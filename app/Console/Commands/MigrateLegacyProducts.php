@@ -438,6 +438,7 @@ class MigrateLegacyProducts extends Command
                 'track_quantity' => (bool) $legacyProduct->track_quantity,
                 'sell_out_of_stock' => (bool) $legacyProduct->sell_out_of_stock,
                 'charge_taxes' => (bool) $legacyProduct->charge_taxes,
+                'price_code' => $legacyProduct->price_code,
                 'quantity' => $legacyProduct->quantity ?? $legacyProduct->total_quantity ?? 0,
                 'created_at' => $legacyProduct->created_at,
                 'updated_at' => $legacyProduct->updated_at,

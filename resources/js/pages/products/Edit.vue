@@ -116,6 +116,7 @@ interface Product {
     track_quantity: boolean;
     sell_out_of_stock: boolean;
     charge_taxes: boolean;
+    price_code: string | null;
     category_id: number | null;
     template_id: number | null;
     compare_at_price: number | null;
@@ -226,6 +227,7 @@ const form = useForm({
     track_quantity: props.product.track_quantity,
     sell_out_of_stock: props.product.sell_out_of_stock,
     charge_taxes: props.product.charge_taxes,
+    price_code: props.product.price_code || '',
     compare_at_price: props.product.compare_at_price || '',
     weight: props.product.weight || '',
     weight_unit: props.product.weight_unit || 'lb',
@@ -1030,6 +1032,37 @@ function deleteProduct() {
                                             <span class="text-sm text-gray-500 dark:text-gray-400">/</span>
                                             <span class="text-sm text-green-600 dark:text-green-400">${{ profit }}</span>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <!-- Divider -->
+                                <div class="my-5 border-t border-gray-200 dark:border-gray-700"></div>
+
+                                <!-- Price Code and Taxes -->
+                                <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                    <div>
+                                        <label for="price_code" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Price Code
+                                        </label>
+                                        <input
+                                            id="price_code"
+                                            v-model="form.price_code"
+                                            type="text"
+                                            placeholder="e.g. NWERIU-WE"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Internal code for pricing reference</p>
+                                    </div>
+
+                                    <div class="flex items-end">
+                                        <label class="relative flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                v-model="form.charge_taxes"
+                                                type="checkbox"
+                                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Charge taxes on this product</span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
