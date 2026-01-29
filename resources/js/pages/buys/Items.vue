@@ -6,7 +6,7 @@ import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import { DatePicker } from '@/components/ui/date-picker';
 import { computed, onMounted, ref, watch } from 'vue';
-import { XMarkIcon } from '@heroicons/vue/20/solid';
+import { XMarkIcon, PlusIcon } from '@heroicons/vue/20/solid';
 
 interface FilterOption {
     value: string;
@@ -108,12 +108,21 @@ const hasActiveFilters = computed(() => {
                         View all individual items from completed buy transactions
                     </p>
                 </div>
-                <Link
-                    href="/buys"
-                    class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                >
-                    View by Transaction
-                </Link>
+                <div class="flex items-center gap-3">
+                    <Link
+                        href="/buys"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    >
+                        View by Transaction
+                    </Link>
+                    <Link
+                        href="/transactions/buy"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                    >
+                        <PlusIcon class="size-4" />
+                        Create New
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->

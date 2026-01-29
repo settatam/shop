@@ -790,7 +790,10 @@ class MigrateLegacyData extends Command
         $query = DB::connection('legacy')
             ->table('customers')
             ->where('store_id', $legacyStoreId)
-            ->whereNull('deleted_at');
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->where('is_vendor', false)->orWhereNull('is_vendor');
+            });
 
         if ($limit > 0) {
             $query->limit($limit);
@@ -902,10 +905,13 @@ class MigrateLegacyData extends Command
             if ($legacyTxn->customer_id && isset($this->customerMap[$legacyTxn->customer_id])) {
                 $newCustomerId = $this->customerMap[$legacyTxn->customer_id];
             } elseif ($legacyTxn->customer_id) {
-                // Customer not migrated yet, try to migrate just this one
+                // Customer not migrated yet, try to migrate just this one (skip vendors)
                 $legacyCustomer = DB::connection('legacy')
                     ->table('customers')
                     ->where('id', $legacyTxn->customer_id)
+                    ->where(function ($q) {
+                        $q->where('is_vendor', false)->orWhereNull('is_vendor');
+                    })
                     ->first();
 
                 if ($legacyCustomer && ! $isDryRun) {

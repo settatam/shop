@@ -15,6 +15,7 @@ import {
 } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
+import TagInput from '@/components/tags/TagInput.vue';
 
 interface Category {
     id: number;
@@ -264,33 +265,15 @@ const form = useForm({
     images: [] as File[],
 });
 
-// Tag management
-const tagSearch = ref('');
-const showTagDropdown = ref(false);
-
-const filteredTags = computed(() => {
-    const search = tagSearch.value.toLowerCase();
-    return (props.availableTags || []).filter(tag =>
-        !form.tag_ids.includes(tag.id) &&
-        tag.name.toLowerCase().includes(search)
-    );
+// Tag management - writable computed for TagInput component
+const selectedTags = computed({
+    get: () => {
+        return (props.availableTags || []).filter(tag => form.tag_ids.includes(tag.id));
+    },
+    set: (tags: Tag[]) => {
+        form.tag_ids = tags.map(tag => tag.id);
+    },
 });
-
-const selectedTags = computed(() => {
-    return (props.availableTags || []).filter(tag => form.tag_ids.includes(tag.id));
-});
-
-function addTag(tagId: number) {
-    if (!form.tag_ids.includes(tagId)) {
-        form.tag_ids.push(tagId);
-    }
-    tagSearch.value = '';
-    showTagDropdown.value = false;
-}
-
-function removeTag(tagId: number) {
-    form.tag_ids = form.tag_ids.filter(id => id !== tagId);
-}
 
 // Sync has_variants with local state
 watch(hasVariants, (newValue) => {
@@ -1664,61 +1647,14 @@ function deleteProduct() {
                                     </div>
 
                                     <!-- Tags -->
-                                    <div v-if="availableTags && availableTags.length > 0">
+                                    <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                             Tags
                                         </label>
-                                        <!-- Selected Tags -->
-                                        <div v-if="selectedTags.length > 0" class="flex flex-wrap gap-1.5 mb-2">
-                                            <span
-                                                v-for="tag in selectedTags"
-                                                :key="tag.id"
-                                                class="inline-flex items-center gap-1 rounded-full pl-2 pr-1 py-0.5 text-xs font-medium"
-                                                :style="{
-                                                    backgroundColor: tag.color + '20',
-                                                    color: tag.color,
-                                                    border: `1px solid ${tag.color}40`
-                                                }"
-                                            >
-                                                {{ tag.name }}
-                                                <button
-                                                    type="button"
-                                                    class="rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
-                                                    @click="removeTag(tag.id)"
-                                                >
-                                                    <XMarkIcon class="size-3" />
-                                                </button>
-                                            </span>
-                                        </div>
-                                        <!-- Tag Search/Dropdown -->
-                                        <div class="relative">
-                                            <input
-                                                v-model="tagSearch"
-                                                type="text"
-                                                placeholder="Search or add tags..."
-                                                class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                @focus="showTagDropdown = true"
-                                                @blur="setTimeout(() => showTagDropdown = false, 150)"
-                                            />
-                                            <div
-                                                v-if="showTagDropdown && filteredTags.length > 0"
-                                                class="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-700"
-                                            >
-                                                <button
-                                                    v-for="tag in filteredTags"
-                                                    :key="tag.id"
-                                                    type="button"
-                                                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-600"
-                                                    @click="addTag(tag.id)"
-                                                >
-                                                    <span
-                                                        class="inline-block size-3 rounded-full"
-                                                        :style="{ backgroundColor: tag.color }"
-                                                    />
-                                                    <span class="text-gray-900 dark:text-white">{{ tag.name }}</span>
-                                                </button>
-                                            </div>
-                                        </div>
+                                        <TagInput
+                                            v-model="selectedTags"
+                                            placeholder="Search or create tags..."
+                                        />
                                     </div>
                                 </div>
                             </div>

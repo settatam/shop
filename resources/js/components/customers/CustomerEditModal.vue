@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
+import LeadSourceSelect from './LeadSourceSelect.vue';
 
 interface Address {
     id: number;
@@ -30,6 +31,7 @@ interface Customer {
     city?: string | null;
     state?: string | null;
     zip?: string | null;
+    lead_source_id?: number | null;
     addresses?: Address[];
 }
 
@@ -59,6 +61,7 @@ const form = useForm({
     email: '',
     phone_number: '',
     company_name: '',
+    lead_source_id: null as number | null,
     address: '',
     address2: '',
     city: '',
@@ -78,6 +81,7 @@ watch(
             form.email = props.customer.email || '';
             form.phone_number = props.customer.phone_number || '';
             form.company_name = props.customer.company_name || '';
+            form.lead_source_id = props.customer.lead_source_id || null;
             form.address = props.customer.address || '';
             form.address2 = props.customer.address2 || '';
             form.city = props.customer.city || '';
@@ -197,7 +201,7 @@ const save = () => {
                                                 id="edit_customer_first_name"
                                                 v-model="form.first_name"
                                                 type="text"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                             <p v-if="form.errors.first_name" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                                 {{ form.errors.first_name }}
@@ -214,7 +218,7 @@ const save = () => {
                                                 id="edit_customer_last_name"
                                                 v-model="form.last_name"
                                                 type="text"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                             <p v-if="form.errors.last_name" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                                 {{ form.errors.last_name }}
@@ -234,7 +238,7 @@ const save = () => {
                                             id="edit_customer_email"
                                             v-model="form.email"
                                             type="email"
-                                            class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <p v-if="form.errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                             {{ form.errors.email }}
@@ -253,7 +257,7 @@ const save = () => {
                                             id="edit_customer_phone"
                                             v-model="form.phone_number"
                                             type="tel"
-                                            class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <p v-if="form.errors.phone_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                             {{ form.errors.phone_number }}
@@ -272,10 +276,28 @@ const save = () => {
                                             id="edit_customer_company"
                                             v-model="form.company_name"
                                             type="text"
-                                            class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <p v-if="form.errors.company_name" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                             {{ form.errors.company_name }}
+                                        </p>
+                                    </div>
+
+                                    <!-- Lead Source -->
+                                    <div>
+                                        <label
+                                            for="edit_customer_lead_source"
+                                            class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                        >
+                                            Lead Source
+                                        </label>
+                                        <LeadSourceSelect
+                                            v-model="form.lead_source_id"
+                                            placeholder="Select or create lead source..."
+                                            class="mt-1"
+                                        />
+                                        <p v-if="form.errors.lead_source_id" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                            {{ form.errors.lead_source_id }}
                                         </p>
                                     </div>
 
@@ -335,7 +357,7 @@ const save = () => {
                                                     id="edit_customer_address"
                                                     v-model="form.address"
                                                     type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 />
                                             </div>
 
@@ -350,7 +372,7 @@ const save = () => {
                                                     id="edit_customer_address2"
                                                     v-model="form.address2"
                                                     type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 />
                                             </div>
 
@@ -366,7 +388,7 @@ const save = () => {
                                                         id="edit_customer_city"
                                                         v-model="form.city"
                                                         type="text"
-                                                        class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                     />
                                                 </div>
                                                 <div>
@@ -380,7 +402,7 @@ const save = () => {
                                                         id="edit_customer_state"
                                                         v-model="form.state"
                                                         type="text"
-                                                        class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                     />
                                                 </div>
                                             </div>
@@ -396,7 +418,7 @@ const save = () => {
                                                     id="edit_customer_zip"
                                                     v-model="form.zip"
                                                     type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 />
                                             </div>
                                         </div>

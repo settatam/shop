@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Traits\BelongsToStore;
 use App\Traits\HasCustomStatuses;
 use App\Traits\HasNotes;
+use App\Traits\HasTags;
 use App\Traits\LogsActivity;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,7 +18,7 @@ use Laravel\Scout\Searchable;
 
 class Repair extends Model
 {
-    use BelongsToStore, HasCustomStatuses, HasFactory, HasNotes, LogsActivity, Searchable, SoftDeletes;
+    use BelongsToStore, HasCustomStatuses, HasFactory, HasNotes, HasTags, LogsActivity, Searchable, SoftDeletes;
 
     // Status constants
     public const STATUS_PENDING = 'pending';

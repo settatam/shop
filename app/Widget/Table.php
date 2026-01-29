@@ -153,6 +153,10 @@ class Table extends Widget
                     $config['data']['options']['fieldWidths'][$key] = $width;
                 }
 
+                if ($minWidth = data_get($data, 'minWidth')) {
+                    $config['data']['options']['fieldMinWidths'][$key] = $minWidth;
+                }
+
                 return $field;
             })
             ->toArray();

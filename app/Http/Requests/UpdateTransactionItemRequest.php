@@ -41,6 +41,8 @@ class UpdateTransactionItemRequest extends FormRequest
                 TransactionItem::CONDITION_USED,
                 TransactionItem::CONDITION_DAMAGED,
             ])],
+            'attributes' => ['nullable', 'array'],
+            'attributes.*' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

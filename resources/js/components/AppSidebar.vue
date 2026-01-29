@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem, type Store } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, Package, ShoppingCart, Warehouse, Plug, ChevronDown, Users, Store } from 'lucide-vue-next';
+import { ArchiveIcon, Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, Package, ShoppingCart, Plug, ChevronDown, Users, Store } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import {
     DropdownMenu,
@@ -79,6 +79,11 @@ const mainNavItems: NavItem[] = [
         ],
     },
     {
+        title: 'Buckets',
+        href: '/buckets',
+        icon: ArchiveIcon,
+    },
+    {
         title: 'Invoices',
         href: '/invoices',
         icon: FileText,
@@ -87,11 +92,6 @@ const mainNavItems: NavItem[] = [
         title: 'Payments',
         href: '/payments',
         icon: CreditCard,
-    },
-    {
-        title: 'Inventory',
-        href: '/inventory',
-        icon: Warehouse,
     },
     {
         title: 'Warehouses',

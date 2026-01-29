@@ -18,9 +18,9 @@ import {
     BeakerIcon,
     TagIcon,
     BellIcon,
-    BanknotesIcon,
     PrinterIcon,
     ShoppingBagIcon,
+    BuildingStorefrontIcon,
 } from '@heroicons/vue/24/outline';
 import { ChevronRightIcon } from '@heroicons/vue/20/solid';
 import type { NavGroup } from '@/types';
@@ -45,6 +45,7 @@ const navigation: NavGroup[] = [
         children: [
             { name: 'All Products', href: '/products' },
             { name: 'Categories', href: '/categories' },
+            { name: 'Product Types', href: '/product-types' },
             { name: 'Templates', href: '/templates' },
         ],
     },
@@ -57,10 +58,6 @@ const navigation: NavGroup[] = [
             { name: 'Returns', href: '/returns' },
         ],
     },
-    { name: 'Inventory', href: '/inventory', icon: ArchiveBoxIcon },
-    { name: 'Repairs', href: '/repairs', icon: WrenchScrewdriverIcon },
-    { name: 'Memos', href: '/memos', icon: DocumentTextIcon },
-    { name: 'Transactions', href: '/transactions', icon: BanknotesIcon },
     {
         name: 'Buys',
         icon: ShoppingBagIcon,
@@ -69,6 +66,10 @@ const navigation: NavGroup[] = [
             { name: 'All Items', href: '/buys/items' },
         ],
     },
+    { name: 'Vendors', href: '/vendors', icon: BuildingStorefrontIcon },
+    // { name: 'Inventory', href: '/inventory', icon: ArchiveBoxIcon },
+    { name: 'Repairs', href: '/repairs', icon: WrenchScrewdriverIcon },
+    { name: 'Memos', href: '/memos', icon: DocumentTextIcon },
     { name: 'Invoices', href: '/invoices', icon: CurrencyDollarIcon },
     { name: 'Payments', href: '/payments', icon: CreditCardIcon },
     { name: 'Labels', href: '/labels', icon: PrinterIcon },

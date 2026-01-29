@@ -47,6 +47,7 @@ class ProductsTable extends Table
                 'key' => 'title',
                 'label' => 'Product Title',
                 'sortable' => true,
+                'minWidth' => '12rem',
             ],
             [
                 'key' => 'category',
@@ -297,6 +298,11 @@ class ProductsTable extends Table
                 'href' => "/products/{$product->id}",
                 'data' => $product->title,
                 'class' => 'font-medium',
+                'tags' => $product->tags->map(fn ($tag) => [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
+                    'color' => $tag->color,
+                ])->toArray(),
             ],
             'category' => [
                 'data' => $product->category?->name ?? '-',

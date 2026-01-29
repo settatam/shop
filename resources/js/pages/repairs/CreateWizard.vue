@@ -17,6 +17,7 @@ import {
     XMarkIcon,
 } from '@heroicons/vue/24/outline';
 import debounce from 'lodash/debounce';
+import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 
 interface StoreUser {
     id: number;
@@ -42,6 +43,7 @@ interface Customer {
     email?: string;
     phone_number?: string;
     company_name?: string;
+    lead_source_id?: number | null;
 }
 
 interface Vendor {
@@ -159,6 +161,7 @@ const newCustomer = ref({
     email: '',
     phone_number: '',
     company_name: '',
+    lead_source_id: null as number | null,
 });
 
 // Vendor search
@@ -253,7 +256,7 @@ function clearCustomer() {
 function startNewCustomer() {
     showNewCustomerForm.value = true;
     formData.value.customer_id = null;
-    newCustomer.value = { first_name: '', last_name: '', email: '', phone_number: '', company_name: '' };
+    newCustomer.value = { first_name: '', last_name: '', email: '', phone_number: '', company_name: '', lead_source_id: null };
 }
 
 function cancelNewCustomer() {
@@ -269,6 +272,7 @@ function confirmNewCustomer() {
         email: newCustomer.value.email,
         phone_number: newCustomer.value.phone_number,
         company_name: newCustomer.value.company_name,
+        lead_source_id: newCustomer.value.lead_source_id,
     };
     showNewCustomerForm.value = false;
 }
@@ -410,6 +414,7 @@ async function submit() {
             email: formData.value.customer?.email,
             phone_number: formData.value.customer?.phone_number,
             company_name: formData.value.customer?.company_name,
+            lead_source_id: formData.value.customer?.lead_source_id,
         },
         items: formData.value.items.map(item => ({
             title: item.title,
@@ -588,6 +593,14 @@ async function submit() {
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
                                         <input v-model="newCustomer.phone_number" type="tel" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
                                     </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
+                                    <LeadSourceSelect
+                                        v-model="newCustomer.lead_source_id"
+                                        placeholder="Select or create lead source..."
+                                        class="mt-1"
+                                    />
                                 </div>
                                 <div class="flex gap-2">
                                     <button type="button" @click="cancelNewCustomer" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">

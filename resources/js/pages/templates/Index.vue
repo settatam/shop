@@ -2,6 +2,8 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+import { useDebounceFn } from '@vueuse/core';
 import {
     PlusIcon,
     PencilIcon,
@@ -9,6 +11,8 @@ import {
     TrashIcon,
     CheckCircleIcon,
     XCircleIcon,
+    MagnifyingGlassIcon,
+    XMarkIcon,
 } from '@heroicons/vue/20/solid';
 import { SparklesIcon } from '@heroicons/vue/24/outline';
 
@@ -23,15 +27,37 @@ interface Template {
     updated_at: string;
 }
 
-interface Props {
-    templates: Template[];
+interface Filters {
+    search: string;
 }
 
-defineProps<Props>();
+interface Props {
+    templates: Template[];
+    filters: Filters;
+}
+
+const props = defineProps<Props>();
+
+const search = ref(props.filters.search || '');
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Templates', href: '/templates' },
 ];
+
+const performSearch = useDebounceFn(() => {
+    router.get('/templates', { search: search.value || undefined }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}, 300);
+
+watch(search, () => {
+    performSearch();
+});
+
+function clearSearch() {
+    search.value = '';
+}
 
 function deleteTemplate(template: Template) {
     if (confirm(`Are you sure you want to delete "${template.name}"? This will remove the template from all assigned categories.`)) {
@@ -80,6 +106,29 @@ function formatDate(date: string): string {
                         <PlusIcon class="-ml-0.5 size-5" />
                         Create Manual
                     </Link>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div class="mb-6">
+                <div class="relative max-w-md">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                        <MagnifyingGlassIcon class="size-5 text-gray-400" />
+                    </div>
+                    <input
+                        v-model="search"
+                        type="text"
+                        placeholder="Search templates..."
+                        class="block w-full rounded-md border-0 py-2 pl-10 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:placeholder:text-gray-400"
+                    />
+                    <button
+                        v-if="search"
+                        type="button"
+                        class="absolute inset-y-0 right-0 flex items-center pr-3"
+                        @click="clearSearch"
+                    >
+                        <XMarkIcon class="size-5 text-gray-400 hover:text-gray-500" />
+                    </button>
                 </div>
             </div>
 
@@ -182,22 +231,40 @@ function formatDate(date: string): string {
 
             <!-- Empty State -->
             <div v-else class="text-center py-12 bg-white rounded-lg shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                    <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                </svg>
-                <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No templates</h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Get started by creating a new product template.
-                </p>
-                <div class="mt-6">
-                    <Link
-                        href="/templates/create"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    >
-                        <PlusIcon class="-ml-0.5 size-5" />
-                        New Template
-                    </Link>
-                </div>
+                <template v-if="search">
+                    <MagnifyingGlassIcon class="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No templates found</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        No templates match your search "{{ search }}".
+                    </p>
+                    <div class="mt-6">
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            @click="clearSearch"
+                        >
+                            Clear Search
+                        </button>
+                    </div>
+                </template>
+                <template v-else>
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    </svg>
+                    <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No templates</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Get started by creating a new product template.
+                    </p>
+                    <div class="mt-6">
+                        <Link
+                            href="/templates/create"
+                            class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        >
+                            <PlusIcon class="-ml-0.5 size-5" />
+                            New Template
+                        </Link>
+                    </div>
+                </template>
             </div>
         </div>
     </AppLayout>

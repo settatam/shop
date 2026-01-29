@@ -48,8 +48,8 @@ class CreateOrderFromWizardRequest extends FormRequest
             ],
             'customer.phone' => ['nullable', 'string', 'max:50'],
 
-            // Step 3: Items (products)
-            'items' => ['required', 'array', 'min:1'],
+            // Step 3: Items (products) - allow empty if bucket_items provided
+            'items' => ['required_without:bucket_items', 'array'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
@@ -78,6 +78,13 @@ class CreateOrderFromWizardRequest extends FormRequest
             'trade_in_items.*.condition' => ['nullable', 'string', 'max:50'],
             'trade_in_items.*.dwt' => ['nullable', 'numeric', 'min:0'],
             'excess_credit_payout_method' => ['nullable', 'string', 'in:cash,check'],
+
+            // Bucket items (selling from junk buckets)
+            'sell_from_bucket' => ['nullable', 'boolean'],
+            'bucket_items' => ['nullable', 'array'],
+            'bucket_items.*.id' => ['required', 'integer', 'exists:bucket_items,id'],
+            'bucket_items.*.price' => ['nullable', 'numeric', 'min:0'],
+            'bucket_items.*.notes' => ['nullable', 'string', 'max:1000'],
 
             // Addresses (optional for in-store sales)
             'billing_address' => ['nullable', 'array'],
@@ -110,8 +117,7 @@ class CreateOrderFromWizardRequest extends FormRequest
             'customer_id.exists' => 'The selected customer does not exist.',
             'customer.first_name.required_with' => 'Customer first name is required.',
             'customer.last_name.required_with' => 'Customer last name is required.',
-            'items.required' => 'At least one item is required.',
-            'items.min' => 'At least one item is required.',
+            'items.required_without' => 'At least one product or bucket item is required.',
             'items.*.product_id.required' => 'Each item must have a product selected.',
             'items.*.product_id.exists' => 'The selected product does not exist.',
             'items.*.quantity.required' => 'Each item must have a quantity.',
@@ -121,6 +127,9 @@ class CreateOrderFromWizardRequest extends FormRequest
             'trade_in_items.*.title.required' => 'Each trade-in item must have a title.',
             'trade_in_items.*.buy_price.required' => 'Each trade-in item must have a buy price.',
             'trade_in_items.*.buy_price.min' => 'Trade-in buy price must be at least 0.',
+            'bucket_items.*.id.required' => 'Each bucket item must be selected.',
+            'bucket_items.*.id.exists' => 'The selected bucket item does not exist.',
+            'bucket_items.*.price.min' => 'Bucket item price must be at least 0.',
         ];
     }
 

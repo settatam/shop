@@ -207,6 +207,7 @@ class TransactionService
             'dwt' => $data['dwt'] ?? null,
             'precious_metal' => $data['precious_metal'] ?? null,
             'condition' => $data['condition'] ?? null,
+            'attributes' => $data['attributes'] ?? null,
         ]);
 
         // Log activity
@@ -249,6 +250,7 @@ class TransactionService
             'dwt' => $data['dwt'] ?? $item->dwt,
             'precious_metal' => $data['precious_metal'] ?? $item->precious_metal,
             'condition' => $data['condition'] ?? $item->condition,
+            'attributes' => array_key_exists('attributes', $data) ? $data['attributes'] : $item->attributes,
         ]);
 
         // Build changes array - track what actually changed

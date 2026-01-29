@@ -306,11 +306,12 @@ class MigrateLegacyProducts extends Command
 
         $this->info('Building vendor mapping...');
 
-        // Get legacy vendors
+        // Get legacy vendors from customers table (where is_vendor = 1)
         $legacyVendors = DB::connection('legacy')
-            ->table('vendors')
+            ->table('customers')
             ->where('store_id', $legacyStoreId)
-
+            ->where('is_vendor', true)
+            ->whereNull('deleted_at')
             ->get();
 
         // Get new vendors
@@ -319,7 +320,7 @@ class MigrateLegacyProducts extends Command
         foreach ($legacyVendors as $legacy) {
             $legacyName = trim(($legacy->first_name ?? '').' '.($legacy->last_name ?? ''));
             if (empty($legacyName)) {
-                $legacyName = $legacy->company;
+                $legacyName = $legacy->company_name ?? '';
             }
 
             foreach ($newVendors as $new) {

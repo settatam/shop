@@ -172,10 +172,12 @@ class MigrateLegacyMemos extends Command
 
         $this->info('Building vendor mapping...');
 
+        // Get legacy vendors from customers table (where is_vendor = 1)
         $legacyVendors = DB::connection('legacy')
-            ->table('vendors')
+            ->table('customers')
             ->where('store_id', $legacyStoreId)
-
+            ->where('is_vendor', true)
+            ->whereNull('deleted_at')
             ->get();
 
         $newVendors = Vendor::where('store_id', $newStore->id)->get();
@@ -183,7 +185,7 @@ class MigrateLegacyMemos extends Command
         foreach ($legacyVendors as $legacy) {
             $legacyName = trim(($legacy->first_name ?? '').' '.($legacy->last_name ?? ''));
             if (empty($legacyName)) {
-                $legacyName = $legacy->company;
+                $legacyName = $legacy->company_name ?? '';
             }
 
             foreach ($newVendors as $new) {
@@ -286,7 +288,8 @@ class MigrateLegacyMemos extends Command
             // Map status
             $status = $this->mapMemoStatus($legacyMemo->status);
 
-            $newMemo = Memo::create([
+            // Use DB::table to preserve timestamps from legacy data
+            $newMemoId = DB::table('memos')->insertGetId([
                 'store_id' => $newStore->id,
                 'warehouse_id' => $this->warehouse?->id,
                 'vendor_id' => $vendorId,
@@ -306,6 +309,7 @@ class MigrateLegacyMemos extends Command
                 'updated_at' => $legacyMemo->updated_at,
             ]);
 
+            $newMemo = Memo::find($newMemoId);
             $this->memoMap[$legacyMemo->id] = $newMemo->id;
             $memoCount++;
 
@@ -314,7 +318,6 @@ class MigrateLegacyMemos extends Command
                 ->table('products')
                 ->where('store_id', $legacyStoreId)
                 ->where('consignment_id', $legacyMemo->id)
-
                 ->get();
 
             foreach ($legacyProducts as $legacyProduct) {
@@ -324,7 +327,8 @@ class MigrateLegacyMemos extends Command
                     $productId = $this->productMap[$legacyProduct->id];
                 }
 
-                MemoItem::create([
+                // Use DB::table to preserve timestamps
+                DB::table('memo_items')->insert([
                     'memo_id' => $newMemo->id,
                     'product_id' => $productId,
                     'sku' => $legacyProduct->sku,

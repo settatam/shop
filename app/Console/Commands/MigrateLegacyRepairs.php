@@ -181,9 +181,12 @@ class MigrateLegacyRepairs extends Command
 
         $this->info('Building vendor mapping...');
 
+        // Get legacy vendors from customers table (where is_vendor = 1)
         $legacyVendors = DB::connection('legacy')
-            ->table('vendors')
-
+            ->table('customers')
+            ->where('store_id', $legacyStoreId)
+            ->where('is_vendor', true)
+            ->whereNull('deleted_at')
             ->get();
 
         $newVendors = Vendor::where('store_id', $newStore->id)->get();
@@ -191,7 +194,7 @@ class MigrateLegacyRepairs extends Command
         foreach ($legacyVendors as $legacy) {
             $legacyName = trim(($legacy->first_name ?? '').' '.($legacy->last_name ?? ''));
             if (empty($legacyName)) {
-                $legacyName = $legacy->company;
+                $legacyName = $legacy->company_name ?? '';
             }
 
             foreach ($newVendors as $new) {
@@ -326,7 +329,8 @@ class MigrateLegacyRepairs extends Command
             // Map status
             $status = $this->mapRepairStatus($legacyRepair->status);
 
-            $newRepair = Repair::create([
+            // Use DB::table to preserve timestamps from legacy data
+            $newRepairId = DB::table('repairs')->insertGetId([
                 'store_id' => $newStore->id,
                 'warehouse_id' => $this->warehouse?->id,
                 'customer_id' => $customerId,
@@ -350,6 +354,7 @@ class MigrateLegacyRepairs extends Command
                 'updated_at' => $legacyRepair->updated_at,
             ]);
 
+            $newRepair = Repair::find($newRepairId);
             $this->repairMap[$legacyRepair->id] = $newRepair->id;
             $repairCount++;
 
@@ -361,7 +366,6 @@ class MigrateLegacyRepairs extends Command
                 $legacyItems = DB::connection('legacy')
                     ->table('repair_items')
                     ->where('repair_id', $legacyRepair->id)
-
                     ->get();
 
                 foreach ($legacyItems as $legacyItem) {
@@ -371,7 +375,8 @@ class MigrateLegacyRepairs extends Command
                         $productId = $this->productMap[$legacyItem->product_id];
                     }
 
-                    RepairItem::create([
+                    // Use DB::table to preserve timestamps
+                    DB::table('repair_items')->insert([
                         'repair_id' => $newRepair->id,
                         'product_id' => $productId,
                         'sku' => $legacyItem->sku ?? null,
@@ -379,8 +384,8 @@ class MigrateLegacyRepairs extends Command
                         'description' => $legacyItem->description,
                         'vendor_cost' => $legacyItem->vendor_cost ?? $legacyItem->cost ?? 0,
                         'customer_cost' => $legacyItem->customer_cost ?? $legacyItem->price ?? 0,
-                        'created_at' => $legacyItem->created_at ?? $newRepair->created_at,
-                        'updated_at' => $legacyItem->updated_at ?? $newRepair->updated_at,
+                        'created_at' => $legacyItem->created_at ?? $legacyRepair->created_at,
+                        'updated_at' => $legacyItem->updated_at ?? $legacyRepair->updated_at,
                     ]);
 
                     $itemCount++;

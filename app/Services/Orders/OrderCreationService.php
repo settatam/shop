@@ -2,6 +2,7 @@
 
 namespace App\Services\Orders;
 
+use App\Models\BucketItem;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
@@ -11,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\Warehouse;
+use App\Services\BucketService;
 use App\Services\Invoices\InvoiceService;
 use App\Services\TaxService;
 use App\Services\TradeIn\TradeInService;
@@ -32,6 +34,7 @@ class OrderCreationService
         protected TaxService $taxService,
         protected TradeInService $tradeInService,
         protected InvoiceService $invoiceService,
+        protected BucketService $bucketService,
     ) {}
 
     /**
@@ -124,6 +127,30 @@ class OrderCreationService
                 // Reduce stock
                 if ($variant) {
                     $this->reduceStock($variant, $itemData['quantity'] ?? 1);
+                }
+            }
+
+            // Add bucket items (if any)
+            if (! empty($data['bucket_items'])) {
+                foreach ($data['bucket_items'] as $bucketItemData) {
+                    $bucketItem = BucketItem::find($bucketItemData['id']);
+
+                    if ($bucketItem && ! $bucketItem->isSold()) {
+                        // Create order item from bucket item
+                        $orderItem = $this->order->items()->create([
+                            'bucket_item_id' => $bucketItem->id,
+                            'sku' => null,
+                            'title' => $bucketItem->title,
+                            'quantity' => 1,
+                            'price' => $bucketItemData['price'] ?? $bucketItem->value,
+                            'cost' => $bucketItem->value, // Cost is the bucket item value
+                            'discount' => 0,
+                            'notes' => $bucketItemData['notes'] ?? $bucketItem->description,
+                        ]);
+
+                        // Mark bucket item as sold
+                        $this->bucketService->sellItem($bucketItem, $orderItem);
+                    }
                 }
             }
 

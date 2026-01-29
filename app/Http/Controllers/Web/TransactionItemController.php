@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\MoveToBucketRequest;
 use App\Http\Requests\UpdateTransactionItemRequest;
+use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Image;
 use App\Models\Transaction;
@@ -40,11 +42,31 @@ class TransactionItemController extends Controller
         $preciousMetals = $this->getPreciousMetals();
         $conditions = $this->getConditions();
 
+        // Load template fields if category has a template
+        $templateFields = [];
+        if ($item->category) {
+            $template = $item->category->getEffectiveTemplate();
+            if ($template) {
+                $template->load('fields.options');
+                $templateFields = $template->fields->map(fn ($field) => [
+                    'id' => $field->id,
+                    'name' => $field->name,
+                    'label' => $field->label,
+                    'type' => $field->type,
+                    'options' => $field->options->map(fn ($opt) => [
+                        'value' => $opt->value,
+                        'label' => $opt->label,
+                    ]),
+                ]);
+            }
+        }
+
         return Inertia::render('transactions/items/Show', [
             'transaction' => $this->formatTransaction($transaction),
             'item' => $this->formatItem($item),
             'preciousMetals' => $preciousMetals,
             'conditions' => $conditions,
+            'templateFields' => $templateFields,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($item)),
         ]);
     }
@@ -69,12 +91,39 @@ class TransactionItemController extends Controller
                 'template_id' => $category->template_id,
             ]);
 
+        // Load template fields if category has a template
+        $templateFields = [];
+        if ($item->category) {
+            $template = $item->category->getEffectiveTemplate();
+            if ($template) {
+                $template->load('fields.options');
+                $templateFields = $template->fields->map(fn ($field) => [
+                    'id' => $field->id,
+                    'name' => $field->name,
+                    'label' => $field->label,
+                    'type' => $field->type,
+                    'placeholder' => $field->placeholder,
+                    'help_text' => $field->help_text,
+                    'default_value' => $field->default_value,
+                    'is_required' => $field->is_required,
+                    'group_name' => $field->group_name,
+                    'group_position' => $field->group_position ?? 0,
+                    'width_class' => $field->width_class ?? 'full',
+                    'options' => $field->options->map(fn ($opt) => [
+                        'value' => $opt->value,
+                        'label' => $opt->label,
+                    ]),
+                ]);
+            }
+        }
+
         return Inertia::render('transactions/items/Edit', [
             'transaction' => $this->formatTransaction($transaction),
             'item' => $this->formatItem($item),
             'categories' => $categories,
             'preciousMetals' => $this->getPreciousMetals(),
             'conditions' => $this->getConditions(),
+            'templateFields' => $templateFields,
         ]);
     }
 
@@ -145,6 +194,25 @@ class TransactionItemController extends Controller
 
         return redirect()->route('web.transactions.items.show', [$transaction, $item])
             ->with('success', "Item moved to inventory. Product #{$product->id} created.");
+    }
+
+    public function moveToBucket(MoveToBucketRequest $request, Transaction $transaction, TransactionItem $item): RedirectResponse
+    {
+        $this->authorizeItem($transaction, $item);
+
+        if (! $item->canBeAddedToBucket()) {
+            return redirect()->back()->with('error', 'This item cannot be moved to a bucket.');
+        }
+
+        $store = $this->storeContext->getCurrentStore();
+        $bucket = Bucket::where('id', $request->validated('bucket_id'))
+            ->where('store_id', $store->id)
+            ->firstOrFail();
+
+        $bucketItem = $item->moveItemToBucket($bucket);
+
+        return redirect()->route('web.transactions.items.show', [$transaction, $item])
+            ->with('success', "Item moved to bucket \"{$bucket->name}\".");
     }
 
     public function review(Transaction $transaction, TransactionItem $item): RedirectResponse
@@ -310,6 +378,7 @@ class TransactionItemController extends Controller
             'dwt' => $item->dwt,
             'precious_metal' => $item->precious_metal,
             'condition' => $item->condition,
+            'attributes' => $item->attributes ?? [],
             'is_added_to_inventory' => $item->is_added_to_inventory,
             'date_added_to_inventory' => $item->date_added_to_inventory?->toISOString(),
             'product_id' => $item->product_id,

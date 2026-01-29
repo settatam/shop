@@ -35,6 +35,9 @@ class Category extends Model
         'template_id',
         'sku_format',
         'sku_prefix',
+        'sku_suffix',
+        'default_bucket_id',
+        'barcode_attributes',
         'label_template_id',
         'charge_taxes',
     ];
@@ -43,6 +46,7 @@ class Category extends Model
     {
         return [
             'charge_taxes' => 'boolean',
+            'barcode_attributes' => 'array',
         ];
     }
 
@@ -69,6 +73,11 @@ class Category extends Model
     public function labelTemplate(): BelongsTo
     {
         return $this->belongsTo(LabelTemplate::class, 'label_template_id');
+    }
+
+    public function defaultBucket(): BelongsTo
+    {
+        return $this->belongsTo(Bucket::class, 'default_bucket_id');
     }
 
     public function skuSequence(): HasOne
@@ -145,6 +154,61 @@ class Category extends Model
     }
 
     /**
+     * Get the effective SKU suffix for this category.
+     * If no suffix is set, it will inherit from the parent category.
+     */
+    public function getEffectiveSkuSuffix(): ?string
+    {
+        if ($this->sku_suffix) {
+            return $this->sku_suffix;
+        }
+
+        if ($this->parent) {
+            return $this->parent->getEffectiveSkuSuffix();
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the effective default bucket for this category.
+     * If no bucket is set, it will inherit from the parent category.
+     */
+    public function getEffectiveDefaultBucket(): ?Bucket
+    {
+        if ($this->default_bucket_id) {
+            return $this->defaultBucket;
+        }
+
+        if ($this->parent) {
+            return $this->parent->getEffectiveDefaultBucket();
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the effective barcode attributes for this category.
+     * If no attributes are set, it will inherit from the parent category.
+     * Defaults to ['category', 'sku', 'price', 'material'] if not set anywhere.
+     *
+     * @return array<int, string>
+     */
+    public function getEffectiveBarcodeAttributes(): array
+    {
+        if (! empty($this->barcode_attributes)) {
+            return $this->barcode_attributes;
+        }
+
+        if ($this->parent) {
+            return $this->parent->getEffectiveBarcodeAttributes();
+        }
+
+        // Default sequence
+        return ['category', 'sku', 'price', 'material'];
+    }
+
+    /**
      * Get the effective charge_taxes setting for this category.
      * If not explicitly set, it will inherit from the parent category.
      * Defaults to true if no parent sets it.
@@ -198,7 +262,7 @@ class Category extends Model
 
     protected function getLoggableAttributes(): array
     {
-        return ['id', 'name', 'slug', 'parent_id', 'template_id', 'sku_format', 'sku_prefix', 'label_template_id'];
+        return ['id', 'name', 'slug', 'parent_id', 'template_id', 'sku_format', 'sku_prefix', 'sku_suffix', 'default_bucket_id', 'barcode_attributes', 'label_template_id'];
     }
 
     protected function getActivityIdentifier(): string

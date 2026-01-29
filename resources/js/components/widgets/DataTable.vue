@@ -45,6 +45,7 @@ interface TypedCell {
     variant?: 'default' | 'success' | 'warning' | 'danger' | 'secondary' | 'info' | 'primary';
     currency?: string;
     color?: string;
+    tags?: TagData[];
 }
 
 interface TagData {
@@ -343,6 +344,22 @@ function getFieldWidth(fieldKey: string): string | undefined {
     return widths?.[fieldKey];
 }
 
+// Get field min-width from options
+function getFieldMinWidth(fieldKey: string): string | undefined {
+    const minWidths = options.value.fieldMinWidths as Record<string, string> | undefined;
+    return minWidths?.[fieldKey];
+}
+
+// Get combined style for field
+function getFieldStyle(fieldKey: string): Record<string, string> {
+    const style: Record<string, string> = {};
+    const width = getFieldWidth(fieldKey);
+    const minWidth = getFieldMinWidth(fieldKey);
+    if (width) style.width = width;
+    if (minWidth) style.minWidth = minWidth;
+    return style;
+}
+
 // ===== EXPORT FUNCTIONALITY =====
 const isExporting = ref(false);
 
@@ -588,7 +605,7 @@ function exportToCsv() {
                             v-for="[key, label, sortable] in fields"
                             :key="key"
                             scope="col"
-                            :style="getFieldWidth(key) ? { width: getFieldWidth(key) } : undefined"
+                            :style="getFieldStyle(key)"
                             :class="[
                                 'px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white',
                                 sortable ? 'cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800' : '',
@@ -650,7 +667,10 @@ function exportToCsv() {
                         <td
                             v-for="[key] in fields"
                             :key="key"
-                            class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300"
+                            :class="[
+                                'px-3 py-4 text-sm text-gray-500 dark:text-gray-300',
+                                getCellValue(item, key).tags?.length ? '' : 'whitespace-nowrap',
+                            ]"
                         >
                             <!-- Get the cell value -->
                             <template v-if="getCellValue(item, key).type === 'image'">
@@ -678,34 +698,48 @@ function exportToCsv() {
                             </template>
 
                             <template v-else-if="getCellValue(item, key).type === 'link'">
-                                <!-- With Quick View HoverCard -->
-                                <HoverCard v-if="enableQuickView && key === quickViewField" :open-delay="300" :close-delay="100">
-                                    <HoverCardTrigger as-child>
-                                        <Link
-                                            :href="getCellValue(item, key).href || '#'"
-                                            :class="[
-                                                'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300',
-                                                getCellValue(item, key).class,
-                                            ]"
+                                <div>
+                                    <!-- With Quick View HoverCard -->
+                                    <HoverCard v-if="enableQuickView && key === quickViewField" :open-delay="300" :close-delay="100">
+                                        <HoverCardTrigger as-child>
+                                            <Link
+                                                :href="getCellValue(item, key).href || '#'"
+                                                :class="[
+                                                    'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300',
+                                                    getCellValue(item, key).class,
+                                                ]"
+                                            >
+                                                {{ getCellValue(item, key).data }}
+                                            </Link>
+                                        </HoverCardTrigger>
+                                        <HoverCardContent side="right" :side-offset="8">
+                                            <ProductQuickView :product-id="getItemId(item) as number" />
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                    <!-- Without Quick View -->
+                                    <Link
+                                        v-else
+                                        :href="getCellValue(item, key).href || '#'"
+                                        :class="[
+                                            'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300',
+                                            getCellValue(item, key).class,
+                                        ]"
+                                    >
+                                        {{ getCellValue(item, key).data }}
+                                    </Link>
+                                    <!-- Tags underneath the link -->
+                                    <div v-if="getCellValue(item, key).tags && getCellValue(item, key).tags!.length > 0" class="mt-1 flex flex-wrap gap-1">
+                                        <span
+                                            v-for="tag in getCellValue(item, key).tags"
+                                            :key="tag.id"
+                                            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                                            :style="tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : {}"
                                         >
-                                            {{ getCellValue(item, key).data }}
-                                        </Link>
-                                    </HoverCardTrigger>
-                                    <HoverCardContent side="right" :side-offset="8">
-                                        <ProductQuickView :product-id="getItemId(item) as number" />
-                                    </HoverCardContent>
-                                </HoverCard>
-                                <!-- Without Quick View -->
-                                <Link
-                                    v-else
-                                    :href="getCellValue(item, key).href || '#'"
-                                    :class="[
-                                        'text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300',
-                                        getCellValue(item, key).class,
-                                    ]"
-                                >
-                                    {{ getCellValue(item, key).data }}
-                                </Link>
+                                            <span class="size-1 rounded-full" :style="tag.color ? { backgroundColor: tag.color } : {}"></span>
+                                            {{ tag.name }}
+                                        </span>
+                                    </div>
+                                </div>
                             </template>
 
                             <template v-else-if="getCellValue(item, key).type === 'badge'">

@@ -197,4 +197,9 @@ class Store extends Model
     {
         return $this->hasMany(TransactionPayout::class);
     }
+
+    public function buckets(): HasMany
+    {
+        return $this->hasMany(Bucket::class);
+    }
 }

@@ -41,6 +41,7 @@ class TransactionItem extends Model
         'transaction_id',
         'category_id',
         'product_id',
+        'bucket_id',
         'sku',
         'title',
         'description',
@@ -49,7 +50,9 @@ class TransactionItem extends Model
         'dwt',
         'precious_metal',
         'condition',
+        'attributes',
         'is_added_to_inventory',
+        'is_added_to_bucket',
         'date_added_to_inventory',
         'reviewed_at',
         'reviewed_by',
@@ -63,7 +66,9 @@ class TransactionItem extends Model
             'price' => 'decimal:2',
             'buy_price' => 'decimal:2',
             'dwt' => 'decimal:4',
+            'attributes' => 'array',
             'is_added_to_inventory' => 'boolean',
+            'is_added_to_bucket' => 'boolean',
             'date_added_to_inventory' => 'datetime',
             'reviewed_at' => 'datetime',
             'ai_research' => 'array',
@@ -86,6 +91,11 @@ class TransactionItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function bucket(): BelongsTo
+    {
+        return $this->belongsTo(Bucket::class);
+    }
+
     public function isAddedToInventory(): bool
     {
         return $this->is_added_to_inventory;
@@ -94,7 +104,40 @@ class TransactionItem extends Model
     public function canBeAddedToInventory(): bool
     {
         return ! $this->is_added_to_inventory
+            && ! $this->is_added_to_bucket
             && $this->transaction->isPaymentProcessed();
+    }
+
+    public function canBeAddedToBucket(): bool
+    {
+        return ! $this->is_added_to_inventory
+            && ! $this->is_added_to_bucket
+            && $this->transaction->isPaymentProcessed();
+    }
+
+    public function isAddedToBucket(): bool
+    {
+        return $this->is_added_to_bucket;
+    }
+
+    public function moveItemToBucket(Bucket $bucket): BucketItem
+    {
+        $bucketItem = BucketItem::create([
+            'bucket_id' => $bucket->id,
+            'transaction_item_id' => $this->id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'value' => $this->buy_price ?? $this->price ?? 0,
+        ]);
+
+        $this->update([
+            'bucket_id' => $bucket->id,
+            'is_added_to_bucket' => true,
+        ]);
+
+        $bucket->recalculateTotal();
+
+        return $bucketItem;
     }
 
     public function markAsAddedToInventory(int $productId): self

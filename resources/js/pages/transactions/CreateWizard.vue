@@ -128,6 +128,8 @@ const formData = ref({
 
     // Step 3: Items
     items: [] as TransactionItem[],
+    offer_amount: 0,
+    items_skipped: false,
 
     // Step 4: Payments (multiple)
     warehouse_id: getDefaultWarehouseId(),
@@ -154,7 +156,11 @@ const canProceed = computed(() => {
         case 2:
             return formData.value.customer_id !== null || (formData.value.customer?.first_name && formData.value.customer?.last_name);
         case 3:
-            return formData.value.items.length > 0 && formData.value.items.every(item => item.title && item.buy_price >= 0);
+            // Allow proceeding if items skipped with offer > 0, or if items exist with valid data
+            if (formData.value.items_skipped) {
+                return formData.value.offer_amount > 0;
+            }
+            return formData.value.items.length > 0 && formData.value.items.every(item => item.title && item.buy_price >= 0) && formData.value.offer_amount > 0;
         case 4:
             return validatePaymentStep();
         default:
@@ -199,7 +205,7 @@ function validatePaymentDetails(payment: Payment): boolean {
 }
 
 const totalBuyPrice = computed(() => {
-    return formData.value.items.reduce((sum, item) => sum + (item.buy_price || 0), 0);
+    return formData.value.offer_amount || 0;
 });
 
 const totalPaymentsAmount = computed(() => {
@@ -269,13 +275,14 @@ function submitTransaction() {
 
     isSubmitting.value = true;
 
-    // For backward compatibility, if there's only one payment, use the old format
-    // Otherwise, send payments array
+    // Build the payload
     const payload: Record<string, any> = {
         store_user_id: formData.value.store_user_id,
         customer_id: formData.value.customer_id,
         customer: formData.value.customer_id ? null : formData.value.customer,
-        items: formData.value.items.map(item => ({
+        offer_amount: formData.value.offer_amount,
+        items_skipped: formData.value.items_skipped,
+        items: formData.value.items_skipped ? [] : formData.value.items.map(item => ({
             title: item.title,
             description: item.description,
             category_id: item.category_id,
@@ -432,12 +439,14 @@ function submitTransaction() {
                                     </p>
                                 </div>
 
-                                <!-- Items Summary -->
+                                <!-- Items / Offer Summary -->
                                 <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Items</span>
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                            {{ formData.items_skipped ? 'Offer' : 'Items' }}
+                                        </span>
                                         <button
-                                            v-if="formData.items.length > 0 && currentStep !== 3"
+                                            v-if="(formData.items.length > 0 || formData.items_skipped) && currentStep !== 3"
                                             type="button"
                                             @click="goToStep(3)"
                                             class="text-indigo-600 hover:text-indigo-500"
@@ -445,7 +454,16 @@ function submitTransaction() {
                                             <PencilIcon class="size-3.5" />
                                         </button>
                                     </div>
-                                    <div v-if="formData.items.length > 0" class="mt-2 space-y-1">
+                                    <!-- Skipped items mode -->
+                                    <div v-if="formData.items_skipped" class="mt-2">
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 italic mb-1">Items skipped</p>
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Offer Amount</span>
+                                            <span class="text-sm font-bold text-gray-900 dark:text-white">${{ totalBuyPrice.toFixed(2) }}</span>
+                                        </div>
+                                    </div>
+                                    <!-- Items mode -->
+                                    <div v-else-if="formData.items.length > 0" class="mt-2 space-y-1">
                                         <div
                                             v-for="item in formData.items.slice(0, 3)"
                                             :key="item.id"
@@ -458,7 +476,7 @@ function submitTransaction() {
                                             +{{ formData.items.length - 3 }} more items
                                         </p>
                                         <div class="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 dark:border-gray-700">
-                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Total</span>
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Offer</span>
                                             <span class="text-sm font-bold text-gray-900 dark:text-white">${{ totalBuyPrice.toFixed(2) }}</span>
                                         </div>
                                     </div>
@@ -537,7 +555,11 @@ function submitTransaction() {
                                     :categories="categories"
                                     :precious-metals="preciousMetals"
                                     :conditions="conditions"
+                                    :offer-amount="formData.offer_amount"
+                                    :items-skipped="formData.items_skipped"
                                     @update="handleItemsUpdate"
+                                    @update:offer-amount="formData.offer_amount = $event"
+                                    @update:items-skipped="formData.items_skipped = $event"
                                 />
 
                                 <!-- Step 4: Payment -->

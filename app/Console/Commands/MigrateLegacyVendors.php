@@ -7,6 +7,12 @@ use App\Models\Vendor;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Migrate vendors from the legacy Laravel 8 application.
+ *
+ * In the legacy system, vendors are stored in the customers table with is_vendor = 1.
+ * This command imports those records into the new dedicated vendors table.
+ */
 class MigrateLegacyVendors extends Command
 {
     protected $signature = 'migrate:legacy-vendors
@@ -15,7 +21,7 @@ class MigrateLegacyVendors extends Command
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing vendors and start fresh}';
 
-    protected $description = 'Migrate vendors from the legacy database';
+    protected $description = 'Migrate vendors from the legacy database (customers with is_vendor=1)';
 
     protected array $vendorMap = [];
 
@@ -26,6 +32,7 @@ class MigrateLegacyVendors extends Command
         $isDryRun = $this->option('dry-run');
 
         $this->info("Starting vendor migration from legacy store ID: {$legacyStoreId}");
+        $this->info('(Importing from customers table where is_vendor = 1)');
 
         if ($isDryRun) {
             $this->warn('DRY RUN MODE - No changes will be made');
@@ -103,11 +110,14 @@ class MigrateLegacyVendors extends Command
 
     protected function migrateVendors(int $legacyStoreId, Store $newStore, bool $isDryRun): void
     {
-        $this->info('Migrating vendors...');
+        $this->info('Migrating vendors from customers table...');
 
+        // Get vendor customers from legacy database (customers with is_vendor = 1)
         $legacyVendors = DB::connection('legacy')
-            ->table('vendors')
+            ->table('customers')
             ->where('store_id', $legacyStoreId)
+            ->where('is_vendor', true)
+            ->whereNull('deleted_at')
             ->get();
 
         if ($legacyVendors->isEmpty()) {
@@ -116,21 +126,23 @@ class MigrateLegacyVendors extends Command
             return;
         }
 
+        $this->line("  Found {$legacyVendors->count()} vendor customers to migrate");
+
         $count = 0;
         $skipped = 0;
 
-        foreach ($legacyVendors as $legacyVendor) {
+        foreach ($legacyVendors as $legacyCustomer) {
             // Build vendor name from first_name and last_name
-            $name = trim(($legacyVendor->first_name ?? '').' '.($legacyVendor->last_name ?? ''));
+            $name = trim(($legacyCustomer->first_name ?? '').' '.($legacyCustomer->last_name ?? ''));
             if (empty($name)) {
-                $name = $legacyVendor->company ?? "Vendor #{$legacyVendor->id}";
+                $name = $legacyCustomer->company_name ?? "Vendor #{$legacyCustomer->id}";
             }
 
             // Check if vendor already exists by email or name
             $existingVendor = null;
-            if ($legacyVendor->email) {
+            if ($legacyCustomer->email) {
                 $existingVendor = Vendor::where('store_id', $newStore->id)
-                    ->where('email', $legacyVendor->email)
+                    ->where('email', $legacyCustomer->email)
                     ->first();
             }
 
@@ -141,55 +153,58 @@ class MigrateLegacyVendors extends Command
             }
 
             if ($existingVendor) {
-                $this->vendorMap[$legacyVendor->id] = $existingVendor->id;
+                $this->vendorMap[$legacyCustomer->id] = $existingVendor->id;
                 $skipped++;
 
                 continue;
             }
 
             if ($isDryRun) {
-                $this->line("  Would create vendor: {$name} ({$legacyVendor->email})");
+                $this->line("  Would create vendor: {$name} ({$legacyCustomer->email})");
                 $count++;
 
                 continue;
             }
 
-            // Get vendor's address from legacy addresses table
+            // Get customer's address from legacy addresses table (polymorphic)
             $legacyAddress = DB::connection('legacy')
                 ->table('addresses')
-                ->where('addressable_type', 'App\\Models\\Vendor')
-                ->where('addressable_id', $legacyVendor->id)
+                ->where('addressable_type', 'App\\Models\\Customer')
+                ->where('addressable_id', $legacyCustomer->id)
                 ->where('is_default', true)
                 ->first();
 
             if (! $legacyAddress) {
                 $legacyAddress = DB::connection('legacy')
                     ->table('addresses')
-                    ->where('addressable_type', 'App\\Models\\Vendor')
-                    ->where('addressable_id', $legacyVendor->id)
+                    ->where('addressable_type', 'App\\Models\\Customer')
+                    ->where('addressable_id', $legacyCustomer->id)
                     ->first();
             }
+
+            // Generate a code from the name
+            $code = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 6));
 
             $newVendor = Vendor::create([
                 'store_id' => $newStore->id,
                 'name' => $name,
-                'code' => strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 6)),
-                'company_name' => $legacyVendor->company,
-                'email' => $legacyVendor->email,
-                'phone' => $legacyVendor->phone_number,
-                'tax_id' => $legacyVendor->tax_id,
+                'code' => $code ?: null,
+                'company_name' => $legacyCustomer->company_name ?? null,
+                'email' => $legacyCustomer->email ?? null,
+                'phone' => $legacyCustomer->phone_number ?? null,
                 'address_line1' => $legacyAddress?->address,
                 'address_line2' => $legacyAddress?->address2,
                 'city' => $legacyAddress?->city,
-                'state' => $legacyAddress?->state_id ? (string) $legacyAddress->state_id : null,
+                'state' => $legacyAddress?->state,
                 'postal_code' => $legacyAddress?->zip,
                 'country' => 'US',
-                'is_active' => true,
-                'created_at' => $legacyVendor->created_at,
-                'updated_at' => $legacyVendor->updated_at,
+                'contact_name' => trim(($legacyCustomer->first_name ?? '').' '.($legacyCustomer->last_name ?? '')) ?: null,
+                'is_active' => $legacyCustomer->is_active ?? true,
+                'created_at' => $legacyCustomer->created_at ?? now(),
+                'updated_at' => $legacyCustomer->updated_at ?? now(),
             ]);
 
-            $this->vendorMap[$legacyVendor->id] = $newVendor->id;
+            $this->vendorMap[$legacyCustomer->id] = $newVendor->id;
             $count++;
         }
 

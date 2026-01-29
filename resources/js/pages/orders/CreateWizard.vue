@@ -19,7 +19,9 @@ import {
     QrCodeIcon,
     ArrowsRightLeftIcon,
     ScaleIcon,
+    ArchiveBoxIcon,
 } from '@heroicons/vue/24/outline';
+import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 
 interface StoreUser {
     id: number;
@@ -55,6 +57,29 @@ interface TradeInItem {
     precious_metal?: string;
     condition?: string;
     dwt?: number;
+}
+
+interface BucketItemData {
+    id: number;
+    title: string;
+    description?: string;
+    value: number;
+    created_at: string;
+}
+
+interface BucketData {
+    id: number;
+    name: string;
+    total_value: number;
+    items: BucketItemData[];
+}
+
+interface SelectedBucketItem {
+    id: number;
+    title: string;
+    value: number;
+    price: number;
+    bucket_name: string;
 }
 
 interface Customer {
@@ -126,6 +151,8 @@ const form = useForm({
     has_trade_in: false,
     trade_in_items: [] as TradeInItem[],
     excess_credit_payout_method: 'cash' as 'cash' | 'check',
+    sell_from_bucket: false,
+    bucket_items: [] as SelectedBucketItem[],
 });
 
 // Wizard state
@@ -148,6 +175,7 @@ const newCustomer = ref({
     last_name: '',
     email: '',
     phone: '',
+    lead_source_id: null as number | null,
 });
 
 let customerSearchTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -200,7 +228,7 @@ function startCreatingCustomer() {
 
 function cancelCreatingCustomer() {
     isCreatingNewCustomer.value = false;
-    newCustomer.value = { first_name: '', last_name: '', email: '', phone: '' };
+    newCustomer.value = { first_name: '', last_name: '', email: '', phone: '', lead_source_id: null };
 }
 
 function confirmNewCustomer() {
@@ -211,6 +239,7 @@ function confirmNewCustomer() {
         last_name: newCustomer.value.last_name,
         email: newCustomer.value.email || undefined,
         phone: newCustomer.value.phone || undefined,
+        lead_source_id: newCustomer.value.lead_source_id || undefined,
     };
     form.customer_id = null;
 
@@ -279,6 +308,60 @@ function toggleTradeIn() {
 }
 
 watch(() => form.has_trade_in, toggleTradeIn);
+
+// Step 3: Bucket Items (Selling from Bucket)
+const availableBuckets = ref<BucketData[]>([]);
+const loadingBuckets = ref(false);
+const selectedBucketId = ref<number | null>(null);
+
+async function loadBucketItems() {
+    if (loadingBuckets.value) return;
+    loadingBuckets.value = true;
+    try {
+        const response = await fetch('/orders/search-bucket-items');
+        const data = await response.json();
+        availableBuckets.value = data.buckets || [];
+    } catch (error) {
+        console.error('Error loading bucket items:', error);
+        availableBuckets.value = [];
+    } finally {
+        loadingBuckets.value = false;
+    }
+}
+
+function addBucketItemToOrder(bucketItem: BucketItemData, bucketName: string) {
+    // Check if already added
+    if (form.bucket_items.some(item => item.id === bucketItem.id)) {
+        return;
+    }
+
+    form.bucket_items.push({
+        id: bucketItem.id,
+        title: bucketItem.title,
+        value: bucketItem.value,
+        price: bucketItem.value, // Default price to value
+        bucket_name: bucketName,
+    });
+}
+
+function removeBucketItem(index: number) {
+    form.bucket_items.splice(index, 1);
+}
+
+const bucketItemsTotal = computed(() => {
+    return form.bucket_items.reduce((sum, item) => sum + item.price, 0);
+});
+
+function toggleSellFromBucket() {
+    if (!form.sell_from_bucket) {
+        form.bucket_items = [];
+    } else {
+        // Load bucket items when enabled
+        loadBucketItems();
+    }
+}
+
+watch(() => form.sell_from_bucket, toggleSellFromBucket);
 
 // Step 4: Product Search/Add
 const productSearchQuery = ref('');
@@ -468,9 +551,11 @@ watch(() => form.warehouse_id, (newWarehouseId) => {
 
 // Calculations
 const subtotal = computed(() => {
-    return form.items.reduce((sum, item) => {
+    const productTotal = form.items.reduce((sum, item) => {
         return sum + (item.price * item.quantity) - item.discount;
     }, 0);
+    const bucketTotal = form.bucket_items.reduce((sum, item) => sum + item.price, 0);
+    return productTotal + bucketTotal;
 });
 
 const tradeInCredit = computed(() => {
@@ -503,9 +588,13 @@ function canProceed(): boolean {
             return true; // Customer is optional for walk-in sales
         case 3:
             // Trade-in step: if trade-in is enabled, must have at least one item
-            return !form.has_trade_in || form.trade_in_items.length > 0;
+            // Bucket sale step: if sell_from_bucket is enabled, must have at least one bucket item
+            const tradeInValid = !form.has_trade_in || form.trade_in_items.length > 0;
+            const bucketValid = !form.sell_from_bucket || form.bucket_items.length > 0;
+            return tradeInValid && bucketValid;
         case 4:
-            return form.items.length > 0;
+            // Must have at least one product OR bucket item
+            return form.items.length > 0 || form.bucket_items.length > 0;
         case 5:
             return true;
         default:
@@ -732,6 +821,14 @@ const steps = [
                                     />
                                 </div>
                             </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
+                                <LeadSourceSelect
+                                    v-model="newCustomer.lead_source_id"
+                                    placeholder="Select or create lead source..."
+                                    class="mt-1"
+                                />
+                            </div>
                             <div class="flex gap-3">
                                 <button
                                     type="button"
@@ -896,6 +993,120 @@ const steps = [
                                 </div>
                                 <div v-else class="p-6 text-center text-gray-500 dark:text-gray-400">
                                     No trade-in items added yet. Add items above.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Divider between Trade-In and Bucket Sale -->
+                        <div v-if="form.has_trade_in" class="my-8 border-t border-gray-200 dark:border-gray-600" />
+
+                        <!-- Toggle Sell From Bucket -->
+                        <div class="mb-6">
+                            <label class="flex cursor-pointer items-center gap-3">
+                                <input
+                                    v-model="form.sell_from_bucket"
+                                    type="checkbox"
+                                    class="size-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span class="font-medium text-gray-900 dark:text-white">Sell items from a bucket</span>
+                            </label>
+                            <p class="mt-1 ml-8 text-sm text-gray-500 dark:text-gray-400">
+                                Select junk items from existing buckets to include in this sale.
+                            </p>
+                        </div>
+
+                        <!-- Bucket Items Selection (shown when sell_from_bucket is enabled) -->
+                        <div v-if="form.sell_from_bucket" class="space-y-6">
+                            <!-- Loading State -->
+                            <div v-if="loadingBuckets" class="text-center py-6 text-gray-500 dark:text-gray-400">
+                                Loading buckets...
+                            </div>
+
+                            <!-- No Buckets Available -->
+                            <div v-else-if="availableBuckets.length === 0" class="text-center py-6">
+                                <ArchiveBoxIcon class="mx-auto h-12 w-12 text-gray-400" />
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                    No buckets with available items found.
+                                </p>
+                            </div>
+
+                            <!-- Buckets with Items -->
+                            <div v-else class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select a bucket</label>
+                                    <select
+                                        v-model="selectedBucketId"
+                                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option :value="null">Choose a bucket...</option>
+                                        <option v-for="bucket in availableBuckets" :key="bucket.id" :value="bucket.id">
+                                            {{ bucket.name }} ({{ bucket.items.length }} items - {{ formatCurrency(bucket.total_value) }})
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Available Items from Selected Bucket -->
+                                <div v-if="selectedBucketId" class="rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-600">
+                                        <h3 class="font-medium text-gray-900 dark:text-white">Available Items</h3>
+                                    </div>
+                                    <div class="max-h-60 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-600">
+                                        <button
+                                            v-for="item in availableBuckets.find(b => b.id === selectedBucketId)?.items || []"
+                                            :key="item.id"
+                                            type="button"
+                                            @click="addBucketItemToOrder(item, availableBuckets.find(b => b.id === selectedBucketId)?.name || '')"
+                                            :disabled="form.bucket_items.some(bi => bi.id === item.id)"
+                                            class="flex w-full items-center gap-4 p-4 text-left hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-gray-700"
+                                        >
+                                            <div class="flex size-10 shrink-0 items-center justify-center rounded bg-amber-100 dark:bg-amber-900">
+                                                <ArchiveBoxIcon class="size-5 text-amber-600 dark:text-amber-400" />
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                                                <p v-if="item.description" class="text-sm text-gray-500 dark:text-gray-400 truncate">{{ item.description }}</p>
+                                            </div>
+                                            <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.value) }}</p>
+                                            <PlusIcon v-if="!form.bucket_items.some(bi => bi.id === item.id)" class="size-5 text-indigo-600 dark:text-indigo-400" />
+                                            <CheckIcon v-else class="size-5 text-green-600 dark:text-green-400" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Selected Bucket Items List -->
+                            <div class="rounded-lg border border-gray-200 dark:border-gray-600">
+                                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-600">
+                                    <div class="flex items-center justify-between">
+                                        <h3 class="font-medium text-gray-900 dark:text-white">Bucket Items to Sell ({{ form.bucket_items.length }})</h3>
+                                        <span class="text-lg font-semibold text-amber-600 dark:text-amber-400">{{ formatCurrency(bucketItemsTotal) }}</span>
+                                    </div>
+                                </div>
+                                <div v-if="form.bucket_items.length > 0" class="divide-y divide-gray-200 dark:divide-gray-600">
+                                    <div v-for="(item, index) in form.bucket_items" :key="item.id" class="flex items-center gap-4 p-4">
+                                        <div class="flex size-12 shrink-0 items-center justify-center rounded bg-amber-100 dark:bg-amber-900">
+                                            <ArchiveBoxIcon class="size-6 text-amber-600 dark:text-amber-400" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">From: {{ item.bucket_name }}</p>
+                                        </div>
+                                        <div class="w-28">
+                                            <input
+                                                v-model.number="item.price"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                class="block w-full rounded-md border-gray-300 text-right shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            />
+                                        </div>
+                                        <button type="button" @click="removeBucketItem(index)" class="text-red-500 hover:text-red-600">
+                                            <TrashIcon class="size-5" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div v-else class="p-6 text-center text-gray-500 dark:text-gray-400">
+                                    No bucket items selected. Choose items from the list above.
                                 </div>
                             </div>
                         </div>
@@ -1195,6 +1406,10 @@ const steps = [
                                     <div v-if="form.has_trade_in" class="flex justify-between">
                                         <dt class="text-gray-500 dark:text-gray-400">Trade-In Items</dt>
                                         <dd class="text-green-600 dark:text-green-400">{{ form.trade_in_items.length }}</dd>
+                                    </div>
+                                    <div v-if="form.sell_from_bucket && form.bucket_items.length > 0" class="flex justify-between">
+                                        <dt class="text-gray-500 dark:text-gray-400">Bucket Items</dt>
+                                        <dd class="text-amber-600 dark:text-amber-400">{{ form.bucket_items.length }}</dd>
                                     </div>
                                     <div class="flex justify-between">
                                         <dt class="text-gray-500 dark:text-gray-400">Location</dt>

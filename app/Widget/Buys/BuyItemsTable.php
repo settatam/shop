@@ -34,11 +34,6 @@ class BuyItemsTable extends Table
                 'sortable' => true,
             ],
             [
-                'key' => 'sku',
-                'label' => 'SKU',
-                'sortable' => true,
-            ],
-            [
                 'key' => 'category',
                 'label' => 'Category',
                 'sortable' => false,
@@ -199,10 +194,6 @@ class BuyItemsTable extends Table
                 'href' => "/transactions/{$transaction->id}/items/{$item->id}",
                 'data' => $item->title ?: 'Untitled Item',
                 'class' => 'font-medium',
-            ],
-            'sku' => [
-                'data' => $item->sku ?: '-',
-                'class' => 'font-mono text-sm text-gray-500',
             ],
             'category' => [
                 'data' => $item->category?->name ?? '-',

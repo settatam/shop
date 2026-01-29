@@ -32,6 +32,8 @@ class Activity extends Model
 
     public const CATEGORY_VENDORS = 'vendors';
 
+    public const CATEGORY_BUCKETS = 'buckets';
+
     // Product Activities
     public const PRODUCTS_VIEW = 'products.view';
 
@@ -256,6 +258,19 @@ class Activity extends Model
 
     public const NOTES_DELETE = 'notes.delete';
 
+    // Bucket Activities
+    public const BUCKETS_CREATE = 'buckets.create';
+
+    public const BUCKETS_UPDATE = 'buckets.update';
+
+    public const BUCKETS_DELETE = 'buckets.delete';
+
+    public const BUCKETS_ITEM_ADDED = 'buckets.item_added';
+
+    public const BUCKETS_ITEM_REMOVED = 'buckets.item_removed';
+
+    public const BUCKETS_ITEM_SOLD = 'buckets.item_sold';
+
     protected $fillable = [
         'slug',
         'name',
@@ -409,6 +424,14 @@ class Activity extends Model
             self::NOTES_CREATE => ['name' => 'Note Added', 'category' => self::CATEGORY_STORE, 'description' => 'A note was added'],
             self::NOTES_UPDATE => ['name' => 'Note Updated', 'category' => self::CATEGORY_STORE, 'description' => 'A note was updated'],
             self::NOTES_DELETE => ['name' => 'Note Deleted', 'category' => self::CATEGORY_STORE, 'description' => 'A note was deleted'],
+
+            // Buckets
+            self::BUCKETS_CREATE => ['name' => 'Bucket Created', 'category' => self::CATEGORY_BUCKETS, 'description' => 'A new bucket was created'],
+            self::BUCKETS_UPDATE => ['name' => 'Bucket Updated', 'category' => self::CATEGORY_BUCKETS, 'description' => 'Bucket details were updated'],
+            self::BUCKETS_DELETE => ['name' => 'Bucket Deleted', 'category' => self::CATEGORY_BUCKETS, 'description' => 'A bucket was deleted'],
+            self::BUCKETS_ITEM_ADDED => ['name' => 'Item Added', 'category' => self::CATEGORY_BUCKETS, 'description' => 'An item was added to the bucket'],
+            self::BUCKETS_ITEM_REMOVED => ['name' => 'Item Removed', 'category' => self::CATEGORY_BUCKETS, 'description' => 'An item was removed from the bucket'],
+            self::BUCKETS_ITEM_SOLD => ['name' => 'Item Sold', 'category' => self::CATEGORY_BUCKETS, 'description' => 'An item was sold from the bucket'],
         ];
     }
 

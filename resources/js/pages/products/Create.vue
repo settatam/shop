@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, PhotoIcon, XMarkIcon, SparklesIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, PhotoIcon, XMarkIcon, SparklesIcon, VideoCameraIcon, LockClosedIcon } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
 
@@ -71,6 +71,17 @@ interface Variant {
     warehouse_id: number | string;
 }
 
+interface VideoInput {
+    url: string;
+    title: string;
+}
+
+interface UploadedVideo {
+    file: File;
+    title: string;
+    preview: string;
+}
+
 interface Props {
     categories: Category[];
     brands: Brand[];
@@ -102,8 +113,12 @@ const loadingTemplate = ref(false);
 // Section visibility
 const sections = ref({
     basicInfo: true,
+    pricingInventory: true,
     attributes: true,
-    variants: true,
+    images: true,
+    videos: false,
+    internalImages: false,
+    shipping: false,
 });
 
 function toggleSection(section: keyof typeof sections.value) {
@@ -133,6 +148,17 @@ const groupedTemplateFields = computed(() => {
 // Track whether product has variants (multiple options like size, color)
 const hasVariants = ref(false);
 
+// Condition options
+const conditionOptions = [
+    { value: 'new', label: 'New' },
+    { value: 'like_new', label: 'Like New' },
+    { value: 'excellent', label: 'Excellent' },
+    { value: 'very_good', label: 'Very Good' },
+    { value: 'good', label: 'Good' },
+    { value: 'fair', label: 'Fair' },
+    { value: 'poor', label: 'Poor' },
+];
+
 const form = useForm({
     title: '',
     description: '',
@@ -143,12 +169,29 @@ const form = useForm({
     has_variants: false,
     track_quantity: true,
     sell_out_of_stock: false,
+    condition: '',
+    // Shipping fields
+    weight: '' as string | number,
+    weight_unit: 'g',
+    length: '' as string | number,
+    width: '' as string | number,
+    height: '' as string | number,
+    length_class: 'cm',
+    domestic_shipping_cost: '' as string | number,
+    international_shipping_cost: '' as string | number,
     variants: [
         { sku: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: '' as string | number },
     ] as Variant[],
     attributes: {} as Record<number, string>,
     images: [] as File[],
+    internal_images: [] as File[],
+    videos: [] as VideoInput[],
+    video_files: [] as File[],
 });
+
+// Uploaded video previews
+const uploadedVideos = ref<UploadedVideo[]>([]);
+const videoInputRef = ref<HTMLInputElement | null>(null);
 
 // Sync has_variants with local state
 watch(hasVariants, (newValue) => {
@@ -164,6 +207,10 @@ watch(hasVariants, (newValue) => {
 // Image upload handling
 const imageInputRef = ref<HTMLInputElement | null>(null);
 const imagePreviews = ref<string[]>([]);
+
+// Internal image upload handling
+const internalImageInputRef = ref<HTMLInputElement | null>(null);
+const internalImagePreviews = ref<string[]>([]);
 
 function handleImageSelect(event: Event) {
     const target = event.target as HTMLInputElement;
@@ -194,6 +241,90 @@ function addImages(files: File[]) {
 function removeImage(index: number) {
     form.images.splice(index, 1);
     imagePreviews.value.splice(index, 1);
+}
+
+// Internal images handling
+function handleInternalImageSelect(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (target.files) {
+        addInternalImages(Array.from(target.files));
+    }
+}
+
+function handleInternalImageDrop(event: DragEvent) {
+    event.preventDefault();
+    if (event.dataTransfer?.files) {
+        addInternalImages(Array.from(event.dataTransfer.files));
+    }
+}
+
+function addInternalImages(files: File[]) {
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    for (const file of imageFiles) {
+        form.internal_images.push(file);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            internalImagePreviews.value.push(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function removeInternalImage(index: number) {
+    form.internal_images.splice(index, 1);
+    internalImagePreviews.value.splice(index, 1);
+}
+
+// Video URL handling
+function addVideo() {
+    form.videos.push({ url: '', title: '' });
+}
+
+function removeVideo(index: number) {
+    form.videos.splice(index, 1);
+}
+
+// Video file upload handling
+function handleVideoSelect(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (target.files) {
+        addVideoFiles(Array.from(target.files));
+    }
+}
+
+function handleVideoDrop(event: DragEvent) {
+    event.preventDefault();
+    if (event.dataTransfer?.files) {
+        addVideoFiles(Array.from(event.dataTransfer.files));
+    }
+}
+
+function addVideoFiles(files: File[]) {
+    const videoFiles = files.filter(file => file.type.startsWith('video/'));
+    for (const file of videoFiles) {
+        form.video_files.push(file);
+        const preview = URL.createObjectURL(file);
+        uploadedVideos.value.push({
+            file,
+            title: file.name.replace(/\.[^/.]+$/, ''), // Remove extension for default title
+            preview,
+        });
+    }
+}
+
+function removeUploadedVideo(index: number) {
+    // Revoke the object URL to free memory
+    URL.revokeObjectURL(uploadedVideos.value[index].preview);
+    form.video_files.splice(index, 1);
+    uploadedVideos.value.splice(index, 1);
+}
+
+function formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // Set default warehouse on mount
@@ -406,339 +537,55 @@ function submit() {
                                         <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
                                     </div>
 
-                                    <div>
-                                        <label for="handle" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Handle (URL slug)
-                                        </label>
-                                        <input
-                                            id="handle"
-                                            v-model="form.handle"
-                                            type="text"
-                                            placeholder="leave-blank-to-auto-generate"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                        />
-                                        <p v-if="form.errors.handle" class="mt-1 text-sm text-red-600">{{ form.errors.handle }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Template Attributes Section -->
-                        <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('attributes')"
-                            >
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ template.name }}</h3>
-                                    <p v-if="template.description" class="text-sm text-gray-500 dark:text-gray-400">{{ template.description }}</p>
-                                </div>
-                                <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
-                            </button>
-
-                            <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <div class="space-y-6">
-                                    <!-- Grouped Fields -->
-                                    <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">
-                                        <div class="flex gap-2">
-                                            <div
-                                                v-for="field in fields"
-                                                :key="field.id"
-                                                :class="[
-                                                    field.width_class === 'full' ? 'flex-1' : '',
-                                                    field.width_class === 'half' ? 'w-1/2' : '',
-                                                    field.width_class === 'third' ? 'w-1/3' : '',
-                                                    field.width_class === 'quarter' ? 'w-1/4' : '',
-                                                    field.group_position > 1 ? 'w-auto shrink-0' : 'flex-1',
-                                                ]"
-                                            >
-                                                <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    {{ field.label }}
-                                                    <span v-if="field.is_required" class="text-red-500">*</span>
-                                                </label>
-
-                                                <input
-                                                    v-if="field.type === 'text'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    type="text"
-                                                    :placeholder="field.placeholder || ''"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <input
-                                                    v-else-if="field.type === 'number'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    type="number"
-                                                    step="any"
-                                                    :placeholder="field.placeholder || ''"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <select
-                                                    v-else-if="field.type === 'select'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="">{{ field.placeholder || 'Select...' }}</option>
-                                                    <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                                                        {{ opt.label }}
-                                                    </option>
-                                                </select>
-
-                                                <select
-                                                    v-else-if="field.type === 'brand'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="">{{ field.placeholder || 'Select brand...' }}</option>
-                                                    <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
-                                                        {{ brand.name }}
-                                                    </option>
-                                                </select>
-
-                                                <input
-                                                    v-else-if="field.type === 'date'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    type="date"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <p v-if="field.help_text && field.group_position === 1" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                    {{ field.help_text }}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Standalone Fields -->
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div
-                                            v-for="field in groupedTemplateFields.standalone"
-                                            :key="field.id"
-                                            :class="[
-                                                field.width_class === 'full' ? 'sm:col-span-2' : '',
-                                            ]"
-                                        >
-                                            <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                {{ field.label }}
-                                                <span v-if="field.is_required" class="text-red-500">*</span>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="handle" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Handle (URL slug)
                                             </label>
-
                                             <input
-                                                v-if="field.type === 'text'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
+                                                id="handle"
+                                                v-model="form.handle"
                                                 type="text"
-                                                :placeholder="field.placeholder || ''"
-                                                :required="field.is_required"
+                                                placeholder="leave-blank-to-auto-generate"
                                                 class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
+                                            <p v-if="form.errors.handle" class="mt-1 text-sm text-red-600">{{ form.errors.handle }}</p>
+                                        </div>
 
-                                            <input
-                                                v-else-if="field.type === 'number'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                type="number"
-                                                step="any"
-                                                :placeholder="field.placeholder || ''"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
-                                            <textarea
-                                                v-else-if="field.type === 'textarea'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                :placeholder="field.placeholder || ''"
-                                                :required="field.is_required"
-                                                rows="3"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
+                                        <div>
+                                            <label for="condition" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Condition
+                                            </label>
                                             <select
-                                                v-else-if="field.type === 'select'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                :required="field.is_required"
+                                                id="condition"
+                                                v-model="form.condition"
                                                 class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             >
-                                                <option value="">{{ field.placeholder || 'Select...' }}</option>
-                                                <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                <option value="">Select condition...</option>
+                                                <option v-for="opt in conditionOptions" :key="opt.value" :value="opt.value">
                                                     {{ opt.label }}
                                                 </option>
                                             </select>
-
-                                            <div v-else-if="field.type === 'checkbox'" class="mt-2 space-y-2">
-                                                <label
-                                                    v-for="opt in field.options"
-                                                    :key="opt.value"
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        :value="opt.value"
-                                                        :checked="(form.attributes[field.id] || '').split(',').includes(opt.value)"
-                                                        @change="(e: Event) => {
-                                                            const target = e.target as HTMLInputElement;
-                                                            const current = (form.attributes[field.id] || '').split(',').filter(Boolean);
-                                                            if (target.checked) {
-                                                                current.push(opt.value);
-                                                            } else {
-                                                                const idx = current.indexOf(opt.value);
-                                                                if (idx > -1) current.splice(idx, 1);
-                                                            }
-                                                            form.attributes[field.id] = current.join(',');
-                                                        }"
-                                                        class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                                    />
-                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
-                                                </label>
-                                            </div>
-
-                                            <div v-else-if="field.type === 'radio'" class="mt-2 space-y-2">
-                                                <label
-                                                    v-for="opt in field.options"
-                                                    :key="opt.value"
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <input
-                                                        type="radio"
-                                                        :name="`attr_${field.id}`"
-                                                        :value="opt.value"
-                                                        v-model="form.attributes[field.id]"
-                                                        class="size-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                                    />
-                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
-                                                </label>
-                                            </div>
-
-                                            <select
-                                                v-else-if="field.type === 'brand'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option value="">{{ field.placeholder || 'Select brand...' }}</option>
-                                                <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
-                                                    {{ brand.name }}
-                                                </option>
-                                            </select>
-
-                                            <input
-                                                v-else-if="field.type === 'date'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                type="date"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
-                                            <p v-if="field.help_text" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                {{ field.help_text }}
-                                            </p>
+                                            <p v-if="form.errors.condition" class="mt-1 text-sm text-red-600">{{ form.errors.condition }}</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Loading Template State -->
-                        <div v-else-if="loadingTemplate" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 p-6">
-                            <div class="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
-                                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                <span>Loading template fields...</span>
-                            </div>
-                        </div>
-
-                        <!-- Media Section -->
+                        <!-- Pricing & Inventory (moved above templates) -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
                                 type="button"
                                 class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('variants')"
+                                @click="toggleSection('pricingInventory')"
                             >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Images</h3>
-                                <ChevronDownIcon v-if="!sections.variants" class="size-5 text-gray-400" />
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Pricing & Inventory</h3>
+                                <ChevronDownIcon v-if="!sections.pricingInventory" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />
                             </button>
 
-                            <div v-show="sections.variants" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <!-- Image previews -->
-                                <div v-if="imagePreviews.length > 0" class="mb-4 flex flex-wrap gap-4">
-                                    <div
-                                        v-for="(preview, index) in imagePreviews"
-                                        :key="index"
-                                        class="relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200 dark:bg-gray-700 dark:ring-gray-600"
-                                    >
-                                        <img
-                                            :src="preview"
-                                            class="h-full w-full object-cover"
-                                        />
-                                        <button
-                                            type="button"
-                                            class="absolute right-1 top-1 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
-                                            @click="removeImage(index)"
-                                        >
-                                            <XMarkIcon class="size-4" />
-                                        </button>
-                                        <span
-                                            v-if="index === 0"
-                                            class="absolute bottom-0 left-0 right-0 bg-indigo-600 px-1 py-0.5 text-center text-xs font-medium text-white"
-                                        >
-                                            Primary
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <!-- Upload area -->
-                                <div
-                                    class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-8 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-colors"
-                                    @click="imageInputRef?.click()"
-                                    @dragover.prevent
-                                    @drop="handleImageDrop"
-                                >
-                                    <PhotoIcon class="size-12 text-gray-400 dark:text-gray-500" />
-                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                        Drag & drop images or <span class="text-indigo-600 dark:text-indigo-400">click to upload</span>
-                                    </p>
-                                    <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                                        PNG, JPG, WEBP up to 10MB each
-                                    </p>
-                                </div>
-                                <input
-                                    ref="imageInputRef"
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    class="hidden"
-                                    @change="handleImageSelect"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Pricing & Inventory -->
-                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <div class="px-4 py-4 sm:px-6">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Pricing & Inventory</h3>
-                            </div>
-
-                            <div class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                            <div v-show="sections.pricingInventory" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <!-- Has Variants Toggle -->
                                 <div class="mb-6 flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
                                     <div>
@@ -1021,6 +868,658 @@ function submit() {
                                 </div>
 
                                 <p v-if="form.errors.variants" class="mt-2 text-sm text-red-600">{{ form.errors.variants }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Template Attributes Section -->
+                        <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('attributes')"
+                            >
+                                <div>
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ template.name }}</h3>
+                                    <p v-if="template.description" class="text-sm text-gray-500 dark:text-gray-400">{{ template.description }}</p>
+                                </div>
+                                <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-6">
+                                    <!-- Grouped Fields -->
+                                    <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">
+                                        <div class="flex gap-2">
+                                            <div
+                                                v-for="field in fields"
+                                                :key="field.id"
+                                                :class="[
+                                                    field.width_class === 'full' ? 'flex-1' : '',
+                                                    field.width_class === 'half' ? 'w-1/2' : '',
+                                                    field.width_class === 'third' ? 'w-1/3' : '',
+                                                    field.width_class === 'quarter' ? 'w-1/4' : '',
+                                                    field.group_position > 1 ? 'w-auto shrink-0' : 'flex-1',
+                                                ]"
+                                            >
+                                                <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    {{ field.label }}
+                                                    <span v-if="field.is_required" class="text-red-500">*</span>
+                                                </label>
+
+                                                <input
+                                                    v-if="field.type === 'text'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="text"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <input
+                                                    v-else-if="field.type === 'number'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="number"
+                                                    step="any"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <select
+                                                    v-else-if="field.type === 'select'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                    <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                        {{ opt.label }}
+                                                    </option>
+                                                </select>
+
+                                                <select
+                                                    v-else-if="field.type === 'brand'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option value="">{{ field.placeholder || 'Select brand...' }}</option>
+                                                    <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
+                                                        {{ brand.name }}
+                                                    </option>
+                                                </select>
+
+                                                <input
+                                                    v-else-if="field.type === 'date'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="date"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <p v-if="field.help_text && field.group_position === 1" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    {{ field.help_text }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Standalone Fields -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div
+                                            v-for="field in groupedTemplateFields.standalone"
+                                            :key="field.id"
+                                            :class="[
+                                                field.width_class === 'full' ? 'sm:col-span-2' : '',
+                                            ]"
+                                        >
+                                            <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ field.label }}
+                                                <span v-if="field.is_required" class="text-red-500">*</span>
+                                            </label>
+
+                                            <input
+                                                v-if="field.type === 'text'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="text"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <input
+                                                v-else-if="field.type === 'number'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="number"
+                                                step="any"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <textarea
+                                                v-else-if="field.type === 'textarea'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                rows="3"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <select
+                                                v-else-if="field.type === 'select'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                    {{ opt.label }}
+                                                </option>
+                                            </select>
+
+                                            <div v-else-if="field.type === 'checkbox'" class="mt-2 space-y-2">
+                                                <label
+                                                    v-for="opt in field.options"
+                                                    :key="opt.value"
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        :value="opt.value"
+                                                        :checked="(form.attributes[field.id] || '').split(',').includes(opt.value)"
+                                                        @change="(e: Event) => {
+                                                            const target = e.target as HTMLInputElement;
+                                                            const current = (form.attributes[field.id] || '').split(',').filter(Boolean);
+                                                            if (target.checked) {
+                                                                current.push(opt.value);
+                                                            } else {
+                                                                const idx = current.indexOf(opt.value);
+                                                                if (idx > -1) current.splice(idx, 1);
+                                                            }
+                                                            form.attributes[field.id] = current.join(',');
+                                                        }"
+                                                        class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                    />
+                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
+                                                </label>
+                                            </div>
+
+                                            <div v-else-if="field.type === 'radio'" class="mt-2 space-y-2">
+                                                <label
+                                                    v-for="opt in field.options"
+                                                    :key="opt.value"
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        :name="`attr_${field.id}`"
+                                                        :value="opt.value"
+                                                        v-model="form.attributes[field.id]"
+                                                        class="size-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                    />
+                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
+                                                </label>
+                                            </div>
+
+                                            <select
+                                                v-else-if="field.type === 'brand'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="">{{ field.placeholder || 'Select brand...' }}</option>
+                                                <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
+                                                    {{ brand.name }}
+                                                </option>
+                                            </select>
+
+                                            <input
+                                                v-else-if="field.type === 'date'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="date"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <p v-if="field.help_text" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                {{ field.help_text }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loading Template State -->
+                        <div v-else-if="loadingTemplate" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 p-6">
+                            <div class="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
+                                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span>Loading template fields...</span>
+                            </div>
+                        </div>
+
+                        <!-- Images Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('images')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Images</h3>
+                                <ChevronDownIcon v-if="!sections.images" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.images" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <!-- Image previews -->
+                                <div v-if="imagePreviews.length > 0" class="mb-4 flex flex-wrap gap-4">
+                                    <div
+                                        v-for="(preview, index) in imagePreviews"
+                                        :key="index"
+                                        class="relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200 dark:bg-gray-700 dark:ring-gray-600"
+                                    >
+                                        <img
+                                            :src="preview"
+                                            class="h-full w-full object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            class="absolute right-1 top-1 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
+                                            @click="removeImage(index)"
+                                        >
+                                            <XMarkIcon class="size-4" />
+                                        </button>
+                                        <span
+                                            v-if="index === 0"
+                                            class="absolute bottom-0 left-0 right-0 bg-indigo-600 px-1 py-0.5 text-center text-xs font-medium text-white"
+                                        >
+                                            Primary
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Upload area -->
+                                <div
+                                    class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-8 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-colors"
+                                    @click="imageInputRef?.click()"
+                                    @dragover.prevent
+                                    @drop="handleImageDrop"
+                                >
+                                    <PhotoIcon class="size-12 text-gray-400 dark:text-gray-500" />
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        Drag & drop images or <span class="text-indigo-600 dark:text-indigo-400">click to upload</span>
+                                    </p>
+                                    <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                        PNG, JPG, WEBP up to 10MB each
+                                    </p>
+                                </div>
+                                <input
+                                    ref="imageInputRef"
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    class="hidden"
+                                    @change="handleImageSelect"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Videos Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('videos')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Videos</h3>
+                                <ChevronDownIcon v-if="!sections.videos" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.videos" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-6">
+                                    <!-- Uploaded Videos -->
+                                    <div v-if="uploadedVideos.length > 0">
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Uploaded Videos</h4>
+                                        <div class="space-y-3">
+                                            <div
+                                                v-for="(video, index) in uploadedVideos"
+                                                :key="'uploaded-' + index"
+                                                class="flex gap-4 items-start rounded-lg border border-gray-200 p-3 dark:border-gray-700"
+                                            >
+                                                <div class="relative h-20 w-32 shrink-0 overflow-hidden rounded bg-gray-100 dark:bg-gray-700">
+                                                    <video
+                                                        :src="video.preview"
+                                                        class="h-full w-full object-cover"
+                                                        muted
+                                                    />
+                                                    <div class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                        <VideoCameraIcon class="size-8 text-white" />
+                                                    </div>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <input
+                                                        v-model="video.title"
+                                                        type="text"
+                                                        placeholder="Video title"
+                                                        class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                        {{ video.file.name }} ({{ formatFileSize(video.file.size) }})
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                    @click="removeUploadedVideo(index)"
+                                                >
+                                                    <TrashIcon class="size-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Video Upload Area -->
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Upload Video</h4>
+                                        <div
+                                            class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-6 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-colors"
+                                            @click="videoInputRef?.click()"
+                                            @dragover.prevent
+                                            @drop="handleVideoDrop"
+                                        >
+                                            <VideoCameraIcon class="size-10 text-gray-400 dark:text-gray-500" />
+                                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                                Drag & drop videos or <span class="text-indigo-600 dark:text-indigo-400">click to upload</span>
+                                            </p>
+                                            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                                MP4, MOV, AVI, WebM up to 100MB each
+                                            </p>
+                                        </div>
+                                        <input
+                                            ref="videoInputRef"
+                                            type="file"
+                                            accept="video/*"
+                                            multiple
+                                            class="hidden"
+                                            @change="handleVideoSelect"
+                                        />
+                                    </div>
+
+                                    <!-- External Video URLs -->
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">External Videos</h4>
+                                        <div class="space-y-3">
+                                            <div
+                                                v-for="(video, index) in form.videos"
+                                                :key="'external-' + index"
+                                                class="flex gap-4 items-start"
+                                            >
+                                                <div class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <input
+                                                            v-model="video.url"
+                                                            type="url"
+                                                            placeholder="https://youtube.com/watch?v=..."
+                                                            class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <input
+                                                            v-model="video.title"
+                                                            type="text"
+                                                            placeholder="Video title (optional)"
+                                                            class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                    @click="removeVideo(index)"
+                                                >
+                                                    <TrashIcon class="size-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            class="mt-3 inline-flex items-center gap-x-1.5 rounded-md bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                            @click="addVideo"
+                                        >
+                                            <PlusIcon class="-ml-0.5 size-4" />
+                                            Add External URL
+                                        </button>
+
+                                        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                            Supports YouTube and Vimeo links
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Internal Images Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('internalImages')"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Internal Images</h3>
+                                    <LockClosedIcon class="size-4 text-gray-400" title="For internal use only" />
+                                </div>
+                                <ChevronDownIcon v-if="!sections.internalImages" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.internalImages" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <p class="mb-4 text-sm text-amber-600 dark:text-amber-400">
+                                    These images are for internal use only and will not be shown to customers.
+                                </p>
+
+                                <!-- Internal image previews -->
+                                <div v-if="internalImagePreviews.length > 0" class="mb-4 flex flex-wrap gap-4">
+                                    <div
+                                        v-for="(preview, index) in internalImagePreviews"
+                                        :key="index"
+                                        class="relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-amber-300 dark:bg-gray-700 dark:ring-amber-600"
+                                    >
+                                        <img
+                                            :src="preview"
+                                            class="h-full w-full object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            class="absolute right-1 top-1 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
+                                            @click="removeInternalImage(index)"
+                                        >
+                                            <XMarkIcon class="size-4" />
+                                        </button>
+                                        <LockClosedIcon class="absolute bottom-1 left-1 size-4 text-amber-600 dark:text-amber-400" />
+                                    </div>
+                                </div>
+
+                                <!-- Upload area -->
+                                <div
+                                    class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-amber-300 p-8 dark:border-amber-600 hover:border-amber-400 dark:hover:border-amber-500 cursor-pointer transition-colors"
+                                    @click="internalImageInputRef?.click()"
+                                    @dragover.prevent
+                                    @drop="handleInternalImageDrop"
+                                >
+                                    <LockClosedIcon class="size-12 text-amber-400 dark:text-amber-500" />
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        Drag & drop internal images or <span class="text-amber-600 dark:text-amber-400">click to upload</span>
+                                    </p>
+                                    <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                        Receipts, certificates, internal documentation
+                                    </p>
+                                </div>
+                                <input
+                                    ref="internalImageInputRef"
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    class="hidden"
+                                    @change="handleInternalImageSelect"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- Shipping Rates Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('shipping')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Shipping</h3>
+                                <ChevronDownIcon v-if="!sections.shipping" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.shipping" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-6">
+                                    <!-- Shipping Costs -->
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Shipping Costs</h4>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label for="domestic_shipping_cost" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Domestic Shipping
+                                                </label>
+                                                <div class="mt-1 flex rounded-md shadow-sm">
+                                                    <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
+                                                    <input
+                                                        id="domestic_shipping_cost"
+                                                        v-model="form.domestic_shipping_cost"
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        placeholder="0.00"
+                                                        class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label for="international_shipping_cost" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    International Shipping
+                                                </label>
+                                                <div class="mt-1 flex rounded-md shadow-sm">
+                                                    <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
+                                                    <input
+                                                        id="international_shipping_cost"
+                                                        v-model="form.international_shipping_cost"
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        placeholder="0.00"
+                                                        class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Weight -->
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Weight</h4>
+                                        <div class="flex gap-2">
+                                            <div class="flex-1">
+                                                <input
+                                                    id="weight"
+                                                    v-model="form.weight"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="0.00"
+                                                    class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                            <select
+                                                v-model="form.weight_unit"
+                                                class="rounded-md border-0 bg-white py-1.5 pl-3 pr-8 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="g">g</option>
+                                                <option value="kg">kg</option>
+                                                <option value="oz">oz</option>
+                                                <option value="lb">lb</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dimensions -->
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Dimensions</h4>
+                                        <div class="flex gap-2 items-end">
+                                            <div class="flex-1">
+                                                <label for="length" class="block text-xs text-gray-500 dark:text-gray-400">Length</label>
+                                                <input
+                                                    id="length"
+                                                    v-model="form.length"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="0"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                            <span class="pb-2 text-gray-400">x</span>
+                                            <div class="flex-1">
+                                                <label for="width" class="block text-xs text-gray-500 dark:text-gray-400">Width</label>
+                                                <input
+                                                    id="width"
+                                                    v-model="form.width"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="0"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                            <span class="pb-2 text-gray-400">x</span>
+                                            <div class="flex-1">
+                                                <label for="height" class="block text-xs text-gray-500 dark:text-gray-400">Height</label>
+                                                <input
+                                                    id="height"
+                                                    v-model="form.height"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="0"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                            <select
+                                                v-model="form.length_class"
+                                                class="rounded-md border-0 bg-white py-1.5 pl-3 pr-8 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="cm">cm</option>
+                                                <option value="in">in</option>
+                                                <option value="m">m</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

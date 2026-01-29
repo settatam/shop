@@ -113,11 +113,17 @@ function updatePaymentMethod(paymentId: string, method: string) {
     const payment = localPayments.value.find(p => p.id === paymentId);
     if (payment) {
         payment.method = method;
-        // Reset details when method changes, but keep check address
-        const checkAddress = payment.details.check_mailing_address;
+        // Reset details when method changes
         payment.details = {};
-        if (checkAddress) {
-            payment.details.check_mailing_address = checkAddress;
+
+        // If switching to check, auto-populate address from customer
+        if (method === 'check' && props.customer) {
+            payment.details.check_mailing_address = {
+                address: props.customer.address || '',
+                city: props.customer.city || '',
+                state: props.customer.state || '',
+                zip: props.customer.zip || '',
+            };
         }
         emitUpdate();
     }

@@ -59,6 +59,7 @@ interface TransactionItem {
     dwt: number | null;
     precious_metal: string | null;
     condition: string | null;
+    attributes: Record<string, string> | null;
     is_added_to_inventory: boolean;
     date_added_to_inventory: string | null;
     product_id: number | null;
@@ -80,11 +81,25 @@ interface MetalOption {
     label: string;
 }
 
+interface FieldOption {
+    value: string;
+    label: string;
+}
+
+interface TemplateField {
+    id: number;
+    name: string;
+    label: string;
+    type: string;
+    options: FieldOption[];
+}
+
 interface Props {
     transaction: Transaction;
     item: TransactionItem;
     preciousMetals: MetalOption[];
     conditions: MetalOption[];
+    templateFields: TemplateField[];
     activityLogs?: ActivityDay[];
 }
 
@@ -122,6 +137,19 @@ const getMetalLabel = (value: string | null) => {
 const getConditionLabel = (value: string | null) => {
     if (!value) return null;
     return props.conditions.find(c => c.value === value)?.label || value;
+};
+
+const getAttributeDisplayValue = (field: TemplateField) => {
+    const value = props.item.attributes?.[field.id];
+    if (!value) return null;
+
+    // For select/radio/checkbox, look up the label
+    if (['select', 'radio', 'checkbox'].includes(field.type)) {
+        const option = field.options.find(o => o.value === value);
+        return option?.label || value;
+    }
+
+    return value;
 };
 
 const margin = (() => {
@@ -354,6 +382,13 @@ const moveToInventory = () => {
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Condition</dt>
                                     <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ getConditionLabel(item.condition) }}</dd>
                                 </div>
+                                <!-- Template Fields -->
+                                <template v-for="field in templateFields" :key="field.id">
+                                    <div v-if="getAttributeDisplayValue(field)">
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">{{ field.label }}</dt>
+                                        <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ getAttributeDisplayValue(field) }}</dd>
+                                    </div>
+                                </template>
                                 <div>
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
                                     <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ formatDate(item.created_at) }}</dd>

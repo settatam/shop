@@ -48,6 +48,8 @@ class VendorController extends Controller
                 'display_name' => $v->display_name,
                 'email' => $v->email,
                 'phone' => $v->phone,
+                'contact_name' => $v->contact_name,
+                'address_line1' => $v->address_line1,
                 'city' => $v->city,
                 'state' => $v->state,
                 'country' => $v->country,
@@ -55,6 +57,10 @@ class VendorController extends Controller
                 'is_active' => $v->is_active,
                 'purchase_orders_count' => $v->purchase_orders_count,
                 'product_variants_count' => $v->product_variants_count,
+                'memo_total' => 0, // TODO: Implement when memo relationship is added
+                'repair_total' => 0, // TODO: Implement when repair relationship is added
+                'sales_total' => 0, // TODO: Implement when sales relationship is added
+                'last_transaction_date' => null, // TODO: Implement when transaction relationship is added
             ]);
 
         return Inertia::render('vendors/Index', [

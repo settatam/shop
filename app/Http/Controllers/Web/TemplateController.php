@@ -16,7 +16,7 @@ class TemplateController extends Controller
 {
     public function __construct(protected StoreContext $storeContext) {}
 
-    public function index(): Response|RedirectResponse
+    public function index(Request $request): Response|RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
@@ -25,10 +25,19 @@ class TemplateController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        $templates = ProductTemplate::where('store_id', $store->id)
+        $query = ProductTemplate::where('store_id', $store->id)
             ->withCount('fields')
-            ->withCount('categories')
-            ->orderBy('name')
+            ->withCount('categories');
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $templates = $query->orderBy('name')
             ->get()
             ->map(fn ($template) => [
                 'id' => $template->id,
@@ -43,6 +52,9 @@ class TemplateController extends Controller
 
         return Inertia::render('templates/Index', [
             'templates' => $templates,
+            'filters' => [
+                'search' => $request->input('search', ''),
+            ],
         ]);
     }
 

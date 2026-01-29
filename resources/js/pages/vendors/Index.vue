@@ -25,6 +25,8 @@ interface Vendor {
     display_name: string;
     email: string | null;
     phone: string | null;
+    contact_name: string | null;
+    address_line1: string | null;
     city: string | null;
     state: string | null;
     country: string | null;
@@ -32,6 +34,10 @@ interface Vendor {
     is_active: boolean;
     purchase_orders_count: number;
     product_variants_count: number;
+    memo_total: number;
+    repair_total: number;
+    sales_total: number;
+    last_transaction_date: string | null;
 }
 
 interface PaginationLink {
@@ -218,6 +224,27 @@ const formatPaymentTerms = (terms: string | null) => {
     if (!terms) return '-';
     return terms.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
+
+const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+    }).format(amount);
+};
+
+const formatAddress = (vendor: Vendor) => {
+    const parts = [vendor.address_line1, vendor.city, vendor.state].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : '-';
+};
+
+const formatDate = (date: string | null) => {
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+};
 </script>
 
 <template>
@@ -283,19 +310,25 @@ const formatPaymentTerms = (terms: string | null) => {
                     <thead class="bg-gray-50 dark:bg-gray-700">
                         <tr>
                             <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                                Vendor
+                                Company Name
                             </th>
                             <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white lg:table-cell">
-                                Contact
+                                Contact Name
                             </th>
                             <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white md:table-cell">
-                                Payment Terms
+                                Address
                             </th>
-                            <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                                Status
+                            <th scope="col" class="hidden px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
+                                Memo Total
                             </th>
-                            <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
-                                Products
+                            <th scope="col" class="hidden px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
+                                Repair Total
+                            </th>
+                            <th scope="col" class="hidden px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white sm:table-cell">
+                                Sales Total
+                            </th>
+                            <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white lg:table-cell">
+                                Last Transaction
                             </th>
                             <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
                                 <span class="sr-only">Actions</span>
@@ -314,62 +347,47 @@ const formatPaymentTerms = (terms: string | null) => {
                                             :href="`/vendors/${vendor.id}`"
                                             class="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400"
                                         >
-                                            {{ vendor.name }}
+                                            {{ vendor.company_name || vendor.name }}
                                         </Link>
-                                        <div v-if="vendor.code" class="text-sm text-gray-500 dark:text-gray-400">
-                                            {{ vendor.code }}
+                                        <div v-if="vendor.company_name && vendor.name !== vendor.company_name" class="text-sm text-gray-500 dark:text-gray-400">
+                                            {{ vendor.name }}
                                         </div>
-                                        <div v-if="vendor.company_name" class="text-sm text-gray-500 dark:text-gray-400">
-                                            {{ vendor.company_name }}
-                                        </div>
-                                        <!-- Mobile contact info -->
+                                        <!-- Mobile info -->
                                         <div class="mt-1 lg:hidden">
-                                            <div v-if="vendor.email" class="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                                                <EnvelopeIcon class="size-3.5" />
-                                                {{ vendor.email }}
-                                            </div>
-                                            <div v-if="vendor.phone" class="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
-                                                <PhoneIcon class="size-3.5" />
-                                                {{ vendor.phone }}
+                                            <div v-if="vendor.contact_name" class="text-sm text-gray-500 dark:text-gray-400">
+                                                {{ vendor.contact_name }}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </td>
                             <td class="hidden px-3 py-4 lg:table-cell">
-                                <div v-if="vendor.email" class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-                                    <EnvelopeIcon class="size-4" />
-                                    {{ vendor.email }}
-                                </div>
-                                <div v-if="vendor.phone" class="mt-1 flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
-                                    <PhoneIcon class="size-4" />
-                                    {{ vendor.phone }}
-                                </div>
-                                <span v-if="!vendor.email && !vendor.phone" class="text-sm text-gray-400 dark:text-gray-500">
-                                    No contact info
+                                <span class="text-sm text-gray-600 dark:text-gray-400">
+                                    {{ vendor.contact_name || '-' }}
                                 </span>
                             </td>
                             <td class="hidden px-3 py-4 md:table-cell">
                                 <span class="text-sm text-gray-600 dark:text-gray-400">
-                                    {{ formatPaymentTerms(vendor.payment_terms) }}
+                                    {{ formatAddress(vendor) }}
                                 </span>
                             </td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm">
-                                <span
-                                    :class="[
-                                        'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium',
-                                        vendor.is_active
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-                                    ]"
-                                >
-                                    <CheckCircleIcon v-if="vendor.is_active" class="size-3.5" />
-                                    <XCircleIcon v-else class="size-3.5" />
-                                    {{ vendor.is_active ? 'Active' : 'Inactive' }}
+                            <td class="hidden whitespace-nowrap px-3 py-4 text-right text-sm sm:table-cell">
+                                <span class="font-medium text-gray-900 dark:text-white">
+                                    {{ formatCurrency(vendor.memo_total || 0) }}
                                 </span>
                             </td>
-                            <td class="hidden whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 sm:table-cell">
-                                {{ vendor.product_variants_count }}
+                            <td class="hidden whitespace-nowrap px-3 py-4 text-right text-sm sm:table-cell">
+                                <span class="font-medium text-gray-900 dark:text-white">
+                                    {{ formatCurrency(vendor.repair_total || 0) }}
+                                </span>
+                            </td>
+                            <td class="hidden whitespace-nowrap px-3 py-4 text-right text-sm sm:table-cell">
+                                <span class="font-medium text-gray-900 dark:text-white">
+                                    {{ formatCurrency(vendor.sales_total || 0) }}
+                                </span>
+                            </td>
+                            <td class="hidden whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 lg:table-cell">
+                                {{ formatDate(vendor.last_transaction_date) }}
                             </td>
                             <td class="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                 <div class="flex items-center justify-end gap-2">
@@ -392,7 +410,7 @@ const formatPaymentTerms = (terms: string | null) => {
                             </td>
                         </tr>
                         <tr v-if="vendors.data.length === 0">
-                            <td colspan="6" class="py-12 text-center">
+                            <td colspan="8" class="py-12 text-center">
                                 <BuildingOffice2Icon class="mx-auto size-12 text-gray-400" />
                                 <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No vendors</h3>
                                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">

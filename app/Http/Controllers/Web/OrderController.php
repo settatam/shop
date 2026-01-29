@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateOrderFromWizardRequest;
+use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Order;
@@ -489,6 +490,38 @@ class OrderController extends Controller
         ]);
     }
 
+    // Search Bucket Items API for Wizard
+
+    public function searchBucketItems(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json(['buckets' => []], 200);
+        }
+
+        // Get all buckets with their active (unsold) items
+        $buckets = Bucket::where('store_id', $store->id)
+            ->with(['activeItems' => fn ($q) => $q->orderBy('created_at', 'desc')])
+            ->get()
+            ->filter(fn ($bucket) => $bucket->activeItems->isNotEmpty())
+            ->map(fn ($bucket) => [
+                'id' => $bucket->id,
+                'name' => $bucket->name,
+                'total_value' => $bucket->total_value,
+                'items' => $bucket->activeItems->map(fn ($item) => [
+                    'id' => $item->id,
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'value' => $item->value,
+                    'created_at' => $item->created_at->toISOString(),
+                ]),
+            ])
+            ->values();
+
+        return response()->json(['buckets' => $buckets]);
+    }
+
     // Search Customers API for Wizard
 
     public function searchCustomers(Request $request): JsonResponse
@@ -732,7 +765,7 @@ class OrderController extends Controller
                     'dwt' => $item->dwt,
                 ]),
             ] : null,
-            'note_entries' => $order->notes->map(fn ($note) => [
+            'note_entries' => ($order->notes ?? collect())->map(fn ($note) => [
                 'id' => $note->id,
                 'content' => $note->content,
                 'user' => $note->user ? [

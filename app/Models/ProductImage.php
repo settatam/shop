@@ -19,12 +19,14 @@ class ProductImage extends Model
         'alt_text',
         'sort_order',
         'is_primary',
+        'is_internal',
     ];
 
     protected function casts(): array
     {
         return [
             'is_primary' => 'boolean',
+            'is_internal' => 'boolean',
         ];
     }
 

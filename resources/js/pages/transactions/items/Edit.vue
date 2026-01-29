@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Form } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { ArrowLeftIcon } from '@heroicons/vue/20/solid';
 
 interface Category {
@@ -23,6 +23,26 @@ interface ItemImage {
     is_primary: boolean;
 }
 
+interface FieldOption {
+    value: string;
+    label: string;
+}
+
+interface TemplateField {
+    id: number;
+    name: string;
+    label: string;
+    type: string;
+    placeholder: string | null;
+    help_text: string | null;
+    default_value: string | null;
+    is_required: boolean;
+    group_name: string | null;
+    group_position: number;
+    width_class: string;
+    options: FieldOption[];
+}
+
 interface TransactionItem {
     id: number;
     transaction_id: number;
@@ -36,6 +56,7 @@ interface TransactionItem {
     dwt: number | null;
     precious_metal: string | null;
     condition: string | null;
+    attributes: Record<string, string> | null;
     images: ItemImage[];
     created_at: string;
     updated_at: string;
@@ -57,9 +78,65 @@ interface Props {
     categories: Category[];
     preciousMetals: MetalOption[];
     conditions: MetalOption[];
+    templateFields: TemplateField[];
 }
 
 const props = defineProps<Props>();
+
+// Template fields state
+const templateFields = ref<TemplateField[]>(props.templateFields || []);
+const loadingTemplate = ref(false);
+const selectedCategoryId = ref(props.item.category_id);
+const attributes = ref<Record<string, string>>({ ...(props.item.attributes || {}) });
+
+// Watch for category changes to load new template fields
+watch(selectedCategoryId, async (newCategoryId) => {
+    if (newCategoryId) {
+        loadingTemplate.value = true;
+        try {
+            const response = await fetch(`/api/v1/categories/${newCategoryId}/template`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                templateFields.value = (data.fields || []).map((f: any) => ({
+                    ...f,
+                    options: f.options || [],
+                }));
+            } else {
+                templateFields.value = [];
+            }
+        } catch {
+            templateFields.value = [];
+        } finally {
+            loadingTemplate.value = false;
+        }
+    } else {
+        templateFields.value = [];
+    }
+});
+
+// Group template fields
+const groupedTemplateFields = computed(() => {
+    const groups: Record<string, TemplateField[]> = {};
+    const standalone: TemplateField[] = [];
+
+    for (const field of templateFields.value) {
+        if (field.group_name) {
+            if (!groups[field.group_name]) {
+                groups[field.group_name] = [];
+            }
+            groups[field.group_name].push(field);
+            groups[field.group_name].sort((a, b) => a.group_position - b.group_position);
+        } else {
+            standalone.push(field);
+        }
+    }
+
+    return { groups, standalone };
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Transactions', href: '/transactions' },
@@ -159,18 +236,148 @@ const deleteImage = (imageId: number) => {
                                     <select
                                         id="category_id"
                                         name="category_id"
+                                        v-model="selectedCategoryId"
                                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                     >
-                                        <option value="">No Category</option>
+                                        <option :value="null">No Category</option>
                                         <option
                                             v-for="cat in categories"
                                             :key="cat.id"
                                             :value="cat.id"
-                                            :selected="cat.id === item.category_id"
                                         >
                                             {{ '\u00A0'.repeat(cat.level * 2) }}{{ cat.name }}
                                         </option>
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Template Fields -->
+                        <div v-if="loadingTemplate" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 mb-6">
+                            <div class="px-4 py-5 sm:p-6 flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
+                                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span>Loading template fields...</span>
+                            </div>
+                        </div>
+
+                        <div v-else-if="templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 mb-6">
+                            <div class="px-4 py-5 sm:p-6 space-y-4">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Template Fields</h3>
+
+                                <!-- Grouped Fields -->
+                                <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">
+                                    <div class="flex gap-2">
+                                        <div
+                                            v-for="field in fields"
+                                            :key="field.id"
+                                            :class="[
+                                                field.width_class === 'full' ? 'flex-1' : '',
+                                                field.width_class === 'half' ? 'w-1/2' : '',
+                                                field.width_class === 'third' ? 'w-1/3' : '',
+                                                field.width_class === 'quarter' ? 'w-1/4' : '',
+                                                field.group_position > 1 ? 'w-auto shrink-0' : 'flex-1',
+                                            ]"
+                                        >
+                                            <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ field.label }}
+                                                <span v-if="field.is_required" class="text-red-500">*</span>
+                                            </label>
+
+                                            <input
+                                                v-if="field.type === 'text'"
+                                                :id="`attr_${field.id}`"
+                                                :name="`attributes[${field.id}]`"
+                                                v-model="attributes[field.id]"
+                                                type="text"
+                                                :placeholder="field.placeholder || ''"
+                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            />
+                                            <input
+                                                v-else-if="field.type === 'number'"
+                                                :id="`attr_${field.id}`"
+                                                :name="`attributes[${field.id}]`"
+                                                v-model="attributes[field.id]"
+                                                type="number"
+                                                step="any"
+                                                :placeholder="field.placeholder || ''"
+                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            />
+                                            <select
+                                                v-else-if="field.type === 'select'"
+                                                :id="`attr_${field.id}`"
+                                                :name="`attributes[${field.id}]`"
+                                                v-model="attributes[field.id]"
+                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            >
+                                                <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                    {{ opt.label }}
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Standalone Fields -->
+                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div
+                                        v-for="field in groupedTemplateFields.standalone"
+                                        :key="field.id"
+                                        :class="[field.width_class === 'full' ? 'sm:col-span-2' : '']"
+                                    >
+                                        <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            {{ field.label }}
+                                            <span v-if="field.is_required" class="text-red-500">*</span>
+                                        </label>
+
+                                        <input
+                                            v-if="field.type === 'text'"
+                                            :id="`attr_${field.id}`"
+                                            :name="`attributes[${field.id}]`"
+                                            v-model="attributes[field.id]"
+                                            type="text"
+                                            :placeholder="field.placeholder || ''"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        />
+                                        <input
+                                            v-else-if="field.type === 'number'"
+                                            :id="`attr_${field.id}`"
+                                            :name="`attributes[${field.id}]`"
+                                            v-model="attributes[field.id]"
+                                            type="number"
+                                            step="any"
+                                            :placeholder="field.placeholder || ''"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        />
+                                        <textarea
+                                            v-else-if="field.type === 'textarea'"
+                                            :id="`attr_${field.id}`"
+                                            :name="`attributes[${field.id}]`"
+                                            v-model="attributes[field.id]"
+                                            :placeholder="field.placeholder || ''"
+                                            rows="3"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        />
+                                        <select
+                                            v-else-if="field.type === 'select'"
+                                            :id="`attr_${field.id}`"
+                                            :name="`attributes[${field.id}]`"
+                                            v-model="attributes[field.id]"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        >
+                                            <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                            <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                {{ opt.label }}
+                                            </option>
+                                        </select>
+
+                                        <p v-if="field.help_text" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            {{ field.help_text }}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

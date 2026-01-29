@@ -17,6 +17,7 @@ import {
 } from '@heroicons/vue/20/solid';
 import { UserIcon } from '@heroicons/vue/24/outline';
 import axios from 'axios';
+import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 
 interface Customer {
     id?: number;
@@ -33,6 +34,7 @@ interface Customer {
     state_id?: number;
     zip?: string;
     country_id?: number;
+    lead_source_id?: number | null;
 }
 
 interface Props {
@@ -67,6 +69,7 @@ const newCustomer = ref<Customer>({
     state_id: undefined,
     zip: '',
     country_id: undefined,
+    lead_source_id: null,
 });
 
 // Initialize from props
@@ -148,6 +151,7 @@ function switchToSearch() {
         city: '',
         state: '',
         zip: '',
+        lead_source_id: null,
     };
     emit('update', null, null);
 }
@@ -385,6 +389,18 @@ const filteredOptions = computed(() => {
                         type="tel"
                         @input="updateNewCustomer"
                         class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label for="lead_source" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Lead Source
+                    </label>
+                    <LeadSourceSelect
+                        v-model="newCustomer.lead_source_id"
+                        placeholder="Select or create lead source..."
+                        class="mt-1"
+                        @update:model-value="updateNewCustomer"
                     />
                 </div>
 

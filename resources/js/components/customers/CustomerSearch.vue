@@ -17,6 +17,7 @@ import {
 } from '@heroicons/vue/20/solid';
 import { UserIcon } from '@heroicons/vue/24/outline';
 import axios from 'axios';
+import LeadSourceSelect from './LeadSourceSelect.vue';
 
 interface Customer {
     id: number;
@@ -55,6 +56,7 @@ const newCustomer = ref({
     last_name: '',
     email: '',
     phone_number: '',
+    lead_source_id: null as number | null,
 });
 const createLoading = ref(false);
 const createError = ref<string | null>(null);
@@ -131,6 +133,7 @@ const resetNewCustomerForm = () => {
         last_name: '',
         email: '',
         phone_number: '',
+        lead_source_id: null,
     };
     createError.value = null;
 };
@@ -326,6 +329,14 @@ const filteredOptions = computed(() => {
                                     v-model="newCustomer.phone_number"
                                     type="tel"
                                     class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                />
+                            </div>
+                            <div>
+                                <label for="lead_source" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
+                                <LeadSourceSelect
+                                    v-model="newCustomer.lead_source_id"
+                                    placeholder="Select or create lead source..."
+                                    class="mt-1"
                                 />
                             </div>
                             <div class="flex gap-3 justify-end pt-2">

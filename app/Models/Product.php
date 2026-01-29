@@ -25,6 +25,7 @@ class Product extends Model
         'weight',
         'weight_unit',
         'compare_at_price',
+        'price_code',
         'currency_code',
         'store_id',
         'handle',
@@ -52,6 +53,9 @@ class Product extends Model
         'country_of_origin',
         'step',
         'is_published',
+        'condition',
+        'domestic_shipping_cost',
+        'international_shipping_cost',
         'is_draft',
         'seo_description',
         'seo_page_title',
@@ -77,6 +81,8 @@ class Product extends Model
             'length' => 'decimal:2',
             'width' => 'decimal:2',
             'height' => 'decimal:2',
+            'domestic_shipping_cost' => 'decimal:2',
+            'international_shipping_cost' => 'decimal:2',
         ];
     }
 
@@ -118,6 +124,27 @@ class Product extends Model
     public function legacyImages(): HasMany
     {
         return $this->hasMany(ProductImage::class);
+    }
+
+    public function videos(): HasMany
+    {
+        return $this->hasMany(ProductVideo::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Get internal images only.
+     */
+    public function internalImages(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->where('is_internal', true)->orderBy('sort_order');
+    }
+
+    /**
+     * Get public images only (non-internal).
+     */
+    public function publicImages(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->where('is_internal', false)->orderBy('sort_order');
     }
 
     public function attributeValues(): HasMany
