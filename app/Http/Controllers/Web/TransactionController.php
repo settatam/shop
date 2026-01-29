@@ -62,7 +62,7 @@ class TransactionController extends Controller
             'store_id' => $store->id,
             'user_id' => auth()->id(),
             'status' => Transaction::STATUS_PENDING,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
 
         return redirect()->route('web.transactions.show', $transaction);
@@ -1313,7 +1313,7 @@ class TransactionController extends Controller
             'can_accept_offer' => $transaction->canAcceptOffer(),
             'can_process_payment' => $transaction->canProcessPayment(),
             'can_be_cancelled' => $transaction->canBeCancelled(),
-            'is_in_house' => $transaction->isInHouse(),
+            'is_in_store' => $transaction->isInStore(),
             'is_online' => $transaction->isOnline(),
             'shipping_address_id' => $transaction->shipping_address_id,
             'shipping_address' => $transaction->shippingAddress ? [
@@ -1552,7 +1552,7 @@ class TransactionController extends Controller
     protected function getTypes(): array
     {
         return [
-            ['value' => Transaction::TYPE_IN_HOUSE, 'label' => 'In-House'],
+            ['value' => Transaction::TYPE_IN_STORE, 'label' => 'In-House'],
             ['value' => Transaction::TYPE_MAIL_IN, 'label' => 'Mail-In'],
         ];
     }

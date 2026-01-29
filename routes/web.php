@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\CategoryController;
 use App\Http\Controllers\Web\CustomProductController;
 use App\Http\Controllers\Web\GiaCardScannerController;
 use App\Http\Controllers\Web\InventoryController;
+use App\Http\Controllers\Web\InventoryReportController;
 use App\Http\Controllers\Web\InvoiceController;
 use App\Http\Controllers\Web\LabelPrintController;
 use App\Http\Controllers\Web\LabelTemplateController;
@@ -382,6 +383,18 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('mtd/export', [SalesReportController::class, 'exportMonthToDate'])->name('mtd.export');
     });
 
+    // Inventory Reports
+    Route::prefix('reports/inventory')->name('reports.inventory.')->group(function () {
+        Route::get('/', [InventoryReportController::class, 'index'])->name('index');
+        Route::get('export', [InventoryReportController::class, 'export'])->name('export');
+        Route::get('weekly', [InventoryReportController::class, 'weekly'])->name('weekly');
+        Route::get('weekly/export', [InventoryReportController::class, 'exportWeekly'])->name('weekly.export');
+        Route::get('monthly', [InventoryReportController::class, 'monthly'])->name('monthly');
+        Route::get('monthly/export', [InventoryReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::get('yearly', [InventoryReportController::class, 'yearly'])->name('yearly');
+        Route::get('yearly/export', [InventoryReportController::class, 'exportYearly'])->name('yearly.export');
+    });
+
     // Buys Reports
     Route::prefix('reports/buys')->name('reports.buys.')->group(function () {
         // In-Store
@@ -396,11 +409,11 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('online/monthly', [BuysReportController::class, 'onlineMonthly'])->name('onlineMonthly');
         Route::get('online/monthly/export', [BuysReportController::class, 'exportOnlineMonthly'])->name('online.monthly.export');
 
-        // In-House
-        Route::get('in-house', [BuysReportController::class, 'inHouse'])->name('in-house');
-        Route::get('in-house/export', [BuysReportController::class, 'exportInHouse'])->name('in-house.export');
-        Route::get('in-house/monthly', [BuysReportController::class, 'inHouseMonthly'])->name('in-house.monthly');
-        Route::get('in-house/monthly/export', [BuysReportController::class, 'exportInHouseMonthly'])->name('in-house.monthly.export');
+        // Trade-In
+        Route::get('trade-in', [BuysReportController::class, 'tradeIn'])->name('trade-in');
+        Route::get('trade-in/export', [BuysReportController::class, 'exportTradeIn'])->name('trade-in.export');
+        Route::get('trade-in/monthly', [BuysReportController::class, 'tradeInMonthly'])->name('trade-in.monthly');
+        Route::get('trade-in/monthly/export', [BuysReportController::class, 'exportTradeInMonthly'])->name('trade-in.monthly.export');
     });
 });
 

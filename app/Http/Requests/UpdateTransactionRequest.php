@@ -21,7 +21,7 @@ class UpdateTransactionRequest extends FormRequest
         return [
             'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
             'type' => ['nullable', 'string', Rule::in([
-                Transaction::TYPE_IN_HOUSE,
+                Transaction::TYPE_IN_STORE,
                 Transaction::TYPE_MAIL_IN,
             ])],
             'preliminary_offer' => ['nullable', 'numeric', 'min:0'],

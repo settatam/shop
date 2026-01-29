@@ -27,7 +27,7 @@ class TransactionFactory extends Factory
             'user_id' => User::factory(),
             'transaction_number' => Transaction::generateTransactionNumber(),
             'status' => Transaction::STATUS_PENDING,
-            'type' => fake()->randomElement([Transaction::TYPE_IN_HOUSE, Transaction::TYPE_MAIL_IN]),
+            'type' => fake()->randomElement([Transaction::TYPE_IN_STORE, Transaction::TYPE_MAIL_IN]),
             'preliminary_offer' => $preliminaryOffer,
             'final_offer' => $finalOffer,
             'estimated_value' => fake()->randomFloat(2, $preliminaryOffer, $preliminaryOffer * 1.5),
@@ -129,7 +129,7 @@ class TransactionFactory extends Factory
     public function inHouse(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
     }
 

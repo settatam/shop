@@ -951,7 +951,7 @@ class MigrateLegacyData extends Command
                 'warehouse_id' => $this->warehouse?->id,
                 'status_id' => $newStatusId,
                 'status' => $this->deriveStatusString($legacyTxn, $currentStatusUpdate?->current_status),
-                'type' => $legacyTxn->is_in_house ? Transaction::TYPE_IN_HOUSE : Transaction::TYPE_MAIL_IN,
+                'type' => $legacyTxn->is_in_house ? Transaction::TYPE_IN_STORE : Transaction::TYPE_MAIL_IN,
                 'source' => 'online',
                 'transaction_number' => "TXN-{$legacyTxn->id}",
                 'preliminary_offer' => $legacyTxn->preliminary_offer ?? 0,
@@ -1333,41 +1333,80 @@ class MigrateLegacyData extends Command
             return;
         }
 
-        // Get SMS messages for transactions (using polymorphic smsable_type/smsable_id)
-        $legacySms = DB::connection('legacy')
+        // Get total count for progress
+        $totalCount = DB::connection('legacy')
             ->table('sms')
             ->where('store_id', $legacyStoreId)
             ->where('smsable_type', 'App\\Models\\Transaction')
-            ->get();
+            ->count();
+
+        $this->line("  Found {$totalCount} SMS messages to process");
 
         if ($isDryRun) {
-            $this->line("  Would migrate {$legacySms->count()} SMS messages");
+            $this->line("  Would migrate {$totalCount} SMS messages");
 
             return;
         }
 
-        $count = 0;
-        foreach ($legacySms as $legacyMsg) {
-            // Map the transaction ID (they're preserved)
-            $transactionId = $legacyMsg->smsable_id;
-            if (! Transaction::where('id', $transactionId)->where('store_id', $this->newStore->id)->exists()) {
-                continue;
-            }
+        if ($totalCount === 0) {
+            $this->line('  No SMS messages to migrate');
 
-            NotificationLog::create([
-                'store_id' => $this->newStore->id,
-                'notifiable_type' => Transaction::class,
-                'notifiable_id' => $transactionId,
-                'channel' => NotificationChannel::TYPE_SMS,
-                'recipient' => $legacyMsg->to,
-                'content' => $legacyMsg->message,
-                'status' => 'sent',
-                'sent_at' => $legacyMsg->created_at,
-                'created_at' => $legacyMsg->created_at,
-                'updated_at' => $legacyMsg->updated_at,
-            ]);
-            $count++;
+            return;
         }
+
+        // Pre-load all valid transaction IDs for this store to avoid N+1 queries
+        $validTransactionIds = Transaction::where('store_id', $this->newStore->id)
+            ->pluck('id')
+            ->flip()
+            ->toArray();
+
+        $count = 0;
+        $processed = 0;
+        $batchSize = 1000;
+
+        // Process in chunks to avoid memory issues
+        DB::connection('legacy')
+            ->table('sms')
+            ->where('store_id', $legacyStoreId)
+            ->where('smsable_type', 'App\\Models\\Transaction')
+            ->orderBy('id')
+            ->chunk($batchSize, function ($legacySmsChunk) use (&$count, &$processed, $validTransactionIds, $totalCount) {
+                $batch = [];
+
+                foreach ($legacySmsChunk as $legacyMsg) {
+                    $transactionId = $legacyMsg->smsable_id;
+
+                    // Skip if transaction doesn't exist in new store
+                    if (! isset($validTransactionIds[$transactionId])) {
+                        continue;
+                    }
+
+                    $batch[] = [
+                        'store_id' => $this->newStore->id,
+                        'notifiable_type' => Transaction::class,
+                        'notifiable_id' => $transactionId,
+                        'channel' => NotificationChannel::TYPE_SMS,
+                        'recipient' => $legacyMsg->to,
+                        'content' => $legacyMsg->message,
+                        'status' => 'sent',
+                        'sent_at' => $legacyMsg->created_at,
+                        'created_at' => $legacyMsg->created_at,
+                        'updated_at' => $legacyMsg->updated_at,
+                    ];
+                    $count++;
+                }
+
+                // Bulk insert the batch
+                if (! empty($batch)) {
+                    NotificationLog::insert($batch);
+                }
+
+                $processed += $legacySmsChunk->count();
+
+                if ($processed % 5000 === 0 || $processed === $totalCount) {
+                    $this->line("  Processed {$processed}/{$totalCount} SMS messages...");
+                }
+            });
 
         $this->line("  Migrated {$count} SMS messages");
     }

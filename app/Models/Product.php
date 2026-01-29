@@ -125,6 +125,11 @@ class Product extends Model
         return $this->hasMany(ProductAttributeValue::class);
     }
 
+    public function platformListings(): HasMany
+    {
+        return $this->hasMany(PlatformListing::class);
+    }
+
     /**
      * Get the effective template for this product.
      * Uses stored template_id first, falls back to category's effective template.

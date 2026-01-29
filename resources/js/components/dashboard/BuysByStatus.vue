@@ -8,8 +8,8 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// In-house workflow statuses (matching StatusService definitions)
-const inHouseStatuses = [
+// In-store workflow statuses (matching StatusService definitions)
+const inStoreStatuses = [
     // Items Phase
     { key: 'pending', label: 'Pending', color: 'bg-yellow-500' },
     { key: 'items_received', label: 'Items Received', color: 'bg-blue-500' },
@@ -42,7 +42,7 @@ const onlineStatuses = [
 // Combined statuses - only show online statuses if they have values
 const statuses = computed(() => {
     const hasOnlineStatuses = onlineStatuses.some((s) => (props.buysByStatus[s.key] || 0) > 0);
-    return hasOnlineStatuses ? [...onlineStatuses, ...inHouseStatuses] : inHouseStatuses;
+    return hasOnlineStatuses ? [...onlineStatuses, ...inStoreStatuses] : inStoreStatuses;
 });
 
 const totalBuys = computed(() => {

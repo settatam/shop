@@ -123,7 +123,7 @@ class SalesReportTest extends TestCase
         Transaction::factory()->create([
             'store_id' => $this->store->id,
             'customer_id' => $customer->id,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
             'status' => Transaction::STATUS_PAYMENT_PROCESSED,
             'estimated_value' => 500,
             'final_offer' => 400,
@@ -169,14 +169,14 @@ class SalesReportTest extends TestCase
         );
     }
 
-    public function test_can_view_in_house_buys_report(): void
+    public function test_can_view_trade_in_buys_report(): void
     {
         $response = $this->actingAs($this->user)
-            ->get('/reports/buys/in-house');
+            ->get('/reports/buys/trade-in');
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) => $page
-            ->component('reports/buys/InHouse')
+            ->component('reports/buys/TradeIn')
             ->has('dailyData')
             ->has('totals')
             ->has('month')

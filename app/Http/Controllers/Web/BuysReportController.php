@@ -97,19 +97,19 @@ class BuysReportController extends Controller
     }
 
     /**
-     * In-House Buys Report - Month to Date (daily breakdown).
+     * Trade-In Buys Report - Month to Date (daily breakdown).
      */
-    public function inHouse(Request $request): Response
+    public function tradeIn(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
         $startDate = now()->startOfMonth();
         $endDate = now();
 
-        $dailyData = $this->getInHouseDailyData($store->id, $startDate, $endDate);
+        $dailyData = $this->getTradeInDailyData($store->id, $startDate, $endDate);
 
         $totals = $this->calculateTotals($dailyData);
 
-        return Inertia::render('reports/buys/InHouse', [
+        return Inertia::render('reports/buys/TradeIn', [
             'dailyData' => $dailyData,
             'totals' => $totals,
             'month' => now()->format('F Y'),
@@ -117,19 +117,19 @@ class BuysReportController extends Controller
     }
 
     /**
-     * In-House Buys Report - Month over Month.
+     * Trade-In Buys Report - Month over Month.
      */
-    public function inHouseMonthly(Request $request): Response
+    public function tradeInMonthly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
         $startDate = now()->subMonths(12)->startOfMonth();
         $endDate = now()->endOfMonth();
 
-        $monthlyData = $this->getInHouseMonthlyData($store->id, $startDate, $endDate);
+        $monthlyData = $this->getTradeInMonthlyData($store->id, $startDate, $endDate);
 
         $totals = $this->calculateTotals($monthlyData);
 
-        return Inertia::render('reports/buys/InHouseMonthly', [
+        return Inertia::render('reports/buys/TradeInMonthly', [
             'monthlyData' => $monthlyData,
             'totals' => $totals,
         ]);
@@ -192,31 +192,31 @@ class BuysReportController extends Controller
     }
 
     /**
-     * Export In-House MTD to CSV.
+     * Export Trade-In MTD to CSV.
      */
-    public function exportInHouse(Request $request): StreamedResponse
+    public function exportTradeIn(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
         $startDate = now()->startOfMonth();
         $endDate = now();
 
-        $dailyData = $this->getInHouseDailyData($store->id, $startDate, $endDate);
+        $dailyData = $this->getTradeInDailyData($store->id, $startDate, $endDate);
 
-        return $this->exportToCsv($dailyData, 'buys-in-house-mtd-'.now()->format('Y-m-d').'.csv');
+        return $this->exportToCsv($dailyData, 'buys-trade-in-mtd-'.now()->format('Y-m-d').'.csv');
     }
 
     /**
-     * Export In-House Monthly to CSV.
+     * Export Trade-In Monthly to CSV.
      */
-    public function exportInHouseMonthly(Request $request): StreamedResponse
+    public function exportTradeInMonthly(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
         $startDate = now()->subMonths(12)->startOfMonth();
         $endDate = now()->endOfMonth();
 
-        $monthlyData = $this->getInHouseMonthlyData($store->id, $startDate, $endDate);
+        $monthlyData = $this->getTradeInMonthlyData($store->id, $startDate, $endDate);
 
-        return $this->exportToCsv($monthlyData, 'buys-in-house-monthly-'.now()->format('Y-m-d').'.csv');
+        return $this->exportToCsv($monthlyData, 'buys-trade-in-monthly-'.now()->format('Y-m-d').'.csv');
     }
 
     /**
@@ -226,7 +226,7 @@ class BuysReportController extends Controller
     protected function getInStoreDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
     {
         return $this->getDailyBuysData($storeId, $startDate, $endDate, function ($query) {
-            $query->where('type', Transaction::TYPE_IN_HOUSE)
+            $query->where('type', Transaction::TYPE_IN_STORE)
                 ->where(function ($q) {
                     $q->whereNull('source')
                         ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
@@ -241,7 +241,7 @@ class BuysReportController extends Controller
     protected function getInStoreMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
     {
         return $this->getMonthlyBuysData($storeId, $startDate, $endDate, function ($query) {
-            $query->where('type', Transaction::TYPE_IN_HOUSE)
+            $query->where('type', Transaction::TYPE_IN_STORE)
                 ->where(function ($q) {
                     $q->whereNull('source')
                         ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
@@ -278,10 +278,10 @@ class BuysReportController extends Controller
     }
 
     /**
-     * Get in-house daily aggregated data.
-     * In-house means source = trade_in (trade-in transactions).
+     * Get trade-in daily aggregated data.
+     * Trade-in means source = trade_in (trade-in transactions).
      */
-    protected function getInHouseDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    protected function getTradeInDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
     {
         return $this->getDailyBuysData($storeId, $startDate, $endDate, function ($query) {
             $query->where('source', Transaction::SOURCE_TRADE_IN);
@@ -289,9 +289,9 @@ class BuysReportController extends Controller
     }
 
     /**
-     * Get in-house monthly aggregated data.
+     * Get trade-in monthly aggregated data.
      */
-    protected function getInHouseMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    protected function getTradeInMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
     {
         return $this->getMonthlyBuysData($storeId, $startDate, $endDate, function ($query) {
             $query->where('source', Transaction::SOURCE_TRADE_IN);

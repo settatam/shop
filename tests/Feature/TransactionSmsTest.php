@@ -76,7 +76,7 @@ class TransactionSmsTest extends TestCase
         $transaction = Transaction::factory()->create([
             'store_id' => $this->store->id,
             'customer_id' => $customer->id,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
 
         $response = $this->post("/transactions/{$transaction->id}/send-sms", [
@@ -205,7 +205,7 @@ class TransactionSmsTest extends TestCase
         $transaction = Transaction::factory()->create([
             'store_id' => $this->store->id,
             'customer_id' => $customer->id,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
 
         $response = $this->get("/transactions/{$transaction->id}");

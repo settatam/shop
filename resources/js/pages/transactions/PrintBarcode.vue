@@ -61,7 +61,7 @@ const selectedPrinterSetting = computed<PrinterSettings | undefined>(() => {
 });
 
 const typeLabels: Record<string, string> = {
-    in_house: 'In-House Buy',
+    in_store: 'In-Store Buy',
     mail_in: 'Mail-In Buy',
 };
 

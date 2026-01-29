@@ -69,19 +69,19 @@ class Transaction extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     // Type constants
-    public const TYPE_IN_HOUSE = 'in_house';
+    public const TYPE_IN_STORE = 'in_store';
 
     public const TYPE_MAIL_IN = 'mail_in';
 
     /**
-     * @deprecated Use TYPE_IN_HOUSE instead. Kept for backwards compatibility.
+     * @deprecated Use TYPE_IN_STORE instead. Kept for backwards compatibility.
      */
-    public const TYPE_BUY = 'in_house';
+    public const TYPE_BUY = 'in_store';
 
     /**
-     * @deprecated Use TYPE_IN_HOUSE instead. Kept for backwards compatibility.
+     * @deprecated Use TYPE_IN_STORE instead. Kept for backwards compatibility.
      */
-    public const TYPE_IN_STORE = 'in_house';
+    public const TYPE_IN_HOUSE = 'in_store';
 
     // Source constants
     public const SOURCE_TRADE_IN = 'trade_in';
@@ -327,9 +327,17 @@ class Transaction extends Model
     }
 
     // Type scopes
+    public function scopeInStore($query)
+    {
+        return $query->where('type', self::TYPE_IN_STORE);
+    }
+
+    /**
+     * @deprecated Use scopeInStore instead.
+     */
     public function scopeInHouse($query)
     {
-        return $query->where('type', self::TYPE_IN_HOUSE);
+        return $this->scopeInStore($query);
     }
 
     public function scopeMailIn($query)
@@ -556,9 +564,17 @@ class Transaction extends Model
 
     // Type helpers
 
+    public function isInStore(): bool
+    {
+        return $this->type === self::TYPE_IN_STORE;
+    }
+
+    /**
+     * @deprecated Use isInStore instead.
+     */
     public function isInHouse(): bool
     {
-        return $this->type === self::TYPE_IN_HOUSE;
+        return $this->isInStore();
     }
 
     public function isMailIn(): bool
@@ -633,17 +649,27 @@ class Transaction extends Model
     }
 
     /**
-     * Get statuses available for in-house transactions.
+     * Get statuses available for in-store transactions.
      *
      * @return array<string, string>
      */
-    public static function getInHouseStatuses(): array
+    public static function getInStoreStatuses(): array
     {
         return [
             self::STATUS_PENDING => 'Pending',
             self::STATUS_PAYMENT_PROCESSED => 'Payment Processed',
             self::STATUS_CANCELLED => 'Cancelled',
         ];
+    }
+
+    /**
+     * @deprecated Use getInStoreStatuses instead.
+     *
+     * @return array<string, string>
+     */
+    public static function getInHouseStatuses(): array
+    {
+        return self::getInStoreStatuses();
     }
 
     /**

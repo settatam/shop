@@ -3,8 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Models\Category;
+use App\Models\Image;
 use App\Models\Product;
+use App\Models\ProductAttributeValue;
 use App\Models\ProductTemplate;
+use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\Store;
 use App\Models\Vendor;
@@ -33,6 +36,21 @@ class MigrateLegacyProducts extends Command
     protected array $templateMap = [];
 
     protected array $vendorMap = [];
+
+    /**
+     * Maps legacy html_form_field.id => new product_template_field.id
+     */
+    protected array $templateFieldMap = [];
+
+    /**
+     * Maps legacy html_form_field.name => new product_template_field.id (by template)
+     * Structure: [template_id => [field_name => field_id]]
+     */
+    protected array $templateFieldNameMap = [];
+
+    protected int $attributeValueCount = 0;
+
+    protected int $imageCount = 0;
 
     public function handle(): int
     {
@@ -80,7 +98,8 @@ class MigrateLegacyProducts extends Command
         $this->loadMappingFiles($legacyStoreId);
 
         if ($this->option('fresh') && ! $isDryRun) {
-            if ($this->confirm('This will delete all existing products for this store. Continue?')) {
+            $shouldCleanup = ! $this->input->isInteractive() || $this->confirm('This will delete all existing products for this store. Continue?');
+            if ($shouldCleanup) {
                 $this->cleanupExistingProducts($newStore);
             }
         }
@@ -208,11 +227,10 @@ class MigrateLegacyProducts extends Command
 
         $this->info('Building template mapping...');
 
-        // Get legacy templates (html_forms)
+        // Get legacy templates (html_forms) only from this store
         $legacyTemplates = DB::connection('legacy')
             ->table('html_forms')
             ->where('store_id', $legacyStoreId)
-
             ->get();
 
         // Get new templates
@@ -229,6 +247,55 @@ class MigrateLegacyProducts extends Command
         }
 
         $this->line('  Mapped '.count($this->templateMap).' templates');
+
+        // Also build template field mapping
+        $this->buildTemplateFieldMapping($legacyStoreId, $newStore);
+    }
+
+    /**
+     * Build mapping from legacy html_form_fields to new product_template_fields.
+     * Maps by field name within each template.
+     */
+    protected function buildTemplateFieldMapping(int $legacyStoreId, Store $newStore): void
+    {
+        $this->info('Building template field mapping...');
+
+        $fieldCount = 0;
+
+        foreach ($this->templateMap as $legacyTemplateId => $newTemplateId) {
+            // Get legacy fields for this template
+            $legacyFields = DB::connection('legacy')
+                ->table('html_form_fields')
+                ->where('html_form_id', $legacyTemplateId)
+                ->get();
+
+            // Get new fields for this template
+            $newFields = ProductTemplateField::where('product_template_id', $newTemplateId)->get();
+
+            // Build a map by canonical_name (which stores the original legacy name)
+            $newFieldsByCanonicalName = $newFields->keyBy(fn ($f) => strtolower($f->canonical_name ?? $f->name));
+
+            // Also map by snake_case name for fallback
+            $newFieldsByName = $newFields->keyBy(fn ($f) => strtolower($f->name));
+
+            $this->templateFieldNameMap[$newTemplateId] = [];
+
+            foreach ($legacyFields as $legacyField) {
+                $legacyName = strtolower($legacyField->name);
+
+                // Try canonical name first, then snake_case name
+                $newField = $newFieldsByCanonicalName->get($legacyName)
+                    ?? $newFieldsByName->get(Str::snake($legacyName));
+
+                if ($newField) {
+                    $this->templateFieldMap[$legacyField->id] = $newField->id;
+                    $this->templateFieldNameMap[$newTemplateId][$legacyName] = $newField->id;
+                    $fieldCount++;
+                }
+            }
+        }
+
+        $this->line("  Mapped {$fieldCount} template fields");
     }
 
     protected function buildVendorMapping(int $legacyStoreId, Store $newStore): void
@@ -276,7 +343,7 @@ class MigrateLegacyProducts extends Command
             ->where('store_id', $legacyStoreId);
 
         if ($skipDeleted) {
-
+            $query->whereNull('deleted_at');
         }
 
         $query->orderBy('id', 'asc');
@@ -342,7 +409,8 @@ class MigrateLegacyProducts extends Command
             $titleSlug = Str::slug($legacyProduct->title ?? $legacyProduct->product_name ?? 'product');
             $handle = $titleSlug ? "{$titleSlug}-{$legacyProduct->id}" : "product-{$legacyProduct->id}";
 
-            $newProduct = Product::create([
+            // Use DB::table to preserve timestamps from legacy data
+            $newProductId = DB::table('products')->insertGetId([
                 'store_id' => $newStore->id,
                 'title' => $legacyProduct->title ?? $legacyProduct->product_name ?? "Product #{$legacyProduct->id}",
                 'description' => $legacyProduct->description,
@@ -372,13 +440,10 @@ class MigrateLegacyProducts extends Command
                 'quantity' => $legacyProduct->quantity ?? $legacyProduct->total_quantity ?? 0,
                 'created_at' => $legacyProduct->created_at,
                 'updated_at' => $legacyProduct->updated_at,
+                'deleted_at' => ($legacyProduct->deleted_at && ! $skipDeleted) ? $legacyProduct->deleted_at : null,
             ]);
 
-            // Handle soft delete if applicable
-            if ($legacyProduct->deleted_at && ! $skipDeleted) {
-                $newProduct->deleted_at = $legacyProduct->deleted_at;
-                $newProduct->save();
-            }
+            $newProduct = Product::withTrashed()->find($newProductId);
 
             $this->productMap[$legacyProduct->id] = $newProduct->id;
             $productCount++;
@@ -391,8 +456,8 @@ class MigrateLegacyProducts extends Command
                 ->get();
 
             if ($legacyVariants->isEmpty()) {
-                // Create default variant from product data
-                $variant = ProductVariant::create([
+                // Create default variant from product data - use DB::table to preserve timestamps
+                DB::table('product_variants')->insert([
                     'product_id' => $newProduct->id,
                     'sku' => $legacyProduct->sku ?? "SKU-{$newProduct->id}",
                     'price' => $legacyProduct->price ?? 0,
@@ -408,7 +473,8 @@ class MigrateLegacyProducts extends Command
                 $variantCount++;
             } else {
                 foreach ($legacyVariants as $legacyVariant) {
-                    $variant = ProductVariant::create([
+                    // Use DB::table to preserve timestamps
+                    $newVariantId = DB::table('product_variants')->insertGetId([
                         'product_id' => $newProduct->id,
                         'sku' => $legacyVariant->sku ?? "SKU-{$newProduct->id}-{$legacyVariant->id}",
                         'price' => $legacyVariant->price ?? 0,
@@ -422,10 +488,16 @@ class MigrateLegacyProducts extends Command
                         'updated_at' => $legacyVariant->updated_at,
                     ]);
 
-                    $this->variantMap[$legacyVariant->id] = $variant->id;
+                    $this->variantMap[$legacyVariant->id] = $newVariantId;
                     $variantCount++;
                 }
             }
+
+            // Migrate product attribute values (metas)
+            $this->migrateProductMetas($legacyProduct, $newProduct, $templateId);
+
+            // Migrate product images
+            $this->migrateProductImages($legacyProduct, $newProduct);
 
             if ($productCount % 100 === 0) {
                 $this->line("  Processed {$productCount} products...");
@@ -433,6 +505,154 @@ class MigrateLegacyProducts extends Command
         }
 
         $this->line("  Created {$productCount} products with {$variantCount} variants, skipped {$skipped} existing");
+        $this->line("  Migrated {$this->attributeValueCount} attribute values and {$this->imageCount} images");
+    }
+
+    /**
+     * Migrate product attribute values from the legacy metas table.
+     *
+     * Legacy structure:
+     * - metas.metable_type = 'App\Models\Product'
+     * - metas.metable_id = product ID
+     * - metas.field = field name (matches html_form_fields.name)
+     * - metas.value = the actual value
+     *
+     * New structure:
+     * - product_attribute_values.product_id
+     * - product_attribute_values.product_template_field_id
+     * - product_attribute_values.value
+     */
+    protected function migrateProductMetas(object $legacyProduct, Product $newProduct, ?int $templateId): void
+    {
+        if (! $templateId) {
+            return;
+        }
+
+        // Get metas for this product (legacy uses metaable_type/metaable_id with double 'a')
+        $legacyMetas = DB::connection('legacy')
+            ->table('metas')
+            ->where('metaable_type', 'App\\Models\\Product')
+            ->where('metaable_id', $legacyProduct->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($legacyMetas->isEmpty()) {
+            return;
+        }
+
+        // Get the field mapping for this template
+        $fieldMap = $this->templateFieldNameMap[$templateId] ?? [];
+
+        if (empty($fieldMap)) {
+            return;
+        }
+
+        foreach ($legacyMetas as $meta) {
+            // Skip empty values
+            if ($meta->value === null || $meta->value === '') {
+                continue;
+            }
+
+            $fieldName = strtolower($meta->field);
+            $newFieldId = $fieldMap[$fieldName] ?? null;
+
+            if (! $newFieldId) {
+                // Try matching with underscores (legacy uses hyphens, new uses underscores)
+                $normalizedName = str_replace('-', '_', $fieldName);
+                $newFieldId = $fieldMap[$normalizedName] ?? null;
+            }
+
+            if (! $newFieldId) {
+                // Try matching with snake_case conversion
+                $newFieldId = $fieldMap[Str::snake($fieldName)] ?? null;
+            }
+
+            if (! $newFieldId) {
+                continue;
+            }
+
+            // Check if this attribute value already exists
+            $existingValue = ProductAttributeValue::where('product_id', $newProduct->id)
+                ->where('product_template_field_id', $newFieldId)
+                ->first();
+
+            if ($existingValue) {
+                continue;
+            }
+
+            // Use DB::table to preserve timestamps
+            DB::table('product_attribute_values')->insert([
+                'product_id' => $newProduct->id,
+                'product_template_field_id' => $newFieldId,
+                'value' => $meta->value,
+                'created_at' => $meta->created_at ?? $legacyProduct->created_at,
+                'updated_at' => $meta->updated_at ?? $legacyProduct->updated_at,
+            ]);
+
+            $this->attributeValueCount++;
+        }
+    }
+
+    /**
+     * Migrate product images from the legacy polymorphic images table.
+     *
+     * Legacy columns: imageable_type, imageable_id, url, thumbnail, rank
+     * New columns: imageable_type, imageable_id, url, thumbnail_url, sort_order, is_primary
+     */
+    protected function migrateProductImages(object $legacyProduct, Product $newProduct): void
+    {
+        // Get images for this product from legacy polymorphic images table
+        $legacyImages = DB::connection('legacy')
+            ->table('images')
+            ->where('imageable_type', 'App\\Models\\Product')
+            ->where('imageable_id', $legacyProduct->id)
+            ->whereNull('deleted_at')
+            ->orderBy('rank')
+            ->get();
+
+        if ($legacyImages->isEmpty()) {
+            return;
+        }
+
+        foreach ($legacyImages as $legacyImage) {
+            // Get the image URL
+            $url = $legacyImage->url ?? null;
+
+            if (! $url) {
+                continue;
+            }
+
+            // Check if this image already exists
+            $existingImage = DB::table('images')
+                ->where('imageable_type', 'App\\Models\\Product')
+                ->where('imageable_id', $newProduct->id)
+                ->where('url', $url)
+                ->first();
+
+            if ($existingImage) {
+                continue;
+            }
+
+            // rank=1 is primary
+            $rank = $legacyImage->rank ?? 0;
+
+            // Use DB::table to preserve timestamps - insert into polymorphic images table
+            DB::table('images')->insert([
+                'store_id' => $newProduct->store_id,
+                'imageable_type' => 'App\\Models\\Product',
+                'imageable_id' => $newProduct->id,
+                'path' => $url, // Store the URL in path field as well
+                'url' => $url,
+                'thumbnail_url' => $legacyImage->thumbnail,
+                'alt_text' => $newProduct->title,
+                'sort_order' => $rank,
+                'is_primary' => $rank === 1,
+                'created_at' => $legacyImage->created_at ?? $legacyProduct->created_at,
+                'updated_at' => $legacyImage->updated_at ?? $legacyProduct->updated_at,
+            ]);
+
+            $this->imageCount++;
+        }
     }
 
     protected function cleanupExistingProducts(Store $newStore): void
@@ -441,6 +661,11 @@ class MigrateLegacyProducts extends Command
 
         $productIds = Product::where('store_id', $newStore->id)->pluck('id');
 
+        // Delete in order of dependencies
+        ProductAttributeValue::whereIn('product_id', $productIds)->delete();
+        Image::where('imageable_type', 'App\\Models\\Product')
+            ->whereIn('imageable_id', $productIds)
+            ->delete();
         ProductVariant::whereIn('product_id', $productIds)->forceDelete();
         Product::where('store_id', $newStore->id)->forceDelete();
 
@@ -454,10 +679,20 @@ class MigrateLegacyProducts extends Command
         $this->line('Store: '.$newStore->name.' (ID: '.$newStore->id.')');
         $this->line('Products mapped: '.count($this->productMap));
         $this->line('Variants mapped: '.count($this->variantMap));
+        $this->line('Template fields mapped: '.count($this->templateFieldMap));
 
-        $productCount = Product::where('store_id', $newStore->id)->count();
-        $variantCount = ProductVariant::whereIn('product_id', Product::where('store_id', $newStore->id)->pluck('id'))->count();
+        $productIds = Product::where('store_id', $newStore->id)->pluck('id');
+        $productCount = $productIds->count();
+        $variantCount = ProductVariant::whereIn('product_id', $productIds)->count();
+        $attributeCount = ProductAttributeValue::whereIn('product_id', $productIds)->count();
+        $imageCount = DB::table('images')
+            ->where('imageable_type', 'App\\Models\\Product')
+            ->whereIn('imageable_id', $productIds)
+            ->count();
+
         $this->line("Total products in store: {$productCount}");
         $this->line("Total variants in store: {$variantCount}");
+        $this->line("Total attribute values in store: {$attributeCount}");
+        $this->line("Total images in store: {$imageCount}");
     }
 }

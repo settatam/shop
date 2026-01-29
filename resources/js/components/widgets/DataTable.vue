@@ -6,6 +6,8 @@ import {
     ChevronDownIcon,
     MagnifyingGlassIcon,
     ArrowDownTrayIcon,
+    PhotoIcon,
+    XMarkIcon,
 } from '@heroicons/vue/20/solid';
 import type { WidgetData } from '@/composables/useWidget';
 import Pagination from './Pagination.vue';
@@ -15,6 +17,23 @@ import {
     HoverCardTrigger,
 } from '@/components/ui/hover-card';
 import ProductQuickView from '@/components/products/ProductQuickView.vue';
+
+// Lightbox state
+const lightboxOpen = ref(false);
+const lightboxImageUrl = ref<string | null>(null);
+const lightboxImageAlt = ref<string>('');
+
+function openLightbox(url: string, alt: string = '') {
+    lightboxImageUrl.value = url;
+    lightboxImageAlt.value = alt;
+    lightboxOpen.value = true;
+}
+
+function closeLightbox() {
+    lightboxOpen.value = false;
+    lightboxImageUrl.value = null;
+    lightboxImageAlt.value = '';
+}
 
 // Types for typed cells
 interface TypedCell {
@@ -636,7 +655,11 @@ function exportToCsv() {
                             <!-- Get the cell value -->
                             <template v-if="getCellValue(item, key).type === 'image'">
                                 <div
-                                    :class="getCellValue(item, key).class || 'h-10 w-10 rounded-md bg-gray-100 dark:bg-gray-700 overflow-hidden'"
+                                    :class="[
+                                        getCellValue(item, key).class || 'h-10 w-10 rounded-md bg-gray-100 dark:bg-gray-700 overflow-hidden',
+                                        getCellValue(item, key).data ? 'cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all' : ''
+                                    ]"
+                                    @click="getCellValue(item, key).data && openLightbox(getCellValue(item, key).data as string, getCellValue(item, key).alt || '')"
                                 >
                                     <img
                                         v-if="getCellValue(item, key).data"
@@ -644,6 +667,13 @@ function exportToCsv() {
                                         :alt="getCellValue(item, key).alt || ''"
                                         class="h-full w-full object-cover"
                                     />
+                                    <!-- Placeholder silhouette when no image -->
+                                    <div
+                                        v-else
+                                        class="h-full w-full flex items-center justify-center"
+                                    >
+                                        <PhotoIcon class="h-6 w-6 text-gray-400 dark:text-gray-500" />
+                                    </div>
                                 </div>
                             </template>
 
@@ -759,4 +789,32 @@ function exportToCsv() {
             @page-change="(page) => emit('pageChange', page)"
         />
     </div>
+
+    <!-- Lightbox Modal -->
+    <Teleport to="body">
+        <div
+            v-if="lightboxOpen"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+            @click.self="closeLightbox"
+            @keydown.escape="closeLightbox"
+        >
+            <!-- Close button -->
+            <button
+                type="button"
+                class="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+                @click="closeLightbox"
+            >
+                <XMarkIcon class="h-6 w-6" />
+                <span class="sr-only">Close</span>
+            </button>
+
+            <!-- Image -->
+            <img
+                v-if="lightboxImageUrl"
+                :src="lightboxImageUrl"
+                :alt="lightboxImageAlt"
+                class="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+            />
+        </div>
+    </Teleport>
 </template>

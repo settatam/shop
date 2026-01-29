@@ -210,7 +210,7 @@ interface Transaction {
     can_accept_offer: boolean;
     can_process_payment: boolean;
     can_be_cancelled: boolean;
-    is_in_house: boolean;
+    is_in_store: boolean;
     is_online: boolean;
     customer: Customer | null;
     user: User | null;
@@ -793,7 +793,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const typeLabels: Record<string, string> = {
-    in_house: 'In-House',
+    in_store: 'In-Store',
     mail_in: 'Mail-In',
 };
 
@@ -1807,7 +1807,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         </div>
                     </div>
 
-                    <!-- In-House Actions (simpler) -->
+                    <!-- In-Store Actions (simpler) -->
                     <div v-else class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Actions</h3>

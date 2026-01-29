@@ -82,7 +82,7 @@ const navigation: NavGroup[] = [
             { name: 'Sales (Month to Date)', href: '/reports/sales/mtd' },
             { name: 'Buys Report (Online)', href: '/reports/buys/online' },
             { name: 'Buys Report (In Store)', href: '/reports/buys/in-store' },
-            { name: 'Buys Report (In House)', href: '/reports/buys/in-house' },
+            { name: 'Buys Report (Trade-In)', href: '/reports/buys/trade-in' },
             { name: 'Inventory Report', href: '/reports/inventory' },
         ],
     },

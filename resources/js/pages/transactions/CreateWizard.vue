@@ -90,7 +90,7 @@ const props = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Transactions', href: '/transactions' },
-    { title: 'New In-House Buy', href: '/transactions/buy' },
+    { title: 'New In-Store Buy', href: '/transactions/buy' },
 ];
 
 // Wizard state
@@ -311,7 +311,7 @@ function submitTransaction() {
 </script>
 
 <template>
-    <Head title="New In-House Buy" />
+    <Head title="New In-Store Buy" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">

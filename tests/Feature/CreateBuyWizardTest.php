@@ -111,7 +111,7 @@ class CreateBuyWizardTest extends TestCase
             'store_id' => $this->store->id,
             'customer_id' => $customer->id,
             'payment_method' => Transaction::PAYMENT_CASH,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
             'status' => Transaction::STATUS_PAYMENT_PROCESSED,
         ]);
 

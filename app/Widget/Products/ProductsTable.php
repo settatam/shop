@@ -2,7 +2,12 @@
 
 namespace App\Widget\Products;
 
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductTemplateField;
+use App\Models\StoreMarketplace;
+use App\Models\Tag;
 use App\Services\StoreContext;
 use App\Widget\Table;
 use Carbon\Carbon;
@@ -81,7 +86,7 @@ class ProductsTable extends Table
         $storeId = data_get($filter, 'store_id') ?? app(StoreContext::class)->getCurrentStoreId();
 
         $query = Product::query()
-            ->with(['category', 'brand', 'images', 'variants'])
+            ->with(['category', 'brand', 'images', 'variants', 'tags'])
             ->where('store_id', $storeId);
 
         // Apply search filter
@@ -91,8 +96,16 @@ class ProductsTable extends Table
                     ->orWhere('handle', 'like', "%{$term}%")
                     ->orWhere('description', 'like', "%{$term}%")
                     ->orWhere('upc', 'like', "%{$term}%")
-                    ->orWhere('sku', 'like', "%{$term}%");
+                    ->orWhereHas('variants', fn ($vq) => $vq->where('sku', 'like', "%{$term}%"));
             });
+        }
+
+        // Apply date range filter
+        if ($fromDate = data_get($filter, 'from_date')) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+        if ($toDate = data_get($filter, 'to_date')) {
+            $query->whereDate('created_at', '<=', $toDate);
         }
 
         // Apply category filter
@@ -105,13 +118,109 @@ class ProductsTable extends Table
             $query->where('brand_id', $brandId);
         }
 
+        // Apply type filter (jewelry_type)
+        if ($type = data_get($filter, 'type')) {
+            // $query->where('jewelry_type', $type);
+        }
+
         // Apply status filter
         if ($status = data_get($filter, 'status')) {
             if ($status === 'published') {
                 $query->where('is_published', true);
             } elseif ($status === 'draft') {
                 $query->where('is_draft', true);
+            } elseif ($status === 'inactive') {
+                $query->where('is_published', false)->where(function ($q) {
+                    $q->where('is_draft', false)->orWhereNull('is_draft');
+                });
             }
+        }
+
+        // Apply stock filter
+        if ($stock = data_get($filter, 'stock')) {
+            if ($stock === 'in_stock') {
+                $query->whereHas('variants', fn ($q) => $q->where('quantity', '>', 0));
+            } elseif ($stock === 'out_of_stock') {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('variants')
+                        ->orWhereHas('variants', fn ($vq) => $vq->havingRaw('SUM(quantity) = 0'));
+                });
+            }
+        }
+
+        // Apply tags filter
+        if ($tagIds = data_get($filter, 'tag_ids')) {
+            $tagArray = is_array($tagIds) ? $tagIds : explode(',', $tagIds);
+            $query->whereHas('tags', fn ($q) => $q->whereIn('tags.id', $tagArray));
+        }
+
+        // Apply listed in (marketplace) filter
+        if ($marketplaceId = data_get($filter, 'marketplace_id')) {
+            $query->whereHas('platformListings', fn ($q) => $q->where('store_marketplace_id', $marketplaceId));
+        }
+
+        // Apply price range filter (min/max from variants)
+        if ($minPrice = data_get($filter, 'min_price')) {
+            $query->whereHas('variants', fn ($q) => $q->where('price', '>=', $minPrice));
+        }
+        if ($maxPrice = data_get($filter, 'max_price')) {
+            $query->whereHas('variants', fn ($q) => $q->where('price', '<=', $maxPrice));
+        }
+
+        // Apply cost range filter (min/max from variants)
+        if ($minCost = data_get($filter, 'min_cost')) {
+            $query->whereHas('variants', fn ($q) => $q->where('cost', '>=', $minCost));
+        }
+        if ($maxCost = data_get($filter, 'max_cost')) {
+            $query->whereHas('variants', fn ($q) => $q->where('cost', '<=', $maxCost));
+        }
+
+        // Apply stone shape filter (from product column or attribute value)
+        if ($stoneShape = data_get($filter, 'stone_shape')) {
+            $query->where(function ($q) use ($stoneShape) {
+                $q->where('main_stone_type', $stoneShape)
+                    ->orWhereHas('attributeValues', function ($avq) use ($stoneShape) {
+                        $avq->where('value', $stoneShape)
+                            ->whereHas('field', fn ($fq) => $fq->where('name', 'like', '%stone_shape%')
+                                ->orWhere('name', 'like', '%shape%'));
+                    });
+            });
+        }
+
+        // Apply stone weight filter
+        if ($minStoneWeight = data_get($filter, 'min_stone_weight')) {
+            $query->where(function ($q) use ($minStoneWeight) {
+                $q->where('total_carat_weight', '>=', $minStoneWeight)
+                    ->orWhereHas('attributeValues', function ($avq) use ($minStoneWeight) {
+                        $avq->whereRaw('CAST(value AS DECIMAL(10,2)) >= ?', [$minStoneWeight])
+                            ->whereHas('field', fn ($fq) => $fq->where('name', 'like', '%stone_weight%')
+                                ->orWhere('name', 'like', '%carat%')
+                                ->orWhere('name', 'like', '%total_stone_wt%'));
+                    });
+            });
+        }
+        if ($maxStoneWeight = data_get($filter, 'max_stone_weight')) {
+            $query->where(function ($q) use ($maxStoneWeight) {
+                $q->where('total_carat_weight', '<=', $maxStoneWeight)
+                    ->orWhereHas('attributeValues', function ($avq) use ($maxStoneWeight) {
+                        $avq->whereRaw('CAST(value AS DECIMAL(10,2)) <= ?', [$maxStoneWeight])
+                            ->whereHas('field', fn ($fq) => $fq->where('name', 'like', '%stone_weight%')
+                                ->orWhere('name', 'like', '%carat%')
+                                ->orWhere('name', 'like', '%total_stone_wt%'));
+                    });
+            });
+        }
+
+        // Apply ring size filter
+        if ($ringSize = data_get($filter, 'ring_size')) {
+            $query->where(function ($q) use ($ringSize) {
+                $q->where('ring_size', $ringSize)
+                    ->orWhereHas('attributeValues', function ($avq) use ($ringSize) {
+                        $avq->where('value', $ringSize)
+                            ->whereHas('field', fn ($fq) => $fq->where('name', 'like', '%ring_size%')
+                                ->orWhere('name', 'like', '%size%'));
+                    });
+            });
         }
 
         return $query;
@@ -180,7 +289,7 @@ class ProductsTable extends Table
             'sku' => [
                 'type' => 'link',
                 'href' => "/products/{$product->id}",
-                'data' => $product->handle ?? "PRD-{$product->id}",
+                'data' => $product->variants->first()?->sku ?? "SKU-{$product->id}",
                 'class' => 'font-mono text-sm',
             ],
             'title' => [
@@ -264,6 +373,164 @@ class ProductsTable extends Table
                 'label' => 'Unpublish Selected',
                 'icon' => 'XCircleIcon',
                 'variant' => 'warning',
+            ],
+        ];
+    }
+
+    /**
+     * Build available filters for the table.
+     *
+     * @param  array<string, mixed>|null  $filter
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    public function buildFilters(?array $filter, array $data): ?array
+    {
+        $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
+
+        // Get categories
+        $categories = Category::where('store_id', $storeId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'parent_id'])
+            ->map(fn ($category) => [
+                'value' => (string) $category->id,
+                'label' => $category->name,
+            ])
+            ->toArray();
+
+        // Get brands
+        $brands = Brand::where('store_id', $storeId)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($brand) => [
+                'value' => (string) $brand->id,
+                'label' => $brand->name,
+            ])
+            ->toArray();
+
+        // Get tags
+        $tags = Tag::where('store_id', $storeId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'color'])
+            ->map(fn ($tag) => [
+                'value' => (string) $tag->id,
+                'label' => $tag->name,
+                'color' => $tag->color,
+            ])
+            ->toArray();
+
+        // Get marketplaces (Listed In)
+        $marketplaces = StoreMarketplace::where('store_id', $storeId)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'platform'])
+            ->map(fn ($marketplace) => [
+                'value' => (string) $marketplace->id,
+                'label' => $marketplace->name ?: ucfirst($marketplace->platform),
+            ])
+            ->toArray();
+
+        // Get distinct jewelry types for the Type filter
+        $jewelryTypes = Product::where('store_id', $storeId)
+            ->whereNotNull('jewelry_type')
+            ->distinct()
+            ->pluck('jewelry_type')
+            ->filter()
+            ->map(fn ($type) => [
+                'value' => $type,
+                'label' => ucfirst(str_replace('_', ' ', $type)),
+            ])
+            ->values()
+            ->toArray();
+
+        // Get stone shapes from attribute values
+        $stoneShapeFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+            ->where(fn ($q) => $q->where('name', 'like', '%stone_shape%')
+                ->orWhere('name', 'like', '%shape%'))
+            ->pluck('id');
+
+        $stoneShapes = collect();
+        if ($stoneShapeFieldIds->isNotEmpty()) {
+            $stoneShapes = \App\Models\ProductAttributeValue::whereIn('product_template_field_id', $stoneShapeFieldIds)
+                ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                ->distinct()
+                ->pluck('value')
+                ->filter()
+                ->map(fn ($shape) => [
+                    'value' => $shape,
+                    'label' => ucfirst($shape),
+                ])
+                ->values();
+        }
+
+        // Also include main_stone_type values
+        $mainStoneTypes = Product::where('store_id', $storeId)
+            ->whereNotNull('main_stone_type')
+            ->distinct()
+            ->pluck('main_stone_type')
+            ->filter()
+            ->map(fn ($type) => [
+                'value' => $type,
+                'label' => ucfirst(str_replace('_', ' ', $type)),
+            ]);
+
+        $allStoneShapes = $stoneShapes->merge($mainStoneTypes)->unique('value')->values()->toArray();
+
+        // Get ring sizes from attribute values and products
+        $ringSizeFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+            ->where(fn ($q) => $q->where('name', 'like', '%ring_size%')
+                ->orWhere('name', 'like', '%size%'))
+            ->pluck('id');
+
+        $ringSizes = collect();
+        if ($ringSizeFieldIds->isNotEmpty()) {
+            $ringSizes = \App\Models\ProductAttributeValue::whereIn('product_template_field_id', $ringSizeFieldIds)
+                ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                ->distinct()
+                ->pluck('value')
+                ->filter()
+                ->map(fn ($size) => [
+                    'value' => $size,
+                    'label' => $size,
+                ]);
+        }
+
+        // Also include ring_size column values
+        $productRingSizes = Product::where('store_id', $storeId)
+            ->whereNotNull('ring_size')
+            ->distinct()
+            ->pluck('ring_size')
+            ->filter()
+            ->map(fn ($size) => [
+                'value' => (string) $size,
+                'label' => (string) $size,
+            ]);
+
+        $allRingSizes = $ringSizes->merge($productRingSizes)
+            ->unique('value')
+            ->sortBy(fn ($item) => is_numeric($item['value']) ? (float) $item['value'] : $item['value'])
+            ->values()
+            ->toArray();
+
+        return [
+            'current' => $filter,
+            'available' => [
+                'categories' => $categories,
+                'brands' => $brands,
+                'tags' => $tags,
+                'marketplaces' => $marketplaces,
+                'types' => $jewelryTypes,
+                'stone_shapes' => $allStoneShapes,
+                'ring_sizes' => $allRingSizes,
+                'statuses' => [
+                    ['value' => 'published', 'label' => 'Published'],
+                    ['value' => 'draft', 'label' => 'Draft'],
+                    ['value' => 'inactive', 'label' => 'Inactive'],
+                ],
+                'stock_options' => [
+                    ['value' => 'in_stock', 'label' => 'In Stock'],
+                    ['value' => 'out_of_stock', 'label' => 'Out of Stock'],
+                ],
             ],
         ];
     }

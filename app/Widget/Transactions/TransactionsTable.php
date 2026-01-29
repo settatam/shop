@@ -183,7 +183,7 @@ class TransactionsTable extends Table
     protected function formatTransaction(Transaction $transaction): array
     {
         $typeLabels = [
-            Transaction::TYPE_IN_HOUSE => 'In-House',
+            Transaction::TYPE_IN_STORE => 'In-House',
             Transaction::TYPE_MAIL_IN => 'Mail-In',
         ];
 
@@ -210,7 +210,7 @@ class TransactionsTable extends Table
             'type' => [
                 'type' => 'badge',
                 'data' => $typeLabels[$transaction->type] ?? $transaction->type,
-                'variant' => $transaction->type === Transaction::TYPE_IN_HOUSE ? 'info' : 'secondary',
+                'variant' => $transaction->type === Transaction::TYPE_IN_STORE ? 'info' : 'secondary',
             ],
             'items_count' => [
                 'data' => $transaction->items_count ?? $transaction->items->count(),
@@ -422,7 +422,7 @@ class TransactionsTable extends Table
                 'statuses' => $statuses,
                 'tags' => $tags,
                 'types' => [
-                    ['value' => Transaction::TYPE_IN_HOUSE, 'label' => 'In-House'],
+                    ['value' => Transaction::TYPE_IN_STORE, 'label' => 'In-House'],
                     ['value' => Transaction::TYPE_MAIL_IN, 'label' => 'Mail-In'],
                 ],
             ],

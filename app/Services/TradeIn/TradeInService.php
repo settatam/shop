@@ -30,7 +30,7 @@ class TradeInService
                 'warehouse_id' => $warehouseId,
                 'customer_id' => $customerId,
                 'user_id' => $userId ?? auth()->id(),
-                'type' => Transaction::TYPE_IN_HOUSE,
+                'type' => Transaction::TYPE_IN_STORE,
                 'source' => Transaction::SOURCE_TRADE_IN,
                 'status' => Transaction::STATUS_PAYMENT_PROCESSED,
                 'final_offer' => $this->calculateTradeInCredit($items),

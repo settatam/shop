@@ -89,7 +89,7 @@ class ActivityLogTest extends TestCase
             'store_id' => $this->store->id,
             'user_id' => $this->user->id,
             'status' => Transaction::STATUS_PENDING,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
 
         $this->assertDatabaseHas('activity_logs', [
@@ -108,7 +108,7 @@ class ActivityLogTest extends TestCase
             'store_id' => $this->store->id,
             'user_id' => $this->user->id,
             'status' => Transaction::STATUS_PENDING,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
 
         $transaction->update(['status' => Transaction::STATUS_OFFER_GIVEN]);

@@ -3,6 +3,10 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
+import { computed } from 'vue';
+import StatCard from '@/components/charts/StatCard.vue';
+import BarChart from '@/components/charts/BarChart.vue';
+import AreaChart from '@/components/charts/AreaChart.vue';
 
 interface MonthRow {
     date: string;
@@ -23,7 +27,7 @@ interface Totals {
     avg_buy_price: number;
 }
 
-defineProps<{
+const props = defineProps<{
     monthlyData: MonthRow[];
     totals: Totals;
 }>();
@@ -41,6 +45,16 @@ function formatCurrency(value: number): string {
     }).format(value);
 }
 
+function formatCurrencyShort(value: number): string {
+    if (value >= 1000000) {
+        return '$' + (value / 1000000).toFixed(1) + 'M';
+    }
+    if (value >= 1000) {
+        return '$' + (value / 1000).toFixed(1) + 'K';
+    }
+    return '$' + value.toFixed(0);
+}
+
 function formatPercent(value: number): string {
     return new Intl.NumberFormat('en-US', {
         style: 'percent',
@@ -48,13 +62,51 @@ function formatPercent(value: number): string {
         maximumFractionDigits: 1,
     }).format(value / 100);
 }
+
+// Chart data
+const chartLabels = computed(() => props.monthlyData.map(row => row.date));
+const purchaseAmtData = computed(() => props.monthlyData.map(row => row.purchase_amt));
+const estimatedValueData = computed(() => props.monthlyData.map(row => row.estimated_value));
+const profitData = computed(() => props.monthlyData.map(row => row.profit));
+const buysCountData = computed(() => props.monthlyData.map(row => row.buys_count));
+
+// Trends
+const purchaseTrend = computed(() => {
+    if (props.monthlyData.length < 2) return 0;
+    const current = props.monthlyData[props.monthlyData.length - 1]?.purchase_amt || 0;
+    const previous = props.monthlyData[props.monthlyData.length - 2]?.purchase_amt || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+const profitTrend = computed(() => {
+    if (props.monthlyData.length < 2) return 0;
+    const current = props.monthlyData[props.monthlyData.length - 1]?.profit || 0;
+    const previous = props.monthlyData[props.monthlyData.length - 2]?.profit || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+const buysTrend = computed(() => {
+    if (props.monthlyData.length < 2) return 0;
+    const current = props.monthlyData[props.monthlyData.length - 1]?.buys_count || 0;
+    const previous = props.monthlyData[props.monthlyData.length - 2]?.buys_count || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+// Average profit margin
+const avgProfitMargin = computed(() => {
+    if (props.totals.estimated_value === 0) return 0;
+    return (props.totals.profit / props.totals.estimated_value) * 100;
+});
 </script>
 
 <template>
     <Head title="In-Store Buys Report (Month over Month)" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full flex-1 flex-col gap-4 p-4">
+        <div class="flex h-full flex-1 flex-col gap-6 p-4">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
@@ -80,13 +132,88 @@ function formatPercent(value: number): string {
                 </div>
             </div>
 
+            <!-- Stat Cards -->
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                    title="Total Purchased"
+                    :value="formatCurrency(totals.purchase_amt)"
+                    :trend="purchaseTrend"
+                    trend-label="vs last month"
+                    :sparkline-data="purchaseAmtData"
+                />
+                <StatCard
+                    title="Total Expected Profit"
+                    :value="formatCurrency(totals.profit)"
+                    :trend="profitTrend"
+                    trend-label="vs last month"
+                    :sparkline-data="profitData"
+                />
+                <StatCard
+                    title="Total Buys"
+                    :value="totals.buys_count.toLocaleString()"
+                    :trend="buysTrend"
+                    trend-label="vs last month"
+                    :sparkline-data="buysCountData"
+                />
+                <StatCard
+                    title="Avg Profit Margin"
+                    :value="formatPercent(avgProfitMargin)"
+                />
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid gap-6 lg:grid-cols-2">
+                <!-- Purchase vs Value Chart -->
+                <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                    <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Purchase Amount vs Estimated Value</h3>
+                    </div>
+                    <div class="p-4">
+                        <AreaChart
+                            v-if="monthlyData.length > 0"
+                            :labels="chartLabels"
+                            :datasets="[
+                                { label: 'Estimated Value', data: estimatedValueData, color: '#6366f1' },
+                                { label: 'Purchase Amount', data: purchaseAmtData, color: '#f59e0b' },
+                            ]"
+                            :height="250"
+                            :format-value="formatCurrencyShort"
+                        />
+                        <div v-else class="flex h-64 items-center justify-center text-gray-500">
+                            No data available
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Buys Count Bar Chart -->
+                <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                    <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Buys Volume by Month</h3>
+                    </div>
+                    <div class="p-4">
+                        <BarChart
+                            v-if="monthlyData.length > 0"
+                            :labels="chartLabels"
+                            :datasets="[
+                                { label: 'Buys', data: buysCountData, color: '#6366f1' },
+                            ]"
+                            :height="250"
+                            :show-legend="false"
+                        />
+                        <div v-else class="flex h-64 items-center justify-center text-gray-500">
+                            No data available
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Data Table -->
             <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Month</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300"># of Buys</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Purchase Amt</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Estimated Value</th>

@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem, type Store } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, Package, ShoppingCart, Warehouse, Plug, ChevronDown, Users } from 'lucide-vue-next';
+import { Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, Package, ShoppingCart, Warehouse, Plug, ChevronDown, Users, Store } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import {
     DropdownMenu,
@@ -99,6 +99,11 @@ const mainNavItems: NavItem[] = [
         icon: Building2,
     },
     {
+        title: 'Vendors',
+        href: '/vendors',
+        icon: Store,
+    },
+    {
         title: 'Integrations',
         href: '/integrations',
         icon: Plug,
@@ -112,7 +117,7 @@ const mainNavItems: NavItem[] = [
             { title: 'Sales (Month to Date)', href: '/reports/sales/mtd' },
             { title: 'Buys Report (Online)', href: '/reports/buys/online' },
             { title: 'Buys Report (In Store)', href: '/reports/buys/in-store' },
-            { title: 'Buys Report (In House)', href: '/reports/buys/in-house' },
+            { title: 'Buys Report (Trade-In)', href: '/reports/buys/trade-in' },
             { title: 'Inventory Report', href: '/reports/inventory' },
         ],
     },

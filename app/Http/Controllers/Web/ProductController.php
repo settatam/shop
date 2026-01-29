@@ -41,11 +41,12 @@ class ProductController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get categories and brands for filters
+        // Get categories for filters (with hierarchy support)
         $categories = Category::where('store_id', $store->id)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'parent_id']);
 
+        // Get brands for filters
         $brands = Brand::where('store_id', $store->id)
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -56,11 +57,132 @@ class ProductController extends Controller
             ->orderBy('priority')
             ->get(['id', 'name', 'code', 'is_default']);
 
+        // Get tags for filters
+        $tags = Tag::where('store_id', $store->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'color']);
+
+        // Get marketplaces for "Listed In" filter
+        $marketplaces = \App\Models\StoreMarketplace::where('store_id', $store->id)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'platform'])
+            ->map(fn ($m) => [
+                'id' => $m->id,
+                'name' => $m->name ?: ucfirst($m->platform),
+            ]);
+
+        // Get distinct jewelry types for Type filter
+        $types = Product::where('store_id', $store->id)
+            ->whereNotNull('jewelry_type')
+            ->distinct()
+            ->pluck('jewelry_type')
+            ->filter()
+            ->map(fn ($type) => [
+                'value' => $type,
+                'label' => ucfirst(str_replace('_', ' ', $type)),
+            ])
+            ->values();
+
+        // Get stone shapes from attribute values
+        $stoneShapes = $this->getStoneShapeOptions($store->id);
+
+        // Get ring sizes
+        $ringSizes = $this->getRingSizeOptions($store->id);
+
         return Inertia::render('products/Index', [
             'categories' => $categories,
             'brands' => $brands,
             'warehouses' => $warehouses,
+            'tags' => $tags,
+            'marketplaces' => $marketplaces,
+            'types' => $types,
+            'stoneShapes' => $stoneShapes,
+            'ringSizes' => $ringSizes,
         ]);
+    }
+
+    /**
+     * Get stone shape options for filters.
+     *
+     * @return \Illuminate\Support\Collection<int, array{value: string, label: string}>
+     */
+    protected function getStoneShapeOptions(int $storeId): \Illuminate\Support\Collection
+    {
+        // Get from attribute values
+        $stoneShapeFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+            ->where(fn ($q) => $q->where('name', 'like', '%stone_shape%')
+                ->orWhere('name', 'like', '%shape%'))
+            ->pluck('id');
+
+        $shapes = collect();
+        if ($stoneShapeFieldIds->isNotEmpty()) {
+            $shapes = \App\Models\ProductAttributeValue::whereIn('product_template_field_id', $stoneShapeFieldIds)
+                ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                ->distinct()
+                ->pluck('value')
+                ->filter()
+                ->map(fn ($shape) => [
+                    'value' => $shape,
+                    'label' => ucfirst($shape),
+                ]);
+        }
+
+        // Include main_stone_type values
+        $mainStoneTypes = Product::where('store_id', $storeId)
+            ->whereNotNull('main_stone_type')
+            ->distinct()
+            ->pluck('main_stone_type')
+            ->filter()
+            ->map(fn ($type) => [
+                'value' => $type,
+                'label' => ucfirst(str_replace('_', ' ', $type)),
+            ]);
+
+        return $shapes->merge($mainStoneTypes)->unique('value')->values();
+    }
+
+    /**
+     * Get ring size options for filters.
+     *
+     * @return \Illuminate\Support\Collection<int, array{value: string, label: string}>
+     */
+    protected function getRingSizeOptions(int $storeId): \Illuminate\Support\Collection
+    {
+        // Get from attribute values
+        $ringSizeFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+            ->where(fn ($q) => $q->where('name', 'like', '%ring_size%')
+                ->orWhere('name', '=', 'size'))
+            ->pluck('id');
+
+        $sizes = collect();
+        if ($ringSizeFieldIds->isNotEmpty()) {
+            $sizes = \App\Models\ProductAttributeValue::whereIn('product_template_field_id', $ringSizeFieldIds)
+                ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                ->distinct()
+                ->pluck('value')
+                ->filter()
+                ->map(fn ($size) => [
+                    'value' => $size,
+                    'label' => $size,
+                ]);
+        }
+
+        // Include ring_size column values
+        $productRingSizes = Product::where('store_id', $storeId)
+            ->whereNotNull('ring_size')
+            ->distinct()
+            ->pluck('ring_size')
+            ->filter()
+            ->map(fn ($size) => [
+                'value' => (string) $size,
+                'label' => (string) $size,
+            ]);
+
+        return $sizes->merge($productRingSizes)
+            ->unique('value')
+            ->sortBy(fn ($item) => is_numeric($item['value']) ? (float) $item['value'] : $item['value'])
+            ->values();
     }
 
     public function create(): Response|RedirectResponse

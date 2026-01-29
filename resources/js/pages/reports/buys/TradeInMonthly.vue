@@ -4,7 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 
-interface DayRow {
+interface MonthRow {
     date: string;
     buys_count: number;
     purchase_amt: number;
@@ -24,14 +24,14 @@ interface Totals {
 }
 
 defineProps<{
-    dailyData: DayRow[];
+    monthlyData: MonthRow[];
     totals: Totals;
-    month: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
-    { title: 'Buys (In House)', href: '/reports/buys/in-house' },
+    { title: 'Buys (Trade-In)', href: '/reports/buys/trade-in' },
+    { title: 'Monthly', href: '/reports/buys/trade-in/monthly' },
 ];
 
 function formatCurrency(value: number): string {
@@ -51,27 +51,27 @@ function formatPercent(value: number): string {
 </script>
 
 <template>
-    <Head title="In-House Buys Report (MTD)" />
+    <Head title="Trade-In Buys Report (Month over Month)" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-4">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">In-House Buys Report</h1>
+                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Trade-In Buys Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Month to Date - {{ month }}
+                        Month over Month - Past 13 Months
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
                     <Link
-                        href="/reports/buys/in-house/monthly"
+                        href="/reports/buys/trade-in"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
-                        View Month over Month
+                        View Month to Date
                     </Link>
                     <Link
-                        href="/reports/buys/in-house/export"
+                        href="/reports/buys/trade-in/monthly/export"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ArrowDownTrayIcon class="size-4" />
@@ -96,7 +96,7 @@ function formatPercent(value: number): string {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in dailyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <tr v-for="row in monthlyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.date }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ row.buys_count }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.purchase_amt) }}</td>
@@ -111,14 +111,14 @@ function formatPercent(value: number): string {
                             </tr>
 
                             <!-- Empty state -->
-                            <tr v-if="dailyData.length === 0">
+                            <tr v-if="monthlyData.length === 0">
                                 <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                    No buys data found for this month.
+                                    No buys data found.
                                 </td>
                             </tr>
                         </tbody>
                         <!-- Totals row -->
-                        <tfoot v-if="dailyData.length > 0" class="bg-gray-100 dark:bg-gray-700">
+                        <tfoot v-if="monthlyData.length > 0" class="bg-gray-100 dark:bg-gray-700">
                             <tr class="font-semibold">
                                 <td class="px-4 py-4 text-sm text-gray-900 dark:text-white">TOTALS</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ totals.buys_count }}</td>

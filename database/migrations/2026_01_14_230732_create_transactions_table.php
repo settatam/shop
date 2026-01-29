@@ -19,7 +19,7 @@ return new class extends Migration
 
             $table->string('transaction_number')->unique();
             $table->string('status')->default('pending');
-            $table->string('type')->default('in_house'); // in_house, mail_in
+            $table->string('type')->default('in_store'); // in_store, mail_in
 
             // Financial
             $table->decimal('preliminary_offer', 10, 2)->nullable();

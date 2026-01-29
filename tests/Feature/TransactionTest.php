@@ -72,14 +72,14 @@ class TransactionTest extends TestCase
 
         Transaction::factory()->count(2)->create([
             'store_id' => $this->store->id,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
         ]);
         Transaction::factory()->count(1)->create([
             'store_id' => $this->store->id,
             'type' => Transaction::TYPE_MAIL_IN,
         ]);
 
-        $response = $this->getJson('/api/v1/transactions?type=in_house');
+        $response = $this->getJson('/api/v1/transactions?type=in_store');
 
         $response->assertStatus(200)
             ->assertJsonCount(2, 'data');
@@ -93,7 +93,7 @@ class TransactionTest extends TestCase
 
         $response = $this->postJson('/api/v1/transactions', [
             'customer_id' => $customer->id,
-            'type' => Transaction::TYPE_IN_HOUSE,
+            'type' => Transaction::TYPE_IN_STORE,
             'items' => [
                 [
                     'title' => 'Gold Ring',

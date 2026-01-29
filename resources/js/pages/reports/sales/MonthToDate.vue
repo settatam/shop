@@ -3,6 +3,9 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
+import { computed } from 'vue';
+import StatCard from '@/components/charts/StatCard.vue';
+import AreaChart from '@/components/charts/AreaChart.vue';
 
 interface DayRow {
     date: string;
@@ -31,7 +34,7 @@ interface Totals {
     profit_percent: number;
 }
 
-defineProps<{
+const props = defineProps<{
     dailyData: DayRow[];
     totals: Totals;
     month: string;
@@ -49,6 +52,16 @@ function formatCurrency(value: number): string {
     }).format(value);
 }
 
+function formatCurrencyShort(value: number): string {
+    if (value >= 1000000) {
+        return '$' + (value / 1000000).toFixed(1) + 'M';
+    }
+    if (value >= 1000) {
+        return '$' + (value / 1000).toFixed(1) + 'K';
+    }
+    return '$' + value.toFixed(0);
+}
+
 function formatPercent(value: number): string {
     return new Intl.NumberFormat('en-US', {
         style: 'percent',
@@ -56,13 +69,50 @@ function formatPercent(value: number): string {
         maximumFractionDigits: 1,
     }).format(value / 100);
 }
+
+// Chart data
+const chartLabels = computed(() => props.dailyData.map(row => {
+    // Extract just the day number from the date
+    const parts = row.date.split('/');
+    return parts.length > 1 ? parts[1] : row.date;
+}));
+
+const revenueData = computed(() => props.dailyData.map(row => row.total_paid));
+const profitData = computed(() => props.dailyData.map(row => row.gross_profit));
+const salesCountData = computed(() => props.dailyData.map(row => row.sales_count));
+
+// Calculate averages
+const avgDailyRevenue = computed(() => {
+    if (props.dailyData.length === 0) return 0;
+    return props.totals.total_paid / props.dailyData.length;
+});
+
+const avgDailyProfit = computed(() => {
+    if (props.dailyData.length === 0) return 0;
+    return props.totals.gross_profit / props.dailyData.length;
+});
+
+// Week over week trend (compare last 7 days vs previous 7 days)
+const revenueTrend = computed(() => {
+    if (props.dailyData.length < 14) return 0;
+    const last7 = props.dailyData.slice(-7).reduce((sum, row) => sum + row.total_paid, 0);
+    const prev7 = props.dailyData.slice(-14, -7).reduce((sum, row) => sum + row.total_paid, 0);
+    if (prev7 === 0) return last7 > 0 ? 100 : 0;
+    return ((last7 - prev7) / Math.abs(prev7)) * 100;
+});
+
+// Average profit margin
+const avgProfitMargin = computed(() => {
+    if (props.totals.total_paid === 0) return 0;
+    return (props.totals.gross_profit / props.totals.total_paid) * 100;
+});
 </script>
 
 <template>
     <Head title="Month to Date Sales Report" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full flex-1 flex-col gap-4 p-4">
+        <div class="flex h-full flex-1 flex-col gap-6 p-4">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
@@ -79,6 +129,52 @@ function formatPercent(value: number): string {
                         <ArrowDownTrayIcon class="size-4" />
                         Export CSV
                     </Link>
+                </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                    title="Total Revenue"
+                    :value="formatCurrency(totals.total_paid)"
+                    :trend="revenueTrend"
+                    trend-label="vs prev week"
+                    :sparkline-data="revenueData"
+                />
+                <StatCard
+                    title="Gross Profit"
+                    :value="formatCurrency(totals.gross_profit)"
+                    :sparkline-data="profitData"
+                />
+                <StatCard
+                    title="Avg Daily Revenue"
+                    :value="formatCurrency(avgDailyRevenue)"
+                />
+                <StatCard
+                    title="Profit Margin"
+                    :value="formatPercent(avgProfitMargin)"
+                />
+            </div>
+
+            <!-- Chart -->
+            <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Daily Revenue & Profit</h3>
+                </div>
+                <div class="p-4">
+                    <AreaChart
+                        v-if="dailyData.length > 0"
+                        :labels="chartLabels"
+                        :datasets="[
+                            { label: 'Revenue', data: revenueData, color: '#6366f1' },
+                            { label: 'Profit', data: profitData, color: '#22c55e' },
+                        ]"
+                        :height="250"
+                        :format-value="formatCurrencyShort"
+                    />
+                    <div v-else class="flex h-64 items-center justify-center text-gray-500">
+                        No data available
+                    </div>
                 </div>
             </div>
 

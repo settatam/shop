@@ -36,7 +36,7 @@ function formatCurrency(value: number | null): string {
 
 function getStatusClasses(status: string): string {
     const classes: Record<string, string> = {
-        // In-house workflow
+        // In-store workflow
         pending: 'bg-yellow-50 text-yellow-700 ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20',
         items_received: 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20',
         items_reviewed: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-500/20',
@@ -64,7 +64,7 @@ function formatStatus(status: string): string {
 }
 
 function getTypeLabel(type: string): string {
-    return type === 'in_house' ? 'In-House' : 'Mail-In';
+    return type === 'in_store' ? 'In-Store' : 'Mail-In';
 }
 </script>
 
