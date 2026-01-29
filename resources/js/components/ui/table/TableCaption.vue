@@ -1,0 +1,19 @@
+<script setup lang="ts">
+import { cn } from '@/lib/utils';
+import { computed, type HTMLAttributes } from 'vue';
+
+const props = defineProps<{
+    class?: HTMLAttributes['class'];
+}>();
+
+const delegatedProps = computed(() => {
+    const { class: _, ...rest } = props;
+    return rest;
+});
+</script>
+
+<template>
+    <caption :class="cn('mt-4 text-sm text-muted-foreground', props.class)" v-bind="delegatedProps">
+        <slot />
+    </caption>
+</template>

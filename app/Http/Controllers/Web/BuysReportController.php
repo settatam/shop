@@ -1,0 +1,467 @@
+<?php
+
+namespace App\Http\Controllers\Web;
+
+use App\Http\Controllers\Controller;
+use App\Models\Payment;
+use App\Models\Transaction;
+use App\Services\StoreContext;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class BuysReportController extends Controller
+{
+    public function __construct(
+        protected StoreContext $storeContext,
+    ) {}
+
+    /**
+     * In-Store Buys Report - Month to Date (daily breakdown).
+     */
+    public function inStore(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getInStoreDailyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($dailyData);
+
+        return Inertia::render('reports/buys/InStore', [
+            'dailyData' => $dailyData,
+            'totals' => $totals,
+            'month' => now()->format('F Y'),
+        ]);
+    }
+
+    /**
+     * In-Store Buys Report - Month over Month.
+     */
+    public function inStoreMonthly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getInStoreMonthlyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($monthlyData);
+
+        return Inertia::render('reports/buys/InStoreMonthly', [
+            'monthlyData' => $monthlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Online Buys Report - Month to Date (daily breakdown).
+     */
+    public function online(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getOnlineDailyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($dailyData);
+
+        return Inertia::render('reports/buys/Online', [
+            'dailyData' => $dailyData,
+            'totals' => $totals,
+            'month' => now()->format('F Y'),
+        ]);
+    }
+
+    /**
+     * Online Buys Report - Month over Month.
+     */
+    public function onlineMonthly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getOnlineMonthlyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($monthlyData);
+
+        return Inertia::render('reports/buys/OnlineMonthly', [
+            'monthlyData' => $monthlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * In-House Buys Report - Month to Date (daily breakdown).
+     */
+    public function inHouse(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getInHouseDailyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($dailyData);
+
+        return Inertia::render('reports/buys/InHouse', [
+            'dailyData' => $dailyData,
+            'totals' => $totals,
+            'month' => now()->format('F Y'),
+        ]);
+    }
+
+    /**
+     * In-House Buys Report - Month over Month.
+     */
+    public function inHouseMonthly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getInHouseMonthlyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($monthlyData);
+
+        return Inertia::render('reports/buys/InHouseMonthly', [
+            'monthlyData' => $monthlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Export In-Store MTD to CSV.
+     */
+    public function exportInStore(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getInStoreDailyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($dailyData, 'buys-in-store-mtd-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export In-Store Monthly to CSV.
+     */
+    public function exportInStoreMonthly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getInStoreMonthlyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($monthlyData, 'buys-in-store-monthly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export Online MTD to CSV.
+     */
+    public function exportOnline(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getOnlineDailyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($dailyData, 'buys-online-mtd-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export Online Monthly to CSV.
+     */
+    public function exportOnlineMonthly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getOnlineMonthlyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($monthlyData, 'buys-online-monthly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export In-House MTD to CSV.
+     */
+    public function exportInHouse(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getInHouseDailyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($dailyData, 'buys-in-house-mtd-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export In-House Monthly to CSV.
+     */
+    public function exportInHouseMonthly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getInHouseMonthlyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($monthlyData, 'buys-in-house-monthly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Get in-store daily aggregated data.
+     * In-store means in_house type with source NOT online.
+     */
+    protected function getInStoreDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getDailyBuysData($storeId, $startDate, $endDate, function ($query) {
+            $query->where('type', Transaction::TYPE_IN_HOUSE)
+                ->where(function ($q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
+                })
+                ->where('source', '!=', Transaction::SOURCE_TRADE_IN);
+        });
+    }
+
+    /**
+     * Get in-store monthly aggregated data.
+     */
+    protected function getInStoreMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getMonthlyBuysData($storeId, $startDate, $endDate, function ($query) {
+            $query->where('type', Transaction::TYPE_IN_HOUSE)
+                ->where(function ($q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
+                })
+                ->where('source', '!=', Transaction::SOURCE_TRADE_IN);
+        });
+    }
+
+    /**
+     * Get online daily aggregated data.
+     * Online means mail_in type OR source = online.
+     */
+    protected function getOnlineDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getDailyBuysData($storeId, $startDate, $endDate, function ($query) {
+            $query->where(function ($q) {
+                $q->where('type', Transaction::TYPE_MAIL_IN)
+                    ->orWhere('source', Transaction::SOURCE_ONLINE);
+            });
+        });
+    }
+
+    /**
+     * Get online monthly aggregated data.
+     */
+    protected function getOnlineMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getMonthlyBuysData($storeId, $startDate, $endDate, function ($query) {
+            $query->where(function ($q) {
+                $q->where('type', Transaction::TYPE_MAIL_IN)
+                    ->orWhere('source', Transaction::SOURCE_ONLINE);
+            });
+        });
+    }
+
+    /**
+     * Get in-house daily aggregated data.
+     * In-house means source = trade_in (trade-in transactions).
+     */
+    protected function getInHouseDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getDailyBuysData($storeId, $startDate, $endDate, function ($query) {
+            $query->where('source', Transaction::SOURCE_TRADE_IN);
+        });
+    }
+
+    /**
+     * Get in-house monthly aggregated data.
+     */
+    protected function getInHouseMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getMonthlyBuysData($storeId, $startDate, $endDate, function ($query) {
+            $query->where('source', Transaction::SOURCE_TRADE_IN);
+        });
+    }
+
+    /**
+     * Get daily buys data with custom filter.
+     */
+    protected function getDailyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
+    {
+        $query = Transaction::query()
+            ->where('store_id', $storeId)
+            ->where('status', Transaction::STATUS_PAYMENT_PROCESSED)
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items', 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED)]);
+
+        $filter($query);
+
+        $transactions = $query->get();
+
+        // Group by day
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y-m-d'));
+
+        // Generate all days in range
+        $days = collect();
+        $current = $startDate->copy();
+        while ($current <= $endDate) {
+            $key = $current->format('Y-m-d');
+            $dayTransactions = $grouped->get($key, collect());
+
+            $buysCount = $dayTransactions->count();
+            $purchaseAmt = $dayTransactions->sum(fn ($t) => $t->payments->sum('amount'));
+            $estimatedValue = $dayTransactions->sum('estimated_value');
+            $profit = $estimatedValue - $purchaseAmt;
+            $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
+            $avgBuyPrice = $buysCount > 0 ? $purchaseAmt / $buysCount : 0;
+
+            $days->push([
+                'date' => $current->format('M d, Y'),
+                'buys_count' => $buysCount,
+                'purchase_amt' => $purchaseAmt,
+                'estimated_value' => $estimatedValue,
+                'profit' => $profit,
+                'profit_percent' => $profitPercent,
+                'avg_buy_price' => $avgBuyPrice,
+            ]);
+
+            $current->addDay();
+        }
+
+        return $days;
+    }
+
+    /**
+     * Get monthly buys data with custom filter.
+     */
+    protected function getMonthlyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
+    {
+        $query = Transaction::query()
+            ->where('store_id', $storeId)
+            ->where('status', Transaction::STATUS_PAYMENT_PROCESSED)
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items', 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED)]);
+
+        $filter($query);
+
+        $transactions = $query->get();
+
+        // Group by month
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y-m'));
+
+        // Generate all months in range
+        $months = collect();
+        $current = $startDate->copy();
+        while ($current <= $endDate) {
+            $key = $current->format('Y-m');
+            $monthTransactions = $grouped->get($key, collect());
+
+            $buysCount = $monthTransactions->count();
+            $purchaseAmt = $monthTransactions->sum(fn ($t) => $t->payments->sum('amount'));
+            $estimatedValue = $monthTransactions->sum('estimated_value');
+            $profit = $estimatedValue - $purchaseAmt;
+            $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
+            $avgBuyPrice = $buysCount > 0 ? $purchaseAmt / $buysCount : 0;
+
+            $months->push([
+                'date' => $current->format('M Y'),
+                'buys_count' => $buysCount,
+                'purchase_amt' => $purchaseAmt,
+                'estimated_value' => $estimatedValue,
+                'profit' => $profit,
+                'profit_percent' => $profitPercent,
+                'avg_buy_price' => $avgBuyPrice,
+            ]);
+
+            $current->addMonth();
+        }
+
+        return $months;
+    }
+
+    /**
+     * Calculate totals from aggregated data.
+     */
+    protected function calculateTotals($data): array
+    {
+        $buysCount = $data->sum('buys_count');
+        $purchaseAmt = $data->sum('purchase_amt');
+        $estimatedValue = $data->sum('estimated_value');
+        $profit = $estimatedValue - $purchaseAmt;
+        $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
+        $avgBuyPrice = $buysCount > 0 ? $purchaseAmt / $buysCount : 0;
+
+        return [
+            'buys_count' => $buysCount,
+            'purchase_amt' => $purchaseAmt,
+            'estimated_value' => $estimatedValue,
+            'profit' => $profit,
+            'profit_percent' => $profitPercent,
+            'avg_buy_price' => $avgBuyPrice,
+        ];
+    }
+
+    /**
+     * Export data to CSV.
+     */
+    protected function exportToCsv($data, string $filename): StreamedResponse
+    {
+        $totals = $this->calculateTotals($data);
+
+        return response()->streamDownload(function () use ($data, $totals) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Date',
+                '# of Buys',
+                'Purchase Amt',
+                'Estimated Value',
+                'Profit',
+                'Profit %',
+                'Avg Buy Price',
+            ]);
+
+            foreach ($data as $row) {
+                fputcsv($handle, [
+                    $row['date'],
+                    $row['buys_count'],
+                    number_format($row['purchase_amt'], 2),
+                    number_format($row['estimated_value'], 2),
+                    number_format($row['profit'], 2),
+                    number_format($row['profit_percent'], 2).'%',
+                    number_format($row['avg_buy_price'], 2),
+                ]);
+            }
+
+            // Totals row
+            fputcsv($handle, [
+                'TOTALS',
+                $totals['buys_count'],
+                number_format($totals['purchase_amt'], 2),
+                number_format($totals['estimated_value'], 2),
+                number_format($totals['profit'], 2),
+                number_format($totals['profit_percent'], 2).'%',
+                number_format($totals['avg_buy_price'], 2),
+            ]);
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+}

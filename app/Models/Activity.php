@@ -1,0 +1,498 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+
+class Activity extends Model
+{
+    // Categories
+    public const CATEGORY_PRODUCTS = 'products';
+
+    public const CATEGORY_ORDERS = 'orders';
+
+    public const CATEGORY_TRANSACTIONS = 'transactions';
+
+    public const CATEGORY_INVENTORY = 'inventory';
+
+    public const CATEGORY_CUSTOMERS = 'customers';
+
+    public const CATEGORY_INTEGRATIONS = 'integrations';
+
+    public const CATEGORY_STORE = 'store';
+
+    public const CATEGORY_TEAM = 'team';
+
+    public const CATEGORY_REPORTS = 'reports';
+
+    public const CATEGORY_MEMOS = 'memos';
+
+    public const CATEGORY_REPAIRS = 'repairs';
+
+    public const CATEGORY_VENDORS = 'vendors';
+
+    // Product Activities
+    public const PRODUCTS_VIEW = 'products.view';
+
+    public const PRODUCTS_CREATE = 'products.create';
+
+    public const PRODUCTS_UPDATE = 'products.update';
+
+    public const PRODUCTS_DELETE = 'products.delete';
+
+    public const PRODUCTS_EXPORT = 'products.export';
+
+    public const PRODUCTS_IMPORT = 'products.import';
+
+    public const PRODUCTS_MANAGE_VARIANTS = 'products.manage_variants';
+
+    public const PRODUCTS_MANAGE_IMAGES = 'products.manage_images';
+
+    public const PRODUCTS_MANAGE_PRICING = 'products.manage_pricing';
+
+    // Category Activities
+    public const CATEGORIES_VIEW = 'categories.view';
+
+    public const CATEGORIES_CREATE = 'categories.create';
+
+    public const CATEGORIES_UPDATE = 'categories.update';
+
+    public const CATEGORIES_DELETE = 'categories.delete';
+
+    // Template Activities
+    public const TEMPLATES_VIEW = 'templates.view';
+
+    public const TEMPLATES_CREATE = 'templates.create';
+
+    public const TEMPLATES_UPDATE = 'templates.update';
+
+    public const TEMPLATES_DELETE = 'templates.delete';
+
+    // Order Activities
+    public const ORDERS_VIEW = 'orders.view';
+
+    public const ORDERS_CREATE = 'orders.create';
+
+    public const ORDERS_UPDATE = 'orders.update';
+
+    public const ORDERS_DELETE = 'orders.delete';
+
+    public const ORDERS_CANCEL = 'orders.cancel';
+
+    public const ORDERS_REFUND = 'orders.refund';
+
+    public const ORDERS_FULFILL = 'orders.fulfill';
+
+    public const ORDERS_EXPORT = 'orders.export';
+
+    public const ORDERS_MANAGE_SHIPPING = 'orders.manage_shipping';
+
+    public const ORDERS_VIEW_FINANCIALS = 'orders.view_financials';
+
+    // Transaction Activities
+    public const TRANSACTIONS_VIEW = 'transactions.view';
+
+    public const TRANSACTIONS_CREATE = 'transactions.create';
+
+    public const TRANSACTIONS_UPDATE = 'transactions.update';
+
+    public const TRANSACTIONS_DELETE = 'transactions.delete';
+
+    public const TRANSACTIONS_SUBMIT_OFFER = 'transactions.submit_offer';
+
+    public const TRANSACTIONS_ACCEPT_OFFER = 'transactions.accept_offer';
+
+    public const TRANSACTIONS_DECLINE_OFFER = 'transactions.decline_offer';
+
+    public const TRANSACTIONS_PROCESS_PAYMENT = 'transactions.process_payment';
+
+    public const TRANSACTIONS_CANCEL = 'transactions.cancel';
+
+    public const TRANSACTIONS_STATUS_CHANGE = 'transactions.status_change';
+
+    public const TRANSACTIONS_UPDATE_PAYOUT_PREFERENCE = 'transactions.update_payout_preference';
+
+    // Inventory Activities
+    public const INVENTORY_VIEW = 'inventory.view';
+
+    public const INVENTORY_ADJUST = 'inventory.adjust';
+
+    public const INVENTORY_TRANSFER = 'inventory.transfer';
+
+    public const INVENTORY_VIEW_REPORTS = 'inventory.view_reports';
+
+    // Warehouse Activities
+    public const WAREHOUSES_VIEW = 'warehouses.view';
+
+    public const WAREHOUSES_CREATE = 'warehouses.create';
+
+    public const WAREHOUSES_UPDATE = 'warehouses.update';
+
+    public const WAREHOUSES_DELETE = 'warehouses.delete';
+
+    // Customer Activities
+    public const CUSTOMERS_VIEW = 'customers.view';
+
+    public const CUSTOMERS_CREATE = 'customers.create';
+
+    public const CUSTOMERS_UPDATE = 'customers.update';
+
+    public const CUSTOMERS_DELETE = 'customers.delete';
+
+    public const CUSTOMERS_EXPORT = 'customers.export';
+
+    public const CUSTOMERS_VIEW_HISTORY = 'customers.view_history';
+
+    // Integration Activities
+    public const INTEGRATIONS_VIEW = 'integrations.view';
+
+    public const INTEGRATIONS_CONNECT = 'integrations.connect';
+
+    public const INTEGRATIONS_DISCONNECT = 'integrations.disconnect';
+
+    public const INTEGRATIONS_SYNC = 'integrations.sync';
+
+    public const INTEGRATIONS_MANAGE_SETTINGS = 'integrations.manage_settings';
+
+    // Store Settings Activities
+    public const STORE_VIEW_SETTINGS = 'store.view_settings';
+
+    public const STORE_UPDATE_SETTINGS = 'store.update_settings';
+
+    public const STORE_VIEW_BILLING = 'store.view_billing';
+
+    public const STORE_MANAGE_BILLING = 'store.manage_billing';
+
+    public const STORE_MANAGE_STATUSES = 'store.manage_statuses';
+
+    // Team Activities
+    public const TEAM_VIEW = 'team.view';
+
+    public const TEAM_INVITE = 'team.invite';
+
+    public const TEAM_UPDATE = 'team.update';
+
+    public const TEAM_REMOVE = 'team.remove';
+
+    public const TEAM_ACCEPT_INVITATION = 'team.accept_invitation';
+
+    public const TEAM_TRANSFER_OWNERSHIP = 'team.transfer_ownership';
+
+    public const TEAM_MANAGE_ROLES = 'team.manage_roles';
+
+    // Role Activities
+    public const ROLES_CREATE = 'roles.create';
+
+    public const ROLES_UPDATE = 'roles.update';
+
+    public const ROLES_DELETE = 'roles.delete';
+
+    // Report Activities
+    public const REPORTS_VIEW_SALES = 'reports.view_sales';
+
+    public const REPORTS_VIEW_INVENTORY = 'reports.view_inventory';
+
+    public const REPORTS_VIEW_CUSTOMERS = 'reports.view_customers';
+
+    public const REPORTS_VIEW_ACTIVITY = 'reports.view_activity';
+
+    public const REPORTS_EXPORT = 'reports.export';
+
+    // AI Activities
+    public const AI_GENERATE_DESCRIPTIONS = 'ai.generate_descriptions';
+
+    public const AI_CATEGORIZE = 'ai.categorize';
+
+    public const AI_OPTIMIZE_PRICING = 'ai.optimize_pricing';
+
+    // Memo Activities
+    public const MEMOS_VIEW = 'memos.view';
+
+    public const MEMOS_CREATE = 'memos.create';
+
+    public const MEMOS_UPDATE = 'memos.update';
+
+    public const MEMOS_DELETE = 'memos.delete';
+
+    public const MEMOS_SEND_TO_VENDOR = 'memos.send_to_vendor';
+
+    public const MEMOS_MARK_RECEIVED = 'memos.mark_received';
+
+    public const MEMOS_PAYMENT_RECEIVED = 'memos.payment_received';
+
+    public const MEMOS_CANCEL = 'memos.cancel';
+
+    // Repair Activities
+    public const REPAIRS_VIEW = 'repairs.view';
+
+    public const REPAIRS_CREATE = 'repairs.create';
+
+    public const REPAIRS_UPDATE = 'repairs.update';
+
+    public const REPAIRS_DELETE = 'repairs.delete';
+
+    public const REPAIRS_SEND_TO_VENDOR = 'repairs.send_to_vendor';
+
+    public const REPAIRS_COMPLETE = 'repairs.complete';
+
+    public const REPAIRS_PAYMENT_RECEIVED = 'repairs.payment_received';
+
+    public const REPAIRS_CANCEL = 'repairs.cancel';
+
+    // Vendor Activities
+    public const VENDORS_VIEW = 'vendors.view';
+
+    public const VENDORS_CREATE = 'vendors.create';
+
+    public const VENDORS_UPDATE = 'vendors.update';
+
+    public const VENDORS_DELETE = 'vendors.delete';
+
+    // Note Activities (polymorphic - can belong to any notable model)
+    public const NOTES_CREATE = 'notes.create';
+
+    public const NOTES_UPDATE = 'notes.update';
+
+    public const NOTES_DELETE = 'notes.delete';
+
+    protected $fillable = [
+        'slug',
+        'name',
+        'description',
+        'category',
+        'group',
+        'sort_order',
+    ];
+
+    /**
+     * Get all defined activities with their metadata.
+     */
+    public static function getDefinitions(): array
+    {
+        return [
+            // Products
+            self::PRODUCTS_VIEW => ['name' => 'View Products', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'View product listings and details'],
+            self::PRODUCTS_CREATE => ['name' => 'Create Products', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Add new products to the catalog'],
+            self::PRODUCTS_UPDATE => ['name' => 'Update Products', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Edit existing product information'],
+            self::PRODUCTS_DELETE => ['name' => 'Delete Products', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Remove products from the catalog'],
+            self::PRODUCTS_EXPORT => ['name' => 'Export Products', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Export product data'],
+            self::PRODUCTS_IMPORT => ['name' => 'Import Products', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Import products from file'],
+            self::PRODUCTS_MANAGE_VARIANTS => ['name' => 'Manage Variants', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Create and edit product variants'],
+            self::PRODUCTS_MANAGE_IMAGES => ['name' => 'Manage Images', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Upload and manage product images'],
+            self::PRODUCTS_MANAGE_PRICING => ['name' => 'Manage Pricing', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Set and update product prices'],
+
+            // Categories
+            self::CATEGORIES_VIEW => ['name' => 'View Categories', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'View product categories'],
+            self::CATEGORIES_CREATE => ['name' => 'Create Categories', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Add new categories'],
+            self::CATEGORIES_UPDATE => ['name' => 'Update Categories', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Edit existing categories'],
+            self::CATEGORIES_DELETE => ['name' => 'Delete Categories', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Remove categories'],
+
+            // Templates
+            self::TEMPLATES_VIEW => ['name' => 'View Templates', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'View product templates'],
+            self::TEMPLATES_CREATE => ['name' => 'Create Templates', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Create new product templates'],
+            self::TEMPLATES_UPDATE => ['name' => 'Update Templates', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Edit product templates'],
+            self::TEMPLATES_DELETE => ['name' => 'Delete Templates', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Remove product templates'],
+
+            // Orders
+            self::ORDERS_VIEW => ['name' => 'View Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'View order listings and details'],
+            self::ORDERS_CREATE => ['name' => 'Create Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Create manual orders'],
+            self::ORDERS_UPDATE => ['name' => 'Update Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Edit order information'],
+            self::ORDERS_DELETE => ['name' => 'Delete Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Remove orders'],
+            self::ORDERS_CANCEL => ['name' => 'Cancel Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Cancel pending orders'],
+            self::ORDERS_REFUND => ['name' => 'Process Refunds', 'category' => self::CATEGORY_ORDERS, 'description' => 'Issue order refunds'],
+            self::ORDERS_FULFILL => ['name' => 'Fulfill Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Mark orders as shipped/fulfilled'],
+            self::ORDERS_EXPORT => ['name' => 'Export Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Export order data'],
+            self::ORDERS_MANAGE_SHIPPING => ['name' => 'Manage Shipping', 'category' => self::CATEGORY_ORDERS, 'description' => 'Create shipping labels and tracking'],
+            self::ORDERS_VIEW_FINANCIALS => ['name' => 'View Order Financials', 'category' => self::CATEGORY_ORDERS, 'description' => 'View order costs and profits'],
+
+            // Transactions
+            self::TRANSACTIONS_VIEW => ['name' => 'View Transactions', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'View buy transactions'],
+            self::TRANSACTIONS_CREATE => ['name' => 'Create Transaction', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Create a new buy transaction'],
+            self::TRANSACTIONS_UPDATE => ['name' => 'Update Transaction', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Update buy transaction details'],
+            self::TRANSACTIONS_DELETE => ['name' => 'Delete Transaction', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Delete a buy transaction'],
+            self::TRANSACTIONS_SUBMIT_OFFER => ['name' => 'Submit Offer', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Submit an offer on a transaction'],
+            self::TRANSACTIONS_ACCEPT_OFFER => ['name' => 'Accept Offer', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Accept a transaction offer'],
+            self::TRANSACTIONS_DECLINE_OFFER => ['name' => 'Decline Offer', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Decline a transaction offer'],
+            self::TRANSACTIONS_PROCESS_PAYMENT => ['name' => 'Process Payment', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Process payment for a transaction'],
+            self::TRANSACTIONS_CANCEL => ['name' => 'Cancel Transaction', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Cancel a buy transaction'],
+            self::TRANSACTIONS_STATUS_CHANGE => ['name' => 'Change Status', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Change transaction status'],
+            self::TRANSACTIONS_UPDATE_PAYOUT_PREFERENCE => ['name' => 'Update Payout Preference', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Customer updated payout preference'],
+
+            // Inventory
+            self::INVENTORY_VIEW => ['name' => 'View Inventory', 'category' => self::CATEGORY_INVENTORY, 'description' => 'View stock levels'],
+            self::INVENTORY_ADJUST => ['name' => 'Adjust Inventory', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Adjust stock quantities'],
+            self::INVENTORY_TRANSFER => ['name' => 'Transfer Inventory', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Transfer stock between locations'],
+            self::INVENTORY_VIEW_REPORTS => ['name' => 'View Inventory Reports', 'category' => self::CATEGORY_INVENTORY, 'description' => 'View inventory analytics'],
+
+            // Warehouses
+            self::WAREHOUSES_VIEW => ['name' => 'View Warehouses', 'category' => self::CATEGORY_INVENTORY, 'description' => 'View warehouse locations'],
+            self::WAREHOUSES_CREATE => ['name' => 'Create Warehouses', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Add new warehouse locations'],
+            self::WAREHOUSES_UPDATE => ['name' => 'Update Warehouses', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Edit warehouse information'],
+            self::WAREHOUSES_DELETE => ['name' => 'Delete Warehouses', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Remove warehouse locations'],
+
+            // Customers
+            self::CUSTOMERS_VIEW => ['name' => 'View Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'View customer listings'],
+            self::CUSTOMERS_CREATE => ['name' => 'Create Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'Add new customers'],
+            self::CUSTOMERS_UPDATE => ['name' => 'Update Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'Edit customer information'],
+            self::CUSTOMERS_DELETE => ['name' => 'Delete Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'Remove customers'],
+            self::CUSTOMERS_EXPORT => ['name' => 'Export Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'Export customer data'],
+            self::CUSTOMERS_VIEW_HISTORY => ['name' => 'View Customer History', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'View customer order history'],
+
+            // Integrations
+            self::INTEGRATIONS_VIEW => ['name' => 'View Integrations', 'category' => self::CATEGORY_INTEGRATIONS, 'description' => 'View connected platforms'],
+            self::INTEGRATIONS_CONNECT => ['name' => 'Connect Integrations', 'category' => self::CATEGORY_INTEGRATIONS, 'description' => 'Connect new platforms'],
+            self::INTEGRATIONS_DISCONNECT => ['name' => 'Disconnect Integrations', 'category' => self::CATEGORY_INTEGRATIONS, 'description' => 'Remove platform connections'],
+            self::INTEGRATIONS_SYNC => ['name' => 'Sync Integrations', 'category' => self::CATEGORY_INTEGRATIONS, 'description' => 'Sync data with platforms'],
+            self::INTEGRATIONS_MANAGE_SETTINGS => ['name' => 'Manage Integration Settings', 'category' => self::CATEGORY_INTEGRATIONS, 'description' => 'Configure integration settings'],
+
+            // Store
+            self::STORE_VIEW_SETTINGS => ['name' => 'View Store Settings', 'category' => self::CATEGORY_STORE, 'description' => 'View store configuration'],
+            self::STORE_UPDATE_SETTINGS => ['name' => 'Update Store Settings', 'category' => self::CATEGORY_STORE, 'description' => 'Modify store settings'],
+            self::STORE_VIEW_BILLING => ['name' => 'View Billing', 'category' => self::CATEGORY_STORE, 'description' => 'View subscription and billing'],
+            self::STORE_MANAGE_BILLING => ['name' => 'Manage Billing', 'category' => self::CATEGORY_STORE, 'description' => 'Manage subscription and payments'],
+            self::STORE_MANAGE_STATUSES => ['name' => 'Manage Statuses', 'category' => self::CATEGORY_STORE, 'description' => 'Configure workflow statuses and automations'],
+
+            // Team
+            self::TEAM_VIEW => ['name' => 'View Team', 'category' => self::CATEGORY_TEAM, 'description' => 'View team members'],
+            self::TEAM_INVITE => ['name' => 'Invite Team Members', 'category' => self::CATEGORY_TEAM, 'description' => 'Invite new team members'],
+            self::TEAM_UPDATE => ['name' => 'Update Team Members', 'category' => self::CATEGORY_TEAM, 'description' => 'Edit team member roles'],
+            self::TEAM_REMOVE => ['name' => 'Remove Team Members', 'category' => self::CATEGORY_TEAM, 'description' => 'Remove team members'],
+            self::TEAM_ACCEPT_INVITATION => ['name' => 'Accept Invitation', 'category' => self::CATEGORY_TEAM, 'description' => 'Manually accept a team invitation'],
+            self::TEAM_TRANSFER_OWNERSHIP => ['name' => 'Transfer Ownership', 'category' => self::CATEGORY_TEAM, 'description' => 'Transfer store ownership to another team member'],
+            self::TEAM_MANAGE_ROLES => ['name' => 'Manage Roles', 'category' => self::CATEGORY_TEAM, 'description' => 'Create and edit roles'],
+
+            // Roles
+            self::ROLES_CREATE => ['name' => 'Create Role', 'category' => self::CATEGORY_TEAM, 'description' => 'A new role was created'],
+            self::ROLES_UPDATE => ['name' => 'Update Role', 'category' => self::CATEGORY_TEAM, 'description' => 'A role was updated'],
+            self::ROLES_DELETE => ['name' => 'Delete Role', 'category' => self::CATEGORY_TEAM, 'description' => 'A role was deleted'],
+
+            // Reports
+            self::REPORTS_VIEW_SALES => ['name' => 'View Sales Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View sales analytics'],
+            self::REPORTS_VIEW_INVENTORY => ['name' => 'View Inventory Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View inventory analytics'],
+            self::REPORTS_VIEW_CUSTOMERS => ['name' => 'View Customer Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View customer analytics'],
+            self::REPORTS_VIEW_ACTIVITY => ['name' => 'View Activity Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View team activity logs'],
+            self::REPORTS_EXPORT => ['name' => 'Export Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'Export report data'],
+
+            // AI
+            self::AI_GENERATE_DESCRIPTIONS => ['name' => 'Generate AI Descriptions', 'category' => self::CATEGORY_PRODUCTS, 'group' => 'ai', 'description' => 'Use AI to generate product descriptions'],
+            self::AI_CATEGORIZE => ['name' => 'AI Categorization', 'category' => self::CATEGORY_PRODUCTS, 'group' => 'ai', 'description' => 'Use AI to categorize products'],
+            self::AI_OPTIMIZE_PRICING => ['name' => 'AI Price Optimization', 'category' => self::CATEGORY_PRODUCTS, 'group' => 'ai', 'description' => 'Use AI for pricing suggestions'],
+
+            // Memos
+            self::MEMOS_VIEW => ['name' => 'View Memos', 'category' => self::CATEGORY_MEMOS, 'description' => 'View memo listings and details'],
+            self::MEMOS_CREATE => ['name' => 'Create Memo', 'category' => self::CATEGORY_MEMOS, 'description' => 'Create a new consignment memo'],
+            self::MEMOS_UPDATE => ['name' => 'Update Memo', 'category' => self::CATEGORY_MEMOS, 'description' => 'Update memo details'],
+            self::MEMOS_DELETE => ['name' => 'Delete Memo', 'category' => self::CATEGORY_MEMOS, 'description' => 'Delete a memo'],
+            self::MEMOS_SEND_TO_VENDOR => ['name' => 'Send to Vendor', 'category' => self::CATEGORY_MEMOS, 'description' => 'Send memo items to vendor'],
+            self::MEMOS_MARK_RECEIVED => ['name' => 'Mark Received', 'category' => self::CATEGORY_MEMOS, 'description' => 'Mark memo as received by vendor'],
+            self::MEMOS_PAYMENT_RECEIVED => ['name' => 'Payment Received', 'category' => self::CATEGORY_MEMOS, 'description' => 'Record payment received for memo'],
+            self::MEMOS_CANCEL => ['name' => 'Cancel Memo', 'category' => self::CATEGORY_MEMOS, 'description' => 'Cancel a memo'],
+
+            // Repairs
+            self::REPAIRS_VIEW => ['name' => 'View Repairs', 'category' => self::CATEGORY_REPAIRS, 'description' => 'View repair listings and details'],
+            self::REPAIRS_CREATE => ['name' => 'Create Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Create a new repair order'],
+            self::REPAIRS_UPDATE => ['name' => 'Update Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Update repair details'],
+            self::REPAIRS_DELETE => ['name' => 'Delete Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Delete a repair order'],
+            self::REPAIRS_SEND_TO_VENDOR => ['name' => 'Send to Vendor', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Send repair items to vendor'],
+            self::REPAIRS_COMPLETE => ['name' => 'Complete Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Mark repair as completed'],
+            self::REPAIRS_PAYMENT_RECEIVED => ['name' => 'Payment Received', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Record payment received for repair'],
+            self::REPAIRS_CANCEL => ['name' => 'Cancel Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Cancel a repair order'],
+
+            // Vendors
+            self::VENDORS_VIEW => ['name' => 'View Vendors', 'category' => self::CATEGORY_VENDORS, 'description' => 'View vendor listings and details'],
+            self::VENDORS_CREATE => ['name' => 'Create Vendor', 'category' => self::CATEGORY_VENDORS, 'description' => 'Add a new vendor'],
+            self::VENDORS_UPDATE => ['name' => 'Update Vendor', 'category' => self::CATEGORY_VENDORS, 'description' => 'Update vendor information'],
+            self::VENDORS_DELETE => ['name' => 'Delete Vendor', 'category' => self::CATEGORY_VENDORS, 'description' => 'Remove a vendor'],
+
+            // Notes (polymorphic - logged on the notable model)
+            self::NOTES_CREATE => ['name' => 'Note Added', 'category' => self::CATEGORY_STORE, 'description' => 'A note was added'],
+            self::NOTES_UPDATE => ['name' => 'Note Updated', 'category' => self::CATEGORY_STORE, 'description' => 'A note was updated'],
+            self::NOTES_DELETE => ['name' => 'Note Deleted', 'category' => self::CATEGORY_STORE, 'description' => 'A note was deleted'],
+        ];
+    }
+
+    /**
+     * Get all activity slugs.
+     */
+    public static function getAllSlugs(): array
+    {
+        return array_keys(self::getDefinitions());
+    }
+
+    /**
+     * Get activities grouped by category.
+     */
+    public static function getGroupedByCategory(): Collection
+    {
+        return collect(self::getDefinitions())->groupBy('category');
+    }
+
+    /**
+     * Get activities for a specific category.
+     */
+    public static function getByCategory(string $category): array
+    {
+        return collect(self::getDefinitions())
+            ->filter(fn ($def) => $def['category'] === $category)
+            ->keys()
+            ->toArray();
+    }
+
+    /**
+     * Get role presets for common roles.
+     */
+    public static function getRolePresets(): array
+    {
+        return [
+            'owner' => [
+                'name' => 'Owner',
+                'slug' => 'owner',
+                'description' => 'Full access to all features',
+                'permissions' => ['*'], // All permissions
+            ],
+            'admin' => [
+                'name' => 'Admin',
+                'slug' => 'admin',
+                'description' => 'Full access except billing and team management',
+                'permissions' => array_values(array_filter(self::getAllSlugs(), fn ($slug) => ! str_starts_with($slug, 'store.') && ! str_starts_with($slug, 'team.manage'))),
+            ],
+            'manager' => [
+                'name' => 'Manager',
+                'slug' => 'manager',
+                'description' => 'Manage products, orders, and inventory',
+                'permissions' => array_merge(
+                    self::getByCategory(self::CATEGORY_PRODUCTS),
+                    self::getByCategory(self::CATEGORY_ORDERS),
+                    self::getByCategory(self::CATEGORY_INVENTORY),
+                    self::getByCategory(self::CATEGORY_CUSTOMERS),
+                    [self::TEAM_VIEW, self::INTEGRATIONS_VIEW, self::INTEGRATIONS_SYNC],
+                ),
+            ],
+            'staff' => [
+                'name' => 'Staff',
+                'slug' => 'staff',
+                'description' => 'Basic product and order management',
+                'permissions' => [
+                    self::PRODUCTS_VIEW, self::PRODUCTS_UPDATE, self::PRODUCTS_MANAGE_IMAGES,
+                    self::CATEGORIES_VIEW,
+                    self::ORDERS_VIEW, self::ORDERS_UPDATE, self::ORDERS_FULFILL,
+                    self::INVENTORY_VIEW, self::INVENTORY_ADJUST,
+                    self::CUSTOMERS_VIEW, self::CUSTOMERS_VIEW_HISTORY,
+                ],
+            ],
+            'viewer' => [
+                'name' => 'Viewer',
+                'slug' => 'viewer',
+                'description' => 'Read-only access',
+                'permissions' => [
+                    self::PRODUCTS_VIEW, self::CATEGORIES_VIEW, self::TEMPLATES_VIEW,
+                    self::ORDERS_VIEW,
+                    self::INVENTORY_VIEW, self::WAREHOUSES_VIEW,
+                    self::CUSTOMERS_VIEW,
+                    self::INTEGRATIONS_VIEW,
+                ],
+            ],
+        ];
+    }
+}

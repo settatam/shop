@@ -1,0 +1,466 @@
+<?php
+
+namespace App\Services\Platforms\Shopify;
+
+use App\Enums\Platform;
+use App\Models\PlatformListing;
+use App\Models\PlatformOrder;
+use App\Models\Product;
+use App\Models\Store;
+use App\Models\StoreMarketplace;
+use App\Services\Platforms\BasePlatformService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
+
+class ShopifyService extends BasePlatformService
+{
+    protected string $apiVersion = '2024-01';
+
+    public function getPlatform(): string
+    {
+        return Platform::Shopify->value;
+    }
+
+    public function connect(Store $store, array $params = []): RedirectResponse
+    {
+        $shopDomain = $params['shop_domain'] ?? null;
+
+        if (! $shopDomain) {
+            throw new \InvalidArgumentException('Shop domain is required');
+        }
+
+        $shopDomain = $this->normalizeShopDomain($shopDomain);
+
+        $redirectUri = route('platforms.shopify.callback');
+        $scopes = implode(',', $this->getRequiredScopes());
+
+        $authUrl = "https://{$shopDomain}/admin/oauth/authorize?"
+            .http_build_query([
+                'client_id' => config('services.shopify.client_id'),
+                'scope' => $scopes,
+                'redirect_uri' => $redirectUri,
+                'state' => encrypt([
+                    'store_id' => $store->id,
+                    'shop_domain' => $shopDomain,
+                ]),
+            ]);
+
+        return redirect()->away($authUrl);
+    }
+
+    public function handleCallback(Request $request, Store $store): StoreMarketplace
+    {
+        $code = $request->input('code');
+        $shopDomain = $request->input('shop');
+
+        $response = Http::post("https://{$shopDomain}/admin/oauth/access_token", [
+            'client_id' => config('services.shopify.client_id'),
+            'client_secret' => config('services.shopify.client_secret'),
+            'code' => $code,
+        ]);
+
+        if ($response->failed()) {
+            throw new \Exception('Failed to obtain access token: '.$response->body());
+        }
+
+        $data = $response->json();
+
+        return StoreMarketplace::updateOrCreate(
+            [
+                'store_id' => $store->id,
+                'platform' => Platform::Shopify,
+                'shop_domain' => $shopDomain,
+            ],
+            [
+                'name' => $shopDomain,
+                'access_token' => $data['access_token'],
+                'credentials' => [
+                    'scope' => $data['scope'] ?? null,
+                ],
+                'status' => 'active',
+            ]
+        );
+    }
+
+    public function disconnect(StoreMarketplace $connection): void
+    {
+        // Shopify doesn't have a revoke endpoint, just delete the connection
+        $connection->update(['status' => 'inactive']);
+        $connection->delete();
+    }
+
+    public function refreshToken(StoreMarketplace $connection): StoreMarketplace
+    {
+        // Shopify access tokens don't expire
+        return $connection;
+    }
+
+    public function validateCredentials(StoreMarketplace $connection): bool
+    {
+        try {
+            $response = $this->shopifyRequest($connection, 'GET', 'shop.json');
+
+            return isset($response['shop']);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    public function pullProducts(StoreMarketplace $connection): Collection
+    {
+        $syncLog = $this->logSync($connection, 'products', 'pull');
+        $products = collect();
+
+        try {
+            $page = null;
+
+            do {
+                $params = ['limit' => 250];
+                if ($page) {
+                    $params['page_info'] = $page;
+                }
+
+                $response = $this->shopifyRequest($connection, 'GET', 'products.json', $params);
+                $shopifyProducts = $response['products'] ?? [];
+
+                foreach ($shopifyProducts as $shopifyProduct) {
+                    $products->push($this->mapShopifyProduct($shopifyProduct, $connection));
+                    $syncLog->incrementProcessed();
+                    $syncLog->incrementSuccess();
+                }
+
+                // Get next page from Link header
+                $page = $this->getNextPage($response);
+            } while ($page);
+
+            $syncLog->markCompleted(['imported_count' => $products->count()]);
+            $connection->recordSync();
+        } catch (\Throwable $e) {
+            $this->handleApiError($connection, $e, 'Pull products failed');
+            $syncLog->markFailed([$e->getMessage()]);
+        }
+
+        return $products;
+    }
+
+    public function pushProduct(Product $product, StoreMarketplace $connection): PlatformListing
+    {
+        $shopifyProduct = $this->mapToShopifyProduct($product);
+
+        $response = $this->shopifyRequest($connection, 'POST', 'products.json', [
+            'product' => $shopifyProduct,
+        ]);
+
+        $shopifyData = $response['product'];
+
+        return PlatformListing::create([
+            'store_marketplace_id' => $connection->id,
+            'product_id' => $product->id,
+            'external_listing_id' => $shopifyData['id'],
+            'status' => $shopifyData['status'] === 'active' ? 'active' : 'draft',
+            'listing_url' => "https://{$connection->shop_domain}/products/{$shopifyData['handle']}",
+            'platform_data' => $shopifyData,
+            'last_synced_at' => now(),
+            'published_at' => $shopifyData['status'] === 'active' ? now() : null,
+        ]);
+    }
+
+    public function updateListing(PlatformListing $listing): PlatformListing
+    {
+        $product = $listing->product;
+        $connection = $listing->marketplace;
+        $shopifyProduct = $this->mapToShopifyProduct($product);
+
+        $response = $this->shopifyRequest(
+            $connection,
+            'PUT',
+            "products/{$listing->external_listing_id}.json",
+            ['product' => $shopifyProduct]
+        );
+
+        $listing->update([
+            'platform_data' => $response['product'],
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing;
+    }
+
+    public function deleteListing(PlatformListing $listing): void
+    {
+        $this->shopifyRequest(
+            $listing->marketplace,
+            'DELETE',
+            "products/{$listing->external_listing_id}.json"
+        );
+
+        $listing->delete();
+    }
+
+    public function syncInventory(StoreMarketplace $connection): void
+    {
+        $listings = $connection->listings()->with('variant')->get();
+
+        foreach ($listings as $listing) {
+            if (! $listing->variant) {
+                continue;
+            }
+
+            try {
+                $this->shopifyRequest($connection, 'POST', 'inventory_levels/set.json', [
+                    'location_id' => $this->getDefaultLocationId($connection),
+                    'inventory_item_id' => $listing->platform_data['variants'][0]['inventory_item_id'] ?? null,
+                    'available' => $listing->variant->quantity,
+                ]);
+            } catch (\Throwable $e) {
+                // Log but continue
+            }
+        }
+    }
+
+    public function pullOrders(StoreMarketplace $connection, ?string $since = null): Collection
+    {
+        $syncLog = $this->logSync($connection, 'orders', 'pull');
+        $orders = collect();
+
+        try {
+            $params = ['limit' => 250, 'status' => 'any'];
+            if ($since) {
+                $params['created_at_min'] = $since;
+            }
+
+            $response = $this->shopifyRequest($connection, 'GET', 'orders.json', $params);
+
+            foreach ($response['orders'] ?? [] as $shopifyOrder) {
+                $platformOrder = $this->importOrder($shopifyOrder, $connection);
+                $orders->push($platformOrder);
+                $syncLog->incrementProcessed();
+                $syncLog->incrementSuccess();
+            }
+
+            $syncLog->markCompleted(['imported_count' => $orders->count()]);
+            $connection->recordSync();
+        } catch (\Throwable $e) {
+            $this->handleApiError($connection, $e, 'Pull orders failed');
+            $syncLog->markFailed([$e->getMessage()]);
+        }
+
+        return $orders;
+    }
+
+    public function updateOrderFulfillment(PlatformOrder $order, array $fulfillmentData): void
+    {
+        $this->shopifyRequest(
+            $order->marketplace,
+            'POST',
+            "orders/{$order->external_order_id}/fulfillments.json",
+            ['fulfillment' => $fulfillmentData]
+        );
+
+        $order->update(['fulfillment_status' => 'fulfilled']);
+    }
+
+    public function getCategories(StoreMarketplace $connection): Collection
+    {
+        $response = $this->shopifyRequest($connection, 'GET', 'custom_collections.json');
+
+        return collect($response['custom_collections'] ?? [])->map(fn ($c) => [
+            'id' => $c['id'],
+            'name' => $c['title'],
+            'handle' => $c['handle'],
+        ]);
+    }
+
+    public function registerWebhooks(StoreMarketplace $connection): void
+    {
+        $webhooks = [
+            'orders/create',
+            'orders/updated',
+            'products/update',
+            'inventory_levels/update',
+        ];
+
+        foreach ($webhooks as $topic) {
+            $this->shopifyRequest($connection, 'POST', 'webhooks.json', [
+                'webhook' => [
+                    'topic' => $topic,
+                    'address' => $this->getWebhookUrl($connection),
+                    'format' => 'json',
+                ],
+            ]);
+        }
+    }
+
+    public function handleWebhook(Request $request, StoreMarketplace $connection): void
+    {
+        $topic = $request->header('X-Shopify-Topic');
+        $data = $request->all();
+
+        match ($topic) {
+            'orders/create', 'orders/updated' => $this->handleOrderWebhook($data, $connection),
+            'products/update' => $this->handleProductWebhook($data, $connection),
+            'inventory_levels/update' => $this->handleInventoryWebhook($data, $connection),
+            default => null,
+        };
+    }
+
+    // Helper methods
+
+    protected function shopifyRequest(
+        StoreMarketplace $connection,
+        string $method,
+        string $endpoint,
+        array $data = []
+    ): array {
+        $url = "https://{$connection->shop_domain}/admin/api/{$this->apiVersion}/{$endpoint}";
+
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $connection->access_token,
+            'Content-Type' => 'application/json',
+        ])->{strtolower($method)}($url, $data);
+
+        if ($response->failed()) {
+            throw new \Exception("Shopify API error: {$response->body()}");
+        }
+
+        return $response->json() ?? [];
+    }
+
+    protected function getRequiredScopes(): array
+    {
+        return [
+            'read_products',
+            'write_products',
+            'read_orders',
+            'write_orders',
+            'read_inventory',
+            'write_inventory',
+            'read_locations',
+        ];
+    }
+
+    protected function normalizeShopDomain(string $domain): string
+    {
+        $domain = preg_replace('#^https?://#', '', $domain);
+        $domain = rtrim($domain, '/');
+
+        if (! str_contains($domain, '.myshopify.com')) {
+            $domain .= '.myshopify.com';
+        }
+
+        return $domain;
+    }
+
+    protected function mapShopifyProduct(array $shopifyProduct, StoreMarketplace $connection): array
+    {
+        return [
+            'external_id' => $shopifyProduct['id'],
+            'title' => $shopifyProduct['title'],
+            'description' => $shopifyProduct['body_html'],
+            'handle' => $shopifyProduct['handle'],
+            'vendor' => $shopifyProduct['vendor'],
+            'product_type' => $shopifyProduct['product_type'],
+            'variants' => collect($shopifyProduct['variants'] ?? [])->map(fn ($v) => [
+                'external_id' => $v['id'],
+                'sku' => $v['sku'],
+                'price' => $v['price'],
+                'quantity' => $v['inventory_quantity'] ?? 0,
+                'barcode' => $v['barcode'],
+            ])->all(),
+            'images' => collect($shopifyProduct['images'] ?? [])->pluck('src')->all(),
+        ];
+    }
+
+    protected function mapToShopifyProduct(Product $product): array
+    {
+        $shopifyProduct = [
+            'title' => $product->title,
+            'body_html' => $product->description,
+            'handle' => $product->handle,
+            'vendor' => $product->brand?->name,
+            'product_type' => $product->category?->name,
+            'status' => $product->is_published ? 'active' : 'draft',
+        ];
+
+        if ($product->has_variants) {
+            $shopifyProduct['variants'] = $product->variants->map(fn ($v) => [
+                'sku' => $v->sku,
+                'price' => $v->price,
+                'inventory_quantity' => $v->quantity,
+                'barcode' => $v->barcode,
+                'option1' => $v->option1_value,
+                'option2' => $v->option2_value,
+                'option3' => $v->option3_value,
+            ])->all();
+        } else {
+            $shopifyProduct['variants'] = [[
+                'price' => $product->variants->first()?->price ?? 0,
+                'inventory_quantity' => $product->quantity,
+            ]];
+        }
+
+        return $shopifyProduct;
+    }
+
+    protected function importOrder(array $shopifyOrder, StoreMarketplace $connection): PlatformOrder
+    {
+        return PlatformOrder::updateOrCreate(
+            [
+                'store_marketplace_id' => $connection->id,
+                'external_order_id' => $shopifyOrder['id'],
+            ],
+            [
+                'external_order_number' => $shopifyOrder['order_number'],
+                'status' => $shopifyOrder['financial_status'],
+                'fulfillment_status' => $shopifyOrder['fulfillment_status'],
+                'payment_status' => $shopifyOrder['financial_status'],
+                'total' => $shopifyOrder['total_price'],
+                'subtotal' => $shopifyOrder['subtotal_price'],
+                'shipping_cost' => collect($shopifyOrder['shipping_lines'] ?? [])->sum('price'),
+                'tax' => $shopifyOrder['total_tax'],
+                'discount' => collect($shopifyOrder['discount_codes'] ?? [])->sum('amount'),
+                'currency' => $shopifyOrder['currency'],
+                'customer_data' => $shopifyOrder['customer'] ?? null,
+                'shipping_address' => $shopifyOrder['shipping_address'] ?? null,
+                'billing_address' => $shopifyOrder['billing_address'] ?? null,
+                'line_items' => $shopifyOrder['line_items'],
+                'platform_data' => $shopifyOrder,
+                'ordered_at' => $shopifyOrder['created_at'],
+                'last_synced_at' => now(),
+            ]
+        );
+    }
+
+    protected function getDefaultLocationId(StoreMarketplace $connection): ?string
+    {
+        $response = $this->shopifyRequest($connection, 'GET', 'locations.json');
+
+        return $response['locations'][0]['id'] ?? null;
+    }
+
+    protected function getNextPage(array $response): ?string
+    {
+        // Implement cursor-based pagination parsing
+        return null;
+    }
+
+    protected function handleOrderWebhook(array $data, StoreMarketplace $connection): void
+    {
+        $this->importOrder($data, $connection);
+    }
+
+    protected function handleProductWebhook(array $data, StoreMarketplace $connection): void
+    {
+        // Update local listing if exists
+        PlatformListing::where('store_marketplace_id', $connection->id)
+            ->where('external_listing_id', $data['id'])
+            ->update(['platform_data' => $data, 'last_synced_at' => now()]);
+    }
+
+    protected function handleInventoryWebhook(array $data, StoreMarketplace $connection): void
+    {
+        // Inventory sync logic
+    }
+}

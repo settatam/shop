@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { update } from '@/routes/password';
@@ -19,8 +16,8 @@ const inputEmail = ref(props.email);
 
 <template>
     <AuthLayout
-        title="Reset password"
-        description="Please enter your new password below"
+        title="Reset your password"
+        description="Enter your new password below"
     >
         <Head title="Reset password" />
 
@@ -29,61 +26,70 @@ const inputEmail = ref(props.email);
             :transform="(data) => ({ ...data, token, email })"
             :reset-on-success="['password', 'password_confirmation']"
             v-slot="{ errors, processing }"
+            class="space-y-6"
         >
-            <div class="grid gap-6">
-                <div class="grid gap-2">
-                    <Label for="email">Email</Label>
-                    <Input
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Email address
+                </label>
+                <div class="mt-2">
+                    <input
                         id="email"
                         type="email"
                         name="email"
                         autocomplete="email"
                         v-model="inputEmail"
-                        class="mt-1 block w-full"
                         readonly
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-500 bg-gray-50 shadow-sm ring-1 ring-inset ring-gray-300 sm:text-sm dark:bg-gray-700 dark:text-gray-400 dark:ring-gray-600"
                     />
-                    <InputError :message="errors.email" class="mt-2" />
                 </div>
+                <InputError :message="errors.email" class="mt-2" />
+            </div>
 
-                <div class="grid gap-2">
-                    <Label for="password">Password</Label>
-                    <Input
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    New password
+                </label>
+                <div class="mt-2">
+                    <input
                         id="password"
                         type="password"
                         name="password"
                         autocomplete="new-password"
-                        class="mt-1 block w-full"
                         autofocus
-                        placeholder="Password"
+                        placeholder="New password"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
-                    <InputError :message="errors.password" />
                 </div>
+                <InputError :message="errors.password" class="mt-2" />
+            </div>
 
-                <div class="grid gap-2">
-                    <Label for="password_confirmation">
-                        Confirm Password
-                    </Label>
-                    <Input
+            <div>
+                <label for="password_confirmation" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Confirm new password
+                </label>
+                <div class="mt-2">
+                    <input
                         id="password_confirmation"
                         type="password"
                         name="password_confirmation"
                         autocomplete="new-password"
-                        class="mt-1 block w-full"
-                        placeholder="Confirm password"
+                        placeholder="Confirm new password"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
-                    <InputError :message="errors.password_confirmation" />
                 </div>
-
-                <Button
-                    type="submit"
-                    class="mt-4 w-full"
-                    :disabled="processing"
-                    data-test="reset-password-button"
-                >
-                    <Spinner v-if="processing" />
-                    Reset password
-                </Button>
+                <InputError :message="errors.password_confirmation" class="mt-2" />
             </div>
+
+            <button
+                type="submit"
+                :disabled="processing"
+                class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                data-test="reset-password-button"
+            >
+                <Spinner v-if="processing" class="mr-2" />
+                Reset password
+            </button>
         </Form>
     </AuthLayout>
 </template>

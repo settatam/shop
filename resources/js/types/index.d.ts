@@ -1,5 +1,9 @@
 import { InertiaLinkProps } from '@inertiajs/vue3';
 import type { LucideIcon } from 'lucide-vue-next';
+import type { FunctionalComponent, SVGAttributes } from 'vue';
+
+// Heroicon type
+export type HeroIcon = FunctionalComponent<SVGAttributes>;
 
 export interface Auth {
     user: User;
@@ -10,11 +14,51 @@ export interface BreadcrumbItem {
     href: string;
 }
 
-export interface NavItem {
+// Nav item child for collapsible menus
+export interface NavItemChild {
     title: string;
     href: NonNullable<InertiaLinkProps['href']>;
+}
+
+// Legacy NavItem for compatibility
+export interface NavItem {
+    title: string;
+    href?: NonNullable<InertiaLinkProps['href']>;
     icon?: LucideIcon;
     isActive?: boolean;
+    children?: NavItemChild[];
+}
+
+// New navigation types for TailwindUI layout
+export interface NavChild {
+    name: string;
+    href: string;
+}
+
+export interface NavGroup {
+    name: string;
+    href?: string;
+    icon: HeroIcon;
+    current?: boolean;
+    children?: NavChild[];
+}
+
+export interface StoreRole {
+    id: number;
+    name: string;
+    slug: string;
+}
+
+export interface Store {
+    id: number;
+    name: string;
+    slug?: string;
+    logo?: string | null;
+    logo_url?: string | null;
+    initial: string;
+    is_owner?: boolean;
+    role?: StoreRole | null;
+    current?: boolean;
 }
 
 export type AppPageProps<
@@ -24,6 +68,8 @@ export type AppPageProps<
     quote: { message: string; author: string };
     auth: Auth;
     sidebarOpen: boolean;
+    stores?: Store[];
+    currentStore?: Store;
 };
 
 export interface User {

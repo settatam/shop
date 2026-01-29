@@ -12,6 +12,10 @@ import { Link } from '@inertiajs/vue3';
 
 const sidebarNavItems: NavItem[] = [
     {
+        title: 'Store',
+        href: '/settings/store',
+    },
+    {
         title: 'Profile',
         href: editProfile(),
     },
@@ -26,6 +30,26 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Appearance',
         href: editAppearance(),
+    },
+    {
+        title: 'Team',
+        href: '/settings/team',
+    },
+    {
+        title: 'Roles',
+        href: '/settings/roles',
+    },
+    {
+        title: 'Statuses',
+        href: '/settings/statuses',
+    },
+    {
+        title: 'Printers',
+        href: '/settings/printers',
+    },
+    {
+        title: 'Notifications',
+        href: '/settings/notifications',
     },
 ];
 
@@ -62,8 +86,8 @@ const currentPath = typeof window !== undefined ? window.location.pathname : '';
 
             <Separator class="my-6 lg:hidden" />
 
-            <div class="flex-1 md:max-w-2xl">
-                <section class="max-w-xl space-y-12">
+            <div class="flex-1 lg:max-w-4xl">
+                <section class="space-y-12">
                     <slot />
                 </section>
             </div>

@@ -2,8 +2,13 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Store;
+use App\Models\StoreUser;
+use App\Models\User;
+use App\Services\StoreContext;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -36,6 +41,11 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        // Portal routes use their own shared data
+        if ($this->isPortalRequest($request)) {
+            return $this->sharePortal($request);
+        }
+
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
         return [
@@ -46,6 +56,81 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'stores' => fn () => $request->user() ? $this->getUserStores($request->user()) : [],
+            'currentStore' => fn () => app(StoreContext::class)->getCurrentStore(),
         ];
+    }
+
+    /**
+     * Determine if this is a portal request.
+     */
+    protected function isPortalRequest(Request $request): bool
+    {
+        $portalDomain = config('app.portal_domain');
+
+        return str_ends_with($request->getHost(), ".{$portalDomain}")
+            || $request->route()?->named('portal.*');
+    }
+
+    /**
+     * Share portal-specific props.
+     *
+     * @return array<string, mixed>
+     */
+    protected function sharePortal(Request $request): array
+    {
+        $store = app(StoreContext::class)->getCurrentStore();
+
+        return [
+            ...parent::share($request),
+            'name' => $store?->name ?? config('app.name'),
+            'isPortal' => true,
+            'auth' => [
+                'customer' => auth('customer')->user(),
+            ],
+            'currentStore' => $store ? [
+                'id' => $store->id,
+                'name' => $store->name,
+                'slug' => $store->slug,
+                'logo' => $store->logo,
+                'logo_url' => $store->logo ? Storage::disk('public')->url($store->logo) : null,
+            ] : null,
+        ];
+    }
+
+    /**
+     * Get all stores the user has access to.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getUserStores(User $user): array
+    {
+        $currentStoreId = app(StoreContext::class)->getCurrentStoreId();
+
+        return Store::withoutGlobalScopes()
+            ->whereHas('storeUsers', function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })
+            ->orWhere('user_id', $user->id)
+            ->get()
+            ->map(function ($store) use ($user, $currentStoreId) {
+                $storeUser = StoreUser::where('user_id', $user->id)
+                    ->where('store_id', $store->id)
+                    ->with('role:id,name,slug')
+                    ->first();
+
+                return [
+                    'id' => $store->id,
+                    'name' => $store->name,
+                    'slug' => $store->slug,
+                    'logo' => $store->logo,
+                    'logo_url' => $store->logo ? Storage::disk('public')->url($store->logo) : null,
+                    'initial' => strtoupper(substr($store->name, 0, 1)),
+                    'is_owner' => $store->user_id === $user->id || ($storeUser?->is_owner ?? false),
+                    'role' => $storeUser?->role,
+                    'current' => $currentStoreId === $store->id,
+                ];
+            })
+            ->toArray();
     }
 }

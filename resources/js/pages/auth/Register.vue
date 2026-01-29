@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { login } from '@/routes';
@@ -13,96 +10,135 @@ import { Form, Head } from '@inertiajs/vue3';
 
 <template>
     <AuthBase
-        title="Create an account"
-        description="Enter your details below to create your account"
+        title="Create your account"
+        description="Start your free trial today"
     >
-        <Head title="Register" />
+        <Head title="Create account" />
 
         <Form
             v-bind="store.form()"
             :reset-on-success="['password', 'password_confirmation']"
             v-slot="{ errors, processing }"
-            class="flex flex-col gap-6"
+            class="space-y-6"
         >
-            <div class="grid gap-6">
-                <div class="grid gap-2">
-                    <Label for="name">Name</Label>
-                    <Input
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Your name
+                </label>
+                <div class="mt-2">
+                    <input
                         id="name"
                         type="text"
+                        name="name"
                         required
                         autofocus
                         :tabindex="1"
                         autocomplete="name"
-                        name="name"
-                        placeholder="Full name"
+                        placeholder="John Smith"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
-                    <InputError :message="errors.name" />
                 </div>
+                <InputError :message="errors.name" class="mt-2" />
+            </div>
 
-                <div class="grid gap-2">
-                    <Label for="email">Email address</Label>
-                    <Input
-                        id="email"
-                        type="email"
+            <div>
+                <label for="store_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Store name
+                </label>
+                <div class="mt-2">
+                    <input
+                        id="store_name"
+                        type="text"
+                        name="store_name"
                         required
                         :tabindex="2"
-                        autocomplete="email"
-                        name="email"
-                        placeholder="email@example.com"
+                        placeholder="My Jewelry Store"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
-                    <InputError :message="errors.email" />
                 </div>
+                <InputError :message="errors.store_name" class="mt-2" />
+            </div>
 
-                <div class="grid gap-2">
-                    <Label for="password">Password</Label>
-                    <Input
-                        id="password"
-                        type="password"
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Email address
+                </label>
+                <div class="mt-2">
+                    <input
+                        id="email"
+                        type="email"
+                        name="email"
                         required
                         :tabindex="3"
-                        autocomplete="new-password"
-                        name="password"
-                        placeholder="Password"
+                        autocomplete="email"
+                        placeholder="you@example.com"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
-                    <InputError :message="errors.password" />
                 </div>
+                <InputError :message="errors.email" class="mt-2" />
+            </div>
 
-                <div class="grid gap-2">
-                    <Label for="password_confirmation">Confirm password</Label>
-                    <Input
-                        id="password_confirmation"
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Password
+                </label>
+                <div class="mt-2">
+                    <input
+                        id="password"
                         type="password"
+                        name="password"
                         required
                         :tabindex="4"
                         autocomplete="new-password"
-                        name="password_confirmation"
-                        placeholder="Confirm password"
+                        placeholder="Password"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
-                    <InputError :message="errors.password_confirmation" />
                 </div>
-
-                <Button
-                    type="submit"
-                    class="mt-2 w-full"
-                    tabindex="5"
-                    :disabled="processing"
-                    data-test="register-user-button"
-                >
-                    <Spinner v-if="processing" />
-                    Create account
-                </Button>
+                <InputError :message="errors.password" class="mt-2" />
             </div>
 
-            <div class="text-center text-sm text-muted-foreground">
+            <div>
+                <label for="password_confirmation" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Confirm password
+                </label>
+                <div class="mt-2">
+                    <input
+                        id="password_confirmation"
+                        type="password"
+                        name="password_confirmation"
+                        required
+                        :tabindex="5"
+                        autocomplete="new-password"
+                        placeholder="Confirm password"
+                        class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
+                    />
+                </div>
+                <InputError :message="errors.password_confirmation" class="mt-2" />
+            </div>
+
+            <div>
+                <button
+                    type="submit"
+                    :tabindex="6"
+                    :disabled="processing"
+                    class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    data-test="register-user-button"
+                >
+                    <Spinner v-if="processing" class="mr-2" />
+                    Create account
+                </button>
+            </div>
+
+            <p class="text-center text-sm text-gray-600 dark:text-gray-400">
                 Already have an account?
                 <TextLink
                     :href="login()"
-                    class="underline underline-offset-4"
-                    :tabindex="6"
-                    >Log in</TextLink
+                    :tabindex="7"
+                    class="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
-            </div>
+                    Sign in
+                </TextLink>
+            </p>
         </Form>
     </AuthBase>
 </template>

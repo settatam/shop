@@ -60,6 +60,20 @@ return [
             'report' => false,
         ],
 
+        'do_spaces' => [
+            'driver' => 's3',
+            'key' => env('DO_SPACE_KEY'),
+            'secret' => env('DO_SPACE_SECRET'),
+            'region' => env('DO_SPACE_REGION', 'nyc3'),
+            'bucket' => env('DO_SPACE_BUCKET'),
+            'url' => env('DO_CDN'),
+            'endpoint' => env('DO_URL'),
+            'use_path_style_endpoint' => false,
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*
