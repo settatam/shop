@@ -454,6 +454,12 @@ class MigrateLegacyData extends Command
                 $linkedTemplates++;
             }
 
+            // Convert legacy barcode_sequence (comma-separated string) to barcode_attributes (JSON array)
+            $barcodeAttributes = null;
+            if ($legacyCategory->barcode_sequence) {
+                $barcodeAttributes = $this->convertBarcodeSequence($legacyCategory->barcode_sequence);
+            }
+
             $newCategory = Category::create([
                 'store_id' => $this->newStore->id,
                 'name' => $name,
@@ -463,6 +469,7 @@ class MigrateLegacyData extends Command
                 'template_id' => $templateId,
                 'sku_prefix' => $legacyCategory->sku_prefix,
                 'sku_suffix' => $legacyCategory->sku_suffix,
+                'barcode_attributes' => $barcodeAttributes,
                 'charge_taxes' => $legacyCategory->charge_taxes ?? true,
                 'created_at' => $legacyCategory->created_at,
                 'updated_at' => $legacyCategory->updated_at,
@@ -1759,6 +1766,24 @@ class MigrateLegacyData extends Command
         }
 
         return $statusName; // Return as-is if no mapping found
+    }
+
+    /**
+     * Convert legacy barcode_sequence (comma-separated string) to barcode_attributes (array).
+     *
+     * Legacy format: "Price Code,Precious Metals,Total Carat Weight,Diamond Color"
+     * New format: ["price_code", "precious_metals", "total_carat_weight", "diamond_color"]
+     *
+     * @return array<string>
+     */
+    protected function convertBarcodeSequence(string $sequence): array
+    {
+        $parts = array_map('trim', explode(',', $sequence));
+
+        return array_map(function ($part) {
+            // Convert to snake_case for consistency
+            return Str::snake(strtolower($part));
+        }, array_filter($parts));
     }
 
     protected function cleanupMigratedData(int $legacyStoreId): void

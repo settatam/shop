@@ -181,7 +181,33 @@ class ProductController extends Controller
                 'label' => (string) $size,
             ]);
 
+        // Include sizes from product variants (option1 or option2 named 'Size' or 'Ring Size')
+        $variantSizes = ProductVariant::whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+            ->where(function ($q) {
+                $q->whereIn('option1_name', ['Size', 'Ring Size'])
+                    ->orWhereIn('option2_name', ['Size', 'Ring Size']);
+            })
+            ->get()
+            ->flatMap(function ($variant) {
+                $sizes = [];
+                if (in_array($variant->option1_name, ['Size', 'Ring Size']) && $variant->option1_value) {
+                    $sizes[] = $variant->option1_value;
+                }
+                if (in_array($variant->option2_name, ['Size', 'Ring Size']) && $variant->option2_value) {
+                    $sizes[] = $variant->option2_value;
+                }
+
+                return $sizes;
+            })
+            ->unique()
+            ->filter()
+            ->map(fn ($size) => [
+                'value' => (string) $size,
+                'label' => (string) $size,
+            ]);
+
         return $sizes->merge($productRingSizes)
+            ->merge($variantSizes)
             ->unique('value')
             ->sortBy(fn ($item) => is_numeric($item['value']) ? (float) $item['value'] : $item['value'])
             ->values();
