@@ -114,7 +114,8 @@ class MigrateLegacyData extends Command
 
         if ($this->option('fresh') && ! $isDryRun) {
             if (! $this->input->isInteractive() || $this->confirm('This will delete all previously migrated data. Continue?')) {
-                $this->cleanupMigratedData($legacyStoreId);
+                // Preserve the store if using --new-store-id
+                $this->cleanupMigratedData($legacyStoreId, $newStoreId !== null);
             }
         }
 
@@ -1802,23 +1803,27 @@ class MigrateLegacyData extends Command
         }, array_filter($parts));
     }
 
-    protected function cleanupMigratedData(int $legacyStoreId): void
+    protected function cleanupMigratedData(int $legacyStoreId, bool $preserveStore = false): void
     {
         $this->warn('Cleaning up previously migrated data...');
 
-        // Find the store that was migrated
-        $legacyStore = DB::connection('legacy')
-            ->table('stores')
-            ->where('id', $legacyStoreId)
-            ->first();
+        // Use already set newStore if available, otherwise find by legacy store name
+        if ($this->newStore) {
+            $store = $this->newStore;
+        } else {
+            $legacyStore = DB::connection('legacy')
+                ->table('stores')
+                ->where('id', $legacyStoreId)
+                ->first();
 
-        if (! $legacyStore) {
-            return;
-        }
+            if (! $legacyStore) {
+                return;
+            }
 
-        $store = Store::where('name', $legacyStore->name)->first();
-        if (! $store) {
-            return;
+            $store = Store::where('name', $legacyStore->name)->first();
+            if (! $store) {
+                return;
+            }
         }
 
         // Delete in order of dependencies (force delete to handle soft deletes)
@@ -1838,10 +1843,14 @@ class MigrateLegacyData extends Command
 
         Category::where('store_id', $store->id)->forceDelete();
         Status::where('store_id', $store->id)->forceDelete();
-        Warehouse::where('store_id', $store->id)->forceDelete();
-        StoreUser::where('store_id', $store->id)->forceDelete();
-        Role::where('store_id', $store->id)->forceDelete();
-        $store->forceDelete();
+
+        // Only delete store infrastructure if not preserving the store
+        if (! $preserveStore) {
+            Warehouse::where('store_id', $store->id)->forceDelete();
+            StoreUser::where('store_id', $store->id)->forceDelete();
+            Role::where('store_id', $store->id)->forceDelete();
+            $store->forceDelete();
+        }
 
         $this->line('  Cleanup complete');
     }
