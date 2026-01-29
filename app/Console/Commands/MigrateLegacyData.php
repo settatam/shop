@@ -34,6 +34,7 @@ class MigrateLegacyData extends Command
 {
     protected $signature = 'migrate:legacy
                             {--store-id=43 : Legacy store ID to migrate}
+                            {--new-store-id= : New store ID (if different from legacy)}
                             {--limit=100 : Number of transactions to migrate (0 for all)}
                             {--skip-users : Skip user migration}
                             {--skip-customers : Skip customer migration}
@@ -75,6 +76,7 @@ class MigrateLegacyData extends Command
     public function handle(): int
     {
         $legacyStoreId = (int) $this->option('store-id');
+        $newStoreId = $this->option('new-store-id') ? (int) $this->option('new-store-id') : null;
         $limit = (int) $this->option('limit');
         $isDryRun = $this->option('dry-run');
 
@@ -98,6 +100,18 @@ class MigrateLegacyData extends Command
 
         $this->info("Migrating store: {$legacyStore->name}");
 
+        // If new-store-id is specified, find and use that store
+        if ($newStoreId) {
+            $this->newStore = Store::find($newStoreId);
+            if (! $this->newStore) {
+                $this->error("New store with ID {$newStoreId} not found");
+
+                return 1;
+            }
+            $this->info("Using existing store: {$this->newStore->name} (ID: {$this->newStore->id})");
+            $this->warehouse = $this->newStore->warehouses()->where('is_default', true)->first();
+        }
+
         if ($this->option('fresh') && ! $isDryRun) {
             if (! $this->input->isInteractive() || $this->confirm('This will delete all previously migrated data. Continue?')) {
                 $this->cleanupMigratedData($legacyStoreId);
@@ -107,8 +121,10 @@ class MigrateLegacyData extends Command
         try {
             DB::beginTransaction();
 
-            // Step 1: Migrate Store
-            $this->newStore = $this->migrateStore($legacyStore, $isDryRun);
+            // Step 1: Migrate Store (skip if new-store-id was provided)
+            if (! $this->newStore) {
+                $this->newStore = $this->migrateStore($legacyStore, $isDryRun);
+            }
             if (! $this->newStore) {
                 throw new \Exception('Failed to create/find store');
             }
