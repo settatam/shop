@@ -252,4 +252,70 @@ class ImageServiceTest extends TestCase
         $this->assertEquals(768, $image->height);
         $this->assertEquals('do_spaces', $image->disk);
     }
+
+    public function test_can_upload_internal_image(): void
+    {
+        Storage::fake('do_spaces');
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+
+        $file = UploadedFile::fake()->image('internal-image.jpg', 800, 600);
+
+        $imageService = app(ImageService::class);
+        $image = $imageService->create(
+            file: $file,
+            imageable: $product,
+            store: $this->store,
+            folder: 'products/internal',
+            altText: 'Internal Image',
+            isInternal: true
+        );
+
+        $this->assertTrue($image->is_internal);
+        $this->assertStringContainsString('/internal/', $image->path);
+    }
+
+    public function test_can_upload_multiple_internal_images(): void
+    {
+        Storage::fake('do_spaces');
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+
+        $files = [
+            UploadedFile::fake()->image('internal1.jpg', 800, 600),
+            UploadedFile::fake()->image('internal2.jpg', 800, 600),
+        ];
+
+        $imageService = app(ImageService::class);
+        $images = $imageService->uploadMultiple(
+            files: $files,
+            imageable: $product,
+            store: $this->store,
+            folder: 'products/internal',
+            isInternal: true
+        );
+
+        $this->assertCount(2, $images);
+        $this->assertTrue($images[0]->is_internal);
+        $this->assertTrue($images[1]->is_internal);
+    }
+
+    public function test_regular_images_are_not_internal_by_default(): void
+    {
+        Storage::fake('do_spaces');
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+
+        $file = UploadedFile::fake()->image('regular-image.jpg', 800, 600);
+
+        $imageService = app(ImageService::class);
+        $image = $imageService->create(
+            file: $file,
+            imageable: $product,
+            store: $this->store,
+            folder: 'products'
+        );
+
+        $this->assertFalse($image->is_internal);
+    }
 }

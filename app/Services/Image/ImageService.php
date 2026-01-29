@@ -86,7 +86,8 @@ class ImageService
         string $folder = 'uploads',
         ?string $altText = null,
         int $sortOrder = 0,
-        bool $isPrimary = false
+        bool $isPrimary = false,
+        bool $isInternal = false
     ): Image {
         $uploadData = $this->upload($file, $imageable, $store, $folder);
 
@@ -105,6 +106,7 @@ class ImageService
             'height' => $uploadData['height'],
             'sort_order' => $sortOrder,
             'is_primary' => $isPrimary,
+            'is_internal' => $isInternal,
         ]);
     }
 
@@ -140,7 +142,8 @@ class ImageService
         string $folder = 'uploads',
         ?string $altText = null,
         int $startSortOrder = 0,
-        bool $setFirstAsPrimary = false
+        bool $setFirstAsPrimary = false,
+        bool $isInternal = false
     ): array {
         $images = [];
         $sortOrder = $startSortOrder;
@@ -155,7 +158,8 @@ class ImageService
                 folder: $folder,
                 altText: $altText,
                 sortOrder: $sortOrder++,
-                isPrimary: $isPrimary
+                isPrimary: $isPrimary,
+                isInternal: $isInternal
             );
         }
 

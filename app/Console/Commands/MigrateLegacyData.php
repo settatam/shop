@@ -980,12 +980,19 @@ class MigrateLegacyData extends Command
                 ->where('transaction_id', $legacyTxn->id)
                 ->get();
 
-            foreach ($legacyItems as $legacyItem) {
+            // Calculate estimated values for items that don't have prices
+            $itemPrices = $this->calculateItemPrices($legacyItems, $legacyTxn->final_offer ?? 0);
+
+            foreach ($legacyItems as $index => $legacyItem) {
                 // Map category
                 $newCategoryId = null;
                 if ($legacyItem->category_id && isset($this->categoryMap[$legacyItem->category_id])) {
                     $newCategoryId = $this->categoryMap[$legacyItem->category_id];
                 }
+
+                // Get the calculated price for this item
+                $estimatedValue = $itemPrices[$index]['price'];
+                $buyPrice = $itemPrices[$index]['buy_price'];
 
                 DB::table('transaction_items')->insert([
                     'transaction_id' => $transactionId,
@@ -993,8 +1000,8 @@ class MigrateLegacyData extends Command
                     'sku' => $legacyItem->sku,
                     'title' => $legacyItem->title ?? $legacyItem->product_name,
                     'description' => $this->buildItemDescription($legacyItem),
-                    'price' => $legacyItem->price ?? 0,
-                    'buy_price' => $legacyItem->override ? ($legacyItem->override_price ?? $legacyItem->price) : ($legacyItem->price ?? 0),
+                    'price' => $estimatedValue,
+                    'buy_price' => $buyPrice,
                     'dwt' => $legacyItem->dwt,
                     'precious_metal' => $legacyItem->precious_metal ?? $legacyItem->category,
                     'condition' => null,
@@ -1215,6 +1222,113 @@ class MigrateLegacyData extends Command
         }
 
         return implode(' ', $parts) ?: 'Item';
+    }
+
+    /**
+     * Calculate estimated value (price) and buy_price for transaction items.
+     *
+     * For items with existing prices, use those values.
+     * For items without prices, distribute the transaction's final_offer
+     * proportionally based on weight (dwt) or evenly if no weights.
+     *
+     * @param  \Illuminate\Support\Collection  $legacyItems
+     * @return array<int, array{price: float, buy_price: float}>
+     */
+    protected function calculateItemPrices($legacyItems, float $finalOffer): array
+    {
+        $itemPrices = [];
+        $itemsWithoutPrice = [];
+        $totalExistingPrices = 0;
+
+        // First pass: identify items with and without prices
+        foreach ($legacyItems as $index => $item) {
+            $existingPrice = (float) ($item->price ?? 0);
+            $overridePrice = $item->override ? (float) ($item->override_price ?? 0) : 0;
+
+            // Use override_price if override flag is set and it has a value
+            if ($item->override && $overridePrice > 0) {
+                $itemPrices[$index] = [
+                    'price' => $existingPrice > 0 ? $existingPrice : $overridePrice,
+                    'buy_price' => $overridePrice,
+                ];
+                $totalExistingPrices += $overridePrice;
+            } elseif ($existingPrice > 0) {
+                // Item has a price, use it for both estimated value and buy price
+                $itemPrices[$index] = [
+                    'price' => $existingPrice,
+                    'buy_price' => $existingPrice,
+                ];
+                $totalExistingPrices += $existingPrice;
+            } else {
+                // Mark for distribution
+                $itemsWithoutPrice[$index] = $item;
+                $itemPrices[$index] = ['price' => 0, 'buy_price' => 0];
+            }
+        }
+
+        // If no items need price distribution, we're done
+        if (empty($itemsWithoutPrice)) {
+            return $itemPrices;
+        }
+
+        // Calculate remaining amount to distribute
+        $remainingAmount = max(0, $finalOffer - $totalExistingPrices);
+
+        if ($remainingAmount <= 0) {
+            return $itemPrices;
+        }
+
+        // Calculate total weight of items without prices
+        $totalWeight = 0;
+        foreach ($itemsWithoutPrice as $item) {
+            $totalWeight += (float) ($item->dwt ?? 0);
+        }
+
+        // Distribute based on weight if available, otherwise evenly
+        if ($totalWeight > 0) {
+            // Proportional distribution based on weight
+            foreach ($itemsWithoutPrice as $index => $item) {
+                $itemWeight = (float) ($item->dwt ?? 0);
+                if ($itemWeight > 0) {
+                    $proportion = $itemWeight / $totalWeight;
+                    $calculatedPrice = round($remainingAmount * $proportion, 2);
+                } else {
+                    // Items with no weight get an equal share of what's left after weighted items
+                    $calculatedPrice = 0;
+                }
+                $itemPrices[$index] = [
+                    'price' => $calculatedPrice,
+                    'buy_price' => $calculatedPrice,
+                ];
+            }
+
+            // Handle items with no weight - distribute any remainder evenly
+            $itemsWithNoWeight = array_filter($itemsWithoutPrice, fn ($item) => ((float) ($item->dwt ?? 0)) <= 0);
+            if (! empty($itemsWithNoWeight)) {
+                $distributedSoFar = array_sum(array_column($itemPrices, 'buy_price'));
+                $remainder = $remainingAmount - $distributedSoFar;
+                if ($remainder > 0) {
+                    $perItem = round($remainder / count($itemsWithNoWeight), 2);
+                    foreach (array_keys($itemsWithNoWeight) as $index) {
+                        $itemPrices[$index] = [
+                            'price' => $perItem,
+                            'buy_price' => $perItem,
+                        ];
+                    }
+                }
+            }
+        } else {
+            // No weights available, distribute evenly
+            $perItem = round($remainingAmount / count($itemsWithoutPrice), 2);
+            foreach (array_keys($itemsWithoutPrice) as $index) {
+                $itemPrices[$index] = [
+                    'price' => $perItem,
+                    'buy_price' => $perItem,
+                ];
+            }
+        }
+
+        return $itemPrices;
     }
 
     /**

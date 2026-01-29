@@ -18,6 +18,7 @@ use App\Services\ActivityLogFormatter;
 use App\Services\Image\ImageService;
 use App\Services\Sku\SkuGeneratorService;
 use App\Services\StoreContext;
+use App\Services\Video\VideoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,8 @@ class ProductController extends Controller
 {
     public function __construct(
         protected StoreContext $storeContext,
-        protected ImageService $imageService
+        protected ImageService $imageService,
+        protected VideoService $videoService
     ) {}
 
     public function index(Request $request): Response|RedirectResponse
@@ -257,6 +259,24 @@ class ProductController extends Controller
             'attributes.*' => 'nullable|string|max:65535',
             'images' => 'nullable|array',
             'images.*' => 'image|max:10240', // 10MB max per image
+            'internal_images' => 'nullable|array',
+            'internal_images.*' => 'image|max:10240',
+            'video_files' => 'nullable|array',
+            'video_files.*' => 'file|mimetypes:video/mp4,video/quicktime,video/x-msvideo,video/webm|max:102400', // 100MB max
+            'video_titles' => 'nullable|array',
+            'video_titles.*' => 'nullable|string|max:255',
+            'videos' => 'nullable|array',
+            'videos.*.url' => 'nullable|url',
+            'videos.*.title' => 'nullable|string|max:255',
+            'condition' => 'nullable|string|in:new,like_new,excellent,very_good,good,fair,poor',
+            'weight' => 'nullable|numeric|min:0',
+            'weight_unit' => 'nullable|string|in:g,kg,oz,lb',
+            'length' => 'nullable|numeric|min:0',
+            'width' => 'nullable|numeric|min:0',
+            'height' => 'nullable|numeric|min:0',
+            'length_class' => 'nullable|string|in:cm,m,in,ft',
+            'domestic_shipping_cost' => 'nullable|numeric|min:0',
+            'international_shipping_cost' => 'nullable|numeric|min:0',
         ]);
 
         // Determine has_variants based on user input (not just count)
@@ -274,6 +294,15 @@ class ProductController extends Controller
             'has_variants' => $hasVariants,
             'track_quantity' => $validated['track_quantity'] ?? true,
             'sell_out_of_stock' => $validated['sell_out_of_stock'] ?? false,
+            'condition' => $validated['condition'] ?? null,
+            'weight' => $validated['weight'] ?? null,
+            'weight_unit' => $validated['weight_unit'] ?? 'g',
+            'length' => $validated['length'] ?? null,
+            'width' => $validated['width'] ?? null,
+            'height' => $validated['height'] ?? null,
+            'length_class' => $validated['length_class'] ?? 'cm',
+            'domestic_shipping_cost' => $validated['domestic_shipping_cost'] ?? null,
+            'international_shipping_cost' => $validated['international_shipping_cost'] ?? null,
         ]);
 
         // Get default warehouse
@@ -332,6 +361,45 @@ class ProductController extends Controller
                 altText: $product->title,
                 setFirstAsPrimary: true
             );
+        }
+
+        // Handle internal image uploads
+        if ($request->hasFile('internal_images')) {
+            $this->imageService->uploadMultiple(
+                files: $request->file('internal_images'),
+                imageable: $product,
+                store: $store,
+                folder: 'products/internal',
+                altText: $product->title.' (internal)',
+                setFirstAsPrimary: false,
+                isInternal: true
+            );
+        }
+
+        // Handle video file uploads
+        if ($request->hasFile('video_files')) {
+            $videoTitles = $validated['video_titles'] ?? [];
+            $this->videoService->uploadMultiple(
+                files: $request->file('video_files'),
+                product: $product,
+                store: $store,
+                titles: $videoTitles
+            );
+        }
+
+        // Handle external video URLs
+        if (! empty($validated['videos'])) {
+            $sortOrder = $product->videos()->max('sort_order') ?? -1;
+            foreach ($validated['videos'] as $videoData) {
+                if (! empty($videoData['url'])) {
+                    $this->videoService->createFromUrl(
+                        product: $product,
+                        url: $videoData['url'],
+                        title: $videoData['title'] ?? null,
+                        sortOrder: ++$sortOrder
+                    );
+                }
+            }
         }
 
         return redirect()->route('products.show', $product)

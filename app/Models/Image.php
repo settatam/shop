@@ -26,6 +26,7 @@ class Image extends Model
         'height',
         'sort_order',
         'is_primary',
+        'is_internal',
     ];
 
     protected function casts(): array
@@ -36,6 +37,7 @@ class Image extends Model
             'height' => 'integer',
             'sort_order' => 'integer',
             'is_primary' => 'boolean',
+            'is_internal' => 'boolean',
         ];
     }
 
