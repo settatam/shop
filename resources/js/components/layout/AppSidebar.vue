@@ -17,7 +17,6 @@ import {
     CreditCardIcon,
     BeakerIcon,
     TagIcon,
-    BellIcon,
     PrinterIcon,
     ShoppingBagIcon,
     BuildingStorefrontIcon,
@@ -89,7 +88,6 @@ const navigation: NavGroup[] = [
         ],
     },
     { name: 'Tags', href: '/tags', icon: TagIcon },
-    { name: 'Notifications', href: '/notifications', icon: BellIcon },
     { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon },
 ];
 
