@@ -44,9 +44,53 @@ class OrderController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
+        // Get distinct marketplaces from orders
+        $marketplaces = Order::where('store_id', $store->id)
+            ->whereNotNull('source_platform')
+            ->distinct()
+            ->pluck('source_platform')
+            ->map(fn ($platform) => [
+                'value' => $platform,
+                'label' => $this->formatMarketplaceLabel($platform),
+            ])
+            ->values()
+            ->toArray();
+
+        // Get vendors that have products sold in orders
+        $vendors = \App\Models\Vendor::where('store_id', $store->id)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn ($vendor) => [
+                'value' => $vendor->id,
+                'label' => $vendor->name,
+            ])
+            ->toArray();
+
         return Inertia::render('orders/Index', [
             'statuses' => $this->getStatuses(),
+            'marketplaces' => $marketplaces,
+            'paymentMethods' => $this->getPaymentMethods(),
+            'vendors' => $vendors,
         ]);
+    }
+
+    /**
+     * Format marketplace label for display.
+     */
+    protected function formatMarketplaceLabel(string $platform): string
+    {
+        $labels = [
+            'pos' => 'In Store',
+            'in_store' => 'In Store',
+            'shopify' => 'Shopify',
+            'reb' => 'REB',
+            'memo' => 'Memo',
+            'repair' => 'Repair',
+            'website' => 'Website',
+            'online' => 'Online',
+        ];
+
+        return $labels[$platform] ?? ucfirst(str_replace('_', ' ', $platform));
     }
 
     public function show(Order $order): Response|RedirectResponse

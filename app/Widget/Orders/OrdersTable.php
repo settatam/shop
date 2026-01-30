@@ -30,7 +30,7 @@ class OrdersTable extends Table
         return [
             [
                 'key' => 'invoice_number',
-                'label' => 'Order #',
+                'label' => 'Order Id',
                 'sortable' => true,
             ],
             [
@@ -44,13 +44,48 @@ class OrdersTable extends Table
                 'sortable' => false,
             ],
             [
-                'key' => 'items_count',
-                'label' => 'Items',
+                'key' => 'status',
+                'label' => 'Status',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'marketplace',
+                'label' => 'Marketplace',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'qty',
+                'label' => 'Qty',
                 'sortable' => false,
             ],
             [
-                'key' => 'sub_total',
-                'label' => 'Subtotal',
+                'key' => 'cost',
+                'label' => 'Cost',
+                'sortable' => false,
+            ],
+            [
+                'key' => 'sales_price',
+                'label' => 'Sales Price',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'profit',
+                'label' => 'Profit',
+                'sortable' => false,
+            ],
+            [
+                'key' => 'tax',
+                'label' => 'Tax',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'delivery',
+                'label' => 'Delivery',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'service_fees',
+                'label' => 'Service Fees',
                 'sortable' => true,
             ],
             [
@@ -59,9 +94,9 @@ class OrdersTable extends Table
                 'sortable' => true,
             ],
             [
-                'key' => 'status',
-                'label' => 'Status',
-                'sortable' => true,
+                'key' => 'payment_type',
+                'label' => 'Payment Type',
+                'sortable' => false,
             ],
         ];
     }
@@ -76,7 +111,7 @@ class OrdersTable extends Table
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
         $query = Order::query()
-            ->with(['customer', 'user'])
+            ->with(['customer', 'user', 'items.product', 'items.variant', 'payments'])
             ->withCount('items')
             ->where('store_id', $storeId);
 
@@ -90,6 +125,53 @@ class OrdersTable extends Table
                             ->orWhere('last_name', 'like', "%{$term}%")
                             ->orWhere('email', 'like', "%{$term}%");
                     });
+            });
+        }
+
+        // Apply date range filter
+        if ($fromDate = data_get($filter, 'from_date')) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+        if ($toDate = data_get($filter, 'to_date')) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        // Apply marketplace/channel filter
+        if ($marketplace = data_get($filter, 'marketplace')) {
+            $query->where('source_platform', $marketplace);
+        }
+
+        // Apply price range filter
+        if ($minPrice = data_get($filter, 'min_price')) {
+            $query->where('total', '>=', $minPrice);
+        }
+        if ($maxPrice = data_get($filter, 'max_price')) {
+            $query->where('total', '<=', $maxPrice);
+        }
+
+        // Apply payment type filter
+        if ($paymentType = data_get($filter, 'payment_type')) {
+            $query->whereHas('payments', function ($pq) use ($paymentType) {
+                $pq->where('payment_method', $paymentType);
+            });
+        }
+
+        // Apply charge tax filter
+        if (($chargeTax = data_get($filter, 'charge_tax')) !== null && $chargeTax !== '') {
+            if ($chargeTax === 'yes' || $chargeTax === '1' || $chargeTax === true) {
+                $query->where('sales_tax', '>', 0);
+            } else {
+                $query->where(function ($q) {
+                    $q->where('sales_tax', '=', 0)
+                        ->orWhereNull('sales_tax');
+                });
+            }
+        }
+
+        // Apply vendor filter
+        if ($vendorId = data_get($filter, 'vendor_id')) {
+            $query->whereHas('items.product', function ($pq) use ($vendorId) {
+                $pq->where('vendor_id', $vendorId);
             });
         }
 
@@ -120,6 +202,16 @@ class OrdersTable extends Table
             $query->leftJoin('customers', 'orders.customer_id', '=', 'customers.id')
                 ->orderByRaw('COALESCE(CONCAT(customers.first_name, " ", customers.last_name), "") '.$sortDirection)
                 ->select('orders.*');
+        } elseif ($sortBy === 'marketplace') {
+            $query->orderBy('source_platform', $sortDirection);
+        } elseif ($sortBy === 'sales_price') {
+            $query->orderBy('sub_total', $sortDirection);
+        } elseif ($sortBy === 'tax') {
+            $query->orderBy('sales_tax', $sortDirection);
+        } elseif ($sortBy === 'delivery') {
+            $query->orderBy('shipping_cost', $sortDirection);
+        } elseif ($sortBy === 'service_fees') {
+            $query->orderBy('service_fee_value', $sortDirection);
         } else {
             $query->orderBy($sortBy, $sortDirection);
         }
@@ -170,6 +262,41 @@ class OrdersTable extends Table
             Order::STATUS_PARTIAL_PAYMENT => 'Partial Payment',
         ];
 
+        // Calculate cost from items using effective cost priority
+        $cost = $order->items->sum(function ($item) {
+            if ($item->cost !== null && $item->cost > 0) {
+                return $item->cost * $item->quantity;
+            }
+            $variant = $item->variant ?? $item->product?->variants?->first();
+            $effectiveCost = $variant?->wholesale_price ?? $variant?->cost ?? 0;
+
+            return $effectiveCost * $item->quantity;
+        });
+
+        $salesPrice = (float) ($order->sub_total ?? 0);
+        $serviceFee = (float) ($order->service_fee_value ?? 0);
+        $profit = $salesPrice + $serviceFee - $cost;
+
+        // Get payment types
+        $paymentTypes = $order->payments
+            ->pluck('payment_method')
+            ->unique()
+            ->map(fn ($method) => ucfirst(str_replace('_', ' ', $method)))
+            ->implode(', ');
+
+        // Format marketplace
+        $marketplaceLabels = [
+            'pos' => 'In Store',
+            'in_store' => 'In Store',
+            'shopify' => 'Shopify',
+            'reb' => 'REB',
+            'memo' => 'Memo',
+            'repair' => 'Repair',
+            'website' => 'Website',
+            'online' => 'Online',
+        ];
+        $marketplace = $marketplaceLabels[$order->source_platform ?? ''] ?? ucfirst($order->source_platform ?? 'In Store');
+
         return [
             'id' => [
                 'data' => $order->id,
@@ -190,13 +317,52 @@ class OrdersTable extends Table
                 'data' => $order->customer?->full_name ?? 'Walk-in Customer',
                 'class' => $order->customer ? '' : 'text-gray-400 italic',
             ],
-            'items_count' => [
-                'data' => $order->items_count ?? $order->items->count(),
+            'status' => [
+                'type' => 'badge',
+                'data' => $statusLabels[$order->status] ?? $order->status,
+                'variant' => $statusColors[$order->status] ?? 'secondary',
+            ],
+            'marketplace' => [
+                'data' => $marketplace,
+                'class' => 'text-sm',
+            ],
+            'qty' => [
+                'data' => $order->items_count ?? $order->items->sum('quantity'),
                 'class' => 'text-center',
             ],
-            'sub_total' => [
+            'cost' => [
                 'type' => 'currency',
-                'data' => $order->sub_total ?? 0,
+                'data' => $cost,
+                'currency' => 'USD',
+                'class' => 'text-gray-600',
+            ],
+            'sales_price' => [
+                'type' => 'currency',
+                'data' => $salesPrice,
+                'currency' => 'USD',
+                'class' => 'text-gray-600',
+            ],
+            'profit' => [
+                'type' => 'currency',
+                'data' => $profit,
+                'currency' => 'USD',
+                'class' => $profit >= 0 ? 'text-green-600' : 'text-red-600',
+            ],
+            'tax' => [
+                'type' => 'currency',
+                'data' => $order->sales_tax ?? 0,
+                'currency' => 'USD',
+                'class' => 'text-gray-600',
+            ],
+            'delivery' => [
+                'type' => 'currency',
+                'data' => $order->shipping_cost ?? 0,
+                'currency' => 'USD',
+                'class' => 'text-gray-600',
+            ],
+            'service_fees' => [
+                'type' => 'currency',
+                'data' => $serviceFee,
                 'currency' => 'USD',
                 'class' => 'text-gray-600',
             ],
@@ -206,10 +372,9 @@ class OrdersTable extends Table
                 'currency' => 'USD',
                 'class' => 'font-semibold',
             ],
-            'status' => [
-                'type' => 'badge',
-                'data' => $statusLabels[$order->status] ?? $order->status,
-                'variant' => $statusColors[$order->status] ?? 'secondary',
+            'payment_type' => [
+                'data' => $paymentTypes ?: '-',
+                'class' => 'text-sm',
             ],
         ];
     }
