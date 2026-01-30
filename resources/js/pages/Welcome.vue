@@ -14,7 +14,7 @@ withDefaults(
 </script>
 
 <template>
-    <Head title="Shopmata - Inventory Management for Jewelers" />
+    <Head title="REB12345 Inventory Management for Jewelers" />
 
     <div class="min-h-screen bg-white dark:bg-gray-900">
         <!-- Navigation -->
@@ -22,7 +22,7 @@ withDefaults(
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex h-16 items-center justify-between">
                     <div class="flex items-center">
-                        <AppLogo class="h-8 w-auto" />
+<!--                        <AppLogo class="h-8 w-auto" />-->
                     </div>
                     <div class="flex items-center gap-4">
                         <Link
@@ -39,13 +39,13 @@ withDefaults(
                             >
                                 Sign in
                             </Link>
-                            <Link
-                                v-if="canRegister"
-                                :href="register()"
-                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                            >
-                                Start free trial
-                            </Link>
+<!--                            <Link-->
+<!--                                v-if="canRegister"-->
+<!--                                :href="register()"-->
+<!--                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"-->
+<!--                            >-->
+<!--                                Start free trial-->
+<!--                            </Link>-->
                         </template>
                     </div>
                 </div>
@@ -62,25 +62,25 @@ withDefaults(
                     <p class="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-400">
                         Streamline your jewelry business with powerful inventory tracking, consignment management, repairs, and point of sale—all in one platform.
                     </p>
-                    <div class="mt-10 flex items-center gap-x-6">
-                        <Link
-                            v-if="!$page.props.auth.user && canRegister"
-                            :href="register()"
-                            class="rounded-md bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        >
-                            Get started for free
-                        </Link>
-                        <Link
-                            v-else-if="$page.props.auth.user"
-                            :href="dashboard()"
-                            class="rounded-md bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        >
-                            Go to Dashboard
-                        </Link>
-                        <a href="#features" class="text-sm font-semibold leading-6 text-gray-900 dark:text-white">
-                            Learn more <span aria-hidden="true">→</span>
-                        </a>
-                    </div>
+<!--                    <div class="mt-10 flex items-center gap-x-6">-->
+<!--                        <Link-->
+<!--                            v-if="!$page.props.auth.user && canRegister"-->
+<!--                            :href="register()"-->
+<!--                            class="rounded-md bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"-->
+<!--                        >-->
+<!--                            Get started for free-->
+<!--                        </Link>-->
+<!--                        <Link-->
+<!--                            v-else-if="$page.props.auth.user"-->
+<!--                            :href="dashboard()"-->
+<!--                            class="rounded-md bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"-->
+<!--                        >-->
+<!--                            Go to Dashboard-->
+<!--                        </Link>-->
+<!--                        <a href="#features" class="text-sm font-semibold leading-6 text-gray-900 dark:text-white">-->
+<!--                            Learn more <span aria-hidden="true">→</span>-->
+<!--                        </a>-->
+<!--                    </div>-->
                 </div>
                 <div class="mx-auto mt-16 flex max-w-2xl sm:mt-24 lg:ml-10 lg:mr-0 lg:mt-0 lg:max-w-none lg:flex-none xl:ml-32">
                     <div class="max-w-3xl flex-none sm:max-w-5xl lg:max-w-none">
@@ -152,27 +152,27 @@ withDefaults(
         <div class="bg-white dark:bg-gray-900">
             <div class="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8">
                 <div class="mx-auto max-w-2xl text-center">
-                    <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
-                        Ready to get started?
-                    </h2>
+<!--                    <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">-->
+<!--                        Ready to get started?-->
+<!--                    </h2>-->
                     <p class="mx-auto mt-6 max-w-xl text-lg leading-8 text-gray-600 dark:text-gray-400">
-                        Join jewelry retailers who trust Shopmata to manage their business.
+                        Join jewelry retailers who trust REB12345 to manage their business.
                     </p>
-                    <div class="mt-10 flex items-center justify-center gap-x-6">
-                        <Link
-                            v-if="!$page.props.auth.user && canRegister"
-                            :href="register()"
-                            class="rounded-md bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                        >
-                            Start your free trial
-                        </Link>
-                        <Link
-                            :href="login()"
-                            class="text-sm font-semibold leading-6 text-gray-900 dark:text-white"
-                        >
-                            Sign in <span aria-hidden="true">→</span>
-                        </Link>
-                    </div>
+<!--                    <div class="mt-10 flex items-center justify-center gap-x-6">-->
+<!--                        <Link-->
+<!--                            v-if="!$page.props.auth.user && canRegister"-->
+<!--                            :href="register()"-->
+<!--                            class="rounded-md bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"-->
+<!--                        >-->
+<!--                            Start your free trial-->
+<!--                        </Link>-->
+<!--                        <Link-->
+<!--                            :href="login()"-->
+<!--                            class="text-sm font-semibold leading-6 text-gray-900 dark:text-white"-->
+<!--                        >-->
+<!--                            Sign in <span aria-hidden="true">→</span>-->
+<!--                        </Link>-->
+<!--                    </div>-->
                 </div>
             </div>
         </div>
