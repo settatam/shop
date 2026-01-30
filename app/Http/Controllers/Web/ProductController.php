@@ -272,7 +272,6 @@ class ProductController extends Controller
             ->get(['id', 'name', 'code', 'is_default']);
 
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
@@ -598,7 +597,6 @@ class ProductController extends Controller
             ->get(['id', 'name', 'code', 'is_default']);
 
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
 
