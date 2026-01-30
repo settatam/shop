@@ -246,6 +246,9 @@ class Order extends Model implements Payable
     {
         $this->update(['status' => self::STATUS_CONFIRMED]);
 
+        // Dispatch job to sync order to ShipStation
+        \App\Jobs\SyncOrderToShipStation::dispatch($this);
+
         return $this;
     }
 

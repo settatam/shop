@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\OrderItem;
 use App\Models\Vendor;
 use App\Services\ActivityLogFormatter;
 use App\Services\StoreContext;
@@ -10,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VendorController extends Controller
 {
@@ -68,6 +70,7 @@ class VendorController extends Controller
             'filters' => [
                 'search' => $request->input('search', ''),
                 'is_active' => $request->input('is_active'),
+                'per_page' => $request->input('per_page', 15),
             ],
             'paymentTerms' => Vendor::PAYMENT_TERMS,
         ]);
@@ -123,7 +126,7 @@ class VendorController extends Controller
             abort(404);
         }
 
-        $vendor->loadCount(['purchaseOrders', 'productVariants']);
+        $vendor->loadCount(['purchaseOrders', 'productVariants', 'memos', 'repairs', 'products']);
         $vendor->load([
             'purchaseOrders' => function ($query) {
                 $query->latest()->take(5);
@@ -159,6 +162,9 @@ class VendorController extends Controller
                 'notes' => $vendor->notes,
                 'purchase_orders_count' => $vendor->purchase_orders_count,
                 'product_variants_count' => $vendor->product_variants_count,
+                'memos_count' => $vendor->memos_count,
+                'repairs_count' => $vendor->repairs_count,
+                'products_count' => $vendor->products_count,
                 'recent_purchase_orders' => $vendor->purchaseOrders->map(fn ($po) => [
                     'id' => $po->id,
                     'po_number' => $po->po_number,
@@ -178,8 +184,136 @@ class VendorController extends Controller
                 ]) ?? [],
             ],
             'paymentTerms' => Vendor::PAYMENT_TERMS,
+            'soldItems' => Inertia::defer(fn () => $this->getSoldItems($vendor)),
+            'memos' => Inertia::defer(fn () => $this->getVendorMemos($vendor)),
+            'repairs' => Inertia::defer(fn () => $this->getVendorRepairs($vendor)),
+            'currentStock' => Inertia::defer(fn () => $this->getCurrentStock($vendor)),
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($vendor)),
         ]);
+    }
+
+    protected function getSoldItems(Vendor $vendor): array
+    {
+        $soldItems = OrderItem::query()
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
+            ->where('products.vendor_id', $vendor->id)
+            ->whereIn('orders.status', ['completed', 'shipped', 'delivered'])
+            ->select([
+                'order_items.id',
+                'order_items.sku',
+                'order_items.title',
+                'order_items.price',
+                'order_items.cost',
+                'order_items.quantity',
+                'orders.id as order_id',
+                'orders.invoice_number',
+                'orders.date_of_purchase',
+                'orders.created_at as order_date',
+            ])
+            ->orderByDesc('orders.created_at')
+            ->get();
+
+        $items = $soldItems->map(function ($item) {
+            $cost = (float) ($item->cost ?? 0);
+            $price = (float) ($item->price ?? 0);
+            $quantity = (int) ($item->quantity ?? 1);
+            $totalCost = $cost * $quantity;
+            $totalSold = $price * $quantity;
+            $profit = $totalSold - $totalCost;
+            $profitPercent = $totalCost > 0 ? ($profit / $totalCost) * 100 : 0;
+
+            return [
+                'id' => $item->id,
+                'sku' => $item->sku,
+                'title' => $item->title,
+                'order_id' => $item->order_id,
+                'invoice_number' => $item->invoice_number,
+                'date' => $item->date_of_purchase?->format('M d, Y') ?? $item->order_date?->format('M d, Y'),
+                'cost' => $totalCost,
+                'amount_sold' => $totalSold,
+                'profit' => $profit,
+                'profit_percent' => round($profitPercent, 1),
+            ];
+        });
+
+        $totals = [
+            'cost' => $items->sum('cost'),
+            'amount_sold' => $items->sum('amount_sold'),
+            'profit' => $items->sum('profit'),
+            'profit_percent' => $items->sum('cost') > 0
+                ? round(($items->sum('profit') / $items->sum('cost')) * 100, 1)
+                : 0,
+        ];
+
+        return [
+            'items' => $items->values()->all(),
+            'totals' => $totals,
+        ];
+    }
+
+    protected function getVendorMemos(Vendor $vendor): array
+    {
+        return $vendor->memos()
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($memo) => [
+                'id' => $memo->id,
+                'memo_number' => $memo->memo_number,
+                'status' => $memo->status,
+                'total' => $memo->total,
+                'grand_total' => $memo->grand_total,
+                'user' => $memo->user?->name,
+                'created_at' => $memo->created_at->format('M d, Y'),
+            ])
+            ->all();
+    }
+
+    protected function getVendorRepairs(Vendor $vendor): array
+    {
+        return $vendor->repairs()
+            ->with(['user:id,name', 'customer:id,first_name,last_name'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($repair) => [
+                'id' => $repair->id,
+                'repair_number' => $repair->repair_number,
+                'status' => $repair->status,
+                'total' => $repair->total,
+                'customer' => $repair->customer
+                    ? trim("{$repair->customer->first_name} {$repair->customer->last_name}")
+                    : null,
+                'user' => $repair->user?->name,
+                'created_at' => $repair->created_at->format('M d, Y'),
+            ])
+            ->all();
+    }
+
+    protected function getCurrentStock(Vendor $vendor): array
+    {
+        return $vendor->products()
+            ->with(['variants' => fn ($q) => $q->orderBy('sort_order')->limit(1)])
+            ->where(function ($query) {
+                $query->where('quantity', '>', 0)
+                    ->orWhereHas('variants', fn ($q) => $q->where('quantity', '>', 0));
+            })
+            ->orderByDesc('updated_at')
+            ->get()
+            ->map(function ($product) {
+                $variant = $product->variants->first();
+
+                return [
+                    'id' => $product->id,
+                    'title' => $product->title,
+                    'sku' => $variant?->sku,
+                    'quantity' => $variant?->quantity ?? $product->quantity ?? 0,
+                    'price' => $variant?->price ?? 0,
+                    'cost' => $variant?->cost ?? 0,
+                    'status' => $variant?->status ?? 'active',
+                ];
+            })
+            ->all();
     }
 
     public function update(Request $request, Vendor $vendor): RedirectResponse
@@ -242,5 +376,92 @@ class VendorController extends Controller
 
         return redirect()->route('web.vendors.index')
             ->with('success', 'Vendor deleted successfully.');
+    }
+
+    /**
+     * Export vendors to CSV.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            abort(404);
+        }
+
+        $query = Vendor::where('store_id', $store->id)
+            ->withCount(['purchaseOrders', 'memos', 'repairs']);
+
+        if ($request->has('search') && $request->input('search')) {
+            $query->search($request->input('search'));
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        $vendors = $query->orderBy('name')->get();
+        $filename = 'vendors-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($vendors) {
+            $handle = fopen('php://output', 'w');
+
+            // Header row
+            fputcsv($handle, [
+                'Name',
+                'Code',
+                'Company Name',
+                'Email',
+                'Phone',
+                'Contact Name',
+                'Contact Email',
+                'Contact Phone',
+                'Address',
+                'City',
+                'State',
+                'Postal Code',
+                'Country',
+                'Payment Terms',
+                'Lead Time (Days)',
+                'Currency',
+                'Tax ID',
+                'Active',
+                'Purchase Orders',
+                'Memos',
+                'Repairs',
+                'Notes',
+            ]);
+
+            foreach ($vendors as $vendor) {
+                fputcsv($handle, [
+                    $vendor->name,
+                    $vendor->code,
+                    $vendor->company_name,
+                    $vendor->email,
+                    $vendor->phone,
+                    $vendor->contact_name,
+                    $vendor->contact_email,
+                    $vendor->contact_phone,
+                    $vendor->address_line1,
+                    $vendor->city,
+                    $vendor->state,
+                    $vendor->postal_code,
+                    $vendor->country,
+                    $vendor->payment_terms,
+                    $vendor->lead_time_days,
+                    $vendor->currency_code,
+                    $vendor->tax_id,
+                    $vendor->is_active ? 'Yes' : 'No',
+                    $vendor->purchase_orders_count,
+                    $vendor->memos_count,
+                    $vendor->repairs_count,
+                    $vendor->notes,
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 }

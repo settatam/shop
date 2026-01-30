@@ -16,6 +16,16 @@ interface Category {
     parent_id: number | null;
 }
 
+interface Level2Category {
+    id: number;
+    name: string;
+}
+
+interface Level3Category {
+    id: number;
+    name: string;
+}
+
 interface Brand {
     id: number;
     name: string;
@@ -46,6 +56,8 @@ interface FilterOption {
 
 interface Props {
     categories: Category[];
+    level2Categories: Level2Category[];
+    level3ByParent: Record<number, Level3Category[]>;
     brands: Brand[];
     warehouses: Warehouse[];
     tags: Tag[];
@@ -80,7 +92,8 @@ const showAdvancedFilters = ref(false);
 
 // Filter state
 const filters = ref({
-    category_id: '',
+    category_level2_id: '',
+    category_level3_id: '',
     brand_id: '',
     status: '',
     stock: '',
@@ -99,10 +112,23 @@ const filters = ref({
     ring_size: '',
 });
 
+// Computed: Level 3 categories based on selected Level 2
+const availableLevel3Categories = computed(() => {
+    if (!filters.value.category_level2_id) return [];
+    const l2Id = Number(filters.value.category_level2_id);
+    return props.level3ByParent[l2Id] || [];
+});
+
+// Watch level2 changes to reset level3
+watch(() => filters.value.category_level2_id, () => {
+    filters.value.category_level3_id = '';
+});
+
 // Count active filters
 const activeFilterCount = computed(() => {
     let count = 0;
-    if (filters.value.category_id) count++;
+    if (filters.value.category_level2_id) count++;
+    if (filters.value.category_level3_id) count++;
     if (filters.value.brand_id) count++;
     if (filters.value.status) count++;
     if (filters.value.stock) count++;
@@ -148,7 +174,12 @@ function applyFilters() {
         page: 1,
     };
 
-    if (filters.value.category_id) filterParams.category_id = filters.value.category_id;
+    // Use level3 if selected, otherwise use level2 (which includes all its children)
+    if (filters.value.category_level3_id) {
+        filterParams.category_id = filters.value.category_level3_id;
+    } else if (filters.value.category_level2_id) {
+        filterParams.category_id = filters.value.category_level2_id;
+    }
     if (filters.value.brand_id) filterParams.brand_id = filters.value.brand_id;
     if (filters.value.status) filterParams.status = filters.value.status;
     if (filters.value.stock) filterParams.stock = filters.value.stock;
@@ -171,7 +202,8 @@ function applyFilters() {
 
 function clearAllFilters() {
     filters.value = {
-        category_id: '',
+        category_level2_id: '',
+        category_level3_id: '',
         brand_id: '',
         status: '',
         stock: '',
@@ -332,13 +364,25 @@ function handleGiaScanSuccess(productId: number) {
                     </option>
                 </select>
 
-                <!-- Category -->
+                <!-- Category Level 2 -->
                 <select
-                    v-model="filters.category_id"
+                    v-model="filters.category_level2_id"
                     class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                 >
                     <option value="">All Categories</option>
-                    <option v-for="category in categories" :key="category.id" :value="category.id">
+                    <option v-for="category in level2Categories" :key="category.id" :value="category.id">
+                        {{ category.name }}
+                    </option>
+                </select>
+
+                <!-- Category Level 3 (Product Type) - only shows when Level 2 is selected -->
+                <select
+                    v-if="filters.category_level2_id && availableLevel3Categories.length > 0"
+                    v-model="filters.category_level3_id"
+                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                >
+                    <option value="">All Types</option>
+                    <option v-for="category in availableLevel3Categories" :key="category.id" :value="category.id">
                         {{ category.name }}
                     </option>
                 </select>

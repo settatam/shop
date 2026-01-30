@@ -83,6 +83,8 @@ interface Props {
     exportFilename?: string | (() => string);
     showTotals?: boolean;
     totalColumns?: (string | ColumnTotal)[];
+    perPageOptions?: number[];
+    showPerPageSelector?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -94,10 +96,13 @@ const props = withDefaults(defineProps<Props>(), {
     exportFilename: 'export',
     showTotals: false,
     totalColumns: () => [],
+    perPageOptions: () => [15, 25, 50, 100],
+    showPerPageSelector: true,
 });
 
 const emit = defineEmits<{
     pageChange: [page: number];
+    perPageChange: [perPage: number];
     sortChange: [field: string, desc: boolean];
     search: [term: string];
     filterChange: [filter: Record<string, unknown>];
@@ -820,7 +825,10 @@ function exportToCsv() {
         <Pagination
             v-if="pagination && pagination.show_pagination && pagination.total > 0"
             :pagination="pagination"
+            :per-page-options="perPageOptions"
+            :show-per-page-selector="showPerPageSelector"
             @page-change="(page) => emit('pageChange', page)"
+            @per-page-change="(perPage) => emit('perPageChange', perPage)"
         />
     </div>
 

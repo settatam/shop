@@ -56,6 +56,9 @@ interface Vendor {
     notes: string | null;
     purchase_orders_count: number;
     product_variants_count: number;
+    memos_count: number;
+    repairs_count: number;
+    products_count: number;
     recent_purchase_orders: PurchaseOrder[];
     note_entries: Note[];
 }
@@ -91,9 +94,66 @@ interface ActivityDay {
     items: ActivityItem[];
 }
 
+interface SoldItem {
+    id: number;
+    sku: string | null;
+    title: string | null;
+    order_id: number;
+    invoice_number: string | null;
+    date: string | null;
+    cost: number;
+    amount_sold: number;
+    profit: number;
+    profit_percent: number;
+}
+
+interface SoldItemsData {
+    items: SoldItem[];
+    totals: {
+        cost: number;
+        amount_sold: number;
+        profit: number;
+        profit_percent: number;
+    };
+}
+
+interface MemoItem {
+    id: number;
+    memo_number: string;
+    status: string;
+    total: number;
+    grand_total: number;
+    user: string | null;
+    created_at: string;
+}
+
+interface RepairItem {
+    id: number;
+    repair_number: string;
+    status: string;
+    total: number;
+    customer: string | null;
+    user: string | null;
+    created_at: string;
+}
+
+interface StockItem {
+    id: number;
+    title: string;
+    sku: string | null;
+    quantity: number;
+    price: number;
+    cost: number;
+    status: string;
+}
+
 interface Props {
     vendor: Vendor;
     paymentTerms: string[];
+    soldItems?: SoldItemsData;
+    memos?: MemoItem[];
+    repairs?: RepairItem[];
+    currentStock?: StockItem[];
     activityLogs?: ActivityDay[];
 }
 
@@ -167,6 +227,67 @@ const statusColors: Record<string, string> = {
     received: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
     closed: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
     cancelled: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+};
+
+const memoStatusColors: Record<string, string> = {
+    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    sent_to_vendor: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    vendor_received: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+    payment_received: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+    returned: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    cancelled: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+};
+
+const repairStatusColors: Record<string, string> = {
+    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    sent_to_vendor: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+    vendor_received: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+    completed: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
+    payment_received: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+    cancelled: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+};
+
+const stockStatusColors: Record<string, string> = {
+    active: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+    inactive: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    sold: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+};
+
+const getMemoStatusClass = (status: string) => {
+    return memoStatusColors[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+};
+
+const getRepairStatusClass = (status: string) => {
+    return repairStatusColors[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+};
+
+const getStockStatusClass = (status: string) => {
+    return stockStatusColors[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+};
+
+const formatMemoStatus = (status: string) => {
+    const labels: Record<string, string> = {
+        pending: 'Pending',
+        sent_to_vendor: 'Sent to Vendor',
+        vendor_received: 'Vendor Received',
+        payment_received: 'Payment Received',
+        returned: 'Returned',
+        cancelled: 'Cancelled',
+    };
+    return labels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+const formatRepairStatus = (status: string) => {
+    const labels: Record<string, string> = {
+        pending: 'Pending',
+        sent_to_vendor: 'Sent to Vendor',
+        vendor_received: 'Vendor Received',
+        completed: 'Completed',
+        payment_received: 'Payment Received',
+        cancelled: 'Cancelled',
+    };
+    return labels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 </script>
 
@@ -328,6 +449,250 @@ const statusColors: Record<string, string> = {
                             <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ vendor.notes }}</p>
                         </div>
                     </div>
+
+                    <!-- Sold Items Profits Table -->
+                    <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Sold Items Profits</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">All sold products from this vendor</p>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700">
+                            <div v-if="!soldItems" class="px-4 py-8">
+                                <div class="animate-pulse space-y-3">
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                                </div>
+                            </div>
+                            <div v-else-if="soldItems.items.length === 0" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No sold items found for this vendor.
+                            </div>
+                            <div v-else class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                                        <tr>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">SKU</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Order</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cost</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount Sold</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Profit</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Profit %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr v-for="item in soldItems.items" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                                {{ item.sku || '-' }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <Link :href="`/orders/${item.order_id}`" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                                    {{ item.invoice_number || `#${item.order_id}` }}
+                                                </Link>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {{ item.date || '-' }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.cost) }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.amount_sold) }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right" :class="item.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                                {{ formatCurrency(item.profit) }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right" :class="item.profit_percent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                                {{ item.profit_percent }}%
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="bg-gray-50 dark:bg-gray-800/50">
+                                        <tr class="font-semibold">
+                                            <td colspan="3" class="px-4 py-3 text-sm text-gray-900 dark:text-white">Totals</td>
+                                            <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(soldItems.totals.cost) }}</td>
+                                            <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(soldItems.totals.amount_sold) }}</td>
+                                            <td class="px-4 py-3 text-sm text-right" :class="soldItems.totals.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">{{ formatCurrency(soldItems.totals.profit) }}</td>
+                                            <td class="px-4 py-3 text-sm text-right" :class="soldItems.totals.profit_percent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">{{ soldItems.totals.profit_percent }}%</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Memos Table -->
+                    <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Memos</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">All memos for this vendor</p>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700">
+                            <div v-if="!memos" class="px-4 py-8">
+                                <div class="animate-pulse space-y-3">
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                                </div>
+                            </div>
+                            <div v-else-if="memos.length === 0" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No memos found for this vendor.
+                            </div>
+                            <div v-else class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                                        <tr>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Memo #</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Employee</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr v-for="memo in memos" :key="memo.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <Link :href="`/memos/${memo.id}`" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                                    {{ memo.memo_number }}
+                                                </Link>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <span :class="getMemoStatusClass(memo.status)" class="inline-flex rounded-full px-2 py-1 text-xs font-medium">
+                                                    {{ formatMemoStatus(memo.status) }}
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {{ memo.user || '-' }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {{ memo.created_at }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(memo.grand_total || memo.total) }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Repairs Table -->
+                    <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Repairs</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">All repairs for this vendor</p>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700">
+                            <div v-if="!repairs" class="px-4 py-8">
+                                <div class="animate-pulse space-y-3">
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                                </div>
+                            </div>
+                            <div v-else-if="repairs.length === 0" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No repairs found for this vendor.
+                            </div>
+                            <div v-else class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                                        <tr>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Repair #</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Customer</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Employee</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr v-for="repair in repairs" :key="repair.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <Link :href="`/repairs/${repair.id}`" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                                    {{ repair.repair_number }}
+                                                </Link>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <span :class="getRepairStatusClass(repair.status)" class="inline-flex rounded-full px-2 py-1 text-xs font-medium">
+                                                    {{ formatRepairStatus(repair.status) }}
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {{ repair.customer || '-' }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {{ repair.user || '-' }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {{ repair.created_at }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(repair.total) }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current Stock Table -->
+                    <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:px-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Current Stock</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Active products from this vendor in inventory</p>
+                        </div>
+                        <div class="border-t border-gray-200 dark:border-gray-700">
+                            <div v-if="!currentStock" class="px-4 py-8">
+                                <div class="animate-pulse space-y-3">
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                                </div>
+                            </div>
+                            <div v-else-if="currentStock.length === 0" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No current stock found for this vendor.
+                            </div>
+                            <div v-else class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                                        <tr>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">SKU</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Title</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Qty</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cost</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
+                                            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr v-for="item in currentStock" :key="item.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <Link :href="`/products/${item.id}`" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                                    {{ item.sku || '-' }}
+                                                </Link>
+                                            </td>
+                                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white max-w-xs truncate">
+                                                {{ item.title }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ item.quantity }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.cost) }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.price) }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <span :class="getStockStatusClass(item.status)" class="inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize">
+                                                    {{ item.status }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right Column - Stats & Business Details -->
@@ -343,7 +708,19 @@ const statusColors: Record<string, string> = {
                         <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10 p-4">
                             <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Products</dt>
                             <dd class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
-                                {{ vendor.product_variants_count }}
+                                {{ vendor.products_count }}
+                            </dd>
+                        </div>
+                        <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10 p-4">
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Memos</dt>
+                            <dd class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
+                                {{ vendor.memos_count }}
+                            </dd>
+                        </div>
+                        <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10 p-4">
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Repairs</dt>
+                            <dd class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
+                                {{ vendor.repairs_count }}
                             </dd>
                         </div>
                     </div>

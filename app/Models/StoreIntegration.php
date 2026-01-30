@@ -20,6 +20,10 @@ class StoreIntegration extends Model
 
     public const PROVIDER_TWILIO = 'twilio';
 
+    public const PROVIDER_GIA = 'gia';
+
+    public const PROVIDER_SHIPSTATION = 'shipstation';
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_INACTIVE = 'inactive';
@@ -185,5 +189,65 @@ class StoreIntegration extends Model
             ->where('provider', $provider)
             ->where('status', self::STATUS_ACTIVE)
             ->first();
+    }
+
+    /**
+     * Get GIA API Key.
+     */
+    public function getGiaApiKey(): ?string
+    {
+        return $this->credentials['api_key'] ?? null;
+    }
+
+    /**
+     * Get GIA API URL (defaults to production).
+     */
+    public function getGiaApiUrl(): string
+    {
+        $default = 'https://api.gia.edu/graphql';
+
+        return $this->credentials['api_url'] ?? $default;
+    }
+
+    /**
+     * Get ShipStation API Key.
+     */
+    public function getShipStationApiKey(): ?string
+    {
+        return $this->credentials['api_key'] ?? null;
+    }
+
+    /**
+     * Get ShipStation API Secret.
+     */
+    public function getShipStationApiSecret(): ?string
+    {
+        return $this->credentials['api_secret'] ?? null;
+    }
+
+    /**
+     * Get ShipStation Store ID (optional, for multi-store accounts).
+     */
+    public function getShipStationStoreId(): ?int
+    {
+        $storeId = $this->credentials['store_id'] ?? null;
+
+        return $storeId ? (int) $storeId : null;
+    }
+
+    /**
+     * Check if auto-sync to ShipStation is enabled.
+     */
+    public function isShipStationAutoSyncEnabled(): bool
+    {
+        return (bool) ($this->settings['auto_sync_orders'] ?? true);
+    }
+
+    /**
+     * Get ShipStation API base URL.
+     */
+    public function getShipStationApiUrl(): string
+    {
+        return 'https://ssapi.shipstation.com';
     }
 }

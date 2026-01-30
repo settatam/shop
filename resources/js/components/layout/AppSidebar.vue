@@ -44,6 +44,7 @@ const navigation: NavGroup[] = [
         icon: CubeIcon,
         children: [
             { name: 'All Products', href: '/products' },
+            { name: 'GIA Entry', href: '/gia' },
             { name: 'Categories', href: '/categories' },
             { name: 'Product Types', href: '/product-types' },
             { name: 'Templates', href: '/templates' },

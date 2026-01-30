@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\Tag;
+use App\Models\Vendor;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
 use App\Services\Image\ImageService;
@@ -43,10 +44,32 @@ class ProductController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get categories for filters (with hierarchy support)
-        $categories = Category::where('store_id', $store->id)
+        // Get all categories with hierarchy
+        $allCategories = Category::where('store_id', $store->id)
             ->orderBy('name')
             ->get(['id', 'name', 'parent_id']);
+
+        // Build category hierarchy for cascading dropdowns
+        // Level 1 = categories with parent_id = null
+        // Level 2 = categories whose parent has parent_id = null
+        // Level 3 = categories whose grandparent has parent_id = null
+        $level1Ids = $allCategories->whereNull('parent_id')->pluck('id')->toArray();
+
+        // Level 2 categories (parent is level 1)
+        $level2Categories = $allCategories->whereIn('parent_id', $level1Ids)->values();
+
+        // Level 3 categories grouped by their Level 2 parent
+        $level2Ids = $level2Categories->pluck('id')->toArray();
+        $level3ByParent = $allCategories->whereIn('parent_id', $level2Ids)
+            ->groupBy('parent_id')
+            ->map(fn ($items) => $items->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+            ])->values())
+            ->toArray();
+
+        // Keep flat categories list for other uses (mass edit, etc.)
+        $categories = $allCategories;
 
         // Get brands for filters
         $brands = Brand::where('store_id', $store->id)
@@ -94,6 +117,8 @@ class ProductController extends Controller
 
         return Inertia::render('products/Index', [
             'categories' => $categories,
+            'level2Categories' => $level2Categories,
+            'level3ByParent' => $level3ByParent,
             'brands' => $brands,
             'warehouses' => $warehouses,
             'tags' => $tags,
@@ -529,7 +554,7 @@ class ProductController extends Controller
             abort(404);
         }
 
-        $product->load(['category', 'brand', 'variants', 'images', 'attributeValues', 'tags']);
+        $product->load(['category', 'brand', 'variants', 'images', 'attributeValues', 'tags', 'orderItems.order', 'memoItems.memo', 'repairItems.repair']);
 
         $categories = Category::where('store_id', $store->id)
             ->with('template')
@@ -555,6 +580,11 @@ class ProductController extends Controller
             ->where('is_active', true)
             ->orderBy('priority')
             ->get(['id', 'name', 'code', 'is_default']);
+
+        $vendors = Vendor::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
 
         // Get inventory by variant
         $variantInventory = [];
@@ -636,6 +666,7 @@ class ProductController extends Controller
                 'charge_taxes' => $product->charge_taxes,
                 'price_code' => $product->price_code,
                 'category_id' => $product->category_id,
+                'vendor_id' => $product->vendor_id,
                 'template_id' => $product->template_id,
                 'compare_at_price' => $product->compare_at_price,
                 'weight' => $product->weight,
@@ -680,6 +711,7 @@ class ProductController extends Controller
             'categories' => $categories,
             'availableTags' => $availableTags,
             'brands' => $brands,
+            'vendors' => $vendors,
             'warehouses' => $warehouses,
             'variantInventory' => $variantInventory,
             'template' => $template ? [
@@ -690,6 +722,30 @@ class ProductController extends Controller
             'templateFields' => $templateFields,
             'templateBrands' => $templateBrands,
             'attributeValues' => $attributeValues,
+            'activity' => [
+                'orders' => $product->orderItems->map(fn ($item) => [
+                    'id' => $item->order->id,
+                    'title' => $item->order->order_number ?? "Order #{$item->order->id}",
+                    'status' => $item->order->status,
+                    'date' => $item->order->created_at->format('M j, Y'),
+                    'price' => $item->price,
+                ])->unique('id')->values(),
+                'memos' => $product->memoItems->filter(fn ($item) => $item->memo)->map(fn ($item) => [
+                    'id' => $item->memo->id,
+                    'title' => $item->memo->memo_number ?? "Memo #{$item->memo->id}",
+                    'status' => $item->is_returned ? 'returned' : 'on_memo',
+                    'date' => $item->created_at->format('M j, Y'),
+                    'due_date' => $item->effective_due_date?->format('M j, Y'),
+                    'price' => $item->price,
+                ])->unique('id')->values(),
+                'repairs' => $product->repairItems->filter(fn ($item) => $item->repair)->map(fn ($item) => [
+                    'id' => $item->repair->id,
+                    'title' => $item->repair->repair_number ?? "Repair #{$item->repair->id}",
+                    'status' => $item->status,
+                    'date' => $item->created_at->format('M j, Y'),
+                    'price' => $item->customer_cost,
+                ])->unique('id')->values(),
+            ],
         ]);
     }
 
@@ -708,7 +764,7 @@ class ProductController extends Controller
             'sku' => 'nullable|string|max:255',
             'upc' => 'nullable|string|max:255',
             'category_id' => 'nullable|exists:categories,id',
-            'vendor_id' => 'nullable|exists:vendors,id',
+            'vendor_id' => 'required|exists:vendors,id',
             'tag_ids' => 'nullable|array',
             'tag_ids.*' => 'exists:tags,id',
             'template_id' => 'nullable|exists:product_templates,id',

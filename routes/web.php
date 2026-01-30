@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\BuysReportController;
 use App\Http\Controllers\Web\CategoryController;
 use App\Http\Controllers\Web\CustomProductController;
 use App\Http\Controllers\Web\GiaCardScannerController;
+use App\Http\Controllers\Web\GiaController;
 use App\Http\Controllers\Web\IntegrationsController;
 use App\Http\Controllers\Web\InventoryController;
 use App\Http\Controllers\Web\InventoryReportController;
@@ -85,6 +86,13 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('/create-product', [GiaCardScannerController::class, 'createProduct'])->name('create-product');
         Route::post('/add-to-product/{product}', [GiaCardScannerController::class, 'addToProduct'])->name('add-to-product');
         Route::get('/search-products', [GiaCardScannerController::class, 'searchProducts'])->name('search-products');
+    });
+
+    // GIA Product Entry (via GIA API)
+    Route::prefix('gia')->name('gia.')->group(function () {
+        Route::get('/', [GiaController::class, 'index'])->name('index');
+        Route::post('/data', [GiaController::class, 'getData'])->name('data');
+        Route::post('/lookup', [GiaController::class, 'lookup'])->name('lookup');
     });
 
     Route::resource('templates', TemplateController::class);
@@ -333,6 +341,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('warehouses/{warehouse}/make-default', [WarehouseController::class, 'makeDefault'])->name('warehouses.make-default');
 
     // Vendor management - use 'web.' prefix to avoid conflict with API routes
+    Route::get('vendors/export', [VendorController::class, 'export'])->name('web.vendors.export');
     Route::resource('vendors', VendorController::class)->except(['create', 'edit'])->names([
         'index' => 'web.vendors.index',
         'store' => 'web.vendors.store',
@@ -374,6 +383,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::get('integrations', [IntegrationsController::class, 'index'])->name('integrations.index');
     Route::post('integrations/fedex', [IntegrationsController::class, 'storeFedex'])->name('integrations.fedex.store');
     Route::post('integrations/twilio', [IntegrationsController::class, 'storeTwilio'])->name('integrations.twilio.store');
+    Route::post('integrations/gia', [IntegrationsController::class, 'storeGia'])->name('integrations.gia.store');
+    Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
     Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
 
     // Invoices

@@ -146,7 +146,8 @@ class ProductTagTest extends TestCase
     {
         $this->actingAs($this->user);
 
-        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $vendor = \App\Models\Vendor::factory()->create(['store_id' => $this->store->id]);
+        $product = Product::factory()->create(['store_id' => $this->store->id, 'vendor_id' => $vendor->id]);
         ProductVariant::factory()->create(['product_id' => $product->id]);
 
         $tag1 = Tag::factory()->create(['store_id' => $this->store->id, 'name' => 'Featured']);
@@ -154,6 +155,7 @@ class ProductTagTest extends TestCase
 
         $response = $this->put("/products/{$product->id}", [
             'title' => 'Updated Product',
+            'vendor_id' => $vendor->id,
             'tag_ids' => [$tag1->id, $tag2->id],
             'variants' => [
                 [

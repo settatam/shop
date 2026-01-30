@@ -5,7 +5,7 @@ import { Head, useForm, router } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle } from 'lucide-vue-next';
+import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 
 interface Integration {
@@ -92,6 +92,66 @@ function deleteTwilio() {
     });
 }
 
+// GIA form
+const giaForm = useForm({
+    api_key: '',
+    api_url: 'https://api.gia.edu/graphql',
+});
+
+const showGiaForm = ref(false);
+
+const giaIntegration = computed(() => props.integrations?.gia);
+
+function saveGia() {
+    giaForm.post('/integrations/gia', {
+        preserveScroll: true,
+        onSuccess: () => {
+            showGiaForm.value = false;
+            giaForm.reset();
+        },
+    });
+}
+
+function deleteGia() {
+    if (!giaIntegration.value?.id) return;
+    if (!confirm('Are you sure you want to remove the GIA integration?')) return;
+
+    router.delete(`/integrations/${giaIntegration.value.id}`, {
+        preserveScroll: true,
+    });
+}
+
+// ShipStation form
+const shipstationForm = useForm({
+    api_key: '',
+    api_secret: '',
+    store_id: '' as string | number,
+    auto_sync_orders: true,
+});
+
+const showShipstationForm = ref(false);
+
+const shipstationIntegration = computed(() => props.integrations?.shipstation);
+
+function saveShipstation() {
+    shipstationForm.post('/integrations/shipstation', {
+        preserveScroll: true,
+        onSuccess: () => {
+            showShipstationForm.value = false;
+            shipstationForm.reset();
+        },
+    });
+}
+
+function deleteShipstation() {
+    if (!shipstationIntegration.value?.id) return;
+    if (!confirm('Are you sure you want to remove the ShipStation integration?')) return;
+
+    router.delete(`/integrations/${shipstationIntegration.value.id}`, {
+        preserveScroll: true,
+    });
+}
+
 const platforms = [
     {
         name: 'Shopify',
@@ -150,8 +210,8 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                 </p>
             </div>
 
-            <!-- Shipping & Messaging Services -->
-            <div class="grid gap-4 md:grid-cols-2">
+            <!-- Services & APIs -->
+            <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <!-- FedEx -->
                 <Card>
                     <CardHeader>
@@ -205,7 +265,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="fedexForm.client_id"
                                     type="text"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Enter FedEx API Client ID"
                                 />
                                 <p v-if="fedexForm.errors.client_id" class="mt-1 text-sm text-red-600">{{ fedexForm.errors.client_id }}</p>
@@ -215,7 +275,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="fedexForm.client_secret"
                                     type="password"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Enter FedEx API Client Secret"
                                 />
                                 <p v-if="fedexForm.errors.client_secret" class="mt-1 text-sm text-red-600">{{ fedexForm.errors.client_secret }}</p>
@@ -225,7 +285,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="fedexForm.account_number"
                                     type="text"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Enter FedEx Account Number"
                                 />
                                 <p v-if="fedexForm.errors.account_number" class="mt-1 text-sm text-red-600">{{ fedexForm.errors.account_number }}</p>
@@ -310,7 +370,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="twilioForm.account_sid"
                                     type="text"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Enter Twilio Account SID"
                                 />
                                 <p v-if="twilioForm.errors.account_sid" class="mt-1 text-sm text-red-600">{{ twilioForm.errors.account_sid }}</p>
@@ -320,7 +380,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="twilioForm.auth_token"
                                     type="password"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Enter Twilio Auth Token"
                                 />
                                 <p v-if="twilioForm.errors.auth_token" class="mt-1 text-sm text-red-600">{{ twilioForm.errors.auth_token }}</p>
@@ -330,7 +390,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="twilioForm.phone_number"
                                     type="text"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="+1234567890"
                                 />
                                 <p v-if="twilioForm.errors.phone_number" class="mt-1 text-sm text-red-600">{{ twilioForm.errors.phone_number }}</p>
@@ -340,7 +400,7 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 <input
                                     v-model="twilioForm.messaging_service_sid"
                                     type="text"
-                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Enter Messaging Service SID (optional)"
                                 />
                             </div>
@@ -363,6 +423,191 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                     type="button"
                                     variant="ghost"
                                     @click="showTwilioForm = false"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                <!-- GIA -->
+                <Card>
+                    <CardHeader>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
+                                    <Gem class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div>
+                                    <CardTitle class="text-lg">GIA</CardTitle>
+                                    <CardDescription>Diamond certification lookup</CardDescription>
+                                </div>
+                            </div>
+                            <Badge
+                                v-if="giaIntegration?.has_credentials"
+                                :variant="getStatusBadgeVariant(giaIntegration.status)"
+                            >
+                                <Check v-if="giaIntegration.status === 'active'" class="mr-1 h-3 w-3" />
+                                <AlertCircle v-else-if="giaIntegration.status === 'error'" class="mr-1 h-3 w-3" />
+                                {{ giaIntegration.status === 'active' ? 'Connected' : giaIntegration.status }}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <!-- Show configured state -->
+                        <div v-if="giaIntegration?.has_credentials && !showGiaForm" class="space-y-4">
+                            <div class="rounded-lg border p-3 text-sm">
+                                <p class="text-muted-foreground">API credentials configured</p>
+                                <div v-if="giaIntegration.last_error" class="mt-2 text-red-600 dark:text-red-400">
+                                    {{ giaIntegration.last_error }}
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button variant="outline" size="sm" @click="showGiaForm = true">
+                                    Update Credentials
+                                </Button>
+                                <Button variant="ghost" size="sm" class="text-red-600" @click="deleteGia">
+                                    <Trash2 class="mr-1 h-4 w-4" />
+                                    Remove
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- Show form -->
+                        <form v-else @submit.prevent="saveGia" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Key</label>
+                                <input
+                                    v-model="giaForm.api_key"
+                                    type="password"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Enter GIA API Key"
+                                />
+                                <p v-if="giaForm.errors.api_key" class="mt-1 text-sm text-red-600">{{ giaForm.errors.api_key }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API URL <span class="text-muted-foreground">(optional)</span></label>
+                                <input
+                                    v-model="giaForm.api_url"
+                                    type="text"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="https://api.gia.edu/graphql"
+                                />
+                                <p class="mt-1 text-xs text-muted-foreground">Default: https://api.gia.edu/graphql</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button type="submit" :disabled="giaForm.processing">
+                                    {{ giaForm.processing ? 'Saving...' : 'Save GIA' }}
+                                </Button>
+                                <Button
+                                    v-if="giaIntegration?.has_credentials"
+                                    type="button"
+                                    variant="ghost"
+                                    @click="showGiaForm = false"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                <!-- ShipStation -->
+                <Card>
+                    <CardHeader>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900">
+                                    <Package class="h-5 w-5 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div>
+                                    <CardTitle class="text-lg">ShipStation</CardTitle>
+                                    <CardDescription>Order fulfillment & shipping</CardDescription>
+                                </div>
+                            </div>
+                            <Badge
+                                v-if="shipstationIntegration?.has_credentials"
+                                :variant="getStatusBadgeVariant(shipstationIntegration.status)"
+                            >
+                                <Check v-if="shipstationIntegration.status === 'active'" class="mr-1 h-3 w-3" />
+                                <AlertCircle v-else-if="shipstationIntegration.status === 'error'" class="mr-1 h-3 w-3" />
+                                {{ shipstationIntegration.status === 'active' ? 'Connected' : shipstationIntegration.status }}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <!-- Show configured state -->
+                        <div v-if="shipstationIntegration?.has_credentials && !showShipstationForm" class="space-y-4">
+                            <div class="rounded-lg border p-3 text-sm">
+                                <p class="text-muted-foreground">API credentials configured</p>
+                                <p class="text-xs text-muted-foreground mt-1">Completed orders will be sent to ShipStation automatically</p>
+                                <div v-if="shipstationIntegration.last_error" class="mt-2 text-red-600 dark:text-red-400">
+                                    {{ shipstationIntegration.last_error }}
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button variant="outline" size="sm" @click="showShipstationForm = true">
+                                    Update Credentials
+                                </Button>
+                                <Button variant="ghost" size="sm" class="text-red-600" @click="deleteShipstation">
+                                    <Trash2 class="mr-1 h-4 w-4" />
+                                    Remove
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- Show form -->
+                        <form v-else @submit.prevent="saveShipstation" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Key</label>
+                                <input
+                                    v-model="shipstationForm.api_key"
+                                    type="text"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Enter ShipStation API Key"
+                                />
+                                <p v-if="shipstationForm.errors.api_key" class="mt-1 text-sm text-red-600">{{ shipstationForm.errors.api_key }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Secret</label>
+                                <input
+                                    v-model="shipstationForm.api_secret"
+                                    type="password"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Enter ShipStation API Secret"
+                                />
+                                <p v-if="shipstationForm.errors.api_secret" class="mt-1 text-sm text-red-600">{{ shipstationForm.errors.api_secret }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Store ID <span class="text-muted-foreground">(optional)</span></label>
+                                <input
+                                    v-model="shipstationForm.store_id"
+                                    type="number"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="For multi-store accounts"
+                                />
+                                <p class="mt-1 text-xs text-muted-foreground">Required if you have multiple stores in ShipStation</p>
+                            </div>
+                            <div>
+                                <label class="flex items-center gap-2">
+                                    <input
+                                        v-model="shipstationForm.auto_sync_orders"
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                    />
+                                    <span class="text-sm">Auto-sync confirmed orders to ShipStation</span>
+                                </label>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button type="submit" :disabled="shipstationForm.processing">
+                                    {{ shipstationForm.processing ? 'Saving...' : 'Save ShipStation' }}
+                                </Button>
+                                <Button
+                                    v-if="shipstationIntegration?.has_credentials"
+                                    type="button"
+                                    variant="ghost"
+                                    @click="showShipstationForm = false"
                                 >
                                     Cancel
                                 </Button>

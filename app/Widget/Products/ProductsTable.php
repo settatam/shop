@@ -109,9 +109,18 @@ class ProductsTable extends Table
             $query->whereDate('created_at', '<=', $toDate);
         }
 
-        // Apply category filter
+        // Apply category filter (includes children for hierarchical filtering)
         if ($categoryId = data_get($filter, 'category_id')) {
-            $query->where('category_id', $categoryId);
+            // Get the category and all its descendants
+            $categoryIds = [$categoryId];
+            $childIds = Category::where('parent_id', $categoryId)->pluck('id')->toArray();
+            if (! empty($childIds)) {
+                $categoryIds = array_merge($categoryIds, $childIds);
+                // Also get grandchildren
+                $grandchildIds = Category::whereIn('parent_id', $childIds)->pluck('id')->toArray();
+                $categoryIds = array_merge($categoryIds, $grandchildIds);
+            }
+            $query->whereIn('category_id', $categoryIds);
         }
 
         // Apply brand filter

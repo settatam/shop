@@ -101,6 +101,68 @@ class IntegrationsController extends Controller
         return back()->with('success', 'Twilio integration saved successfully.');
     }
 
+    public function storeGia(Request $request, StoreContext $storeContext): RedirectResponse
+    {
+        $validated = $request->validate([
+            'api_key' => ['required', 'string'],
+            'api_url' => ['nullable', 'string', 'url'],
+        ]);
+
+        $storeId = $storeContext->getCurrentStoreId();
+
+        StoreIntegration::updateOrCreate(
+            [
+                'store_id' => $storeId,
+                'provider' => StoreIntegration::PROVIDER_GIA,
+            ],
+            [
+                'name' => 'GIA',
+                'environment' => StoreIntegration::ENV_PRODUCTION,
+                'credentials' => [
+                    'api_key' => $validated['api_key'],
+                    'api_url' => $validated['api_url'] ?? 'https://api.gia.edu/graphql',
+                ],
+                'status' => StoreIntegration::STATUS_ACTIVE,
+            ]
+        );
+
+        return back()->with('success', 'GIA integration saved successfully.');
+    }
+
+    public function storeShipStation(Request $request, StoreContext $storeContext): RedirectResponse
+    {
+        $validated = $request->validate([
+            'api_key' => ['required', 'string'],
+            'api_secret' => ['required', 'string'],
+            'store_id' => ['nullable', 'integer'],
+            'auto_sync_orders' => ['nullable', 'boolean'],
+        ]);
+
+        $storeId = $storeContext->getCurrentStoreId();
+
+        StoreIntegration::updateOrCreate(
+            [
+                'store_id' => $storeId,
+                'provider' => StoreIntegration::PROVIDER_SHIPSTATION,
+            ],
+            [
+                'name' => 'ShipStation',
+                'environment' => StoreIntegration::ENV_PRODUCTION,
+                'credentials' => [
+                    'api_key' => $validated['api_key'],
+                    'api_secret' => $validated['api_secret'],
+                    'store_id' => $validated['store_id'] ?? null,
+                ],
+                'settings' => [
+                    'auto_sync_orders' => $validated['auto_sync_orders'] ?? true,
+                ],
+                'status' => StoreIntegration::STATUS_ACTIVE,
+            ]
+        );
+
+        return back()->with('success', 'ShipStation integration saved successfully.');
+    }
+
     public function destroy(StoreIntegration $integration, StoreContext $storeContext): RedirectResponse
     {
         $storeId = $storeContext->getCurrentStoreId();

@@ -81,6 +81,21 @@ class Vendor extends Model
         return $this->hasMany(PurchaseOrder::class);
     }
 
+    public function memos(): HasMany
+    {
+        return $this->hasMany(Memo::class);
+    }
+
+    public function repairs(): HasMany
+    {
+        return $this->hasMany(Repair::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

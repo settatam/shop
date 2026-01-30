@@ -14,6 +14,7 @@ import {
     GlobeAltIcon,
     CheckCircleIcon,
     XCircleIcon,
+    ArrowDownTrayIcon,
 } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
 
@@ -58,6 +59,7 @@ interface PaginatedVendors {
 interface Filters {
     search: string;
     is_active: boolean | null;
+    per_page: number;
 }
 
 interface Props {
@@ -75,6 +77,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 // Filter state
 const searchQuery = ref(props.filters.search || '');
 const activeFilter = ref<string>(props.filters.is_active !== null ? String(props.filters.is_active) : '');
+const perPage = ref(props.filters.per_page || 15);
+const perPageOptions = [15, 25, 50, 100];
 
 // Modal state
 const showVendorModal = ref(false);
@@ -122,10 +126,15 @@ watch(activeFilter, () => {
     applyFilters();
 });
 
+watch(perPage, () => {
+    applyFilters();
+});
+
 const applyFilters = () => {
     router.get('/vendors', {
         search: searchQuery.value || undefined,
         is_active: activeFilter.value !== '' ? activeFilter.value : undefined,
+        per_page: perPage.value !== 15 ? perPage.value : undefined,
     }, {
         preserveState: true,
         preserveScroll: true,
@@ -133,9 +142,19 @@ const applyFilters = () => {
     });
 };
 
+const exportVendors = () => {
+    const params = new URLSearchParams();
+    if (searchQuery.value) params.append('search', searchQuery.value);
+    if (activeFilter.value !== '') params.append('is_active', activeFilter.value);
+
+    const url = '/vendors/export' + (params.toString() ? '?' + params.toString() : '');
+    window.location.href = url;
+};
+
 const clearFilters = () => {
     searchQuery.value = '';
     activeFilter.value = '';
+    perPage.value = 15;
     router.get('/vendors', {}, {
         preserveState: true,
         preserveScroll: true,
@@ -260,14 +279,24 @@ const formatDate = (date: string | null) => {
                         {{ vendors.total }} vendor{{ vendors.total === 1 ? '' : 's' }} total
                     </p>
                 </div>
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    @click="openCreateModal"
-                >
-                    <PlusIcon class="-ml-0.5 size-5" />
-                    Add Vendor
-                </button>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                        @click="exportVendors"
+                    >
+                        <ArrowDownTrayIcon class="-ml-0.5 size-5" />
+                        Export
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        @click="openCreateModal"
+                    >
+                        <PlusIcon class="-ml-0.5 size-5" />
+                        Add Vendor
+                    </button>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -293,9 +322,19 @@ const formatDate = (date: string | null) => {
                     <option value="0">Inactive</option>
                 </select>
 
+                <!-- Per Page -->
+                <select
+                    v-model="perPage"
+                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                >
+                    <option v-for="option in perPageOptions" :key="option" :value="option">
+                        {{ option }} per page
+                    </option>
+                </select>
+
                 <!-- Clear Filters -->
                 <button
-                    v-if="searchQuery || activeFilter !== ''"
+                    v-if="searchQuery || activeFilter !== '' || perPage !== 15"
                     type="button"
                     class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                     @click="clearFilters"

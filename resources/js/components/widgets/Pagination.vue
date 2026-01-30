@@ -13,13 +13,24 @@ interface PaginationData {
 
 interface Props {
     pagination: PaginationData;
+    perPageOptions?: number[];
+    showPerPageSelector?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    perPageOptions: () => [15, 25, 50, 100],
+    showPerPageSelector: true,
+});
 
 const emit = defineEmits<{
     pageChange: [page: number];
+    perPageChange: [perPage: number];
 }>();
+
+function handlePerPageChange(event: Event) {
+    const target = event.target as HTMLSelectElement;
+    emit('perPageChange', parseInt(target.value, 10));
+}
 
 const lastPage = computed(() => Math.ceil(props.pagination.total / props.pagination.per_page));
 
@@ -102,7 +113,7 @@ function goToPage(page: number | string) {
 
         <!-- Desktop pagination -->
         <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-            <div>
+            <div class="flex items-center gap-4">
                 <p class="text-sm text-gray-700 dark:text-gray-300">
                     Showing
                     <span class="font-medium">{{ pagination.from }}</span>
@@ -112,6 +123,21 @@ function goToPage(page: number | string) {
                     <span class="font-medium">{{ pagination.total }}</span>
                     results
                 </p>
+
+                <!-- Per-page selector -->
+                <div v-if="showPerPageSelector" class="flex items-center gap-2">
+                    <label for="per-page" class="text-sm text-gray-700 dark:text-gray-300">Show</label>
+                    <select
+                        id="per-page"
+                        :value="pagination.per_page"
+                        class="rounded-md border-0 py-1 pl-2 pr-8 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @change="handlePerPageChange"
+                    >
+                        <option v-for="option in perPageOptions" :key="option" :value="option">
+                            {{ option }}
+                        </option>
+                    </select>
+                </div>
             </div>
             <div>
                 <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">

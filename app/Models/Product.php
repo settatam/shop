@@ -157,6 +157,26 @@ class Product extends Model
         return $this->hasMany(PlatformListing::class);
     }
 
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function memoItems(): HasMany
+    {
+        return $this->hasMany(MemoItem::class);
+    }
+
+    public function repairItems(): HasMany
+    {
+        return $this->hasMany(RepairItem::class);
+    }
+
+    public function transactionItems(): HasMany
+    {
+        return $this->hasMany(TransactionItem::class);
+    }
+
     /**
      * Get the effective template for this product.
      * Uses stored template_id first, falls back to category's effective template.
