@@ -202,6 +202,7 @@ class TransactionService
             'sku' => $data['sku'] ?? null,
             'title' => $data['title'] ?? null,
             'description' => $data['description'] ?? null,
+            'quantity' => $data['quantity'] ?? 1,
             'price' => $data['price'] ?? null,
             'buy_price' => $data['buy_price'] ?? null,
             'dwt' => $data['dwt'] ?? null,
@@ -233,6 +234,7 @@ class TransactionService
             'description' => $item->description,
             'category_id' => $item->category_id,
             'sku' => $item->sku,
+            'quantity' => $item->quantity,
             'price' => $item->price,
             'buy_price' => $item->buy_price,
             'dwt' => $item->dwt,
@@ -245,6 +247,7 @@ class TransactionService
             'sku' => $data['sku'] ?? $item->sku,
             'title' => $data['title'] ?? $item->title,
             'description' => $data['description'] ?? $item->description,
+            'quantity' => $data['quantity'] ?? $item->quantity,
             'price' => $data['price'] ?? $item->price,
             'buy_price' => $data['buy_price'] ?? $item->buy_price,
             'dwt' => $data['dwt'] ?? $item->dwt,
@@ -260,6 +263,7 @@ class TransactionService
             'description' => 'Description',
             'category_id' => 'Category',
             'sku' => 'SKU',
+            'quantity' => 'Quantity',
             'price' => 'Estimated Value',
             'buy_price' => 'Buy Price',
             'dwt' => 'DWT',
@@ -310,9 +314,9 @@ class TransactionService
         // Log activity with detailed changes
         ActivityLog::log(
             activity: 'item_updated',
-            subject: $item->transaction,
+            subject: $item,
             properties: [
-                'item_id' => $item->id,
+                'transaction_id' => $item->transaction_id,
                 'title' => $item->title,
                 'changes' => $changes,
             ],
@@ -378,9 +382,9 @@ class TransactionService
         // Log activity
         ActivityLog::log(
             activity: 'item_reviewed',
-            subject: $item->transaction,
+            subject: $item,
             properties: [
-                'item_id' => $item->id,
+                'transaction_id' => $item->transaction_id,
                 'title' => $item->title,
                 'reviewed_at' => $item->reviewed_at->toISOString(),
             ],
@@ -1088,7 +1092,8 @@ class TransactionService
 
             if ($warehouseId) {
                 $inventory = \App\Models\Inventory::getOrCreate($store->id, $variant->id, $warehouseId);
-                $inventory->receive(1, (float) $item->buy_price);
+                $quantity = $item->quantity ?? 1;
+                $inventory->receive($quantity, (float) $item->buy_price);
             }
 
             $item->markAsAddedToInventory($product->id);

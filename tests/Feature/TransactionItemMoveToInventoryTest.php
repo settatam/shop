@@ -130,6 +130,37 @@ class TransactionItemMoveToInventoryTest extends TestCase
         $this->assertEquals(1, $inventory->quantity);
     }
 
+    public function test_move_item_creates_inventory_with_custom_quantity(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->withWarehouse($this->warehouse)->create([
+            'store_id' => $this->store->id,
+        ]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'quantity' => 5,
+            'buy_price' => 100.00,
+        ]);
+
+        $service = app(TransactionService::class);
+        $product = $service->moveItemToInventory($item);
+
+        $variant = $product->variants->first();
+        $inventory = $variant->inventories()->where('warehouse_id', $this->warehouse->id)->first();
+
+        $this->assertNotNull($inventory);
+        $this->assertEquals(5, $inventory->quantity);
+    }
+
+    public function test_transaction_item_quantity_defaults_to_one(): void
+    {
+        $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+        ]);
+
+        $this->assertEquals(1, $item->quantity);
+    }
+
     public function test_move_item_sets_template_from_category(): void
     {
         $template = \App\Models\ProductTemplate::factory()->create(['store_id' => $this->store->id]);

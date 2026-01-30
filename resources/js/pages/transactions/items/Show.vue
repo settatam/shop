@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
+import { NotesSection } from '@/components/notes';
+import { ImageLightbox } from '@/components/images';
 import SimilarItemsSection from '@/components/transactions/SimilarItemsSection.vue';
 import AiResearchCard from '@/components/transactions/AiResearchCard.vue';
 import ItemChatPanel from '@/components/transactions/ItemChatPanel.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon, RectangleStackIcon, XMarkIcon } from '@heroicons/vue/20/solid';
 
 interface ItemImage {
     id: number;
@@ -52,6 +54,7 @@ interface TransactionItem {
     title: string;
     description: string | null;
     sku: string | null;
+    quantity: number;
     category_id: number | null;
     category: Category | null;
     price: number | null;
@@ -61,8 +64,10 @@ interface TransactionItem {
     condition: string | null;
     attributes: Record<string, string> | null;
     is_added_to_inventory: boolean;
+    is_added_to_bucket: boolean;
     date_added_to_inventory: string | null;
     product_id: number | null;
+    bucket_id: number | null;
     ai_research: Record<string, any> | null;
     ai_research_generated_at: string | null;
     images: ItemImage[];
@@ -94,12 +99,27 @@ interface TemplateField {
     options: FieldOption[];
 }
 
+interface Note {
+    id: number;
+    content: string;
+    user: { id: number; name: string } | null;
+    created_at: string;
+    updated_at: string;
+}
+
+interface Bucket {
+    id: number;
+    name: string;
+}
+
 interface Props {
     transaction: Transaction;
     item: TransactionItem;
     preciousMetals: MetalOption[];
     conditions: MetalOption[];
     templateFields: TemplateField[];
+    notes: Note[];
+    buckets: Bucket[];
     activityLogs?: ActivityDay[];
 }
 
@@ -112,7 +132,20 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const selectedImage = ref<ItemImage | null>(props.item.images[0] || null);
+const lightboxOpen = ref(false);
+const lightboxIndex = ref(0);
 const movingToInventory = ref(false);
+
+const openLightbox = (index: number) => {
+    lightboxIndex.value = index;
+    lightboxOpen.value = true;
+};
+
+// Move to Bucket modal state
+const showBucketModal = ref(false);
+const selectedBucketId = ref<number | null>(null);
+const bucketValue = ref<string>(String(props.item.buy_price ?? props.item.price ?? 0));
+const movingToBucket = ref(false);
 
 const formatPrice = (price: number | null) => {
     if (price === null || price === undefined) return '-';
@@ -164,6 +197,35 @@ const moveToInventory = () => {
         onFinish: () => { movingToInventory.value = false; },
     });
 };
+
+const openBucketModal = () => {
+    bucketValue.value = String(props.item.buy_price ?? props.item.price ?? 0);
+    selectedBucketId.value = null;
+    showBucketModal.value = true;
+};
+
+const closeBucketModal = () => {
+    showBucketModal.value = false;
+};
+
+const moveToBucket = () => {
+    if (!selectedBucketId.value) {
+        alert('Please select a bucket.');
+        return;
+    }
+    movingToBucket.value = true;
+    router.post(`/transactions/${props.transaction.id}/items/${props.item.id}/move-to-bucket`, {
+        bucket_id: selectedBucketId.value,
+        value: parseFloat(bucketValue.value) || 0,
+    }, {
+        onSuccess: () => {
+            showBucketModal.value = false;
+        },
+        onFinish: () => {
+            movingToBucket.value = false;
+        },
+    });
+};
 </script>
 
 <template>
@@ -190,7 +252,7 @@ const moveToInventory = () => {
                 </div>
                 <div class="flex gap-3">
                     <button
-                        v-if="!item.is_added_to_inventory"
+                        v-if="!item.is_added_to_inventory && !item.is_added_to_bucket"
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-50"
                         :disabled="movingToInventory"
@@ -198,6 +260,15 @@ const moveToInventory = () => {
                     >
                         <ArchiveBoxArrowDownIcon class="-ml-0.5 size-5" />
                         {{ movingToInventory ? 'Moving...' : 'Move to Inventory' }}
+                    </button>
+                    <button
+                        v-if="!item.is_added_to_inventory && !item.is_added_to_bucket && buckets.length > 0"
+                        type="button"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-500"
+                        @click="openBucketModal"
+                    >
+                        <RectangleStackIcon class="-ml-0.5 size-5" />
+                        Move to Bucket
                     </button>
                     <Link
                         :href="`/transactions/${transaction.id}/items/${item.id}/edit`"
@@ -217,13 +288,18 @@ const moveToInventory = () => {
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Images</h3>
                             <!-- Main image -->
-                            <div v-if="selectedImage" class="mb-4 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
+                            <button
+                                v-if="selectedImage"
+                                type="button"
+                                class="mb-4 w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-zoom-in"
+                                @click="openLightbox(item.images.findIndex(img => img.id === selectedImage?.id))"
+                            >
                                 <img
                                     :src="selectedImage.url"
                                     :alt="selectedImage.alt_text || item.title"
                                     class="mx-auto max-h-96 object-contain"
                                 />
-                            </div>
+                            </button>
                             <!-- Thumbnails -->
                             <div class="flex flex-wrap gap-2">
                                 <button
@@ -299,6 +375,28 @@ const moveToInventory = () => {
 
                     <!-- Chat -->
                     <ItemChatPanel :transaction-id="transaction.id" :item-id="item.id" />
+
+                    <!-- Notes -->
+                    <NotesSection
+                        :notes="notes"
+                        notable-type="App\\Models\\TransactionItem"
+                        :notable-id="item.id"
+                    />
+
+                    <!-- Activity Timeline -->
+                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Activity</h3>
+                            <ActivityTimeline v-if="activityLogs && activityLogs.length > 0" :days="activityLogs" />
+                            <div v-else class="flex items-center justify-center py-8">
+                                <div class="animate-pulse space-y-3 w-full">
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Sidebar -->
@@ -370,25 +468,31 @@ const moveToInventory = () => {
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Details</h3>
                             <dl class="space-y-3">
-                                <div v-if="item.category">
+                                <div>
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Category</dt>
-                                    <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ item.category.full_path || item.category.name }}</dd>
+                                    <dd class="mt-0.5 text-sm" :class="item.category ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 italic'">
+                                        {{ item.category ? (item.category.full_path || item.category.name) : 'Not set' }}
+                                    </dd>
                                 </div>
-                                <div v-if="item.precious_metal">
+                                <div>
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Metal</dt>
-                                    <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ getMetalLabel(item.precious_metal) }}</dd>
+                                    <dd class="mt-0.5 text-sm" :class="item.precious_metal ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 italic'">
+                                        {{ item.precious_metal ? getMetalLabel(item.precious_metal) : 'Not set' }}
+                                    </dd>
                                 </div>
-                                <div v-if="item.condition">
+                                <div>
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Condition</dt>
-                                    <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ getConditionLabel(item.condition) }}</dd>
+                                    <dd class="mt-0.5 text-sm" :class="item.condition ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 italic'">
+                                        {{ item.condition ? getConditionLabel(item.condition) : 'Not set' }}
+                                    </dd>
                                 </div>
                                 <!-- Template Fields -->
-                                <template v-for="field in templateFields" :key="field.id">
-                                    <div v-if="getAttributeDisplayValue(field)">
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">{{ field.label }}</dt>
-                                        <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ getAttributeDisplayValue(field) }}</dd>
-                                    </div>
-                                </template>
+                                <div v-for="field in templateFields" :key="field.id">
+                                    <dt class="text-sm text-gray-500 dark:text-gray-400">{{ field.label }}</dt>
+                                    <dd class="mt-0.5 text-sm" :class="getAttributeDisplayValue(field) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500 italic'">
+                                        {{ getAttributeDisplayValue(field) || 'Not set' }}
+                                    </dd>
+                                </div>
                                 <div>
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
                                     <dd class="mt-0.5 text-sm text-gray-900 dark:text-white">{{ formatDate(item.created_at) }}</dd>
@@ -400,23 +504,117 @@ const moveToInventory = () => {
                             </dl>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <!-- Activity Timeline -->
-                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Activity</h3>
-                            <ActivityTimeline v-if="activityLogs && activityLogs.length > 0" :days="activityLogs" />
-                            <div v-else class="flex items-center justify-center py-8">
-                                <div class="animate-pulse space-y-3 w-full">
-                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-                                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+        <!-- Move to Bucket Modal -->
+        <div
+            v-if="showBucketModal"
+            class="fixed inset-0 z-50 overflow-y-auto"
+            aria-labelledby="modal-title"
+            role="dialog"
+            aria-modal="true"
+        >
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                <!-- Backdrop -->
+                <div
+                    class="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75"
+                    @click="closeBucketModal"
+                ></div>
+
+                <!-- Modal panel -->
+                <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 dark:bg-gray-800">
+                    <div class="absolute right-0 top-0 pr-4 pt-4">
+                        <button
+                            type="button"
+                            class="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none dark:bg-gray-800 dark:text-gray-500 dark:hover:text-gray-400"
+                            @click="closeBucketModal"
+                        >
+                            <span class="sr-only">Close</span>
+                            <XMarkIcon class="size-6" />
+                        </button>
+                    </div>
+
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-amber-100 sm:mx-0 sm:size-10 dark:bg-amber-900/30">
+                            <RectangleStackIcon class="size-6 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left flex-1">
+                            <h3 id="modal-title" class="text-base font-semibold text-gray-900 dark:text-white">
+                                Move to Bucket
+                            </h3>
+                            <div class="mt-4 space-y-4">
+                                <!-- Bucket selection -->
+                                <div>
+                                    <label for="bucket-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Select Bucket
+                                    </label>
+                                    <select
+                                        id="bucket-select"
+                                        v-model="selectedBucketId"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    >
+                                        <option :value="null" disabled>Choose a bucket...</option>
+                                        <option v-for="bucket in buckets" :key="bucket.id" :value="bucket.id">
+                                            {{ bucket.name }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Value input -->
+                                <div>
+                                    <label for="bucket-value" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Value
+                                    </label>
+                                    <div class="relative mt-1 rounded-md shadow-sm">
+                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                            <span class="text-gray-500 sm:text-sm dark:text-gray-400">$</span>
+                                        </div>
+                                        <input
+                                            id="bucket-value"
+                                            v-model="bucketValue"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        This value will be added to the bucket total.
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex w-full justify-center rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-500 sm:w-auto disabled:opacity-50"
+                            :disabled="movingToBucket || !selectedBucketId"
+                            @click="moveToBucket"
+                        >
+                            {{ movingToBucket ? 'Moving...' : 'Move to Bucket' }}
+                        </button>
+                        <button
+                            type="button"
+                            class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                            @click="closeBucketModal"
+                        >
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Image Lightbox -->
+        <ImageLightbox
+            v-model="lightboxOpen"
+            :images="item.images"
+            :initial-index="lightboxIndex"
+        />
     </AppLayout>
 </template>

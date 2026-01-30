@@ -25,6 +25,7 @@ class TransactionItemFactory extends Factory
             'sku' => fake()->optional()->bothify('TXN-????-####'),
             'title' => fake()->words(3, true),
             'description' => fake()->optional()->sentence(),
+            'quantity' => 1,
             'price' => $price,
             'buy_price' => $price * fake()->randomFloat(2, 0.4, 0.7),
             'dwt' => null,

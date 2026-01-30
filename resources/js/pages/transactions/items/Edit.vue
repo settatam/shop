@@ -49,6 +49,7 @@ interface TransactionItem {
     title: string;
     description: string | null;
     sku: string | null;
+    quantity: number;
     category_id: number | null;
     category: { id: number; name: string; full_path: string } | null;
     price: number | null;
@@ -215,7 +216,7 @@ const deleteImage = (imageId: number) => {
                                         type="text"
                                         name="title"
                                         :value="item.title"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     />
                                     <p v-if="errors.title" class="mt-1 text-sm text-red-600">{{ errors.title }}</p>
                                 </div>
@@ -226,7 +227,7 @@ const deleteImage = (imageId: number) => {
                                         id="description"
                                         name="description"
                                         rows="4"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >{{ item.description }}</textarea>
                                     <p v-if="errors.description" class="mt-1 text-sm text-red-600">{{ errors.description }}</p>
                                 </div>
@@ -237,7 +238,7 @@ const deleteImage = (imageId: number) => {
                                         id="category_id"
                                         name="category_id"
                                         v-model="selectedCategoryId"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >
                                         <option :value="null">No Category</option>
                                         <option
@@ -293,7 +294,7 @@ const deleteImage = (imageId: number) => {
                                                 v-model="attributes[field.id]"
                                                 type="text"
                                                 :placeholder="field.placeholder || ''"
-                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                             <input
                                                 v-else-if="field.type === 'number'"
@@ -303,14 +304,14 @@ const deleteImage = (imageId: number) => {
                                                 type="number"
                                                 step="any"
                                                 :placeholder="field.placeholder || ''"
-                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                             <select
                                                 v-else-if="field.type === 'select'"
                                                 :id="`attr_${field.id}`"
                                                 :name="`attributes[${field.id}]`"
                                                 v-model="attributes[field.id]"
-                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             >
                                                 <option value="">{{ field.placeholder || 'Select...' }}</option>
                                                 <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
@@ -340,7 +341,7 @@ const deleteImage = (imageId: number) => {
                                             v-model="attributes[field.id]"
                                             type="text"
                                             :placeholder="field.placeholder || ''"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <input
                                             v-else-if="field.type === 'number'"
@@ -350,7 +351,7 @@ const deleteImage = (imageId: number) => {
                                             type="number"
                                             step="any"
                                             :placeholder="field.placeholder || ''"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <textarea
                                             v-else-if="field.type === 'textarea'"
@@ -359,14 +360,14 @@ const deleteImage = (imageId: number) => {
                                             v-model="attributes[field.id]"
                                             :placeholder="field.placeholder || ''"
                                             rows="3"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <select
                                             v-else-if="field.type === 'select'"
                                             :id="`attr_${field.id}`"
                                             :name="`attributes[${field.id}]`"
                                             v-model="attributes[field.id]"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         >
                                             <option value="">{{ field.placeholder || 'Select...' }}</option>
                                             <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
@@ -393,7 +394,7 @@ const deleteImage = (imageId: number) => {
                                         <select
                                             id="precious_metal"
                                             name="precious_metal"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         >
                                             <option value="">None</option>
                                             <option
@@ -415,7 +416,7 @@ const deleteImage = (imageId: number) => {
                                             name="dwt"
                                             step="0.0001"
                                             :value="item.dwt"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                     </div>
 
@@ -424,7 +425,7 @@ const deleteImage = (imageId: number) => {
                                         <select
                                             id="condition"
                                             name="condition"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         >
                                             <option value="">Not specified</option>
                                             <option
@@ -441,12 +442,25 @@ const deleteImage = (imageId: number) => {
                             </div>
                         </div>
 
-                        <!-- Pricing -->
+                        <!-- Quantity & Pricing -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 mb-6">
                             <div class="px-4 py-5 sm:p-6 space-y-4">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Pricing</h3>
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Quantity & Pricing</h3>
 
-                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                    <div>
+                                        <label for="quantity" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantity</label>
+                                        <input
+                                            id="quantity"
+                                            type="number"
+                                            name="quantity"
+                                            min="1"
+                                            :value="item.quantity"
+                                            class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                        <p v-if="errors.quantity" class="mt-1 text-sm text-red-600">{{ errors.quantity }}</p>
+                                    </div>
+
                                     <div>
                                         <label for="price" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Value</label>
                                         <div class="relative mt-1">
@@ -459,7 +473,7 @@ const deleteImage = (imageId: number) => {
                                                 name="price"
                                                 step="0.01"
                                                 :value="item.price"
-                                                class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                         </div>
                                     </div>
@@ -476,7 +490,7 @@ const deleteImage = (imageId: number) => {
                                                 name="buy_price"
                                                 step="0.01"
                                                 :value="item.buy_price"
-                                                class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                         </div>
                                     </div>

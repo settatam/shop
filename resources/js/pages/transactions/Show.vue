@@ -604,6 +604,10 @@ async function handleDeleteItem(itemId: number) {
 async function handleReviewItem(item: TransactionItem) {
     if (item.reviewed_at) return;
 
+    if (!confirm('Are you sure you want to mark this item as reviewed?')) {
+        return;
+    }
+
     try {
         await axios.post(`/transactions/${props.transaction.id}/items/${item.id}/review`);
         router.reload({ only: ['transaction', 'activityLogs'] });
@@ -1418,7 +1422,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Status</th>
+                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Review</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
@@ -1907,7 +1911,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Status</th>
+                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Review</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>

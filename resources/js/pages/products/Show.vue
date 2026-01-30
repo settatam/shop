@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
+import { ImageLightbox } from '@/components/images';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import { PencilIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/vue/20/solid';
 
 interface Variant {
@@ -88,6 +90,15 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// Lightbox state
+const lightboxOpen = ref(false);
+const lightboxIndex = ref(0);
+
+const openLightbox = (index: number) => {
+    lightboxIndex.value = index;
+    lightboxOpen.value = true;
+};
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Products', href: '/products' },
     { title: props.product.title, href: `/products/${props.product.id}` },
@@ -165,10 +176,12 @@ const deleteProduct = () => {
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Images</h3>
                             <div class="flex flex-wrap gap-4">
-                                <div
-                                    v-for="image in product.images"
+                                <button
+                                    v-for="(image, index) in product.images"
                                     :key="image.id"
-                                    class="relative h-32 w-32 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700"
+                                    type="button"
+                                    class="relative h-32 w-32 overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700 cursor-zoom-in"
+                                    @click="openLightbox(index)"
                                 >
                                     <img
                                         :src="image.url"
@@ -181,7 +194,7 @@ const deleteProduct = () => {
                                     >
                                         Primary
                                     </span>
-                                </div>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -419,5 +432,12 @@ const deleteProduct = () => {
                 </div>
             </div>
         </div>
+
+        <!-- Image Lightbox -->
+        <ImageLightbox
+            v-model="lightboxOpen"
+            :images="product.images"
+            :initial-index="lightboxIndex"
+        />
     </AppLayout>
 </template>

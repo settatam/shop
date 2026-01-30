@@ -37,7 +37,7 @@ function closeLightbox() {
 
 // Types for typed cells
 interface TypedCell {
-    type?: 'text' | 'link' | 'image' | 'badge' | 'status-badge' | 'tags' | 'currency';
+    type?: 'text' | 'link' | 'image' | 'badge' | 'status-badge' | 'tags' | 'currency' | 'review_action';
     data: unknown;
     href?: string;
     alt?: string;
@@ -46,6 +46,9 @@ interface TypedCell {
     currency?: string;
     color?: string;
     tags?: TagData[];
+    reviewed?: boolean;
+    transaction_id?: number;
+    item_id?: number;
 }
 
 interface TagData {
@@ -108,7 +111,22 @@ const emit = defineEmits<{
     filterChange: [filter: Record<string, unknown>];
     bulkAction: [action: string, ids: (number | string)[], config: Record<string, unknown>];
     bulkActionModal: [action: string, ids: (number | string)[]];
+    reviewItem: [transactionId: number, itemId: number];
 }>();
+
+// Review action state
+const reviewingItemId = ref<number | null>(null);
+
+function handleReviewClick(transactionId: number, itemId: number) {
+    if (confirm('Are you sure you want to mark this item as reviewed?')) {
+        reviewingItemId.value = itemId;
+        emit('reviewItem', transactionId, itemId);
+    }
+}
+
+function clearReviewingState() {
+    reviewingItemId.value = null;
+}
 
 const searchTerm = ref('');
 const selectedItems = ref<Set<number | string>>(new Set());
@@ -336,6 +354,7 @@ function clearSelection() {
 
 defineExpose({
     clearSelection,
+    clearReviewingState,
 });
 
 // Check if field should render HTML
@@ -782,6 +801,27 @@ function exportToCsv() {
                                         —
                                     </span>
                                 </div>
+                            </template>
+
+                            <template v-else-if="getCellValue(item, key).type === 'review_action'">
+                                <!-- Already reviewed - show date -->
+                                <span
+                                    v-if="getCellValue(item, key).reviewed"
+                                    class="text-xs text-green-600 dark:text-green-400"
+                                    :title="getCellValue(item, key).data as string"
+                                >
+                                    Reviewed {{ getCellValue(item, key).data }}
+                                </span>
+                                <!-- Not reviewed - show button -->
+                                <button
+                                    v-else
+                                    type="button"
+                                    :disabled="reviewingItemId === getCellValue(item, key).item_id"
+                                    class="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 hover:bg-indigo-100 disabled:opacity-50 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30 dark:hover:bg-indigo-400/20"
+                                    @click="handleReviewClick(getCellValue(item, key).transaction_id as number, getCellValue(item, key).item_id as number)"
+                                >
+                                    {{ reviewingItemId === getCellValue(item, key).item_id ? 'Reviewing...' : 'Review' }}
+                                </button>
                             </template>
 
                             <!-- HTML content -->

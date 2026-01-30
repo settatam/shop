@@ -348,6 +348,7 @@ class BucketTest extends TestCase
 
         $response = $this->withStore()->post("/transactions/{$transaction->id}/items/{$transactionItem->id}/move-to-bucket", [
             'bucket_id' => $bucket->id,
+            'value' => 150.00,
         ]);
 
         $response->assertRedirect()
@@ -361,10 +362,79 @@ class BucketTest extends TestCase
             'bucket_id' => $bucket->id,
             'transaction_item_id' => $transactionItem->id,
             'title' => 'Scrap Gold Ring',
+            'value' => 150.00,
         ]);
 
         $bucket->refresh();
         $this->assertEquals(150.00, $bucket->total_value);
+    }
+
+    public function test_transaction_item_can_be_moved_to_bucket_with_custom_value(): void
+    {
+        $this->actingAs($this->user);
+
+        $transaction = Transaction::factory()->paymentProcessed()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $transactionItem = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'title' => 'Gold Chain',
+            'buy_price' => 200.00,
+            'price' => 250.00,
+            'is_added_to_inventory' => false,
+            'is_added_to_bucket' => false,
+        ]);
+
+        $bucket = Bucket::factory()->create([
+            'store_id' => $this->store->id,
+            'total_value' => 0,
+        ]);
+
+        // User overrides the value to a custom amount
+        $customValue = 175.50;
+
+        $response = $this->withStore()->post("/transactions/{$transaction->id}/items/{$transactionItem->id}/move-to-bucket", [
+            'bucket_id' => $bucket->id,
+            'value' => $customValue,
+        ]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('bucket_items', [
+            'bucket_id' => $bucket->id,
+            'transaction_item_id' => $transactionItem->id,
+            'title' => 'Gold Chain',
+            'value' => $customValue,
+        ]);
+
+        $bucket->refresh();
+        $this->assertEquals($customValue, $bucket->total_value);
+    }
+
+    public function test_move_to_bucket_requires_value(): void
+    {
+        $this->actingAs($this->user);
+
+        $transaction = Transaction::factory()->paymentProcessed()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $transactionItem = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'is_added_to_inventory' => false,
+            'is_added_to_bucket' => false,
+        ]);
+
+        $bucket = Bucket::factory()->create(['store_id' => $this->store->id]);
+
+        $response = $this->withStore()->post("/transactions/{$transaction->id}/items/{$transactionItem->id}/move-to-bucket", [
+            'bucket_id' => $bucket->id,
+            // No value provided
+        ]);
+
+        $response->assertSessionHasErrors('value');
     }
 
     public function test_cannot_move_already_bucketed_item(): void
@@ -386,6 +456,7 @@ class BucketTest extends TestCase
 
         $response = $this->withStore()->post("/transactions/{$transaction->id}/items/{$transactionItem->id}/move-to-bucket", [
             'bucket_id' => $bucket2->id,
+            'value' => 100.00,
         ]);
 
         $response->assertRedirect()
@@ -408,6 +479,7 @@ class BucketTest extends TestCase
 
         $response = $this->withStore()->post("/transactions/{$transaction->id}/items/{$transactionItem->id}/move-to-bucket", [
             'bucket_id' => $bucket->id,
+            'value' => 100.00,
         ]);
 
         $response->assertRedirect()

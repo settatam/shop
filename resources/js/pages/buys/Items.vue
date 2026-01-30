@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import { DatePicker } from '@/components/ui/date-picker';
 import { computed, onMounted, ref, watch } from 'vue';
 import { XMarkIcon, PlusIcon } from '@heroicons/vue/20/solid';
+import axios from 'axios';
 
 interface FilterOption {
     value: string;
@@ -28,6 +29,7 @@ function getUrlParams(): WidgetFilter {
     if (params.get('from_date')) filter.from_date = params.get('from_date') || undefined;
     if (params.get('to_date')) filter.to_date = params.get('to_date') || undefined;
     if (params.get('category_id')) filter.category_id = params.get('category_id') || undefined;
+    if (params.get('review_status')) filter.review_status = params.get('review_status') || undefined;
     return filter;
 }
 
@@ -39,6 +41,7 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } =
 // Filters - initialize from URL params
 const selectedPaymentMethod = ref<string>(initialParams.payment_method as string || '');
 const selectedCategory = ref<string>(initialParams.category_id as string || '');
+const selectedReviewStatus = ref<string>(initialParams.review_status as string || '');
 const minAmount = ref<string>(initialParams.min_amount as string || '');
 const maxAmount = ref<string>(initialParams.max_amount as string || '');
 const fromDate = ref<string>(initialParams.from_date as string || '');
@@ -50,6 +53,7 @@ const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
 // Get available filters from widget data
 const availablePaymentMethods = computed<FilterOption[]>(() => data.value?.filters?.available?.payment_methods || []);
 const availableCategories = computed<FilterOption[]>(() => data.value?.filters?.available?.categories || []);
+const availableReviewStatuses = computed<FilterOption[]>(() => data.value?.filters?.available?.review_statuses || []);
 
 // Load widget on mount
 onMounted(() => {
@@ -57,10 +61,11 @@ onMounted(() => {
 });
 
 // Watch filter changes
-watch([selectedPaymentMethod, selectedCategory, minAmount, maxAmount, fromDate, toDate], () => {
+watch([selectedPaymentMethod, selectedCategory, selectedReviewStatus, minAmount, maxAmount, fromDate, toDate], () => {
     updateFilter({
         payment_method: selectedPaymentMethod.value || undefined,
         category_id: selectedCategory.value || undefined,
+        review_status: selectedReviewStatus.value || undefined,
         min_amount: minAmount.value || undefined,
         max_amount: maxAmount.value || undefined,
         from_date: fromDate.value || undefined,
@@ -84,14 +89,28 @@ function handleSearch(term: string) {
 function clearFilters() {
     selectedPaymentMethod.value = '';
     selectedCategory.value = '';
+    selectedReviewStatus.value = '';
     minAmount.value = '';
     maxAmount.value = '';
     fromDate.value = '';
     toDate.value = '';
 }
 
+// Handle review item action
+async function handleReviewItem(transactionId: number, itemId: number) {
+    try {
+        await axios.post(`/transactions/${transactionId}/items/${itemId}/review`);
+        // Reload the widget data to reflect the change
+        loadWidget();
+        dataTableRef.value?.clearReviewingState();
+    } catch (error: any) {
+        alert(error.response?.data?.message || 'Failed to review item. Please try again.');
+        dataTableRef.value?.clearReviewingState();
+    }
+}
+
 const hasActiveFilters = computed(() => {
-    return selectedPaymentMethod.value || selectedCategory.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
+    return selectedPaymentMethod.value || selectedCategory.value || selectedReviewStatus.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
 });
 </script>
 
@@ -149,6 +168,19 @@ const hasActiveFilters = computed(() => {
                         <option value="">All Categories</option>
                         <option v-for="category in availableCategories" :key="category.value" :value="category.value">
                             {{ category.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Review Status</label>
+                    <select
+                        v-model="selectedReviewStatus"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Items</option>
+                        <option v-for="status in availableReviewStatuses" :key="status.value" :value="status.value">
+                            {{ status.label }}
                         </option>
                     </select>
                 </div>
@@ -216,6 +248,7 @@ const hasActiveFilters = computed(() => {
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
+                @review-item="handleReviewItem"
             />
 
             <!-- Loading skeleton -->

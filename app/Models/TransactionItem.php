@@ -6,6 +6,7 @@ use App\Traits\HasImages;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class TransactionItem extends Model
 {
@@ -45,6 +46,7 @@ class TransactionItem extends Model
         'sku',
         'title',
         'description',
+        'quantity',
         'price',
         'buy_price',
         'dwt',
@@ -67,6 +69,7 @@ class TransactionItem extends Model
             'buy_price' => 'decimal:2',
             'dwt' => 'decimal:4',
             'attributes' => 'array',
+            'quantity' => 'integer',
             'is_added_to_inventory' => 'boolean',
             'is_added_to_bucket' => 'boolean',
             'date_added_to_inventory' => 'datetime',
@@ -96,6 +99,11 @@ class TransactionItem extends Model
         return $this->belongsTo(Bucket::class);
     }
 
+    public function notes(): MorphMany
+    {
+        return $this->morphMany(Note::class, 'notable')->orderBy('created_at', 'desc');
+    }
+
     public function isAddedToInventory(): bool
     {
         return $this->is_added_to_inventory;
@@ -120,14 +128,14 @@ class TransactionItem extends Model
         return $this->is_added_to_bucket;
     }
 
-    public function moveItemToBucket(Bucket $bucket): BucketItem
+    public function moveItemToBucket(Bucket $bucket, ?float $value = null): BucketItem
     {
         $bucketItem = BucketItem::create([
             'bucket_id' => $bucket->id,
             'transaction_item_id' => $this->id,
             'title' => $this->title,
             'description' => $this->description,
-            'value' => $this->buy_price ?? $this->price ?? 0,
+            'value' => $value ?? $this->buy_price ?? $this->price ?? 0,
         ]);
 
         $this->update([
@@ -149,11 +157,6 @@ class TransactionItem extends Model
         ]);
 
         return $this;
-    }
-
-    public function getQuantityAttribute(): int
-    {
-        return 1;
     }
 
     public function isPreciousMetal(): bool

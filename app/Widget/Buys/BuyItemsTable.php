@@ -63,6 +63,11 @@ class BuyItemsTable extends Table
                 'label' => 'Date Paid',
                 'sortable' => false,
             ],
+            [
+                'key' => 'review',
+                'label' => 'Review',
+                'sortable' => true,
+            ],
         ];
     }
 
@@ -134,6 +139,15 @@ class BuyItemsTable extends Table
             $query->where('category_id', $categoryId);
         }
 
+        // Apply review status filter
+        if ($reviewStatus = data_get($filter, 'review_status')) {
+            if ($reviewStatus === 'reviewed') {
+                $query->whereNotNull('reviewed_at');
+            } elseif ($reviewStatus === 'not_reviewed') {
+                $query->whereNull('reviewed_at');
+            }
+        }
+
         return $query;
     }
 
@@ -151,7 +165,12 @@ class BuyItemsTable extends Table
         $sortBy = data_get($filter, 'sortBy', 'id');
         $sortDirection = data_get($filter, 'sortDirection', 'desc');
 
-        $query->orderBy($sortBy, $sortDirection);
+        // Handle special sort columns
+        if ($sortBy === 'review') {
+            $query->orderBy('reviewed_at', $sortDirection);
+        } else {
+            $query->orderBy($sortBy, $sortDirection);
+        }
 
         // Pagination
         $page = (int) data_get($filter, 'page', 1);
@@ -228,6 +247,13 @@ class BuyItemsTable extends Table
                     : '-',
                 'class' => 'text-sm text-gray-500',
             ],
+            'review' => [
+                'type' => 'review_action',
+                'data' => $item->reviewed_at ? Carbon::parse($item->reviewed_at)->format('M d, Y g:i A') : null,
+                'reviewed' => $item->isReviewed(),
+                'transaction_id' => $transaction->id,
+                'item_id' => $item->id,
+            ],
         ];
     }
 
@@ -279,11 +305,17 @@ class BuyItemsTable extends Table
             ])
             ->toArray();
 
+        $reviewStatuses = [
+            ['value' => 'reviewed', 'label' => 'Reviewed'],
+            ['value' => 'not_reviewed', 'label' => 'Not Reviewed'],
+        ];
+
         return [
             'current' => $filter,
             'available' => [
                 'payment_methods' => $paymentMethods,
                 'categories' => $categories,
+                'review_statuses' => $reviewStatuses,
             ],
         ];
     }

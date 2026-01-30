@@ -36,7 +36,7 @@ class TransactionItemController extends Controller
         $this->authorizeItem($transaction, $item);
 
         $store = $this->storeContext->getCurrentStore();
-        $item->load(['category', 'product', 'images']);
+        $item->load(['category', 'product', 'images', 'notes.user']);
         $transaction->load(['customer', 'user']);
 
         $preciousMetals = $this->getPreciousMetals();
@@ -61,12 +61,31 @@ class TransactionItemController extends Controller
             }
         }
 
+        // Format notes for the frontend
+        $notes = $item->notes->map(fn ($note) => [
+            'id' => $note->id,
+            'content' => $note->content,
+            'user' => $note->user ? [
+                'id' => $note->user->id,
+                'name' => $note->user->name,
+            ] : null,
+            'created_at' => $note->created_at->toISOString(),
+            'updated_at' => $note->updated_at->toISOString(),
+        ]);
+
+        // Load buckets for the store
+        $buckets = Bucket::where('store_id', $store->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('transactions/items/Show', [
             'transaction' => $this->formatTransaction($transaction),
             'item' => $this->formatItem($item),
             'preciousMetals' => $preciousMetals,
             'conditions' => $conditions,
             'templateFields' => $templateFields,
+            'notes' => $notes,
+            'buckets' => $buckets,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($item)),
         ]);
     }
@@ -209,7 +228,8 @@ class TransactionItemController extends Controller
             ->where('store_id', $store->id)
             ->firstOrFail();
 
-        $bucketItem = $item->moveItemToBucket($bucket);
+        $value = (float) $request->validated('value');
+        $bucketItem = $item->moveItemToBucket($bucket, $value);
 
         return redirect()->route('web.transactions.items.show', [$transaction, $item])
             ->with('success', "Item moved to bucket \"{$bucket->name}\".");
@@ -373,6 +393,7 @@ class TransactionItemController extends Controller
                 'name' => $item->category->name,
                 'full_path' => $item->category->full_path ?? $item->category->name,
             ] : null,
+            'quantity' => $item->quantity,
             'price' => $item->price,
             'buy_price' => $item->buy_price,
             'dwt' => $item->dwt,
@@ -380,8 +401,10 @@ class TransactionItemController extends Controller
             'condition' => $item->condition,
             'attributes' => $item->attributes ?? [],
             'is_added_to_inventory' => $item->is_added_to_inventory,
+            'is_added_to_bucket' => $item->is_added_to_bucket,
             'date_added_to_inventory' => $item->date_added_to_inventory?->toISOString(),
             'product_id' => $item->product_id,
+            'bucket_id' => $item->bucket_id,
             'ai_research' => $item->ai_research,
             'ai_research_generated_at' => $item->ai_research_generated_at?->toISOString(),
             'images' => $item->images->map(fn ($image) => [

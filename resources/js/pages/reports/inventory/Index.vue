@@ -181,13 +181,13 @@ const currentViewTotals = computed(() => ({
                     >
                         Yearly
                     </Link>
-                    <Link
+                    <a
                         href="/reports/inventory/export"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ArrowDownTrayIcon class="size-4" />
                         Export CSV
-                    </Link>
+                    </a>
                 </div>
             </div>
 

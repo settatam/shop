@@ -182,6 +182,26 @@ class CustomerController extends Controller
      */
     protected function formatCustomer(Customer $customer, bool $detailed = false): array
     {
+        // Get primary address from addresses table if customer doesn't have address on record
+        $primaryAddress = null;
+        if (empty($customer->address)) {
+            $primaryAddress = $customer->getPrimaryShippingAddress();
+            // Eager load state relationship if we have an address
+            $primaryAddress?->load('state');
+        }
+
+        // Use address from addresses table if available, otherwise fall back to customer fields
+        $address = $primaryAddress?->address ?? $customer->address;
+        $address2 = $primaryAddress?->address2 ?? $customer->address2;
+        $city = $primaryAddress?->city ?? $customer->city;
+        $zip = $primaryAddress?->zip ?? $customer->zip;
+
+        // Get state - either from customer.state, or from the address's state relationship
+        $state = $customer->state;
+        if (empty($state) && $primaryAddress?->state) {
+            $state = $primaryAddress->state->abbreviation;
+        }
+
         $data = [
             'id' => $customer->id,
             'first_name' => $customer->first_name,
@@ -189,19 +209,19 @@ class CustomerController extends Controller
             'full_name' => $customer->full_name,
             'email' => $customer->email,
             'phone_number' => $customer->phone_number,
-            'address' => $customer->address,
-            'address2' => $customer->address2,
-            'city' => $customer->city,
-            'state' => $customer->state,
-            'zip' => $customer->zip,
+            'address' => $address,
+            'address2' => $address2,
+            'city' => $city,
+            'state' => $state,
+            'zip' => $zip,
             'is_active' => $customer->is_active,
             'created_at' => $customer->created_at?->toISOString(),
         ];
 
         if ($detailed) {
             $data = array_merge($data, [
-                'state_id' => $customer->state_id,
-                'country_id' => $customer->country_id,
+                'state_id' => $primaryAddress?->state_id ?? $customer->state_id,
+                'country_id' => $primaryAddress?->country_id ?? $customer->country_id,
                 'accepts_marketing' => $customer->accepts_marketing,
                 'orders_count' => $customer->orders_count ?? 0,
                 'transactions_count' => $customer->transactions_count ?? 0,

@@ -22,6 +22,7 @@ class UpdateTransactionItemRequest extends FormRequest
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'quantity' => ['sometimes', 'integer', 'min:1'],
             'price' => ['nullable', 'numeric', 'min:0'],
             'buy_price' => ['nullable', 'numeric', 'min:0'],
             'dwt' => ['nullable', 'numeric', 'min:0'],
