@@ -228,7 +228,7 @@ function clearFilters() {
                             <input
                                 v-model="filters.from_date"
                                 type="date"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             />
                         </div>
                         <div>
@@ -236,7 +236,7 @@ function clearFilters() {
                             <input
                                 v-model="filters.to_date"
                                 type="date"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             />
                         </div>
 
@@ -249,7 +249,7 @@ function clearFilters() {
                                 min="0"
                                 step="0.01"
                                 placeholder="0.00"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             />
                         </div>
                         <div>
@@ -260,7 +260,7 @@ function clearFilters() {
                                 min="0"
                                 step="0.01"
                                 placeholder="0.00"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             />
                         </div>
 
@@ -269,7 +269,7 @@ function clearFilters() {
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vendor</label>
                             <select
                                 v-model="filters.vendor_id"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                class="block w-full rounded-md border-0 bg-white pl-3 pr-10 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             >
                                 <option value="">All Vendors</option>
                                 <option v-for="vendor in vendors" :key="vendor.value" :value="vendor.value">
@@ -283,7 +283,7 @@ function clearFilters() {
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tax Charged</label>
                             <select
                                 v-model="filters.charge_tax"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                class="block w-full rounded-md border-0 bg-white pl-3 pr-10 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             >
                                 <option value="">All</option>
                                 <option value="yes">Yes (Tax Charged)</option>
