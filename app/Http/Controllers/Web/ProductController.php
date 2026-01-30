@@ -271,10 +271,16 @@ class ProductController extends Controller
             ->orderBy('priority')
             ->get(['id', 'name', 'code', 'is_default']);
 
+        $vendors = Vendor::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+
         return Inertia::render('products/Create', [
             'categories' => $categories,
             'brands' => $brands,
             'warehouses' => $warehouses,
+            'vendors' => $vendors,
         ]);
     }
 
@@ -293,6 +299,11 @@ class ProductController extends Controller
             'handle' => 'nullable|string|max:255',
             'category_id' => 'nullable|exists:categories,id',
             'template_id' => 'nullable|exists:product_templates,id',
+            'vendor_id' => 'required|exists:vendors,id',
+            'brand_id' => 'nullable|exists:brands,id',
+            'charge_taxes' => 'boolean',
+            'compare_at_price' => 'nullable|numeric|min:0',
+            'price_code' => 'nullable|string|max:50',
             'is_published' => 'boolean',
             'has_variants' => 'boolean',
             'track_quantity' => 'boolean',
@@ -340,11 +351,16 @@ class ProductController extends Controller
             'handle' => $validated['handle'] ?? Str::slug($validated['title']),
             'category_id' => $validated['category_id'] ?? null,
             'template_id' => $validated['template_id'] ?? null,
+            'vendor_id' => $validated['vendor_id'],
+            'brand_id' => $validated['brand_id'] ?? null,
             'is_published' => $validated['is_published'] ?? false,
             'is_draft' => ! ($validated['is_published'] ?? false),
             'has_variants' => $hasVariants,
             'track_quantity' => $validated['track_quantity'] ?? true,
             'sell_out_of_stock' => $validated['sell_out_of_stock'] ?? false,
+            'charge_taxes' => $validated['charge_taxes'] ?? true,
+            'compare_at_price' => $validated['compare_at_price'] ?? null,
+            'price_code' => $validated['price_code'] ?? null,
             'condition' => $validated['condition'] ?? null,
             'weight' => $validated['weight'] ?? null,
             'weight_unit' => $validated['weight_unit'] ?? 'g',

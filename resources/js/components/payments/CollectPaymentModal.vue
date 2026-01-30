@@ -368,22 +368,9 @@ async function submitPayment() {
                 }
             }
         } else {
-            // No terminal payments - check if fully paid
-            if (summary.value.balance_due <= 0.01) {
-                successMessage.value = 'Payment completed! Balance has been fully paid.';
-                setTimeout(() => {
-                    emit('success');
-                }, 1500);
-            } else {
-                // Partial payment complete
-                successMessage.value = `Payments recorded. Remaining balance: ${formatCurrency(summary.value.balance_due)}`;
-                // Reset payment lines for next payment
-                paymentLines.value = [createPaymentLine(summary.value.balance_due)];
-                setTimeout(() => {
-                    successMessage.value = null;
-                }, 3000);
-            }
+            // No terminal payments - close modal immediately
             isProcessing.value = false;
+            emit('success');
         }
     } catch (err: any) {
         error.value = err.response?.data?.message || 'Failed to process payment.';
@@ -442,10 +429,7 @@ async function pollCheckoutStatus(checkoutId: number, maxAttempts = 60) {
             if (status === 'completed') {
                 terminalCheckoutStatus.value = 'completed';
                 processingTerminalLineId.value = null;
-                successMessage.value = 'Payment completed successfully!';
-                setTimeout(() => {
-                    emit('success');
-                }, 1500);
+                emit('success');
                 return;
             } else if (status === 'failed' || status === 'cancelled') {
                 error.value = `Terminal payment ${status}. Please try again.`;

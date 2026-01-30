@@ -153,12 +153,16 @@ function deleteCategory(category: Category) {
     }
 }
 
-// Expand all root categories by default
-props.categories.forEach(cat => {
-    if (cat.children.length > 0) {
-        expandedIds.value.add(cat.id);
+// Expand all categories with children by default
+function expandAllWithChildren(cats: Category[]) {
+    for (const cat of cats) {
+        if (cat.children.length > 0) {
+            expandedIds.value.add(cat.id);
+            expandAllWithChildren(cat.children);
+        }
     }
-});
+}
+expandAllWithChildren(props.categories);
 
 // Get available parents for the current form (exclude self and descendants)
 const availableParents = computed(() => {

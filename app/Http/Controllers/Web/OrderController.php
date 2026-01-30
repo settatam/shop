@@ -765,7 +765,7 @@ class OrderController extends Controller
                     'dwt' => $item->dwt,
                 ]),
             ] : null,
-            'note_entries' => ($order->notes ?? collect())->map(fn ($note) => [
+            'note_entries' => ($order->getRelation('notes') ?? collect())->map(fn ($note) => [
                 'id' => $note->id,
                 'content' => $note->content,
                 'user' => $note->user ? [

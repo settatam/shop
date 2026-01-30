@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Contracts\Payable;
 use App\Traits\BelongsToStore;
 use App\Traits\HasCustomStatuses;
 use App\Traits\HasNotes;
@@ -12,11 +13,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Scout\Searchable;
 
-class Repair extends Model
+class Repair extends Model implements Payable
 {
     use BelongsToStore, HasCustomStatuses, HasFactory, HasNotes, HasTags, LogsActivity, Searchable, SoftDeletes;
 
@@ -59,12 +61,23 @@ class Repair extends Model
         'status',
         'status_id',
         'service_fee',
+        'service_fee_value',
+        'service_fee_unit',
+        'service_fee_reason',
         'subtotal',
         'tax',
         'tax_rate',
+        'charge_taxes',
+        'tax_type',
         'discount',
+        'discount_value',
+        'discount_unit',
+        'discount_reason',
         'shipping_cost',
         'total',
+        'grand_total',
+        'total_paid',
+        'balance_due',
         'description',
         'repair_days',
         'is_appraisal',
@@ -77,12 +90,18 @@ class Repair extends Model
     {
         return [
             'service_fee' => 'decimal:2',
+            'service_fee_value' => 'decimal:2',
             'subtotal' => 'decimal:2',
             'tax' => 'decimal:2',
             'tax_rate' => 'decimal:4',
+            'charge_taxes' => 'boolean',
             'discount' => 'decimal:2',
+            'discount_value' => 'decimal:2',
             'shipping_cost' => 'decimal:2',
             'total' => 'decimal:2',
+            'grand_total' => 'decimal:2',
+            'total_paid' => 'decimal:2',
+            'balance_due' => 'decimal:2',
             'repair_days' => 'integer',
             'is_appraisal' => 'boolean',
             'date_sent_to_vendor' => 'datetime',
@@ -144,7 +163,7 @@ class Repair extends Model
         return $this->morphOne(Invoice::class, 'invoiceable');
     }
 
-    public function payments(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    public function payments(): MorphMany
     {
         return $this->morphMany(Payment::class, 'payable');
     }
@@ -332,19 +351,111 @@ class Repair extends Model
         return (float) $this->items->sum('customer_cost');
     }
 
-    public function getTotalPaidAttribute(): float
-    {
-        return (float) $this->payments->where('status', 'completed')->sum('amount');
-    }
-
-    public function getBalanceDueAttribute(): float
-    {
-        return max(0, (float) $this->total - $this->total_paid);
-    }
-
     public function isFullyPaid(): bool
     {
         return $this->balance_due <= 0;
+    }
+
+    // Payable interface methods
+
+    public function getStoreId(): int
+    {
+        return (int) $this->store_id;
+    }
+
+    public function getSubtotal(): float
+    {
+        return (float) $this->subtotal;
+    }
+
+    public function getGrandTotal(): float
+    {
+        return (float) ($this->grand_total ?? $this->total);
+    }
+
+    public function getTotalPaid(): float
+    {
+        return (float) ($this->total_paid ?? 0);
+    }
+
+    public function getBalanceDue(): float
+    {
+        return (float) ($this->balance_due ?? $this->getGrandTotal() - $this->getTotalPaid());
+    }
+
+    public function getDisplayIdentifier(): string
+    {
+        return $this->repair_number;
+    }
+
+    public static function getPayableTypeName(): string
+    {
+        return 'repair';
+    }
+
+    public function onPaymentComplete(): void
+    {
+        app(\App\Services\RepairPaymentService::class)->completeRepairPayment($this);
+    }
+
+    public function getPaymentAdjustments(): array
+    {
+        // Convert tax_rate from decimal (0.08) to percentage (8) for PaymentService
+        $taxRate = (float) ($this->tax_rate ?? 0);
+        if ($taxRate > 0 && $taxRate < 1) {
+            $taxRate = $taxRate * 100;
+        }
+
+        return [
+            'discount_value' => (float) ($this->discount_value ?? 0),
+            'discount_unit' => $this->discount_unit ?? 'fixed',
+            'discount_reason' => $this->discount_reason,
+            'service_fee_value' => (float) ($this->service_fee_value ?? 0),
+            'service_fee_unit' => $this->service_fee_unit ?? 'fixed',
+            'service_fee_reason' => $this->service_fee_reason,
+            'charge_taxes' => (bool) ($this->charge_taxes ?? true),
+            'tax_rate' => $taxRate,
+            'tax_type' => 'percent',
+            'shipping_cost' => (float) ($this->shipping_cost ?? 0),
+        ];
+    }
+
+    public function updatePaymentAdjustments(array $adjustments): void
+    {
+        $this->update([
+            'discount_value' => $adjustments['discount_value'] ?? $this->discount_value,
+            'discount_unit' => $adjustments['discount_unit'] ?? $this->discount_unit,
+            'discount_reason' => $adjustments['discount_reason'] ?? $this->discount_reason,
+            'service_fee_value' => $adjustments['service_fee_value'] ?? $this->service_fee_value,
+            'service_fee_unit' => $adjustments['service_fee_unit'] ?? $this->service_fee_unit,
+            'service_fee_reason' => $adjustments['service_fee_reason'] ?? $this->service_fee_reason,
+            'charge_taxes' => $adjustments['charge_taxes'] ?? $this->charge_taxes,
+            'tax_rate' => $adjustments['tax_rate'] ?? $this->tax_rate,
+            'tax_type' => $adjustments['tax_type'] ?? $this->tax_type,
+            'shipping_cost' => $adjustments['shipping_cost'] ?? $this->shipping_cost,
+        ]);
+    }
+
+    public function updateCalculatedTotals(array $summary): void
+    {
+        $this->update([
+            'discount' => $summary['discount_amount'],
+            'service_fee' => $summary['service_fee_amount'],
+            'tax' => $summary['tax_amount'],
+            'grand_total' => $summary['grand_total'],
+            'balance_due' => $summary['grand_total'] - (float) $this->total_paid,
+        ]);
+    }
+
+    public function recordPayment(float $amount): void
+    {
+        $newTotalPaid = (float) $this->total_paid + $amount;
+        $balanceDue = max(0, (float) $this->grand_total - $newTotalPaid);
+
+        $this->update([
+            'total_paid' => $newTotalPaid,
+            'balance_due' => $balanceDue,
+        ]);
     }
 
     /**

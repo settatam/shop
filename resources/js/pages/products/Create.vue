@@ -60,8 +60,15 @@ interface Template {
     description: string | null;
 }
 
+interface Vendor {
+    id: number;
+    name: string;
+    code: string;
+}
+
 interface Variant {
     sku: string;
+    barcode: string;
     option1_name: string;
     option1_value: string;
     price: number | string;
@@ -86,12 +93,15 @@ interface Props {
     categories: Category[];
     brands: Brand[];
     warehouses: Warehouse[];
+    vendors: Vendor[];
 }
 
 const props = defineProps<Props>();
 
-// Expose warehouses for the template
+// Expose warehouses and vendors for the template
 const warehouses = computed(() => props.warehouses);
+const vendors = computed(() => props.vendors);
+const brands = computed(() => props.brands);
 
 // Get default warehouse ID
 const defaultWarehouseId = computed(() => {
@@ -112,10 +122,13 @@ const loadingTemplate = ref(false);
 
 // Section visibility
 const sections = ref({
-    basicInfo: true,
-    pricingInventory: true,
+    productInfo: true,
+    pricing: true,
+    brandDescription: true,
+    inventory: true,
+    variants: true,
     attributes: true,
-    images: true,
+    media: true,
     videos: false,
     internalImages: false,
     shipping: false,
@@ -165,11 +178,18 @@ const form = useForm({
     handle: '',
     category_id: '' as string | number,
     template_id: '' as string | number,
+    vendor_id: '' as string | number,
+    brand_id: '' as string | number,
     is_published: false,
     has_variants: false,
     track_quantity: true,
     sell_out_of_stock: false,
     condition: '',
+    charge_taxes: true,
+    compare_at_price: '' as string | number,
+    price_code: '',
+    generate_title: false,
+    generate_description: false,
     // Shipping fields
     weight: '' as string | number,
     weight_unit: 'g',
@@ -180,7 +200,7 @@ const form = useForm({
     domestic_shipping_cost: '' as string | number,
     international_shipping_cost: '' as string | number,
     variants: [
-        { sku: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: '' as string | number },
+        { sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: '' as string | number },
     ] as Variant[],
     attributes: {} as Record<number, string>,
     images: [] as File[],
@@ -198,7 +218,7 @@ watch(hasVariants, (newValue) => {
     form.has_variants = newValue;
     // If switching to no variants mode, keep only first variant and clear options
     if (!newValue) {
-        form.variants = [form.variants[0] || { sku: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: defaultWarehouseId.value }];
+        form.variants = [form.variants[0] || { sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: defaultWarehouseId.value }];
         form.variants[0].option1_name = '';
         form.variants[0].option1_value = '';
     }
@@ -387,7 +407,7 @@ watch(() => form.category_id, async (newCategoryId) => {
 
 function addVariant() {
     if (!hasVariants.value) return;
-    form.variants.push({ sku: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: defaultWarehouseId.value });
+    form.variants.push({ sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: defaultWarehouseId.value });
 }
 
 function removeVariant(index: number) {
@@ -497,178 +517,22 @@ function submit() {
                 <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <!-- Main content -->
                     <div class="lg:col-span-2 space-y-6">
-                        <!-- Basic Info -->
+                        <!-- Pricing Section -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
                                 type="button"
                                 class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('basicInfo')"
+                                @click="toggleSection('pricing')"
                             >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Basic Information</h3>
-                                <ChevronDownIcon v-if="!sections.basicInfo" class="size-5 text-gray-400" />
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Pricing</h3>
+                                <ChevronDownIcon v-if="!sections.pricing" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />
                             </button>
 
-                            <div v-show="sections.basicInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                            <div v-show="sections.pricing" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <div class="space-y-4">
-                                    <div>
-                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Title <span class="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            id="title"
-                                            v-model="form.title"
-                                            type="text"
-                                            required
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                        />
-                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
-                                    </div>
-
-                                    <div>
-                                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Description
-                                        </label>
-                                        <RichTextEditor
-                                            v-model="form.description"
-                                            placeholder="Enter product description..."
-                                            class="mt-1"
-                                        />
-                                        <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
-                                    </div>
-
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label for="handle" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Handle (URL slug)
-                                            </label>
-                                            <input
-                                                id="handle"
-                                                v-model="form.handle"
-                                                type="text"
-                                                placeholder="leave-blank-to-auto-generate"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                            <p v-if="form.errors.handle" class="mt-1 text-sm text-red-600">{{ form.errors.handle }}</p>
-                                        </div>
-
-                                        <div>
-                                            <label for="condition" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Condition
-                                            </label>
-                                            <select
-                                                id="condition"
-                                                v-model="form.condition"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option value="">Select condition...</option>
-                                                <option v-for="opt in conditionOptions" :key="opt.value" :value="opt.value">
-                                                    {{ opt.label }}
-                                                </option>
-                                            </select>
-                                            <p v-if="form.errors.condition" class="mt-1 text-sm text-red-600">{{ form.errors.condition }}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Pricing & Inventory (moved above templates) -->
-                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('pricingInventory')"
-                            >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Pricing & Inventory</h3>
-                                <ChevronDownIcon v-if="!sections.pricingInventory" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
-                            </button>
-
-                            <div v-show="sections.pricingInventory" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <!-- Has Variants Toggle -->
-                                <div class="mb-6 flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
-                                    <div>
-                                        <p class="text-sm font-medium text-gray-900 dark:text-white">This product has variants</p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">Enable if this product comes in different sizes, colors, or options</p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        :class="[
-                                            hasVariants ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600',
-                                            'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2'
-                                        ]"
-                                        @click="hasVariants = !hasVariants"
-                                    >
-                                        <span
-                                            :class="[
-                                                hasVariants ? 'translate-x-5' : 'translate-x-0',
-                                                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out'
-                                            ]"
-                                        />
-                                    </button>
-                                </div>
-
-                                <!-- Single product (no variants) -->
-                                <div v-if="!hasVariants" class="space-y-4">
-                                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-6">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                SKU <span class="text-red-500">*</span>
-                                            </label>
-                                            <div class="mt-1 flex gap-2">
-                                                <input
-                                                    v-model="form.variants[0].sku"
-                                                    type="text"
-                                                    required
-                                                    class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                                <button
-                                                    v-if="categoryHasSkuFormat"
-                                                    type="button"
-                                                    :disabled="generatingSku"
-                                                    class="shrink-0 rounded-md bg-indigo-50 px-2 py-1.5 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
-                                                    title="Generate SKU"
-                                                    @click="generateSku(0)"
-                                                >
-                                                    <SparklesIcon class="size-5" :class="{ 'animate-pulse': generatingSku }" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Price <span class="text-red-500">*</span>
-                                            </label>
-                                            <div class="mt-1 flex rounded-md shadow-sm">
-                                                <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
-                                                <input
-                                                    v-model="form.variants[0].price"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    required
-                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Wholesale
-                                            </label>
-                                            <div class="mt-1 flex rounded-md shadow-sm">
-                                                <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
-                                                <input
-                                                    v-model="form.variants[0].wholesale_price"
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                        </div>
-
+                                    <!-- Row 1: Cost | Wholesale -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                                 Cost
@@ -680,188 +544,426 @@ function submit() {
                                                     type="number"
                                                     step="0.01"
                                                     min="0"
-                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    :disabled="hasVariants"
+                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
                                                 />
                                             </div>
                                         </div>
 
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Quantity <span class="text-red-500">*</span>
+                                                Wholesale - Estimated Value
                                             </label>
-                                            <input
-                                                v-model="form.variants[0].quantity"
-                                                type="number"
-                                                min="0"
-                                                required
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
+                                            <div class="mt-1 flex rounded-md shadow-sm">
+                                                <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
+                                                <input
+                                                    v-model="form.variants[0].wholesale_price"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    :disabled="hasVariants"
+                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Row 2: Selling Price | Approx. Retail Price -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Selling Price <span class="text-red-500">*</span>
+                                            </label>
+                                            <div class="mt-1 flex rounded-md shadow-sm">
+                                                <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
+                                                <input
+                                                    v-model="form.variants[0].price"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    required
+                                                    :disabled="hasVariants"
+                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                                />
+                                            </div>
                                         </div>
 
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Warehouse
+                                                Approx. Retail Price
                                             </label>
-                                            <select
-                                                v-model="form.variants[0].warehouse_id"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option v-for="warehouse in warehouses" :key="warehouse.id" :value="warehouse.id">
-                                                    {{ warehouse.name }}{{ warehouse.is_default ? ' (Default)' : '' }}
-                                                </option>
-                                            </select>
+                                            <div class="mt-1 flex rounded-md shadow-sm">
+                                                <span class="inline-flex items-center rounded-l-md border border-r-0 border-gray-300 bg-gray-50 px-2 text-gray-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">$</span>
+                                                <input
+                                                    v-model="form.compare_at_price"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Row 3: Price Code -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Price Code
+                                        </label>
+                                        <input
+                                            v-model="form.price_code"
+                                            type="text"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                    </div>
+
+                                    <!-- Charge Tax Checkbox -->
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            id="charge_taxes"
+                                            v-model="form.charge_taxes"
+                                            type="checkbox"
+                                            class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        <label for="charge_taxes" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Charge tax for this product
+                                        </label>
+                                    </div>
+
+                                    <p v-if="hasVariants" class="text-xs text-gray-500 dark:text-gray-400">
+                                        Pricing is managed per variant when variants are enabled
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Product Information Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('productInfo')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Information</h3>
+                                <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.productInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-4">
+                                    <!-- Title -->
+                                    <div>
+                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Title <span class="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            id="title"
+                                            v-model="form.title"
+                                            type="text"
+                                            :required="!form.generate_title"
+                                            :disabled="form.generate_title"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                        />
+                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
+
+                                        <!-- Generate Title Checkbox -->
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input
+                                                id="generate_title"
+                                                v-model="form.generate_title"
+                                                type="checkbox"
+                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <label for="generate_title" class="text-sm text-gray-600 dark:text-gray-400">
+                                                Generate title (from category format or AI)
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Description -->
+                                    <div>
+                                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Description
+                                        </label>
+                                        <RichTextEditor
+                                            v-model="form.description"
+                                            placeholder="Enter product description..."
+                                            class="mt-1"
+                                            :disabled="form.generate_description"
+                                        />
+                                        <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
+
+                                        <!-- Generate Description Checkbox -->
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input
+                                                id="generate_description"
+                                                v-model="form.generate_description"
+                                                type="checkbox"
+                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <label for="generate_description" class="text-sm text-gray-600 dark:text-gray-400">
+                                                Generate with AI
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- SKU and Barcode -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                SKU
+                                            </label>
+                                            <div class="mt-1 flex gap-2">
+                                                <input
+                                                    id="sku"
+                                                    v-model="form.variants[0].sku"
+                                                    type="text"
+                                                    :disabled="hasVariants"
+                                                    class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                                />
+                                                <button
+                                                    v-if="categoryHasSkuFormat && !hasVariants"
+                                                    type="button"
+                                                    :disabled="generatingSku"
+                                                    class="shrink-0 rounded-md bg-indigo-50 px-2 py-1.5 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
+                                                    title="Generate SKU"
+                                                    @click="generateSku(0)"
+                                                >
+                                                    <SparklesIcon class="size-5" :class="{ 'animate-pulse': generatingSku }" />
+                                                </button>
+                                            </div>
+                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                SKU is managed per variant
+                                            </p>
+                                            <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                Leave blank to auto-generate
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label for="barcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Barcode
+                                            </label>
+                                            <input
+                                                id="barcode"
+                                                v-model="form.variants[0].barcode"
+                                                type="text"
+                                                :disabled="hasVariants"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                            />
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
 
-                                <!-- Multiple variants -->
-                                <div v-else>
-                                    <div class="flex justify-end mb-4">
-                                        <button
-                                            type="button"
-                                            class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-50 px-2.5 py-1.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900"
-                                            @click="addVariant"
-                                        >
-                                            <PlusIcon class="-ml-0.5 size-4" />
-                                            Add Variant
-                                        </button>
+                        <!-- Inventory Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('inventory')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Inventory</h3>
+                                <ChevronDownIcon v-if="!sections.inventory" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.inventory" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-4">
+                                    <!-- Has Variants Checkbox -->
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            id="has_variants"
+                                            v-model="hasVariants"
+                                            type="checkbox"
+                                            class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        <label for="has_variants" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            This product has variants
+                                        </label>
                                     </div>
+                                    <p v-if="hasVariants" class="text-xs text-gray-500 dark:text-gray-400">
+                                        Inventory is managed per variant
+                                    </p>
 
-                                    <div class="space-y-4">
-                                        <div
-                                            v-for="(variant, index) in form.variants"
-                                            :key="index"
-                                            class="rounded-lg border border-gray-200 p-4 dark:border-gray-700"
-                                        >
-                                            <div class="flex items-center justify-between mb-3">
-                                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    Variant {{ index + 1 }}
-                                                </span>
-                                                <button
-                                                    v-if="form.variants.length > 1"
-                                                    type="button"
-                                                    class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                                    @click="removeVariant(index)"
+                                    <!-- Single product inventory (no variants) -->
+                                    <div v-if="!hasVariants" class="space-y-3">
+                                        <div class="flex items-center justify-between py-2">
+                                            <div class="flex items-center gap-3">
+                                                <select
+                                                    v-model="form.variants[0].warehouse_id"
+                                                    class="rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 >
-                                                    <TrashIcon class="size-5" />
-                                                </button>
+                                                    <option v-for="warehouse in warehouses" :key="warehouse.id" :value="warehouse.id">
+                                                        {{ warehouse.name }}{{ warehouse.is_default ? ' (Default)' : '' }}
+                                                    </option>
+                                                </select>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <label class="text-sm text-gray-500 dark:text-gray-400">Qty:</label>
+                                                <input
+                                                    v-model="form.variants[0].quantity"
+                                                    type="number"
+                                                    min="0"
+                                                    class="w-20 rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center justify-between border-t border-gray-200 pt-3 dark:border-gray-700">
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Total Quantity</span>
+                                            <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ form.variants[0].quantity || 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Variants Section (only shown when has variants) -->
+                        <div v-if="hasVariants" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('variants')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Variants</h3>
+                                <ChevronDownIcon v-if="!sections.variants" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.variants" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="flex justify-end mb-4">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-50 px-2.5 py-1.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900"
+                                        @click="addVariant"
+                                    >
+                                        <PlusIcon class="-ml-0.5 size-4" />
+                                        Add Variant
+                                    </button>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div
+                                        v-for="(variant, index) in form.variants"
+                                        :key="index"
+                                        class="rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+                                    >
+                                        <div class="flex items-center justify-between mb-3">
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Variant {{ index + 1 }}
+                                            </span>
+                                            <button
+                                                v-if="form.variants.length > 1"
+                                                type="button"
+                                                class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                @click="removeVariant(index)"
+                                            >
+                                                <TrashIcon class="size-5" />
+                                            </button>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    SKU <span class="text-red-500">*</span>
+                                                </label>
+                                                <div class="mt-1 flex gap-1">
+                                                    <input
+                                                        v-model="variant.sku"
+                                                        type="text"
+                                                        required
+                                                        class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                    <button
+                                                        v-if="categoryHasSkuFormat"
+                                                        type="button"
+                                                        :disabled="generatingSku"
+                                                        class="shrink-0 rounded-md bg-indigo-50 px-1.5 py-1.5 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
+                                                        title="Generate SKU"
+                                                        @click="generateSku(index)"
+                                                    >
+                                                        <SparklesIcon class="size-4" :class="{ 'animate-pulse': generatingSku }" />
+                                                    </button>
+                                                </div>
                                             </div>
 
-                                            <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        SKU <span class="text-red-500">*</span>
-                                                    </label>
-                                                    <div class="mt-1 flex gap-1">
-                                                        <input
-                                                            v-model="variant.sku"
-                                                            type="text"
-                                                            required
-                                                            class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                        />
-                                                        <button
-                                                            v-if="categoryHasSkuFormat"
-                                                            type="button"
-                                                            :disabled="generatingSku"
-                                                            class="shrink-0 rounded-md bg-indigo-50 px-1.5 py-1.5 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
-                                                            title="Generate SKU"
-                                                            @click="generateSku(index)"
-                                                        >
-                                                            <SparklesIcon class="size-4" :class="{ 'animate-pulse': generatingSku }" />
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Option Name
+                                                </label>
+                                                <input
+                                                    v-model="variant.option1_name"
+                                                    type="text"
+                                                    placeholder="e.g. Size"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
 
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Option Name
-                                                    </label>
-                                                    <input
-                                                        v-model="variant.option1_name"
-                                                        type="text"
-                                                        placeholder="e.g. Size"
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
-                                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Option Value
+                                                </label>
+                                                <input
+                                                    v-model="variant.option1_value"
+                                                    type="text"
+                                                    placeholder="e.g. Medium"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
 
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Option Value
-                                                    </label>
-                                                    <input
-                                                        v-model="variant.option1_value"
-                                                        type="text"
-                                                        placeholder="e.g. Medium"
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
-                                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Price <span class="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    v-model="variant.price"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    required
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
 
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Price <span class="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        v-model="variant.price"
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        required
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
-                                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Cost
+                                                </label>
+                                                <input
+                                                    v-model="variant.cost"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
 
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Wholesale
-                                                    </label>
-                                                    <input
-                                                        v-model="variant.wholesale_price"
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
-                                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Quantity <span class="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    v-model="variant.quantity"
+                                                    type="number"
+                                                    min="0"
+                                                    required
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
 
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Cost
-                                                    </label>
-                                                    <input
-                                                        v-model="variant.cost"
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Quantity <span class="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        v-model="variant.quantity"
-                                                        type="number"
-                                                        min="0"
-                                                        required
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                        Warehouse
-                                                    </label>
-                                                    <select
-                                                        v-model="variant.warehouse_id"
-                                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    >
-                                                        <option v-for="warehouse in warehouses" :key="warehouse.id" :value="warehouse.id">
-                                                            {{ warehouse.name }}{{ warehouse.is_default ? ' (Default)' : '' }}
-                                                        </option>
-                                                    </select>
-                                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Warehouse
+                                                </label>
+                                                <select
+                                                    v-model="variant.warehouse_id"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option v-for="warehouse in warehouses" :key="warehouse.id" :value="warehouse.id">
+                                                        {{ warehouse.name }}{{ warehouse.is_default ? ' (Default)' : '' }}
+                                                    </option>
+                                                </select>
                                             </div>
                                         </div>
                                     </div>
@@ -1119,14 +1221,14 @@ function submit() {
                             <button
                                 type="button"
                                 class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('images')"
+                                @click="toggleSection('media')"
                             >
                                 <h3 class="text-base font-semibold text-gray-900 dark:text-white">Images</h3>
-                                <ChevronDownIcon v-if="!sections.images" class="size-5 text-gray-400" />
+                                <ChevronDownIcon v-if="!sections.media" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />
                             </button>
 
-                            <div v-show="sections.images" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                            <div v-show="sections.media" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <!-- Image previews -->
                                 <div v-if="imagePreviews.length > 0" class="mb-4 flex flex-wrap gap-4">
                                     <div
@@ -1588,10 +1690,35 @@ function submit() {
                             </div>
                         </div>
 
-                        <!-- Inventory -->
+                        <!-- Vendor -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <div class="px-4 py-5 sm:p-6">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Inventory</h3>
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Vendor</h3>
+
+                                <div>
+                                    <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Vendor <span class="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        id="vendor_id"
+                                        v-model="form.vendor_id"
+                                        required
+                                        class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    >
+                                        <option value="">Select vendor...</option>
+                                        <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
+                                            {{ vendor.name }}{{ vendor.code ? ` (${vendor.code})` : '' }}
+                                        </option>
+                                    </select>
+                                    <p v-if="form.errors.vendor_id" class="mt-1 text-sm text-red-600">{{ form.errors.vendor_id }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Inventory Settings -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Inventory Settings</h3>
 
                                 <div class="space-y-3">
                                     <label class="flex items-center gap-3">

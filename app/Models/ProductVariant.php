@@ -98,4 +98,17 @@ class ProductVariant extends Model
     {
         return implode(' / ', array_values($this->options));
     }
+
+    /**
+     * Get the effective cost for profit calculation.
+     * Priority: wholesale_price > cost
+     */
+    public function getEffectiveCostAttribute(): ?float
+    {
+        if ($this->wholesale_price !== null && $this->wholesale_price > 0) {
+            return (float) $this->wholesale_price;
+        }
+
+        return $this->cost !== null ? (float) $this->cost : null;
+    }
 }

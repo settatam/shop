@@ -36,6 +36,7 @@ class Category extends Model
         'sku_format',
         'sku_prefix',
         'sku_suffix',
+        'title_format',
         'default_bucket_id',
         'barcode_attributes',
         'label_template_id',
@@ -188,6 +189,20 @@ class Category extends Model
     }
 
     /**
+     * Get the effective title format for this category.
+     * If not set, it will inherit from the parent category.
+     * Returns null if no format is set anywhere in the hierarchy.
+     */
+    public function getEffectiveTitleFormat(): ?string
+    {
+        if ($this->title_format) {
+            return $this->title_format;
+        }
+
+        return $this->parent?->getEffectiveTitleFormat();
+    }
+
+    /**
      * Get the effective barcode attributes for this category.
      * If no attributes are set, it will inherit from the parent category.
      * Defaults to ['category', 'sku', 'price', 'material'] if not set anywhere.
@@ -262,7 +277,7 @@ class Category extends Model
 
     protected function getLoggableAttributes(): array
     {
-        return ['id', 'name', 'slug', 'parent_id', 'template_id', 'sku_format', 'sku_prefix', 'sku_suffix', 'default_bucket_id', 'barcode_attributes', 'label_template_id'];
+        return ['id', 'name', 'slug', 'parent_id', 'template_id', 'sku_format', 'sku_prefix', 'sku_suffix', 'title_format', 'default_bucket_id', 'barcode_attributes', 'label_template_id'];
     }
 
     protected function getActivityIdentifier(): string

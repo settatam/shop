@@ -46,16 +46,15 @@ class PaymentService
 
         $afterDiscount = $subtotal - $discountAmount;
 
-        // Service fee calculation
+        // Service fee calculation (calculated on subtotal after discount)
         $serviceFeeValue = $adjustments['service_fee_value'] ?? $currentAdjustments['service_fee_value'];
         $serviceFeeUnit = $adjustments['service_fee_unit'] ?? $currentAdjustments['service_fee_unit'];
         $serviceFeeAmount = $serviceFeeUnit === 'percent'
             ? ($afterDiscount * $serviceFeeValue / 100)
             : $serviceFeeValue;
 
-        $taxableAmount = $afterDiscount + $serviceFeeAmount;
-
-        // Tax calculation
+        // Tax calculation (only on subtotal after discount, not on service fee)
+        $taxableAmount = $afterDiscount;
         $chargeTaxes = $adjustments['charge_taxes'] ?? $currentAdjustments['charge_taxes'];
         $taxRate = $adjustments['tax_rate'] ?? $currentAdjustments['tax_rate'];
         $taxType = $adjustments['tax_type'] ?? $currentAdjustments['tax_type'];
@@ -70,7 +69,7 @@ class PaymentService
         $shippingCost = $adjustments['shipping_cost'] ?? $currentAdjustments['shipping_cost'];
 
         // Grand total
-        $grandTotal = $taxableAmount + $taxAmount + $shippingCost;
+        $grandTotal = $afterDiscount + $serviceFeeAmount + $taxAmount + $shippingCost;
 
         // Payment tracking
         $totalPaid = $payable->getTotalPaid();

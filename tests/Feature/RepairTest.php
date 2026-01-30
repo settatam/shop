@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\Repair;
 use App\Models\RepairItem;
 use App\Models\Role;
@@ -409,5 +410,11 @@ class RepairTest extends TestCase
         // Verify repair has invoice relationship
         $this->assertNotNull($repair->invoice);
         $this->assertEquals('paid', $repair->invoice->status);
+
+        // Verify order has REP- prefix in invoice number
+        $order = Order::find($repair->order_id);
+        $this->assertNotNull($order);
+        $this->assertStringStartsWith('REP-', $order->invoice_number);
+        $this->assertEquals("REP-{$order->id}", $order->invoice_number);
     }
 }

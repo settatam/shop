@@ -75,7 +75,14 @@ const isExpanded = props.expandedIds.has(props.category.id);
             />
 
             <!-- Category name -->
-            <span class="flex-1 text-sm font-medium text-gray-900 dark:text-white">
+            <span
+                v-if="category.is_leaf"
+                class="flex-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 cursor-pointer"
+                @click="router.visit(`/categories/${category.id}/settings`)"
+            >
+                {{ category.name }}
+            </span>
+            <span v-else class="flex-1 text-sm font-medium text-gray-900 dark:text-white">
                 {{ category.name }}
             </span>
 

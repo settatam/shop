@@ -323,6 +323,8 @@ const form = useForm({
     seo_page_title: props.product.seo_page_title || '',
     seo_description: props.product.seo_description || '',
     tag_ids: props.product.tag_ids || [],
+    generate_title: false,
+    generate_description: false,
     variants: props.product.variants.map(v => ({
         id: v.id,
         sku: v.sku,
@@ -619,68 +621,6 @@ function deleteProduct() {
                 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <!-- Main content -->
                     <div class="lg:col-span-2 space-y-6">
-                        <!-- Product Information Section -->
-                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('productInfo')"
-                            >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Information</h3>
-                                <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
-                            </button>
-
-                            <div v-show="sections.productInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <div class="space-y-4">
-                                    <div>
-                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Product Name <span class="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            id="title"
-                                            v-model="form.title"
-                                            type="text"
-                                            required
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                        />
-                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div>
-                                            <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                SKU
-                                            </label>
-                                            <input
-                                                id="sku"
-                                                v-model="form.variants[0].sku"
-                                                type="text"
-                                                :disabled="hasVariants"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                            />
-                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                SKU is managed per variant
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <label for="upc" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Barcode
-                                            </label>
-                                            <input
-                                                id="upc"
-                                                v-model="form.variants[0].barcode"
-                                                type="text"
-                                                :disabled="hasVariants"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Template Attributes Section -->
                         <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
@@ -1144,33 +1084,50 @@ function deleteProduct() {
                             </div>
                         </div>
 
-                        <!-- Brand & Description Section -->
+                        <!-- Product Information Section -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <div class="px-4 py-4 sm:px-6">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Brand & Description</h3>
-                            </div>
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('productInfo')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Information</h3>
+                                <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
 
-                            <div class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                            <div v-show="sections.productInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <div class="space-y-4">
-                                    <!-- Brand field - only show if template has brand type field -->
-                                    <div v-for="field in templateFields.filter(f => f.type === 'brand')" :key="field.id">
-                                        <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            {{ field.label }}
-                                            <span v-if="field.is_required" class="text-red-500">*</span>
+                                    <!-- Title -->
+                                    <div>
+                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Title <span class="text-red-500">*</span>
                                         </label>
-                                        <select
-                                            :id="`attr_${field.id}`"
-                                            v-model="form.attributes[field.id]"
-                                            :required="field.is_required"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                        >
-                                            <option value="">{{ field.placeholder || 'Select brand...' }}</option>
-                                            <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
-                                                {{ brand.name }}
-                                            </option>
-                                        </select>
+                                        <input
+                                            id="title"
+                                            v-model="form.title"
+                                            type="text"
+                                            :required="!form.generate_title"
+                                            :disabled="form.generate_title"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                        />
+                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
+
+                                        <!-- Generate Title Checkbox -->
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input
+                                                id="generate_title"
+                                                v-model="form.generate_title"
+                                                type="checkbox"
+                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <label for="generate_title" class="text-sm text-gray-600 dark:text-gray-400">
+                                                Generate title (from category format or AI)
+                                            </label>
+                                        </div>
                                     </div>
 
+                                    <!-- Description -->
                                     <div>
                                         <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                             Description
@@ -1179,8 +1136,54 @@ function deleteProduct() {
                                             v-model="form.description"
                                             placeholder="Enter product description..."
                                             class="mt-1"
+                                            :disabled="form.generate_description"
                                         />
                                         <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
+
+                                        <!-- Generate Description Checkbox -->
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input
+                                                id="generate_description"
+                                                v-model="form.generate_description"
+                                                type="checkbox"
+                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <label for="generate_description" class="text-sm text-gray-600 dark:text-gray-400">
+                                                Generate with AI
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- SKU and Barcode -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                SKU
+                                            </label>
+                                            <input
+                                                id="sku"
+                                                v-model="form.variants[0].sku"
+                                                type="text"
+                                                :disabled="hasVariants"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                            />
+                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                SKU is managed per variant
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label for="barcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Barcode
+                                            </label>
+                                            <input
+                                                id="barcode"
+                                                v-model="form.variants[0].barcode"
+                                                type="text"
+                                                :disabled="hasVariants"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>

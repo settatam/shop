@@ -24,6 +24,8 @@ interface Category {
     sku_prefix: string | null;
     effective_sku_format: string | null;
     effective_sku_prefix: string | null;
+    title_format: string | null;
+    effective_title_format: string | null;
     label_template_id: number | null;
     label_template_name: string | null;
     effective_label_template_name: string | null;
@@ -61,6 +63,7 @@ const form = useForm({
     template_id: props.category.template_id,
     sku_format: props.category.sku_format || '',
     sku_prefix: props.category.sku_prefix || '',
+    title_format: props.category.title_format || '',
     label_template_id: props.category.label_template_id,
 });
 
@@ -165,6 +168,14 @@ const isTemplateInherited = computed(() => {
 const isLabelTemplateInherited = computed(() => {
     return !props.category.label_template_id && props.category.effective_label_template_name;
 });
+
+const isTitleFormatInherited = computed(() => {
+    return !props.category.title_format && props.category.effective_title_format;
+});
+
+function insertTitleVariable(variable: string) {
+    form.title_format = (form.title_format || '') + variable;
+}
 </script>
 
 <template>
@@ -280,6 +291,62 @@ const isLabelTemplateInherited = computed(() => {
                                         >
                                             Reset
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Title Configuration -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Title Configuration</h3>
+
+                                <div class="space-y-4">
+                                    <!-- Title Format -->
+                                    <div>
+                                        <label for="title_format" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Title Format Pattern
+                                        </label>
+                                        <input
+                                            id="title_format"
+                                            v-model="form.title_format"
+                                            type="text"
+                                            maxlength="255"
+                                            placeholder="e.g., {brand} {metal_type} {category_name}"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 font-mono"
+                                        />
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            Define how product titles are auto-generated for this category. Uses the same variables as SKU format.
+                                            <span v-if="isTitleFormatInherited" class="text-amber-600 dark:text-amber-400 ml-1">
+                                                (inheriting from parent)
+                                            </span>
+                                        </p>
+                                        <p v-if="form.errors.title_format" class="mt-1 text-sm text-red-600">{{ form.errors.title_format }}</p>
+                                    </div>
+
+                                    <!-- Quick Variable Insert -->
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Quick Insert Variables</p>
+                                        <div class="flex flex-wrap gap-2">
+                                            <button
+                                                v-for="(desc, variable) in availableVariables"
+                                                :key="'title-' + variable"
+                                                type="button"
+                                                class="rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900 dark:hover:text-indigo-300"
+                                                @click="insertTitleVariable(variable)"
+                                                :title="desc"
+                                            >
+                                                {{ variable }}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preview -->
+                                    <div v-if="form.title_format || category.effective_title_format" class="rounded-lg bg-gray-50 p-4 dark:bg-gray-700/50">
+                                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Example Output</span>
+                                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                                            Title will be generated using template attributes and the format pattern.
+                                        </p>
                                     </div>
                                 </div>
                             </div>

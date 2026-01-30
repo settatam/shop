@@ -306,6 +306,9 @@ class MemoController extends Controller
         }
 
         // Create the memo item
+        // Cost priority: provided cost > wholesale_price > cost
+        $effectiveCost = $validated['cost'] ?? $variant?->effective_cost ?? 0;
+
         $memo->items()->create([
             'product_id' => $product->id,
             'category_id' => $product->category_id,
@@ -313,7 +316,7 @@ class MemoController extends Controller
             'title' => $product->title,
             'description' => $product->description,
             'price' => $validated['price'] ?? $variant?->price ?? 0,
-            'cost' => $validated['cost'] ?? $variant?->cost ?? 0,
+            'cost' => $effectiveCost,
             'tenor' => $validated['tenor'] ?? $memo->tenure,
             'is_returned' => false,
         ]);

@@ -102,21 +102,26 @@ class MemoService
 
             // Add items and mark products as out of stock
             foreach ($data['items'] as $itemData) {
-                $product = Product::find($itemData['product_id']);
+                $product = Product::with('variants')->find($itemData['product_id']);
 
                 if (! $product) {
                     continue;
                 }
 
+                $variant = $product->variants->first();
+
+                // Cost priority: wholesale_price > cost
+                $effectiveCost = $variant?->effective_cost ?? 0;
+
                 // Create memo item
                 $memo->items()->create([
                     'product_id' => $product->id,
                     'category_id' => $product->category_id,
-                    'sku' => $product->sku,
+                    'sku' => $variant?->sku ?? $product->sku,
                     'title' => $itemData['title'] ?? $product->title,
                     'description' => $itemData['description'] ?? $product->description,
                     'price' => $itemData['price'],
-                    'cost' => $product->cost ?? 0,
+                    'cost' => $effectiveCost,
                     'tenor' => $itemData['tenor'] ?? $data['tenure'] ?? Memo::TENURE_30_DAYS,
                     'charge_taxes' => $data['charge_taxes'] ?? false,
                 ]);
@@ -146,6 +151,14 @@ class MemoService
             }
         }
 
+        // Get effective cost from product variant if not provided
+        $cost = $data['cost'] ?? 0;
+        if (! isset($data['cost']) && ! empty($data['product_id'])) {
+            $product = Product::with('variants')->find($data['product_id']);
+            $variant = $product?->variants->first();
+            $cost = $variant?->effective_cost ?? 0;
+        }
+
         $item = $memo->items()->create([
             'product_id' => $data['product_id'] ?? null,
             'category_id' => $data['category_id'] ?? null,
@@ -153,7 +166,7 @@ class MemoService
             'title' => $data['title'] ?? null,
             'description' => $data['description'] ?? null,
             'price' => $data['price'] ?? 0,
-            'cost' => $data['cost'] ?? 0,
+            'cost' => $cost,
             'tenor' => $data['tenor'] ?? null,
             'due_date' => $data['due_date'] ?? null,
             'charge_taxes' => $data['charge_taxes'] ?? true,
@@ -241,8 +254,10 @@ class MemoService
                     'title' => $item->title ?? 'Memo Item',
                     'sku' => $item->sku,
                     'quantity' => 1,
-                    'price' => $item->price,
+                    'price' => $item->price,        // Selling price
+                    'cost' => $item->cost,          // Cost for profit calculation
                     'product_id' => $item->product_id,
+                    'reduce_stock' => false,        // Don't reduce stock for memo items
                 ])->toArray();
 
             // Build customer data from vendor for order creation
@@ -265,6 +280,9 @@ class MemoService
                 'source_platform' => 'memo',
                 'notes' => "Created from Memo #{$memo->memo_number}",
             ], $store);
+
+            // Update invoice number to use MEM-<order.id> format for memo orders
+            $order->update(['invoice_number' => "MEM-{$order->id}"]);
 
             $memo->update(['order_id' => $order->id]);
             $memo->markPaymentReceived();

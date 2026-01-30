@@ -408,6 +408,8 @@ class CategoryController extends Controller
                 'sku_prefix' => $category->sku_prefix,
                 'effective_sku_format' => $category->getEffectiveSkuFormat(),
                 'effective_sku_prefix' => $category->getEffectiveSkuPrefix(),
+                'title_format' => $category->title_format,
+                'effective_title_format' => $category->getEffectiveTitleFormat(),
                 'label_template_id' => $category->label_template_id,
                 'label_template_name' => $category->labelTemplate?->name,
                 'effective_label_template_name' => $category->getEffectiveLabelTemplate()?->name,
@@ -440,6 +442,7 @@ class CategoryController extends Controller
             'template_id' => 'nullable|integer|exists:product_templates,id',
             'sku_format' => ['nullable', 'string', 'max:255', new ValidSkuFormat],
             'sku_prefix' => 'nullable|string|max:50',
+            'title_format' => 'nullable|string|max:255',
             'label_template_id' => 'nullable|integer|exists:label_templates,id',
         ]);
 

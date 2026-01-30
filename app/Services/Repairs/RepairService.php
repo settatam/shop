@@ -231,10 +231,26 @@ class RepairService
 
         return DB::transaction(function () use ($repair) {
             $items = $repair->items->map(fn (RepairItem $item) => [
-                'title' => $item->title ?? 'Repair Service',
+                'product_id' => $item->product_id,
+                'sku' => $item->sku,
+                'title' => $item->title ?? $item->product?->title ?? 'Repair Service',
                 'quantity' => 1,
-                'price' => $item->customer_cost,
+                'cost' => $item->vendor_cost,    // What vendor charges us
+                'price' => $item->customer_cost, // What customer pays
+                'reduce_stock' => false,         // Don't reduce stock for repair items
             ])->toArray();
+
+            // Add service fee as a line item if present
+            if ($repair->service_fee > 0) {
+                $items[] = [
+                    'title' => 'Service Fee',
+                    'sku' => 'SERVICE-FEE',
+                    'quantity' => 1,
+                    'cost' => 0,                      // No cost for service fee
+                    'price' => $repair->service_fee,  // Pure profit
+                    'reduce_stock' => false,
+                ];
+            }
 
             $store = $repair->store ?? $this->storeContext->getCurrentStore();
             $order = $this->orderCreationService->create([
@@ -248,6 +264,9 @@ class RepairService
                 'source_platform' => 'repair',
                 'notes' => "Created from Repair #{$repair->repair_number}",
             ], $store);
+
+            // Update invoice number to use REP-<order.id> format for repair orders
+            $order->update(['invoice_number' => "REP-{$order->id}"]);
 
             $repair->update(['order_id' => $order->id]);
             $repair->markPaymentReceived();

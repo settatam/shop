@@ -112,6 +112,7 @@ interface Repair {
     shipping_cost: number;
     discount: number;
     total: number;
+    grand_total: number;
     description?: string;
     is_appraisal: boolean;
     repair_days?: number;
@@ -119,6 +120,17 @@ interface Repair {
     customer_total: number;
     total_paid: number;
     balance_due: number;
+
+    // Payment adjustment fields
+    charge_taxes?: boolean;
+    tax_type?: string;
+    payment_tax_rate?: number;
+    discount_value?: number;
+    discount_unit?: string;
+    discount_reason?: string;
+    service_fee_value?: number;
+    service_fee_unit?: string;
+    service_fee_reason?: string;
 
     date_sent_to_vendor?: string;
     date_received_by_vendor?: string;
@@ -210,6 +222,13 @@ const showPaymentModal = ref(false);
 const showCustomerEditModal = ref(false);
 const showVendorEditModal = ref(false);
 const isProcessing = ref(false);
+
+// Computed repair model for payment modal with converted tax_rate
+const repairForPayment = computed(() => ({
+    ...props.repair,
+    // Use payment_tax_rate (converted to percentage) for the payment modal
+    tax_rate: props.repair.payment_tax_rate ?? props.repair.tax_rate,
+}));
 
 const statusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
@@ -572,11 +591,21 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                             </div>
                         </div>
 
-                        <!-- Notes -->
+                        <!-- Description -->
                         <div v-if="repair.description" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-3 text-lg font-medium text-gray-900 dark:text-white">Notes</h2>
+                            <h2 class="mb-3 text-lg font-medium text-gray-900 dark:text-white">Description</h2>
                             <p class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{{ repair.description }}</p>
                         </div>
+
+                        <!-- Notes -->
+                        <NotesSection
+                            :notes="repair.note_entries"
+                            notable-type="repair"
+                            :notable-id="repair.id"
+                        />
+
+                        <!-- Activity Log -->
+                        <ActivityTimeline :activities="activityLogs" />
                     </div>
 
                     <!-- Sidebar -->
@@ -616,70 +645,6 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                                 <div class="flex justify-between text-base font-bold">
                                     <dt class="text-gray-900 dark:text-white">Balance Due</dt>
                                     <dd class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(repair.balance_due) }}</dd>
-                                </div>
-                            </dl>
-                        </div>
-
-                        <!-- Payment History -->
-                        <div v-if="repair.payments && repair.payments.length > 0" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Payment History</h2>
-                            <div class="space-y-3">
-                                <div v-for="payment in repair.payments" :key="payment.id" class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(payment.amount) }}</p>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                                            {{ payment.payment_method }}
-                                            <span v-if="payment.paid_at"> &bull; {{ formatDate(payment.paid_at) }}</span>
-                                        </p>
-                                    </div>
-                                    <span :class="[
-                                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                        payment.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
-                                    ]">
-                                        {{ payment.status }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Timeline / Details -->
-                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Timeline</h2>
-                            <dl class="space-y-4">
-                                <div class="flex items-start gap-3">
-                                    <CalendarIcon class="size-5 shrink-0 text-gray-400" />
-                                    <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.created_at) }}</dd>
-                                    </div>
-                                </div>
-                                <div v-if="repair.date_sent_to_vendor" class="flex items-start gap-3">
-                                    <PaperAirplaneIcon class="size-5 shrink-0 text-gray-400" />
-                                    <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Sent to Vendor</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.date_sent_to_vendor) }}</dd>
-                                    </div>
-                                </div>
-                                <div v-if="repair.date_received_by_vendor" class="flex items-start gap-3">
-                                    <CheckCircleIcon class="size-5 shrink-0 text-gray-400" />
-                                    <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Received by Vendor</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.date_received_by_vendor) }}</dd>
-                                    </div>
-                                </div>
-                                <div v-if="repair.date_completed" class="flex items-start gap-3">
-                                    <WrenchScrewdriverIcon class="size-5 shrink-0 text-green-500" />
-                                    <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Completed</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.date_completed) }}</dd>
-                                    </div>
-                                </div>
-                                <div v-if="repair.repair_days !== null && repair.repair_days !== undefined" class="flex items-start gap-3">
-                                    <ClockIcon class="size-5 shrink-0 text-gray-400" />
-                                    <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Repair Duration</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ repair.repair_days }} days</dd>
-                                    </div>
                                 </div>
                             </dl>
                         </div>
@@ -746,6 +711,70 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                             </p>
                         </div>
 
+                        <!-- Payment History -->
+                        <div v-if="repair.payments && repair.payments.length > 0" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Payment History</h2>
+                            <div class="space-y-3">
+                                <div v-for="payment in repair.payments" :key="payment.id" class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
+                                    <div>
+                                        <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(payment.amount) }}</p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                            {{ payment.payment_method }}
+                                            <span v-if="payment.paid_at"> &bull; {{ formatDate(payment.paid_at) }}</span>
+                                        </p>
+                                    </div>
+                                    <span :class="[
+                                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                        payment.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                                    ]">
+                                        {{ payment.status }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Timeline / Details -->
+                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Timeline</h2>
+                            <dl class="space-y-4">
+                                <div class="flex items-start gap-3">
+                                    <CalendarIcon class="size-5 shrink-0 text-gray-400" />
+                                    <div>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
+                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.created_at) }}</dd>
+                                    </div>
+                                </div>
+                                <div v-if="repair.date_sent_to_vendor" class="flex items-start gap-3">
+                                    <PaperAirplaneIcon class="size-5 shrink-0 text-gray-400" />
+                                    <div>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Sent to Vendor</dt>
+                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.date_sent_to_vendor) }}</dd>
+                                    </div>
+                                </div>
+                                <div v-if="repair.date_received_by_vendor" class="flex items-start gap-3">
+                                    <CheckCircleIcon class="size-5 shrink-0 text-gray-400" />
+                                    <div>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Received by Vendor</dt>
+                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.date_received_by_vendor) }}</dd>
+                                    </div>
+                                </div>
+                                <div v-if="repair.date_completed" class="flex items-start gap-3">
+                                    <WrenchScrewdriverIcon class="size-5 shrink-0 text-green-500" />
+                                    <div>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Completed</dt>
+                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(repair.date_completed) }}</dd>
+                                    </div>
+                                </div>
+                                <div v-if="repair.repair_days !== null && repair.repair_days !== undefined" class="flex items-start gap-3">
+                                    <ClockIcon class="size-5 shrink-0 text-gray-400" />
+                                    <div>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Repair Duration</dt>
+                                        <dd class="text-gray-900 dark:text-white">{{ repair.repair_days }} days</dd>
+                                    </div>
+                                </div>
+                            </dl>
+                        </div>
+
                         <!-- Employee -->
                         <div v-if="repair.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Handled By</h2>
@@ -764,16 +793,6 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                                 {{ repair.order.order_number }}
                             </Link>
                         </div>
-
-                        <!-- Notes -->
-                        <NotesSection
-                            :notes="repair.note_entries"
-                            notable-type="repair"
-                            :notable-id="repair.id"
-                        />
-
-                        <!-- Activity Log -->
-                        <ActivityTimeline :activities="activityLogs" />
                     </div>
                 </div>
             </div>
@@ -783,7 +802,7 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
         <CollectPaymentModal
             :show="showPaymentModal"
             model-type="repair"
-            :model="repair"
+            :model="repairForPayment"
             :title="repair.repair_number"
             :subtitle="repair.customer?.full_name || ''"
             @close="closePaymentModal"

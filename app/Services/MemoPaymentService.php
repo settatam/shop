@@ -325,7 +325,7 @@ class MemoPaymentService
             'store_id' => $memo->store_id,
             'memo_id' => $memo->id,
             'user_id' => $memo->user_id,
-            'invoice_number' => Order::query()->max('id') + 1,
+            'invoice_number' => 'MEM-TEMP', // Temporary, will be updated with order ID
             'sub_total' => $memo->total,
             'sales_tax' => $memo->tax_amount ?? 0,
             'shipping_cost' => $memo->shipping_cost ?? 0,
@@ -337,6 +337,9 @@ class MemoPaymentService
             'notes' => "Created from Memo #{$memo->memo_number}",
         ]);
 
+        // Update invoice number with MEM-<order.id> format
+        $order->update(['invoice_number' => "MEM-{$order->id}"]);
+
         // Create order items from memo items
         foreach ($memo->active_items as $memoItem) {
             OrderItem::create([
@@ -346,8 +349,8 @@ class MemoPaymentService
                 'title' => $memoItem->title ?? $memoItem->product?->title ?? 'Unknown Product',
                 'sku' => $memoItem->sku,
                 'quantity' => 1,
-                'unit_price' => $memoItem->price,
-                'line_total' => $memoItem->price,
+                'price' => $memoItem->price,  // Selling price
+                'cost' => $memoItem->cost,    // Cost for profit calculation
             ]);
         }
 

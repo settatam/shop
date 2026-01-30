@@ -492,6 +492,22 @@ class RepairController extends Controller
             'shipping_cost' => $repair->shipping_cost,
             'discount' => $repair->discount,
             'total' => $repair->total,
+            'grand_total' => $repair->grand_total,
+
+            // Payment adjustment fields (for CollectPaymentModal)
+            // These use converted values compatible with PaymentService
+            'charge_taxes' => $repair->charge_taxes ?? true,
+            'tax_type' => 'percent',
+            // Convert tax_rate from decimal (0.08) to percentage (8) for payment modal
+            'payment_tax_rate' => $repair->tax_rate > 0 && $repair->tax_rate < 1
+                ? $repair->tax_rate * 100
+                : (float) $repair->tax_rate,
+            'discount_value' => (float) ($repair->discount_value ?? 0),
+            'discount_unit' => $repair->discount_unit ?? 'fixed',
+            'discount_reason' => $repair->discount_reason,
+            'service_fee_value' => (float) ($repair->service_fee_value ?? 0),
+            'service_fee_unit' => $repair->service_fee_unit ?? 'fixed',
+            'service_fee_reason' => $repair->service_fee_reason,
             'description' => $repair->description,
             'is_appraisal' => $repair->is_appraisal,
             'repair_days' => $repair->repair_days,
