@@ -233,6 +233,30 @@ const statusLabels: Record<string, string> = {
     archived: 'Archived',
 };
 
+const statuses = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'sent_to_vendor', label: 'Sent to Vendor' },
+    { value: 'received_by_vendor', label: 'With Vendor' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'payment_received', label: 'Payment Received' },
+    { value: 'refunded', label: 'Refunded' },
+    { value: 'cancelled', label: 'Cancelled' },
+    { value: 'archived', label: 'Archived' },
+];
+
+function changeStatus(newStatus: string) {
+    if (isProcessing.value) return;
+    if (newStatus === props.repair.status) return;
+
+    isProcessing.value = true;
+    router.post(`/repairs/${props.repair.id}/change-status`, {
+        status: newStatus,
+    }, {
+        preserveScroll: true,
+        onFinish: () => { isProcessing.value = false; },
+    });
+}
+
 function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
@@ -348,9 +372,16 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                         <div>
                             <div class="flex items-center gap-3">
                                 <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ repair.repair_number }}</h1>
-                                <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', statusColors[repair.status]]">
-                                    {{ statusLabels[repair.status] }}
-                                </span>
+                                <select
+                                    :value="repair.status"
+                                    @change="changeStatus(($event.target as HTMLSelectElement).value)"
+                                    :disabled="isProcessing"
+                                    :class="['rounded-full px-3 py-1 text-xs font-medium border-0 cursor-pointer focus:ring-2 focus:ring-indigo-500', statusColors[repair.status]]"
+                                >
+                                    <option v-for="status in statuses" :key="status.value" :value="status.value">
+                                        {{ status.label }}
+                                    </option>
+                                </select>
                                 <span v-if="repair.is_appraisal" class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
                                     Appraisal
                                 </span>

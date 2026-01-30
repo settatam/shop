@@ -647,7 +647,7 @@ const steps = [
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
-            <div class="mx-auto w-full max-w-4xl">
+            <div class="mx-auto w-full max-w-6xl">
                 <!-- Header -->
                 <div class="mb-6 flex items-center justify-between">
                     <div class="flex items-center gap-4">

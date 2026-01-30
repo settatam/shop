@@ -29,7 +29,7 @@ class MemoFactory extends Factory
             'vendor_id' => Vendor::factory(),
             'user_id' => User::factory(),
             'order_id' => null,
-            'memo_number' => Memo::generateMemoNumber(),
+            'memo_number' => 'MEM-TEMP', // Will be updated in model booted event
             'status' => Memo::STATUS_PENDING,
             'tenure' => fake()->randomElement(Memo::PAYMENT_TERMS),
             'subtotal' => $subtotal,

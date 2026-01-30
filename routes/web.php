@@ -279,9 +279,13 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::delete('memos/{memo}', [MemoController::class, 'destroy'])->name('web.memos.destroy');
     Route::post('memos/{memo}/send-to-vendor', [MemoController::class, 'sendToVendor'])->name('web.memos.send-to-vendor');
     Route::post('memos/{memo}/mark-received', [MemoController::class, 'markReceived'])->name('web.memos.mark-received');
+    Route::post('memos/{memo}/mark-returned', [MemoController::class, 'markReturned'])->name('web.memos.mark-returned');
     Route::post('memos/{memo}/receive-payment', [MemoController::class, 'receivePayment'])->name('web.memos.receive-payment');
     Route::post('memos/{memo}/return-item/{item}', [MemoController::class, 'returnItem'])->name('web.memos.return-item');
+    Route::post('memos/{memo}/add-item', [MemoController::class, 'addItem'])->name('web.memos.add-item');
+    Route::patch('memos/{memo}/items/{item}', [MemoController::class, 'updateItem'])->name('web.memos.update-item');
     Route::post('memos/{memo}/cancel', [MemoController::class, 'cancel'])->name('web.memos.cancel');
+    Route::post('memos/{memo}/change-status', [MemoController::class, 'changeStatus'])->name('web.memos.change-status');
     Route::post('memos/bulk-action', [MemoController::class, 'bulkAction'])->name('web.memos.bulk-action');
 
     // Repair management
@@ -298,6 +302,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('repairs/{repair}/mark-completed', [RepairController::class, 'markCompleted'])->name('web.repairs.mark-completed');
     Route::post('repairs/{repair}/receive-payment', [RepairController::class, 'receivePayment'])->name('web.repairs.receive-payment');
     Route::post('repairs/{repair}/cancel', [RepairController::class, 'cancel'])->name('web.repairs.cancel');
+    Route::post('repairs/{repair}/change-status', [RepairController::class, 'changeStatus'])->name('web.repairs.change-status');
     Route::patch('repairs/{repair}/items/{item}', [RepairController::class, 'updateItem'])->name('web.repairs.update-item');
     Route::delete('repairs/{repair}/items/{item}', [RepairController::class, 'removeItem'])->name('web.repairs.remove-item');
     Route::post('repairs/bulk-action', [RepairController::class, 'bulkAction'])->name('web.repairs.bulk-action');

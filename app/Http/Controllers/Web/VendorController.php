@@ -166,7 +166,7 @@ class VendorController extends Controller
                     'total' => $po->total,
                     'order_date' => $po->order_date?->format('M d, Y'),
                 ]),
-                'note_entries' => $vendor->notes->map(fn ($note) => [
+                'note_entries' => $vendor->getRelation('notes')?->map(fn ($note) => [
                     'id' => $note->id,
                     'content' => $note->content,
                     'user' => $note->user ? [
@@ -175,7 +175,7 @@ class VendorController extends Controller
                     ] : null,
                     'created_at' => $note->created_at->toISOString(),
                     'updated_at' => $note->updated_at->toISOString(),
-                ]),
+                ]) ?? [],
             ],
             'paymentTerms' => Vendor::PAYMENT_TERMS,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($vendor)),

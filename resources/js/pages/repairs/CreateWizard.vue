@@ -15,6 +15,7 @@ import {
     TrashIcon,
     MagnifyingGlassIcon,
     XMarkIcon,
+    PencilIcon,
 } from '@heroicons/vue/24/outline';
 import debounce from 'lodash/debounce';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
@@ -457,7 +458,7 @@ async function submit() {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
-            <div class="mx-auto w-full max-w-4xl">
+            <div class="mx-auto w-full max-w-6xl">
                 <!-- Wizard Steps -->
                 <nav aria-label="Progress" class="mb-8">
                     <ol role="list" class="flex items-center justify-between">
@@ -485,450 +486,501 @@ async function submit() {
                     </div>
                 </nav>
 
-                <!-- Step Content -->
-                <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                    <!-- Step 1: Employee -->
-                    <div v-if="currentStep === 1">
-                        <h2 class="mb-6 text-xl font-semibold text-gray-900 dark:text-white">Select Employee</h2>
-                        <div class="space-y-4">
-                            <label v-for="user in storeUsers" :key="user.id" class="flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition-colors" :class="formData.store_user_id === user.id ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'">
-                                <input
-                                    type="radio"
-                                    :value="user.id"
-                                    v-model="formData.store_user_id"
-                                    class="size-4 border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                />
-                                <div class="flex items-center gap-3">
-                                    <div class="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
-                                        <UserIcon class="size-5 text-gray-500 dark:text-gray-400" />
+                <!-- Main content area with summary sidebar -->
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <!-- Summary Sidebar -->
+                    <div class="lg:col-span-1">
+                        <div class="sticky top-4 space-y-4">
+                            <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Repair Summary</h3>
+
+                                <!-- Employee Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Employee</span>
+                                        <button v-if="selectedEmployee && currentStep !== 1" type="button" @click="currentStep = 1" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
                                     </div>
-                                    <span class="font-medium text-gray-900 dark:text-white">{{ user.name }}</span>
+                                    <p v-if="selectedEmployee" class="mt-1 text-sm text-gray-900 dark:text-white">{{ selectedEmployee.name }}</p>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">Not selected</p>
                                 </div>
-                            </label>
+
+                                <!-- Customer Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Customer</span>
+                                        <button v-if="formData.customer && currentStep !== 2" type="button" @click="currentStep = 2" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <div v-if="formData.customer" class="mt-1">
+                                        <p class="text-sm text-gray-900 dark:text-white">{{ formData.customer.full_name }}</p>
+                                        <p v-if="formData.customer.email" class="text-xs text-gray-500 dark:text-gray-400">{{ formData.customer.email }}</p>
+                                    </div>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">Not selected</p>
+                                </div>
+
+                                <!-- Items Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Items</span>
+                                        <button v-if="formData.items.length > 0 && currentStep !== 3" type="button" @click="currentStep = 3" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <div v-if="formData.items.length > 0" class="mt-2 space-y-1">
+                                        <div v-for="item in formData.items.slice(0, 3)" :key="item.id" class="flex items-center justify-between text-sm">
+                                            <span class="truncate text-gray-700 dark:text-gray-300">{{ item.title }}</span>
+                                            <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.customer_cost) }}</span>
+                                        </div>
+                                        <p v-if="formData.items.length > 3" class="text-xs text-gray-500 dark:text-gray-400">+{{ formData.items.length - 3 }} more items</p>
+                                        <div class="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 dark:border-gray-700">
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Subtotal</span>
+                                            <span class="text-sm font-bold text-gray-900 dark:text-white">{{ formatCurrency(totalCustomerCost) }}</span>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">No items added</p>
+                                </div>
+
+                                <!-- Vendor Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Vendor</span>
+                                        <button v-if="formData.vendor && currentStep !== 4" type="button" @click="currentStep = 4" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <div v-if="formData.vendor" class="mt-1">
+                                        <p class="text-sm text-gray-900 dark:text-white">{{ formData.vendor.display_name || formData.vendor.name }}</p>
+                                        <p v-if="formData.vendor.company_name" class="text-xs text-gray-500 dark:text-gray-400">{{ formData.vendor.company_name }}</p>
+                                    </div>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">Not assigned (optional)</p>
+                                </div>
+
+                                <!-- Totals -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="space-y-1 text-sm">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500 dark:text-gray-400">Vendor Cost</span>
+                                            <span class="text-gray-900 dark:text-white">{{ formatCurrency(totalVendorCost) }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-500 dark:text-gray-400">Customer Total</span>
+                                            <span class="text-gray-900 dark:text-white">{{ formatCurrency(total) }}</span>
+                                        </div>
+                                        <div class="flex justify-between font-medium" :class="profit >= 0 ? 'text-green-600' : 'text-red-600'">
+                                            <span>Est. Profit</span>
+                                            <span>{{ formatCurrency(profit) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Step 2: Customer -->
-                    <div v-else-if="currentStep === 2">
-                        <h2 class="mb-6 text-xl font-semibold text-gray-900 dark:text-white">Select or Create Customer</h2>
-
-                        <!-- Selected Customer -->
-                        <div v-if="formData.customer_id || formData.customer" class="mb-6 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                                    <UserIcon class="size-6 text-green-600 dark:text-green-400" />
+                    <!-- Step content -->
+                    <div class="lg:col-span-2">
+                        <div class="rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div class="px-6 py-8">
+                                <!-- Step 1: Employee -->
+                                <div v-if="currentStep === 1" class="space-y-6">
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Select Employee</h2>
+                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose the employee handling this repair.</p>
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <button
+                                            v-for="user in storeUsers"
+                                            :key="user.id"
+                                            type="button"
+                                            @click="formData.store_user_id = user.id"
+                                            :class="[
+                                                'flex items-center gap-4 rounded-lg border-2 p-4 text-left transition-all',
+                                                formData.store_user_id === user.id
+                                                    ? 'border-indigo-600 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-900/20'
+                                                    : 'border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500',
+                                            ]"
+                                        >
+                                            <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+                                                <UserIcon class="size-6 text-gray-500 dark:text-gray-400" />
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900 dark:text-white">{{ user.name }}</p>
+                                            </div>
+                                            <CheckIcon v-if="formData.store_user_id === user.id" class="ml-auto size-6 text-indigo-600" />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="font-medium text-gray-900 dark:text-white">{{ formData.customer?.full_name }}</p>
-                                    <p v-if="formData.customer?.email" class="text-sm text-gray-500 dark:text-gray-400">{{ formData.customer.email }}</p>
-                                </div>
-                            </div>
-                            <button type="button" @click="clearCustomer" class="rounded p-1 text-gray-400 hover:text-gray-500">
-                                <XMarkIcon class="size-5" />
-                            </button>
-                        </div>
 
-                        <!-- Search / New Customer Form -->
-                        <div v-else>
-                            <div v-if="!showNewCustomerForm">
-                                <div class="relative mb-4">
-                                    <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-                                    <input
-                                        v-model="customerQuery"
-                                        type="text"
-                                        placeholder="Search customers by name, email, or phone..."
-                                        class="w-full rounded-lg border-0 py-3 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                    />
+                                <!-- Step 2: Customer -->
+                                <div v-else-if="currentStep === 2" class="space-y-6">
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Select or Create Customer</h2>
+                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose an existing customer or create a new one.</p>
+                                    </div>
+
+                                    <!-- Selected Customer -->
+                                    <div v-if="formData.customer_id || formData.customer" class="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex size-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                                                <UserIcon class="size-6 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900 dark:text-white">{{ formData.customer?.full_name }}</p>
+                                                <p v-if="formData.customer?.email" class="text-sm text-gray-500 dark:text-gray-400">{{ formData.customer.email }}</p>
+                                            </div>
+                                        </div>
+                                        <button type="button" @click="clearCustomer" class="rounded p-1 text-gray-400 hover:text-gray-500">
+                                            <XMarkIcon class="size-5" />
+                                        </button>
+                                    </div>
+
+                                    <!-- Search / New Customer Form -->
+                                    <div v-else>
+                                        <div v-if="!showNewCustomerForm">
+                                            <div class="relative mb-4">
+                                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    v-model="customerQuery"
+                                                    type="text"
+                                                    placeholder="Search customers by name, email, or phone..."
+                                                    class="w-full rounded-lg border-0 py-3 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+
+                                            <!-- Search Results -->
+                                            <div v-if="customerResults.length > 0" class="mb-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+                                                <button
+                                                    v-for="customer in customerResults"
+                                                    :key="customer.id"
+                                                    type="button"
+                                                    @click="selectCustomer(customer)"
+                                                    class="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                >
+                                                    <UserIcon class="size-8 text-gray-400" />
+                                                    <div>
+                                                        <p class="font-medium text-gray-900 dark:text-white">{{ customer.full_name }}</p>
+                                                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ customer.email || customer.phone_number }}</p>
+                                                    </div>
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                @click="startNewCustomer"
+                                                class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                            >
+                                                <PlusIcon class="size-5" />
+                                                Create New Customer
+                                            </button>
+                                        </div>
+
+                                        <!-- New Customer Form -->
+                                        <div v-else class="space-y-4">
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name *</label>
+                                                    <input v-model="newCustomer.first_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name *</label>
+                                                    <input v-model="newCustomer.last_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
+                                                <input v-model="newCustomer.company_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                                                    <input v-model="newCustomer.email" type="email" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                                                    <input v-model="newCustomer.phone_number" type="tel" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
+                                                <LeadSourceSelect
+                                                    v-model="newCustomer.lead_source_id"
+                                                    placeholder="Select or create lead source..."
+                                                    class="mt-1"
+                                                />
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button type="button" @click="cancelNewCustomer" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
+                                                    Cancel
+                                                </button>
+                                                <button type="button" @click="confirmNewCustomer" :disabled="!newCustomer.first_name || !newCustomer.last_name" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+                                                    Confirm Customer
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <!-- Search Results -->
-                                <div v-if="customerResults.length > 0" class="mb-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+                                <!-- Step 3: Items -->
+                                <div v-else-if="currentStep === 3" class="space-y-6">
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Repair Items</h2>
+                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add items to be repaired.</p>
+                                    </div>
+
+                                    <!-- Items List -->
+                                    <div v-if="formData.items.length > 0" class="space-y-3">
+                                        <div
+                                            v-for="item in formData.items"
+                                            :key="item.id"
+                                            class="flex items-center justify-between rounded-lg border border-gray-200 p-4 dark:border-gray-700"
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <div class="flex size-10 items-center justify-center rounded bg-gray-100 dark:bg-gray-700">
+                                                    <CubeIcon class="size-5 text-gray-400" />
+                                                </div>
+                                                <div>
+                                                    <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                                                    <p v-if="item.category_id" class="text-sm text-gray-500 dark:text-gray-400">{{ getCategoryLabel(item.category_id) }}</p>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-4">
+                                                <div class="text-right">
+                                                    <p class="text-sm text-gray-500 dark:text-gray-400">Vendor: {{ formatCurrency(item.vendor_cost) }}</p>
+                                                    <p class="font-medium text-gray-900 dark:text-white">Customer: {{ formatCurrency(item.customer_cost) }}</p>
+                                                </div>
+                                                <button type="button" @click="removeItem(item.id)" class="rounded p-1 text-red-400 hover:text-red-500">
+                                                    <TrashIcon class="size-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Add Item Form -->
+                                    <div class="space-y-4 rounded-lg border border-dashed border-gray-300 p-4 dark:border-gray-600">
+                                        <h3 class="font-medium text-gray-900 dark:text-white">Add Item</h3>
+                                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div class="md:col-span-2">
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Item Title *</label>
+                                                <input v-model="newItem.title" type="text" placeholder="e.g., Ring Repair, Watch Battery Replacement" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
+                                                <select v-model="newItem.category_id" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600">
+                                                    <option :value="undefined">Select category...</option>
+                                                    <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+                                                </select>
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                                                <textarea v-model="newItem.description" rows="2" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Vendor Cost ($)</label>
+                                                <input v-model.number="newItem.vendor_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Customer Cost ($)</label>
+                                                <input v-model.number="newItem.customer_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            @click="addItem"
+                                            :disabled="!newItem.title"
+                                            class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                        >
+                                            <PlusIcon class="size-4" />
+                                            Add Item
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4: Vendor (Optional) -->
+                                <div v-else-if="currentStep === 4" class="space-y-6">
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Select Repair Vendor (Optional)</h2>
+                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">You can skip this step if you want to assign a vendor later.</p>
+                                    </div>
+
+                                    <!-- Selected Vendor -->
+                                    <div v-if="formData.vendor_id || formData.vendor" class="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex size-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                                                <WrenchScrewdriverIcon class="size-6 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900 dark:text-white">{{ formData.vendor?.display_name || formData.vendor?.name }}</p>
+                                                <p v-if="formData.vendor?.email" class="text-sm text-gray-500 dark:text-gray-400">{{ formData.vendor.email }}</p>
+                                            </div>
+                                        </div>
+                                        <button type="button" @click="clearVendor" class="rounded p-1 text-gray-400 hover:text-gray-500">
+                                            <XMarkIcon class="size-5" />
+                                        </button>
+                                    </div>
+
+                                    <!-- Search / New Vendor Form -->
+                                    <div v-else>
+                                        <div v-if="!showNewVendorForm">
+                                            <div class="relative mb-4">
+                                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
+                                                <input
+                                                    v-model="vendorQuery"
+                                                    type="text"
+                                                    placeholder="Search vendors by name or email..."
+                                                    class="w-full rounded-lg border-0 py-3 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+
+                                            <!-- Search Results -->
+                                            <div v-if="vendorResults.length > 0" class="mb-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+                                                <button
+                                                    v-for="vendor in vendorResults"
+                                                    :key="vendor.id"
+                                                    type="button"
+                                                    @click="selectVendor(vendor)"
+                                                    class="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                >
+                                                    <WrenchScrewdriverIcon class="size-8 text-gray-400" />
+                                                    <div>
+                                                        <p class="font-medium text-gray-900 dark:text-white">{{ vendor.display_name || vendor.name }}</p>
+                                                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ vendor.email }}</p>
+                                                    </div>
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                @click="startNewVendor"
+                                                class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                            >
+                                                <PlusIcon class="size-5" />
+                                                Create New Vendor
+                                            </button>
+                                        </div>
+
+                                        <!-- New Vendor Form -->
+                                        <div v-else class="space-y-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name *</label>
+                                                <input v-model="newVendor.name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
+                                                <input v-model="newVendor.company_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                                                    <input v-model="newVendor.email" type="email" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                                                    <input v-model="newVendor.phone" type="tel" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                </div>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button type="button" @click="cancelNewVendor" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
+                                                    Cancel
+                                                </button>
+                                                <button type="button" @click="confirmNewVendor" :disabled="!newVendor.name" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+                                                    Confirm Vendor
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5: Review -->
+                                <div v-else-if="currentStep === 5" class="space-y-6">
+                                    <div>
+                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Review & Create Repair</h2>
+                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Review the details and create the repair order.</p>
+                                    </div>
+
+                                    <!-- Settings -->
+                                    <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-600">
+                                        <h3 class="mb-4 font-medium text-gray-900 dark:text-white">Repair Settings</h3>
+                                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div v-if="warehouses.length > 0">
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Warehouse / Location</label>
+                                                <select v-model="formData.warehouse_id" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600">
+                                                    <option :value="null">No warehouse (use store default)</option>
+                                                    <option v-for="wh in warehouses" :key="wh.value" :value="wh.value">{{ wh.label }}</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tax Rate</label>
+                                                <div class="mt-1 flex items-center gap-2">
+                                                    <input v-model.number="formData.tax_rate" type="number" step="0.0001" min="0" max="1" class="block w-24 rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                    <span class="text-sm text-gray-500 dark:text-gray-400">({{ (formData.tax_rate * 100).toFixed(2) }}%)</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Service Fee ($)</label>
+                                                <input v-model.number="formData.service_fee" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Discount ($)</label>
+                                                <input v-model.number="formData.discount" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div class="md:col-span-2">
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
+                                                <textarea v-model="formData.description" rows="3" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <input id="is_appraisal" v-model="formData.is_appraisal" type="checkbox" class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
+                                                <label for="is_appraisal" class="text-sm text-gray-700 dark:text-gray-300">This is an appraisal</label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Errors -->
+                                    <div v-if="Object.keys(errors).length > 0" class="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                                        <ul class="list-inside list-disc text-sm text-red-600 dark:text-red-400">
+                                            <li v-for="(error, key) in errors" :key="key">{{ error }}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <!-- Navigation -->
+                                <div class="mt-8 flex justify-between border-t border-gray-200 pt-6 dark:border-gray-700">
                                     <button
-                                        v-for="customer in customerResults"
-                                        :key="customer.id"
+                                        v-if="currentStep > 1"
                                         type="button"
-                                        @click="selectCustomer(customer)"
-                                        class="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        @click="goBack"
+                                        class="inline-flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                                     >
-                                        <UserIcon class="size-8 text-gray-400" />
-                                        <div>
-                                            <p class="font-medium text-gray-900 dark:text-white">{{ customer.full_name }}</p>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ customer.email || customer.phone_number }}</p>
-                                        </div>
+                                        <ChevronLeftIcon class="size-4" />
+                                        Back
                                     </button>
-                                </div>
+                                    <div v-else />
 
-                                <button
-                                    type="button"
-                                    @click="startNewCustomer"
-                                    class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    <PlusIcon class="size-5" />
-                                    Create New Customer
-                                </button>
-                            </div>
-
-                            <!-- New Customer Form -->
-                            <div v-else class="space-y-4">
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name *</label>
-                                        <input v-model="newCustomer.first_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name *</label>
-                                        <input v-model="newCustomer.last_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
-                                    <input v-model="newCustomer.company_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                        <input v-model="newCustomer.email" type="email" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                        <input v-model="newCustomer.phone_number" type="tel" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
-                                    <LeadSourceSelect
-                                        v-model="newCustomer.lead_source_id"
-                                        placeholder="Select or create lead source..."
-                                        class="mt-1"
-                                    />
-                                </div>
-                                <div class="flex gap-2">
-                                    <button type="button" @click="cancelNewCustomer" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-                                        Cancel
-                                    </button>
-                                    <button type="button" @click="confirmNewCustomer" :disabled="!newCustomer.first_name || !newCustomer.last_name" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
-                                        Confirm Customer
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 3: Items -->
-                    <div v-else-if="currentStep === 3">
-                        <h2 class="mb-6 text-xl font-semibold text-gray-900 dark:text-white">Repair Items</h2>
-
-                        <!-- Items List -->
-                        <div v-if="formData.items.length > 0" class="mb-6 space-y-3">
-                            <div
-                                v-for="item in formData.items"
-                                :key="item.id"
-                                class="flex items-center justify-between rounded-lg border border-gray-200 p-4 dark:border-gray-700"
-                            >
-                                <div class="flex items-center gap-3">
-                                    <div class="flex size-10 items-center justify-center rounded bg-gray-100 dark:bg-gray-700">
-                                        <CubeIcon class="size-5 text-gray-400" />
-                                    </div>
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
-                                        <p v-if="item.category_id" class="text-sm text-gray-500 dark:text-gray-400">{{ getCategoryLabel(item.category_id) }}</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <div class="text-right">
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">Vendor: {{ formatCurrency(item.vendor_cost) }}</p>
-                                        <p class="font-medium text-gray-900 dark:text-white">Customer: {{ formatCurrency(item.customer_cost) }}</p>
-                                    </div>
-                                    <button type="button" @click="removeItem(item.id)" class="rounded p-1 text-red-400 hover:text-red-500">
-                                        <TrashIcon class="size-5" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Add Item Form -->
-                        <div class="space-y-4 rounded-lg border border-dashed border-gray-300 p-4 dark:border-gray-600">
-                            <h3 class="font-medium text-gray-900 dark:text-white">Add Item</h3>
-                            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Item Title *</label>
-                                    <input v-model="newItem.title" type="text" placeholder="e.g., Ring Repair, Watch Battery Replacement" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-                                    <select v-model="newItem.category_id" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600">
-                                        <option :value="undefined">Select category...</option>
-                                        <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
-                                    </select>
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                                    <textarea v-model="newItem.description" rows="2" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Vendor Cost ($)</label>
-                                    <input v-model.number="newItem.vendor_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Customer Cost ($)</label>
-                                    <input v-model.number="newItem.customer_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                @click="addItem"
-                                :disabled="!newItem.title"
-                                class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                            >
-                                <PlusIcon class="size-4" />
-                                Add Item
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Step 4: Vendor (Optional) -->
-                    <div v-else-if="currentStep === 4">
-                        <h2 class="mb-6 text-xl font-semibold text-gray-900 dark:text-white">Select Repair Vendor (Optional)</h2>
-                        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-                            You can skip this step if you want to assign a vendor later.
-                        </p>
-
-                        <!-- Selected Vendor -->
-                        <div v-if="formData.vendor_id || formData.vendor" class="mb-6 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                                    <WrenchScrewdriverIcon class="size-6 text-green-600 dark:text-green-400" />
-                                </div>
-                                <div>
-                                    <p class="font-medium text-gray-900 dark:text-white">{{ formData.vendor?.display_name || formData.vendor?.name }}</p>
-                                    <p v-if="formData.vendor?.email" class="text-sm text-gray-500 dark:text-gray-400">{{ formData.vendor.email }}</p>
-                                </div>
-                            </div>
-                            <button type="button" @click="clearVendor" class="rounded p-1 text-gray-400 hover:text-gray-500">
-                                <XMarkIcon class="size-5" />
-                            </button>
-                        </div>
-
-                        <!-- Search / New Vendor Form -->
-                        <div v-else>
-                            <div v-if="!showNewVendorForm">
-                                <div class="relative mb-4">
-                                    <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-                                    <input
-                                        v-model="vendorQuery"
-                                        type="text"
-                                        placeholder="Search vendors by name or email..."
-                                        class="w-full rounded-lg border-0 py-3 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                    />
-                                </div>
-
-                                <!-- Search Results -->
-                                <div v-if="vendorResults.length > 0" class="mb-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700">
                                     <button
-                                        v-for="vendor in vendorResults"
-                                        :key="vendor.id"
+                                        v-if="currentStep < steps.length"
                                         type="button"
-                                        @click="selectVendor(vendor)"
-                                        class="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        @click="goNext"
+                                        :disabled="!canProceed()"
+                                        class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
                                     >
-                                        <WrenchScrewdriverIcon class="size-8 text-gray-400" />
-                                        <div>
-                                            <p class="font-medium text-gray-900 dark:text-white">{{ vendor.display_name || vendor.name }}</p>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ vendor.email }}</p>
-                                        </div>
+                                        Next
+                                        <ChevronRightIcon class="size-4" />
                                     </button>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    @click="startNewVendor"
-                                    class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    <PlusIcon class="size-5" />
-                                    Create New Vendor
-                                </button>
-                            </div>
-
-                            <!-- New Vendor Form -->
-                            <div v-else class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name *</label>
-                                    <input v-model="newVendor.name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
-                                    <input v-model="newVendor.company_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                        <input v-model="newVendor.email" type="email" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                        <input v-model="newVendor.phone" type="tel" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button type="button" @click="cancelNewVendor" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-                                        Cancel
-                                    </button>
-                                    <button type="button" @click="confirmNewVendor" :disabled="!newVendor.name" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
-                                        Confirm Vendor
+                                    <button
+                                        v-else
+                                        type="button"
+                                        @click="submit"
+                                        :disabled="isSubmitting || !canProceed()"
+                                        class="inline-flex items-center gap-2 rounded-md bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
+                                    >
+                                        <CheckIcon v-if="!isSubmitting" class="size-4" />
+                                        <span v-if="isSubmitting">Creating...</span>
+                                        <span v-else>Create Repair</span>
                                     </button>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Step 5: Review -->
-                    <div v-else-if="currentStep === 5">
-                        <h2 class="mb-6 text-xl font-semibold text-gray-900 dark:text-white">Review & Create Repair</h2>
-
-                        <div class="space-y-6">
-                            <!-- Settings -->
-                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-600">
-                                <h3 class="mb-4 font-medium text-gray-900 dark:text-white">Repair Settings</h3>
-                                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                    <div v-if="warehouses.length > 0">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Warehouse / Location</label>
-                                        <select v-model="formData.warehouse_id" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600">
-                                            <option :value="null">No warehouse (use store default)</option>
-                                            <option v-for="wh in warehouses" :key="wh.value" :value="wh.value">{{ wh.label }}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tax Rate</label>
-                                        <div class="mt-1 flex items-center gap-2">
-                                            <input v-model.number="formData.tax_rate" type="number" step="0.0001" min="0" max="1" class="block w-24 rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            <span class="text-sm text-gray-500 dark:text-gray-400">({{ (formData.tax_rate * 100).toFixed(2) }}%)</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Service Fee ($)</label>
-                                        <input v-model.number="formData.service_fee" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Discount ($)</label>
-                                        <input v-model.number="formData.discount" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                    <div class="md:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
-                                        <textarea v-model="formData.description" rows="3" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <input id="is_appraisal" v-model="formData.is_appraisal" type="checkbox" class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600" />
-                                        <label for="is_appraisal" class="text-sm text-gray-700 dark:text-gray-300">This is an appraisal</label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Summary -->
-                            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-600">
-                                    <h3 class="mb-3 font-medium text-gray-900 dark:text-white">Details</h3>
-                                    <dl class="space-y-2 text-sm">
-                                        <div class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Employee</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ selectedEmployee?.name }}</dd>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Customer</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formData.customer?.full_name }}</dd>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Vendor</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formData.vendor?.display_name || formData.vendor?.name || 'Not assigned' }}</dd>
-                                        </div>
-                                        <div v-if="formData.warehouse_id" class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Warehouse</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ selectedWarehouse?.label }}</dd>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Items</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formData.items.length }}</dd>
-                                        </div>
-                                    </dl>
-                                </div>
-
-                                <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-600">
-                                    <h3 class="mb-3 font-medium text-gray-900 dark:text-white">Pricing</h3>
-                                    <dl class="space-y-2 text-sm">
-                                        <div class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Vendor Total</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formatCurrency(totalVendorCost) }}</dd>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Customer Subtotal</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formatCurrency(subtotal) }}</dd>
-                                        </div>
-                                        <div v-if="formData.service_fee > 0" class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Service Fee</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formatCurrency(formData.service_fee) }}</dd>
-                                        </div>
-                                        <div v-if="formData.discount > 0" class="flex justify-between text-green-600">
-                                            <dt>Discount</dt>
-                                            <dd>-{{ formatCurrency(formData.discount) }}</dd>
-                                        </div>
-                                        <div v-if="taxAmount > 0" class="flex justify-between">
-                                            <dt class="text-gray-500 dark:text-gray-400">Tax</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formatCurrency(taxAmount) }}</dd>
-                                        </div>
-                                        <div class="flex justify-between border-t border-gray-200 pt-2 font-medium dark:border-gray-700">
-                                            <dt class="text-gray-900 dark:text-white">Total</dt>
-                                            <dd class="text-gray-900 dark:text-white">{{ formatCurrency(total) }}</dd>
-                                        </div>
-                                        <div class="flex justify-between" :class="profit >= 0 ? 'text-green-600' : 'text-red-600'">
-                                            <dt>Estimated Profit</dt>
-                                            <dd>{{ formatCurrency(profit) }}</dd>
-                                        </div>
-                                    </dl>
-                                </div>
-                            </div>
-
-                            <!-- Errors -->
-                            <div v-if="Object.keys(errors).length > 0" class="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-                                <ul class="list-inside list-disc text-sm text-red-600 dark:text-red-400">
-                                    <li v-for="(error, key) in errors" :key="key">{{ error }}</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Navigation -->
-                    <div class="mt-8 flex justify-between border-t border-gray-200 pt-6 dark:border-gray-700">
-                        <button
-                            v-if="currentStep > 1"
-                            type="button"
-                            @click="goBack"
-                            class="inline-flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                        >
-                            <ChevronLeftIcon class="size-4" />
-                            Back
-                        </button>
-                        <div v-else />
-
-                        <button
-                            v-if="currentStep < steps.length"
-                            type="button"
-                            @click="goNext"
-                            :disabled="!canProceed()"
-                            class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                        >
-                            Next
-                            <ChevronRightIcon class="size-4" />
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            @click="submit"
-                            :disabled="isSubmitting || !canProceed()"
-                            class="inline-flex items-center gap-2 rounded-md bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
-                        >
-                            <CheckIcon v-if="!isSubmitting" class="size-4" />
-                            <span v-if="isSubmitting">Creating...</span>
-                            <span v-else>Create Repair</span>
-                        </button>
                     </div>
                 </div>
             </div>

@@ -31,7 +31,7 @@ class RepairFactory extends Factory
             'vendor_id' => Customer::factory(),
             'user_id' => User::factory(),
             'order_id' => null,
-            'repair_number' => Repair::generateRepairNumber(),
+            'repair_number' => 'REP-TEMP', // Will be updated in model booted event
             'status' => Repair::STATUS_PENDING,
             'service_fee' => $serviceFee,
             'subtotal' => $subtotal,

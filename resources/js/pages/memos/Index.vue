@@ -17,9 +17,15 @@ interface PaymentTerm {
     label: string;
 }
 
+interface Vendor {
+    value: number;
+    label: string;
+}
+
 interface Props {
     statuses: Status[];
     paymentTerms: PaymentTerm[];
+    vendors: Vendor[];
 }
 
 const props = defineProps<Props>();
@@ -33,6 +39,9 @@ function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
     if (params.get('status')) filter.status = params.get('status') || undefined;
+    if (params.get('vendor_id')) filter.vendor_id = params.get('vendor_id') || undefined;
+    if (params.get('date_from')) filter.date_from = params.get('date_from') || undefined;
+    if (params.get('date_to')) filter.date_to = params.get('date_to') || undefined;
     return filter;
 }
 
@@ -43,6 +52,9 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } =
 
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status || '');
+const selectedVendor = ref<string>(initialParams.vendor_id || '');
+const dateFrom = ref<string>(initialParams.date_from || '');
+const dateTo = ref<string>(initialParams.date_to || '');
 
 // Reference to DataTable for clearing selection
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
@@ -53,9 +65,12 @@ onMounted(() => {
 });
 
 // Watch filter changes
-watch([selectedStatus], () => {
+watch([selectedStatus, selectedVendor, dateFrom, dateTo], () => {
     updateFilter({
         status: selectedStatus.value || undefined,
+        vendor_id: selectedVendor.value || undefined,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
         page: 1,
     });
 });
@@ -112,6 +127,34 @@ function handleBulkActionSuccess() {
                         {{ status.label }}
                     </option>
                 </select>
+
+                <select
+                    v-model="selectedVendor"
+                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                >
+                    <option value="">All Vendors</option>
+                    <option v-for="vendor in vendors" :key="vendor.value" :value="vendor.value">
+                        {{ vendor.label }}
+                    </option>
+                </select>
+
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-500 dark:text-gray-400">From:</label>
+                    <input
+                        v-model="dateFrom"
+                        type="date"
+                        class="rounded-md border-0 bg-white py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-500 dark:text-gray-400">To:</label>
+                    <input
+                        v-model="dateTo"
+                        type="date"
+                        class="rounded-md border-0 bg-white py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
             </div>
 
             <!-- Data Table -->

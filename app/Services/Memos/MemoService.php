@@ -202,6 +202,22 @@ class MemoService
         return $memo->markVendorReceived();
     }
 
+    public function markVendorReturned(Memo $memo): Memo
+    {
+        if (! $memo->canBeMarkedAsReturned()) {
+            throw new InvalidArgumentException('Memo cannot be marked as returned in its current state.');
+        }
+
+        return DB::transaction(function () use ($memo) {
+            // Return all non-returned items to stock
+            $memo->items()->where('is_returned', false)->each(function (MemoItem $item) {
+                $item->returnToStock();
+            });
+
+            return $memo->markVendorReturned();
+        });
+    }
+
     public function cancel(Memo $memo): Memo
     {
         if (! $memo->canBeCancelled()) {

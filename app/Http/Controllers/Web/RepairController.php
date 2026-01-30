@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateRepairFromWizardRequest;
+use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Repair;
@@ -35,8 +36,18 @@ class RepairController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
+        $vendors = Vendor::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($vendor) => [
+                'value' => $vendor->id,
+                'label' => $vendor->display_name,
+            ]);
+
         return Inertia::render('repairs/Index', [
             'statuses' => $this->getStatuses(),
+            'vendors' => $vendors,
         ]);
     }
 
@@ -257,6 +268,49 @@ class RepairController extends Controller
         $this->repairService->cancel($repair);
 
         return back()->with('success', 'Repair cancelled.');
+    }
+
+    public function changeStatus(Request $request, Repair $repair): RedirectResponse
+    {
+        $this->authorizeRepair($repair);
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:'.implode(',', Repair::STATUSES),
+        ]);
+
+        $oldStatus = $repair->status;
+        $newStatus = $validated['status'];
+
+        if ($oldStatus === $newStatus) {
+            return back();
+        }
+
+        $repair->update(['status' => $newStatus]);
+
+        // Log the status change
+        ActivityLog::log(
+            'repairs.update',
+            $repair,
+            auth()->user(),
+            [
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+            ],
+            "Status changed from {$oldStatus} to {$newStatus}"
+        );
+
+        $statusLabels = [
+            Repair::STATUS_PENDING => 'Pending',
+            Repair::STATUS_SENT_TO_VENDOR => 'Sent to Vendor',
+            Repair::STATUS_RECEIVED_BY_VENDOR => 'Received by Vendor',
+            Repair::STATUS_COMPLETED => 'Completed',
+            Repair::STATUS_PAYMENT_RECEIVED => 'Payment Received',
+            Repair::STATUS_REFUNDED => 'Refunded',
+            Repair::STATUS_CANCELLED => 'Cancelled',
+            Repair::STATUS_ARCHIVED => 'Archived',
+        ];
+
+        return back()->with('success', "Status changed to {$statusLabels[$newStatus]}.");
     }
 
     public function bulkAction(Request $request): RedirectResponse

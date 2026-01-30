@@ -94,19 +94,19 @@ class Repair extends Model
     protected static function booted(): void
     {
         static::creating(function (Repair $repair) {
+            // Set temporary value to satisfy NOT NULL constraint
             if (empty($repair->repair_number)) {
-                $repair->repair_number = static::generateRepairNumber();
+                $repair->repair_number = 'REP-TEMP';
             }
         });
-    }
 
-    public static function generateRepairNumber(): string
-    {
-        $prefix = 'REP';
-        $date = now()->format('Ymd');
-        $random = strtoupper(substr(md5(uniqid()), 0, 6));
-
-        return "{$prefix}-{$date}-{$random}";
+        static::created(function (Repair $repair) {
+            // Update with actual ID-based number
+            if ($repair->repair_number === 'REP-TEMP') {
+                $repair->repair_number = "REP-{$repair->id}";
+                $repair->saveQuietly();
+            }
+        });
     }
 
     public function customer(): BelongsTo

@@ -101,6 +101,20 @@ class Order extends Model implements Payable
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::created(function (Order $order) {
+            // Generate order_id from store prefix/suffix if not already set
+            if (empty($order->order_id)) {
+                $store = $order->store;
+                $prefix = $store?->order_id_prefix ?? '';
+                $suffix = $store?->order_id_suffix ?? '';
+                $order->order_id = "{$prefix}{$order->id}{$suffix}";
+                $order->saveQuietly();
+            }
+        });
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

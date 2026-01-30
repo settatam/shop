@@ -637,40 +637,6 @@ watch(() => props.show, (newVal) => {
                                             />
                                         </div>
 
-                                        <!-- Service Fee -->
-                                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Service Fee</label>
-                                            <div class="mt-2 flex gap-2">
-                                                <div class="relative flex-1">
-                                                    <span v-if="adjustments.service_fee_unit === 'fixed'" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
-                                                    <input
-                                                        v-model.number="adjustments.service_fee_value"
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        :class="[
-                                                            'block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600',
-                                                            adjustments.service_fee_unit === 'fixed' ? 'pl-7 pr-2' : 'px-2'
-                                                        ]"
-                                                    />
-                                                    <span v-if="adjustments.service_fee_unit === 'percent'" class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span>
-                                                </div>
-                                                <select
-                                                    v-model="adjustments.service_fee_unit"
-                                                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="fixed">$</option>
-                                                    <option value="percent">%</option>
-                                                </select>
-                                            </div>
-                                            <input
-                                                v-model="adjustments.service_fee_reason"
-                                                type="text"
-                                                placeholder="Reason (optional)"
-                                                class="mt-2 block w-full rounded-md border-0 px-2 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-
                                         <!-- Tax -->
                                         <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
                                             <div class="flex items-center justify-between">

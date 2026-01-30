@@ -98,6 +98,8 @@ class Memo extends Model implements Payable
         'grand_total',
         'total_paid',
         'balance_due',
+        'date_sent_to_vendor',
+        'date_vendor_received',
     ];
 
     protected function casts(): array
@@ -120,25 +122,27 @@ class Memo extends Model implements Payable
             'grand_total' => 'decimal:2',
             'total_paid' => 'decimal:2',
             'balance_due' => 'decimal:2',
+            'date_sent_to_vendor' => 'datetime',
+            'date_vendor_received' => 'datetime',
         ];
     }
 
     protected static function booted(): void
     {
         static::creating(function (Memo $memo) {
+            // Set temporary value to satisfy NOT NULL constraint
             if (empty($memo->memo_number)) {
-                $memo->memo_number = static::generateMemoNumber();
+                $memo->memo_number = 'MEM-TEMP';
             }
         });
-    }
 
-    public static function generateMemoNumber(): string
-    {
-        $prefix = 'MEM';
-        $date = now()->format('Ymd');
-        $random = strtoupper(substr(md5(uniqid()), 0, 6));
-
-        return "{$prefix}-{$date}-{$random}";
+        static::created(function (Memo $memo) {
+            // Update with actual ID-based number
+            if ($memo->memo_number === 'MEM-TEMP') {
+                $memo->memo_number = "MEM-{$memo->id}";
+                $memo->saveQuietly();
+            }
+        });
     }
 
     public function vendor(): BelongsTo
@@ -359,17 +363,28 @@ class Memo extends Model implements Payable
         ]);
     }
 
+    public function canBeMarkedAsReturned(): bool
+    {
+        return $this->isVendorReceived();
+    }
+
     // State transitions
     public function sendToVendor(): self
     {
-        $this->update(['status' => self::STATUS_SENT_TO_VENDOR]);
+        $this->update([
+            'status' => self::STATUS_SENT_TO_VENDOR,
+            'date_sent_to_vendor' => now(),
+        ]);
 
         return $this;
     }
 
     public function markVendorReceived(): self
     {
-        $this->update(['status' => self::STATUS_VENDOR_RECEIVED]);
+        $this->update([
+            'status' => self::STATUS_VENDOR_RECEIVED,
+            'date_vendor_received' => now(),
+        ]);
 
         return $this;
     }
@@ -476,6 +491,7 @@ class Memo extends Model implements Payable
 
     /**
      * Calculate the tax amount based on type (percent or fixed).
+     * Note: tax_rate is stored as a decimal (e.g., 0.08 for 8%).
      */
     public function calculateTaxAmount(float $taxableAmount): float
     {
@@ -484,7 +500,7 @@ class Memo extends Model implements Payable
         }
 
         return $this->tax_type === 'percent'
-            ? ($taxableAmount * $this->tax_rate / 100)
+            ? ($taxableAmount * $this->tax_rate)
             : $this->tax_rate;
     }
 
@@ -626,10 +642,12 @@ class Memo extends Model implements Payable
 
     /**
      * Get the number of days the items have been with the vendor.
+     * Calculated from date_vendor_received (when vendor received the memo).
      */
     public function getDaysWithVendorAttribute(): int
     {
-        if (! $this->created_at) {
+        // Only count days if memo is with vendor or completed
+        if (! $this->date_vendor_received) {
             return 0;
         }
 
@@ -642,7 +660,7 @@ class Memo extends Model implements Payable
             default => now(),
         };
 
-        return (int) $this->created_at->diffInDays($endDate);
+        return (int) $this->date_vendor_received->diffInDays($endDate);
     }
 
     public function isOverdue(): bool

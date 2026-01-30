@@ -354,11 +354,21 @@ class MemoWorkflowTest extends TestCase
 
     public function test_days_with_vendor_is_calculated_correctly(): void
     {
+        // Days with vendor is calculated from date_vendor_received (when vendor received the memo)
         $memo = Memo::factory()->create([
-            'created_at' => now()->subDays(10),
+            'status' => Memo::STATUS_VENDOR_RECEIVED,
+            'date_vendor_received' => now()->subDays(10),
         ]);
 
         $this->assertEquals(10, $memo->days_with_vendor);
+
+        // If no date_vendor_received, days with vendor is 0
+        $memoWithoutReceived = Memo::factory()->create([
+            'status' => Memo::STATUS_PENDING,
+            'date_vendor_received' => null,
+        ]);
+
+        $this->assertEquals(0, $memoWithoutReceived->days_with_vendor);
     }
 
     public function test_search_products_returns_price_from_variant(): void

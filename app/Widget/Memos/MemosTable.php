@@ -97,6 +97,19 @@ class MemosTable extends Table
             $query->where('status', $status);
         }
 
+        // Apply vendor filter
+        if ($vendorId = data_get($filter, 'vendor_id')) {
+            $query->where('vendor_id', $vendorId);
+        }
+
+        // Apply date range filter
+        if ($dateFrom = data_get($filter, 'date_from')) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo = data_get($filter, 'date_to')) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
         return $query;
     }
 

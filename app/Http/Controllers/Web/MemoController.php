@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateMemoFromWizardRequest;
+use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Memo;
 use App\Models\MemoItem;
@@ -36,9 +37,19 @@ class MemoController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
+        $vendors = Vendor::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($vendor) => [
+                'value' => $vendor->id,
+                'label' => $vendor->display_name,
+            ]);
+
         return Inertia::render('memos/Index', [
             'statuses' => $this->getStatuses(),
             'paymentTerms' => $this->getPaymentTerms(),
+            'vendors' => $vendors,
         ]);
     }
 
@@ -53,18 +64,29 @@ class MemoController extends Controller
         $memo->load([
             'vendor',
             'user',
-            'items.product',
+            'items.product.images',
+            'items.category',
             'order',
             'invoice',
             'payments.user',
             'notes.user',
         ]);
 
+        // Get categories for add item modal
+        $categories = Category::where('store_id', $store->id)
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($category) => [
+                'value' => $category->id,
+                'label' => $category->name,
+            ]);
+
         return Inertia::render('memos/Show', [
             'memo' => $this->formatMemo($memo),
             'statuses' => $this->getStatuses(),
             'paymentTerms' => $this->getPaymentTerms(),
             'paymentMethods' => $this->getPaymentMethods(),
+            'categories' => $categories,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($memo)),
         ]);
     }
@@ -211,6 +233,19 @@ class MemoController extends Controller
         return back()->with('success', 'Memo marked as received by vendor.');
     }
 
+    public function markReturned(Memo $memo): RedirectResponse
+    {
+        $this->authorizeMemo($memo);
+
+        if (! $memo->canBeMarkedAsReturned()) {
+            return back()->with('error', 'Memo cannot be marked as returned in its current state.');
+        }
+
+        $this->memoService->markVendorReturned($memo);
+
+        return back()->with('success', 'Memo marked as returned by vendor. All items returned to stock.');
+    }
+
     public function receivePayment(Request $request, Memo $memo): RedirectResponse
     {
         $this->authorizeMemo($memo);
@@ -245,6 +280,181 @@ class MemoController extends Controller
         $this->memoService->returnItem($item);
 
         return back()->with('success', 'Item returned to stock.');
+    }
+
+    public function addItem(Request $request, Memo $memo): RedirectResponse
+    {
+        $this->authorizeMemo($memo);
+
+        if (! $memo->isPending()) {
+            return back()->with('error', 'Items can only be added to pending memos.');
+        }
+
+        $validated = $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'price' => 'nullable|numeric|min:0',
+            'cost' => 'nullable|numeric|min:0',
+            'tenor' => 'nullable|integer|min:1',
+        ]);
+
+        $product = Product::with(['variants', 'category', 'images'])->findOrFail($validated['product_id']);
+        $variant = $product->variants->first();
+
+        // Check if product is available
+        if ($product->quantity <= 0) {
+            return back()->with('error', 'Product is out of stock.');
+        }
+
+        // Create the memo item
+        $memo->items()->create([
+            'product_id' => $product->id,
+            'category_id' => $product->category_id,
+            'sku' => $variant?->sku,
+            'title' => $product->title,
+            'description' => $product->description,
+            'price' => $validated['price'] ?? $variant?->price ?? 0,
+            'cost' => $validated['cost'] ?? $variant?->cost ?? 0,
+            'tenor' => $validated['tenor'] ?? $memo->tenure,
+            'is_returned' => false,
+        ]);
+
+        // Mark product as on memo (out of stock)
+        MemoItem::markProductOnMemo($product);
+
+        // Recalculate totals
+        $memo->calculateTotals();
+
+        return back()->with('success', 'Item added to memo.');
+    }
+
+    public function updateItem(Request $request, Memo $memo, MemoItem $item): RedirectResponse
+    {
+        $this->authorizeMemo($memo);
+
+        if ($item->memo_id !== $memo->id) {
+            return back()->with('error', 'Item does not belong to this memo.');
+        }
+
+        // Only allow updates until payment is received
+        if ($memo->isPaymentReceived() || $memo->isArchived()) {
+            return back()->with('error', 'Cannot update items after payment has been received.');
+        }
+
+        $validated = $request->validate([
+            'cost' => 'nullable|numeric|min:0',
+            'price' => 'nullable|numeric|min:0',
+            'tenor' => 'nullable|integer|min:1',
+        ]);
+
+        $changes = [];
+
+        // Track cost change
+        if (isset($validated['cost']) && (float) $validated['cost'] !== (float) $item->cost) {
+            $changes[] = "Cost changed from \${$item->cost} to \${$validated['cost']}";
+        }
+
+        // Track price change
+        if (isset($validated['price']) && (float) $validated['price'] !== (float) $item->price) {
+            $changes[] = "Price changed from \${$item->price} to \${$validated['price']}";
+        }
+
+        // Track tenor change
+        if (isset($validated['tenor']) && (int) $validated['tenor'] !== (int) $item->tenor) {
+            $changes[] = "Terms changed from {$item->tenor} days to {$validated['tenor']} days";
+        }
+
+        if (empty($changes)) {
+            return back();
+        }
+
+        // Update the item
+        $item->update([
+            'cost' => $validated['cost'] ?? $item->cost,
+            'price' => $validated['price'] ?? $item->price,
+            'tenor' => $validated['tenor'] ?? $item->tenor,
+        ]);
+
+        // Log activity
+        ActivityLog::log(
+            'memos.update',
+            $memo,
+            auth()->user(),
+            [
+                'item_id' => $item->id,
+                'item_title' => $item->title,
+                'changes' => $changes,
+            ],
+            'Memo item updated: '.implode(', ', $changes)
+        );
+
+        // Recalculate totals
+        $memo->calculateTotals();
+
+        return back()->with('success', 'Item updated.');
+    }
+
+    public function changeStatus(Request $request, Memo $memo): RedirectResponse
+    {
+        $this->authorizeMemo($memo);
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:'.implode(',', Memo::STATUSES),
+        ]);
+
+        $oldStatus = $memo->status;
+        $newStatus = $validated['status'];
+
+        if ($oldStatus === $newStatus) {
+            return back();
+        }
+
+        // Handle special cases for status transitions
+        $updates = ['status' => $newStatus];
+
+        // Set date fields based on status
+        if ($newStatus === Memo::STATUS_SENT_TO_VENDOR && ! $memo->date_sent_to_vendor) {
+            $updates['date_sent_to_vendor'] = now();
+        }
+
+        if ($newStatus === Memo::STATUS_VENDOR_RECEIVED && ! $memo->date_vendor_received) {
+            $updates['date_vendor_received'] = now();
+        }
+
+        // Clear date fields if moving backward
+        if ($newStatus === Memo::STATUS_PENDING) {
+            $updates['date_sent_to_vendor'] = null;
+            $updates['date_vendor_received'] = null;
+        }
+
+        if ($newStatus === Memo::STATUS_SENT_TO_VENDOR) {
+            $updates['date_vendor_received'] = null;
+        }
+
+        $memo->update($updates);
+
+        // Log the status change
+        ActivityLog::log(
+            'memos.update',
+            $memo,
+            auth()->user(),
+            [
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+            ],
+            "Status changed from {$oldStatus} to {$newStatus}"
+        );
+
+        $statusLabels = [
+            Memo::STATUS_PENDING => 'Pending',
+            Memo::STATUS_SENT_TO_VENDOR => 'Sent to Vendor',
+            Memo::STATUS_VENDOR_RECEIVED => 'Vendor Received',
+            Memo::STATUS_VENDOR_RETURNED => 'Vendor Returned',
+            Memo::STATUS_PAYMENT_RECEIVED => 'Payment Received',
+            Memo::STATUS_ARCHIVED => 'Archived',
+            Memo::STATUS_CANCELLED => 'Cancelled',
+        ];
+
+        return back()->with('success', "Status changed to {$statusLabels[$newStatus]}.");
     }
 
     public function cancel(Memo $memo): RedirectResponse
@@ -505,6 +715,8 @@ class MemoController extends Controller
             'days_with_vendor' => $memo->days_with_vendor,
             'due_date' => $memo->due_date?->toISOString(),
             'is_overdue' => $memo->isOverdue(),
+            'date_sent_to_vendor' => $memo->date_sent_to_vendor?->toISOString(),
+            'date_vendor_received' => $memo->date_vendor_received?->toISOString(),
             'created_at' => $memo->created_at->toISOString(),
             'updated_at' => $memo->updated_at->toISOString(),
 
@@ -520,6 +732,7 @@ class MemoController extends Controller
             // Action helpers
             'can_be_sent_to_vendor' => $memo->canBeSentToVendor(),
             'can_be_marked_as_received' => $memo->canBeMarkedAsReceived(),
+            'can_be_marked_as_returned' => $memo->canBeMarkedAsReturned(),
             'can_receive_payment' => $memo->canReceivePayment(),
             'can_be_cancelled' => $memo->canBeCancelled(),
 
