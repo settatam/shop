@@ -47,8 +47,19 @@ class SalesReportController extends Controller
                     ->values()
                     ->implode(', ');
 
-                // Calculate cost and wholesale value from items
-                $cost = $order->items->sum(fn ($item) => ($item->cost ?? 0) * $item->quantity);
+                // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
+                $cost = $order->items->sum(function ($item) {
+                    // Use item's cost if set
+                    if ($item->cost !== null && $item->cost > 0) {
+                        return $item->cost * $item->quantity;
+                    }
+                    // Fallback to variant's wholesale_price or cost
+                    $variant = $item->variant ?? $item->product?->variants?->first();
+                    $effectiveCost = $variant?->wholesale_price ?? $variant?->cost ?? 0;
+
+                    return $effectiveCost * $item->quantity;
+                });
+
                 $wholesaleValue = $order->items->sum(function ($item) {
                     $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
 
@@ -61,8 +72,9 @@ class SalesReportController extends Controller
                     ->unique()
                     ->implode(', ');
 
-                // Calculate profit
-                $profit = ($order->sub_total ?? 0) - $cost;
+                // Calculate profit: subtotal + service_fee - effective_cost
+                $serviceFee = (float) ($order->service_fee_value ?? 0);
+                $profit = ($order->sub_total ?? 0) + $serviceFee - $cost;
 
                 return [
                     'id' => $order->id,
@@ -77,6 +89,7 @@ class SalesReportController extends Controller
                     'cost' => $cost,
                     'wholesale_value' => $wholesaleValue,
                     'sub_total' => $order->sub_total ?? 0,
+                    'service_fee' => $serviceFee,
                     'profit' => $profit,
                     'tax' => $order->sales_tax ?? 0,
                     'shipping_cost' => $order->shipping_cost ?? 0,
@@ -92,6 +105,7 @@ class SalesReportController extends Controller
             'cost' => $orders->sum('cost'),
             'wholesale_value' => $orders->sum('wholesale_value'),
             'sub_total' => $orders->sum('sub_total'),
+            'service_fee' => $orders->sum('service_fee'),
             'profit' => $orders->sum('profit'),
             'tax' => $orders->sum('tax'),
             'shipping_cost' => $orders->sum('shipping_cost'),
@@ -240,7 +254,17 @@ class SalesReportController extends Controller
                     ->values()
                     ->implode(', ');
 
-                $cost = $order->items->sum(fn ($item) => ($item->cost ?? 0) * $item->quantity);
+                // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
+                $cost = $order->items->sum(function ($item) {
+                    if ($item->cost !== null && $item->cost > 0) {
+                        return $item->cost * $item->quantity;
+                    }
+                    $variant = $item->variant ?? $item->product?->variants?->first();
+                    $effectiveCost = $variant?->wholesale_price ?? $variant?->cost ?? 0;
+
+                    return $effectiveCost * $item->quantity;
+                });
+
                 $wholesaleValue = $order->items->sum(function ($item) {
                     $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
 
@@ -252,7 +276,9 @@ class SalesReportController extends Controller
                     ->unique()
                     ->implode(', ');
 
-                $profit = ($order->sub_total ?? 0) - $cost;
+                // Calculate profit: subtotal + service_fee - effective_cost
+                $serviceFee = (float) ($order->service_fee_value ?? 0);
+                $profit = ($order->sub_total ?? 0) + $serviceFee - $cost;
                 $numItems = $order->items->sum('quantity');
 
                 fputcsv($handle, [
@@ -508,16 +534,26 @@ class SalesReportController extends Controller
             $itemsSold = 0;
             $totalShopify = 0;
             $totalReb = 0;
+            $totalServiceFee = 0;
 
             foreach ($monthOrders as $order) {
                 foreach ($order->items as $item) {
-                    $cost = ($item->cost ?? 0) * $item->quantity;
+                    // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
+                    if ($item->cost !== null && $item->cost > 0) {
+                        $cost = $item->cost * $item->quantity;
+                    } else {
+                        $effectiveCost = $item->variant?->wholesale_price ?? $item->variant?->cost ?? 0;
+                        $cost = $effectiveCost * $item->quantity;
+                    }
                     $wholesalePrice = $item->variant?->wholesale_price ?? 0;
 
                     $totalCost += $cost;
                     $totalWholesaleValue += $wholesalePrice * $item->quantity;
                     $itemsSold += $item->quantity;
                 }
+
+                // Add service fee
+                $totalServiceFee += (float) ($order->service_fee_value ?? 0);
 
                 // Count by platform
                 if ($order->source_platform === 'shopify') {
@@ -529,7 +565,8 @@ class SalesReportController extends Controller
 
             $totalSalesPrice = $monthOrders->sum('sub_total');
             $totalPaid = $monthOrders->sum(fn ($o) => $o->payments->sum('amount'));
-            $grossProfit = $totalSalesPrice - $totalCost;
+            // Profit = subtotal + service_fee - effective_cost
+            $grossProfit = $totalSalesPrice + $totalServiceFee - $totalCost;
             $profitPercent = $totalSalesPrice > 0 ? ($grossProfit / $totalSalesPrice) * 100 : 0;
 
             $months->push([
@@ -582,16 +619,26 @@ class SalesReportController extends Controller
             $itemsSold = 0;
             $totalShopify = 0;
             $totalReb = 0;
+            $totalServiceFee = 0;
 
             foreach ($dayOrders as $order) {
                 foreach ($order->items as $item) {
-                    $cost = ($item->cost ?? 0) * $item->quantity;
+                    // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
+                    if ($item->cost !== null && $item->cost > 0) {
+                        $cost = $item->cost * $item->quantity;
+                    } else {
+                        $effectiveCost = $item->variant?->wholesale_price ?? $item->variant?->cost ?? 0;
+                        $cost = $effectiveCost * $item->quantity;
+                    }
                     $wholesalePrice = $item->variant?->wholesale_price ?? 0;
 
                     $totalCost += $cost;
                     $totalWholesaleValue += $wholesalePrice * $item->quantity;
                     $itemsSold += $item->quantity;
                 }
+
+                // Add service fee
+                $totalServiceFee += (float) ($order->service_fee_value ?? 0);
 
                 // Count by platform
                 if ($order->source_platform === 'shopify') {
@@ -603,7 +650,8 @@ class SalesReportController extends Controller
 
             $totalSalesPrice = $dayOrders->sum('sub_total');
             $totalPaid = $dayOrders->sum(fn ($o) => $o->payments->sum('amount'));
-            $grossProfit = $totalSalesPrice - $totalCost;
+            // Profit = subtotal + service_fee - effective_cost
+            $grossProfit = $totalSalesPrice + $totalServiceFee - $totalCost;
             $profitPercent = $totalSalesPrice > 0 ? ($grossProfit / $totalSalesPrice) * 100 : 0;
 
             $days->push([
