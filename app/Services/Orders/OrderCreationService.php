@@ -92,7 +92,7 @@ class OrderCreationService
                 'warehouse_id' => $warehouse?->id,
                 'status' => Order::STATUS_PENDING,
                 'invoice_number' => $invoiceNumber,
-                'date_of_purchase' => now(),
+                'date_of_purchase' => $data['date_of_purchase'] ?? now(),
                 'tax_rate' => $taxRate,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
                 'discount_cost' => $data['discount_cost'] ?? 0,

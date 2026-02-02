@@ -34,6 +34,8 @@ class Activity extends Model
 
     public const CATEGORY_BUCKETS = 'buckets';
 
+    public const CATEGORY_LAYAWAYS = 'layaways';
+
     // Product Activities
     public const PRODUCTS_VIEW = 'products.view';
 
@@ -242,6 +244,25 @@ class Activity extends Model
 
     public const REPAIRS_CANCEL = 'repairs.cancel';
 
+    // Layaway Activities
+    public const LAYAWAYS_VIEW = 'layaways.view';
+
+    public const LAYAWAYS_CREATE = 'layaways.create';
+
+    public const LAYAWAYS_UPDATE = 'layaways.update';
+
+    public const LAYAWAYS_DELETE = 'layaways.delete';
+
+    public const LAYAWAYS_PAYMENT_RECEIVED = 'layaways.payment_received';
+
+    public const LAYAWAYS_PAYMENT_DUE_SOON = 'layaways.payment_due_soon';
+
+    public const LAYAWAYS_PAYMENT_OVERDUE = 'layaways.payment_overdue';
+
+    public const LAYAWAYS_COMPLETED = 'layaways.completed';
+
+    public const LAYAWAYS_CANCELLED = 'layaways.cancelled';
+
     // Vendor Activities
     public const VENDORS_VIEW = 'vendors.view';
 
@@ -413,6 +434,17 @@ class Activity extends Model
             self::REPAIRS_COMPLETE => ['name' => 'Complete Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Mark repair as completed'],
             self::REPAIRS_PAYMENT_RECEIVED => ['name' => 'Payment Received', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Record payment received for repair'],
             self::REPAIRS_CANCEL => ['name' => 'Cancel Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Cancel a repair order'],
+
+            // Layaways
+            self::LAYAWAYS_VIEW => ['name' => 'View Layaways', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'View layaway listings and details'],
+            self::LAYAWAYS_CREATE => ['name' => 'Create Layaway', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Create a new layaway'],
+            self::LAYAWAYS_UPDATE => ['name' => 'Update Layaway', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Update layaway details'],
+            self::LAYAWAYS_DELETE => ['name' => 'Delete Layaway', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Delete a layaway'],
+            self::LAYAWAYS_PAYMENT_RECEIVED => ['name' => 'Payment Received', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Record payment received for layaway'],
+            self::LAYAWAYS_PAYMENT_DUE_SOON => ['name' => 'Payment Due Soon', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Layaway payment due reminder sent'],
+            self::LAYAWAYS_PAYMENT_OVERDUE => ['name' => 'Payment Overdue', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Layaway payment overdue notice sent'],
+            self::LAYAWAYS_COMPLETED => ['name' => 'Layaway Completed', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Layaway fully paid and completed'],
+            self::LAYAWAYS_CANCELLED => ['name' => 'Layaway Cancelled', 'category' => self::CATEGORY_LAYAWAYS, 'description' => 'Layaway was cancelled'],
 
             // Vendors
             self::VENDORS_VIEW => ['name' => 'View Vendors', 'category' => self::CATEGORY_VENDORS, 'description' => 'View vendor listings and details'],

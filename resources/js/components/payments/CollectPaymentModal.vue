@@ -20,7 +20,7 @@ import {
 import axios from 'axios';
 
 // Types
-export type PayableModelType = 'memo' | 'repair' | 'order';
+export type PayableModelType = 'memo' | 'repair' | 'order' | 'layaway';
 
 interface PaymentSummary {
     subtotal: number;
@@ -102,6 +102,7 @@ const apiBasePath = computed(() => {
         memo: `/memos/${props.model.id}/payment`,
         repair: `/repairs/${props.model.id}/payment`,
         order: `/orders/${props.model.id}/payment`,
+        layaway: `/layaways/${props.model.id}/payment`,
     };
     return paths[props.modelType];
 });
@@ -188,11 +189,7 @@ const totalPaymentAmount = computed(() => {
 
 const totalServiceFees = computed(() => {
     return paymentLines.value.reduce((sum, line) => {
-        if (line.service_fee_value <= 0) return sum;
-        if (line.service_fee_unit === 'percent') {
-            return sum + (line.amount * line.service_fee_value / 100);
-        }
-        return sum + line.service_fee_value;
+        return sum + getLineServiceFeeAmount(line);
     }, 0);
 });
 
@@ -204,12 +201,43 @@ const remainingToAllocate = computed(() => {
     return Math.max(0, summary.value.balance_due - totalPaymentAmount.value);
 });
 
+// Subtotal after discount - the base for service fee calculation
+const subtotalAfterDiscount = computed(() => {
+    return Math.max(0, summary.value.subtotal - summary.value.discount_amount);
+});
+
 function getLineServiceFeeAmount(line: PaymentLine): number {
     if (line.service_fee_value <= 0) return 0;
+
+    // Service fee is only calculated on subtotal (cost of items), not shipping/taxes
+    // For partial payments, it's based on payment amount but capped at subtotal
+    const subtotal = subtotalAfterDiscount.value;
+
     if (line.service_fee_unit === 'percent') {
-        return line.amount * line.service_fee_value / 100;
+        // Calculate on the lesser of payment amount or subtotal
+        const serviceFeeBase = Math.min(line.amount, subtotal);
+        return serviceFeeBase * line.service_fee_value / 100;
     }
-    return line.service_fee_value;
+
+    // For fixed fee, if partial payment under subtotal, prorate it
+    if (line.amount >= subtotal) {
+        return line.service_fee_value;
+    }
+    return subtotal > 0 ? line.service_fee_value * (line.amount / subtotal) : 0;
+}
+
+// Get service fee calculation explanation for percentage fees
+function getServiceFeeExplanation(line: PaymentLine): string | null {
+    if (line.service_fee_value <= 0 || line.service_fee_unit !== 'percent') return null;
+
+    const subtotal = subtotalAfterDiscount.value;
+    const base = Math.min(line.amount, subtotal);
+    const fee = getLineServiceFeeAmount(line);
+
+    if (line.amount <= subtotal) {
+        return `${line.service_fee_value}% of ${formatCurrency(base)} = ${formatCurrency(fee)}`;
+    }
+    return `${line.service_fee_value}% of ${formatCurrency(subtotal)} (items) = ${formatCurrency(fee)}`;
 }
 
 function getLineTotalWithFee(line: PaymentLine): number {
@@ -276,9 +304,12 @@ async function fetchSummary() {
         });
         summary.value = response.data.summary;
 
-        // Initialize with one payment line for full balance
-        if (paymentLines.value.length === 0 || paymentLines.value[0].amount === 0) {
+        // Update payment line amount when there's only one line (user hasn't split payment)
+        if (paymentLines.value.length === 0) {
             paymentLines.value = [createPaymentLine(summary.value.balance_due)];
+        } else if (paymentLines.value.length === 1) {
+            // Update the single payment line to match new balance
+            paymentLines.value[0].amount = summary.value.balance_due;
         }
     } catch (err: any) {
         error.value = err.response?.data?.message || 'Failed to load payment summary.';
@@ -304,6 +335,28 @@ async function updateAdjustments() {
         isLoading.value = false;
     }
 }
+
+// Debounce utility
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedFetchSummary() {
+    if (debounceTimer) {
+        clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(() => {
+        fetchSummary();
+    }, 300);
+}
+
+// Watch adjustments and auto-update summary
+watch(
+    () => adjustments.value,
+    () => {
+        if (props.show) {
+            debouncedFetchSummary();
+        }
+    },
+    { deep: true }
+);
 
 async function fetchTerminals() {
     isLoadingTerminals.value = true;
@@ -674,14 +727,7 @@ watch(() => props.show, (newVal) => {
                                             </div>
                                         </div>
 
-                                        <button
-                                            type="button"
-                                            @click="updateAdjustments"
-                                            :disabled="isLoading"
-                                            class="w-full rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                                        >
-                                            {{ isLoading ? 'Updating...' : 'Update Totals' }}
-                                        </button>
+                                        <!-- Totals update automatically as you type -->
                                     </div>
 
                                     <!-- Right column: Summary & Payment (full width if no adjustments) -->
@@ -702,8 +748,11 @@ watch(() => props.show, (newVal) => {
                                                     <dt class="text-gray-500 dark:text-gray-400">Service Fee</dt>
                                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.service_fee_amount) }}</dd>
                                                 </div>
-                                                <div v-if="summary.tax_amount > 0" class="flex justify-between">
-                                                    <dt class="text-gray-500 dark:text-gray-400">Tax</dt>
+                                                <div v-if="summary.tax_amount > 0 || adjustments.charge_taxes" class="flex justify-between">
+                                                    <dt class="text-gray-500 dark:text-gray-400">
+                                                        Tax
+                                                        <span v-if="adjustments.charge_taxes && adjustments.tax_type === 'percent'" class="text-xs">({{ adjustments.tax_rate }}%)</span>
+                                                    </dt>
                                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.tax_amount) }}</dd>
                                                 </div>
                                                 <div v-if="summary.shipping_cost > 0" class="flex justify-between">
@@ -852,6 +901,10 @@ watch(() => props.show, (newVal) => {
                                                                 <option value="percent">%</option>
                                                             </select>
                                                         </div>
+                                                        <!-- Service fee calculation note -->
+                                                        <p v-if="getServiceFeeExplanation(line)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                            {{ getServiceFeeExplanation(line) }}
+                                                        </p>
                                                     </div>
                                                 </div>
 

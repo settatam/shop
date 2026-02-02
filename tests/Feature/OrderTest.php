@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
@@ -33,7 +34,10 @@ class OrderTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create();
-        $this->store = Store::factory()->create(['user_id' => $this->user->id]);
+        $this->store = Store::factory()->create([
+            'user_id' => $this->user->id,
+            'step' => 2,
+        ]);
 
         $role = Role::factory()->owner()->create(['store_id' => $this->store->id]);
         StoreUser::factory()->owner()->create([
@@ -42,6 +46,7 @@ class OrderTest extends TestCase
             'role_id' => $role->id,
         ]);
 
+        $this->user->update(['current_store_id' => $this->store->id]);
         app(StoreContext::class)->setCurrentStore($this->store);
     }
 
@@ -338,6 +343,49 @@ class OrderTest extends TestCase
             ->assertJsonPath('data.status', Order::STATUS_SHIPPED);
     }
 
+    public function test_can_ship_order_with_tracking(): void
+    {
+        $this->actingAs($this->user);
+
+        $order = Order::factory()->confirmed()->create(['store_id' => $this->store->id]);
+
+        $response = $this->post("/orders/{$order->id}/ship", [
+            'tracking_number' => '1234567890',
+            'carrier' => 'fedex',
+        ]);
+
+        $response->assertRedirect();
+
+        $order->refresh();
+        $this->assertEquals(Order::STATUS_SHIPPED, $order->status);
+        $this->assertEquals('1234567890', $order->tracking_number);
+        $this->assertEquals('fedex', $order->shipping_carrier);
+        $this->assertNotNull($order->shipped_at);
+    }
+
+    public function test_order_tracking_url_is_generated(): void
+    {
+        $order = Order::factory()->shipped()->create([
+            'store_id' => $this->store->id,
+            'tracking_number' => 'TRACK123',
+            'shipping_carrier' => 'fedex',
+        ]);
+
+        $this->assertEquals(
+            'https://www.fedex.com/fedextrack/?trknbr=TRACK123',
+            $order->getTrackingUrl()
+        );
+
+        $order->update(['shipping_carrier' => 'ups']);
+        $this->assertEquals(
+            'https://www.ups.com/track?tracknum=TRACK123',
+            $order->getTrackingUrl()
+        );
+
+        $order->update(['tracking_number' => null]);
+        $this->assertNull($order->getTrackingUrl());
+    }
+
     public function test_can_deliver_order(): void
     {
         Passport::actingAs($this->user);
@@ -518,7 +566,7 @@ class OrderTest extends TestCase
     {
         $order = Order::factory()->create([
             'store_id' => $this->store->id,
-            'tax_rate' => 0.08, // 8% tax rate
+            'tax_rate' => 0.08, // 8% tax rate stored as decimal
             'sales_tax' => 0, // Not yet calculated
         ]);
 
@@ -526,7 +574,8 @@ class OrderTest extends TestCase
 
         // charge_taxes should be true because tax_rate > 0
         $this->assertTrue($adjustments['charge_taxes']);
-        $this->assertEquals(0.08, $adjustments['tax_rate']);
+        // tax_rate is returned as percentage (8) for the payment modal
+        $this->assertEquals(8, $adjustments['tax_rate']);
     }
 
     public function test_payment_adjustments_stores_service_fee(): void
@@ -562,5 +611,227 @@ class OrderTest extends TestCase
         $this->assertEquals('15.00', $order->service_fee_value);
         $this->assertEquals('percent', $order->service_fee_unit);
         $this->assertEquals('Card processing', $order->service_fee_reason);
+    }
+
+    public function test_service_fee_calculated_only_on_subtotal(): void
+    {
+        $this->actingAs($this->user);
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 100.00,
+        ]);
+
+        // Create order with $100 subtotal
+        $order = Order::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'sub_total' => 100.00,
+            'shipping_cost' => 20.00,
+            'sales_tax' => 10.00,
+            'discount_cost' => 0,
+            'total' => 130.00,
+        ]);
+
+        // 10% service fee should only apply to subtotal ($100), not shipping/tax
+        $paymentService = app(\App\Services\PaymentService::class);
+        $summary = $paymentService->calculateSummary($order, [
+            'service_fee_value' => 10,
+            'service_fee_unit' => 'percent',
+        ]);
+
+        // Service fee should be $10 (10% of $100 subtotal), not $13 (10% of $130 total)
+        $this->assertEquals(10.00, $summary['service_fee_amount']);
+    }
+
+    public function test_partial_payment_service_fee_capped_at_subtotal(): void
+    {
+        $this->actingAs($this->user);
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 100.00,
+        ]);
+
+        // Create order with $100 subtotal + $50 shipping/tax = $150 total
+        $order = Order::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'sub_total' => 100.00,
+            'shipping_cost' => 30.00,
+            'sales_tax' => 20.00,
+            'discount_cost' => 0,
+            'total' => 150.00,
+        ]);
+
+        $paymentService = app(\App\Services\PaymentService::class);
+
+        // Full payment of $150 - service fee should be on subtotal only ($100)
+        $result = $paymentService->processPayments($order, [
+            'payment_method' => 'credit_card',
+            'amount' => 150.00,
+            'service_fee_value' => 3,
+            'service_fee_unit' => 'percent',
+        ], $this->user->id);
+
+        // Service fee should be $3 (3% of $100 subtotal), not $4.50 (3% of $150)
+        $this->assertEquals(3.00, $result['payment']->service_fee_amount);
+    }
+
+    public function test_partial_payment_under_subtotal_gets_proportional_service_fee(): void
+    {
+        $this->actingAs($this->user);
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 100.00,
+        ]);
+
+        // Create order with $100 subtotal
+        $order = Order::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'sub_total' => 100.00,
+            'shipping_cost' => 20.00,
+            'discount_cost' => 0,
+            'total' => 120.00,
+        ]);
+
+        $paymentService = app(\App\Services\PaymentService::class);
+
+        // Partial payment of $50 (less than subtotal) - service fee on the $50
+        $result = $paymentService->processPayments($order, [
+            'payment_method' => 'credit_card',
+            'amount' => 50.00,
+            'service_fee_value' => 3,
+            'service_fee_unit' => 'percent',
+        ], $this->user->id);
+
+        // Service fee should be $1.50 (3% of $50)
+        $this->assertEquals(1.50, $result['payment']->service_fee_amount);
+    }
+
+    public function test_quick_product_is_created_with_quantity_one(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+        $this->actingAs($this->user);
+
+        $category = Category::factory()->create(['store_id' => $this->store->id]);
+
+        $response = $this->postJson('/orders/create-product', [
+            'title' => 'Quick Order Product',
+            'sku' => 'QOP-001',
+            'price' => 299.99,
+            'cost' => 150.00,
+            'category_id' => $category->id,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('product.title', 'Quick Order Product')
+            ->assertJsonPath('product.quantity', 1);
+
+        $this->assertDatabaseHas('products', [
+            'store_id' => $this->store->id,
+            'title' => 'Quick Order Product',
+            'quantity' => 1,
+            'is_published' => true,
+            'is_draft' => false,
+        ]);
+
+        $this->assertDatabaseHas('product_variants', [
+            'sku' => 'QOP-001',
+            'quantity' => 1,
+        ]);
+    }
+
+    public function test_quick_product_inherits_charge_taxes_from_category(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+        $this->actingAs($this->user);
+
+        // Create a category with charge_taxes = false
+        $categoryNoTax = Category::factory()->create([
+            'store_id' => $this->store->id,
+            'name' => 'Non-Taxable',
+            'charge_taxes' => false,
+        ]);
+
+        $response = $this->postJson('/orders/create-product', [
+            'title' => 'Non-Taxable Product',
+            'price' => 100.00,
+            'category_id' => $categoryNoTax->id,
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('products', [
+            'title' => 'Non-Taxable Product',
+            'charge_taxes' => false,
+        ]);
+
+        // Create a category with charge_taxes = true
+        $categoryWithTax = Category::factory()->create([
+            'store_id' => $this->store->id,
+            'name' => 'Taxable',
+            'charge_taxes' => true,
+        ]);
+
+        $response = $this->postJson('/orders/create-product', [
+            'title' => 'Taxable Product',
+            'price' => 200.00,
+            'category_id' => $categoryWithTax->id,
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('products', [
+            'title' => 'Taxable Product',
+            'charge_taxes' => true,
+        ]);
+    }
+
+    public function test_quick_product_defaults_to_taxable_without_category(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+        $this->actingAs($this->user);
+
+        $response = $this->postJson('/orders/create-product', [
+            'title' => 'No Category Product',
+            'price' => 50.00,
+        ]);
+
+        $response->assertStatus(201);
+
+        $this->assertDatabaseHas('products', [
+            'title' => 'No Category Product',
+            'charge_taxes' => true,
+        ]);
+    }
+
+    public function test_quick_product_is_searchable_in_products(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+        $this->actingAs($this->user);
+
+        $category = Category::factory()->create(['store_id' => $this->store->id]);
+
+        // Create the quick product
+        $response = $this->postJson('/orders/create-product', [
+            'title' => 'Searchable Quick Product',
+            'sku' => 'SQP-999',
+            'price' => 499.99,
+            'category_id' => $category->id,
+        ]);
+
+        $response->assertStatus(201);
+
+        // Verify it can be searched in the order product search
+        $searchResponse = $this->getJson('/orders/search-products?query=Searchable');
+
+        $searchResponse->assertStatus(200);
+        $products = $searchResponse->json('products');
+
+        $this->assertNotEmpty($products);
+        $this->assertEquals('Searchable Quick Product', $products[0]['title']);
     }
 }

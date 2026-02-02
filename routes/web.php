@@ -15,6 +15,7 @@ use App\Http\Controllers\Web\InventoryReportController;
 use App\Http\Controllers\Web\InvoiceController;
 use App\Http\Controllers\Web\LabelPrintController;
 use App\Http\Controllers\Web\LabelTemplateController;
+use App\Http\Controllers\Web\LayawayController;
 use App\Http\Controllers\Web\MemoController;
 use App\Http\Controllers\Web\OnboardingController;
 use App\Http\Controllers\Web\OrderController;
@@ -135,6 +136,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->name('web.orders.destroy');
     Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('web.orders.confirm');
     Route::post('orders/{order}/ship', [OrderController::class, 'ship'])->name('web.orders.ship');
+    Route::post('orders/{order}/create-shipping-label', [OrderController::class, 'createShippingLabel'])->name('web.orders.create-shipping-label');
+    Route::post('orders/{order}/push-to-shipstation', [OrderController::class, 'pushToShipStation'])->name('web.orders.push-to-shipstation');
     Route::post('orders/{order}/deliver', [OrderController::class, 'deliver'])->name('web.orders.deliver');
     Route::post('orders/{order}/complete', [OrderController::class, 'complete'])->name('web.orders.complete');
     Route::post('orders/{order}/receive-payment', [OrderController::class, 'receivePayment'])->name('web.orders.receive-payment');
@@ -296,6 +299,23 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('memos/{memo}/change-status', [MemoController::class, 'changeStatus'])->name('web.memos.change-status');
     Route::post('memos/bulk-action', [MemoController::class, 'bulkAction'])->name('web.memos.bulk-action');
 
+    // Layaways
+    Route::get('layaways', [LayawayController::class, 'index'])->name('web.layaways.index');
+    Route::get('layaways/create', [LayawayController::class, 'createWizard'])->name('web.layaways.create-wizard');
+    Route::post('layaways', [LayawayController::class, 'storeFromWizard'])->name('web.layaways.store');
+    Route::get('layaways/search-products', [LayawayController::class, 'searchProducts'])->name('web.layaways.search-products');
+    Route::get('layaways/search-customers', [LayawayController::class, 'searchCustomers'])->name('web.layaways.search-customers');
+    Route::get('layaways/{layaway}', [LayawayController::class, 'show'])->name('web.layaways.show');
+    Route::patch('layaways/{layaway}', [LayawayController::class, 'update'])->name('web.layaways.update');
+    Route::delete('layaways/{layaway}', [LayawayController::class, 'destroy'])->name('web.layaways.destroy');
+    Route::post('layaways/{layaway}/activate', [LayawayController::class, 'activate'])->name('web.layaways.activate');
+    Route::post('layaways/{layaway}/complete', [LayawayController::class, 'complete'])->name('web.layaways.complete');
+    Route::post('layaways/{layaway}/cancel', [LayawayController::class, 'cancel'])->name('web.layaways.cancel');
+    Route::post('layaways/{layaway}/receive-payment', [LayawayController::class, 'receivePayment'])->name('web.layaways.receive-payment');
+    Route::post('layaways/{layaway}/add-item', [LayawayController::class, 'addItem'])->name('web.layaways.add-item');
+    Route::delete('layaways/{layaway}/items/{item}', [LayawayController::class, 'removeItem'])->name('web.layaways.remove-item');
+    Route::post('layaways/bulk-action', [LayawayController::class, 'bulkAction'])->name('web.layaways.bulk-action');
+
     // Repair management
     Route::get('repairs', [RepairController::class, 'index'])->name('web.repairs.index');
     Route::get('repairs/create', [RepairController::class, 'createWizard'])->name('web.repairs.create-wizard');
@@ -316,7 +336,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('repairs/bulk-action', [RepairController::class, 'bulkAction'])->name('web.repairs.bulk-action');
 
     // Generic Payment Routes - defined explicitly for each model type to avoid route conflicts
-    foreach (['memos', 'repairs', 'orders'] as $type) {
+    foreach (['memos', 'repairs', 'orders', 'layaways'] as $type) {
         Route::prefix("{$type}/{id}/payment")->where(['id' => '[0-9]+'])->group(function () use ($type) {
             Route::get('summary', [\App\Http\Controllers\PaymentController::class, 'summary'])
                 ->name("{$type}.payment.summary")

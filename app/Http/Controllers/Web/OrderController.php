@@ -114,11 +114,17 @@ class OrderController extends Controller
             'notes.user',
         ]);
 
+        // Check if FedEx and ShipStation are configured
+        $fedexConfigured = app(\App\Services\Shipping\ShippingLabelService::class)->isConfigured($store);
+        $shipstationConfigured = \App\Services\ShipStation\ShipStationService::forStore($store->id)->isConfigured();
+
         return Inertia::render('orders/Show', [
             'order' => $this->formatOrder($order),
             'statuses' => $this->getStatuses(),
             'paymentMethods' => $this->getPaymentMethods(),
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($order)),
+            'fedexConfigured' => $fedexConfigured,
+            'shipstationConfigured' => $shipstationConfigured,
         ]);
     }
 
@@ -145,13 +151,27 @@ class OrderController extends Controller
         // Get the current user's store user ID
         $currentStoreUserId = auth()->user()?->currentStoreUser()?->id;
 
-        // Get categories for filtering products
+        // Get categories for filtering products (simple format for product search)
         $categories = Category::where('store_id', $store->id)
             ->orderBy('name')
             ->get()
             ->map(fn ($category) => [
                 'value' => $category->id,
                 'label' => $category->name,
+            ]);
+
+        // Get categories with full tree structure for AddItemModal (used in trade-ins)
+        $tradeInCategories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($category) => [
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
             ]);
 
         // Get warehouses for the warehouse dropdown
@@ -172,6 +192,7 @@ class OrderController extends Controller
             'storeUsers' => $storeUsers,
             'currentStoreUserId' => $currentStoreUserId,
             'categories' => $categories,
+            'tradeInCategories' => $tradeInCategories,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $defaultWarehouseId,
             'defaultTaxRate' => $store->default_tax_rate ?? 0,
@@ -205,6 +226,7 @@ class OrderController extends Controller
             'notes' => 'nullable|string|max:5000',
             'shipping_cost' => 'nullable|numeric|min:0',
             'discount_cost' => 'nullable|numeric|min:0',
+            'date_of_purchase' => 'nullable|date',
         ]);
 
         $order->update($validated);
@@ -249,17 +271,214 @@ class OrderController extends Controller
         return back()->with('success', 'Order confirmed.');
     }
 
-    public function ship(Order $order): RedirectResponse
+    public function ship(Request $request, Order $order): RedirectResponse|JsonResponse
     {
         $this->authorizeOrder($order);
 
         if (! $order->isConfirmed() && $order->status !== Order::STATUS_PROCESSING) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Order cannot be shipped in its current state.'], 422);
+            }
+
             return back()->with('error', 'Order cannot be shipped in its current state.');
         }
 
-        $order->markAsShipped();
+        $validated = $request->validate([
+            'tracking_number' => 'nullable|string|max:255',
+            'carrier' => 'nullable|string|in:fedex,ups,usps,dhl,other',
+        ]);
+
+        $order->markAsShipped(
+            $validated['tracking_number'] ?? null,
+            $validated['carrier'] ?? null
+        );
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Order marked as shipped.',
+                'order' => $order->fresh(),
+            ]);
+        }
 
         return back()->with('success', 'Order marked as shipped.');
+    }
+
+    public function createShippingLabel(Request $request, Order $order): JsonResponse
+    {
+        $this->authorizeOrder($order);
+
+        if (! $order->isConfirmed() && $order->status !== Order::STATUS_PROCESSING) {
+            return response()->json(['error' => 'Order cannot be shipped in its current state.'], 422);
+        }
+
+        $validated = $request->validate([
+            'carrier' => 'required|string|in:fedex',
+            'service_type' => 'required|string',
+            'packaging_type' => 'required|string',
+            'weight' => 'required|numeric|min:0.1',
+            'length' => 'required|numeric|min:1',
+            'width' => 'required|numeric|min:1',
+            'height' => 'required|numeric|min:1',
+        ]);
+
+        // Check if order has shipping address
+        if (empty($order->shipping_address)) {
+            return response()->json(['error' => 'Order does not have a shipping address.'], 422);
+        }
+
+        try {
+            $shippingService = app(\App\Services\Shipping\ShippingLabelService::class);
+
+            if (! $shippingService->isConfigured($order->store)) {
+                return response()->json(['error' => 'FedEx is not configured for this store.'], 422);
+            }
+
+            // Create the shipping label for the order
+            $label = $this->createOrderShippingLabel($order, $validated);
+
+            // Mark the order as shipped with the tracking number
+            $order->markAsShipped($label->tracking_number, 'fedex');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Shipping label created successfully.',
+                'tracking_number' => $label->tracking_number,
+                'label_id' => $label->id,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+    }
+
+    protected function createOrderShippingLabel(Order $order, array $options): \App\Models\ShippingLabel
+    {
+        $store = $order->store;
+        $shippingAddress = $order->shipping_address;
+
+        $fedExService = \App\Services\Shipping\FedExService::forStore($store);
+
+        if (! $fedExService->isConfigured()) {
+            throw new \InvalidArgumentException('FedEx service is not configured.');
+        }
+
+        // Build sender address from store
+        $senderAddress = $this->buildStoreShippingAddress($store);
+
+        // Build recipient address from order shipping address
+        $recipientAddress = [
+            'name' => $shippingAddress['name'] ?? '',
+            'company' => $shippingAddress['company'] ?? '',
+            'street' => $shippingAddress['street1'] ?? $shippingAddress['address_line1'] ?? '',
+            'street2' => $shippingAddress['street2'] ?? $shippingAddress['address_line2'] ?? '',
+            'city' => $shippingAddress['city'] ?? '',
+            'state' => $shippingAddress['state'] ?? '',
+            'postal_code' => $shippingAddress['postal_code'] ?? $shippingAddress['zip'] ?? '',
+            'country' => $shippingAddress['country'] ?? 'US',
+            'phone' => $shippingAddress['phone'] ?? '',
+        ];
+
+        $packageDetails = [
+            'weight' => (float) $options['weight'],
+            'length' => (float) $options['length'],
+            'width' => (float) $options['width'],
+            'height' => (float) $options['height'],
+        ];
+
+        $result = $fedExService->createShipment(
+            $senderAddress,
+            $recipientAddress,
+            $packageDetails,
+            $options['service_type'],
+            'PDF',
+            $options['packaging_type']
+        );
+
+        if (! $result->success) {
+            throw new \InvalidArgumentException($result->errorMessage ?? 'Failed to create shipping label');
+        }
+
+        // Store the label PDF
+        $labelPath = sprintf(
+            'shipping-labels/orders/%s/outbound-%s.pdf',
+            $order->order_id ?? $order->id,
+            now()->timestamp
+        );
+        \Illuminate\Support\Facades\Storage::put($labelPath, base64_decode($result->labelPdf));
+
+        return $order->shippingLabels()->create([
+            'store_id' => $store->id,
+            'type' => \App\Models\ShippingLabel::TYPE_OUTBOUND,
+            'carrier' => \App\Models\ShippingLabel::CARRIER_FEDEX,
+            'tracking_number' => $result->trackingNumber,
+            'service_type' => $options['service_type'],
+            'label_format' => 'PDF',
+            'label_path' => $labelPath,
+            'label_zpl' => $result->labelZpl,
+            'shipping_cost' => $result->shippingCost,
+            'sender_address' => $senderAddress,
+            'recipient_address' => $recipientAddress,
+            'shipment_details' => array_merge($packageDetails, ['packaging_type' => $options['packaging_type']]),
+            'fedex_shipment_id' => $result->shipmentId,
+            'status' => \App\Models\ShippingLabel::STATUS_CREATED,
+            'shipped_at' => now(),
+        ]);
+    }
+
+    protected function buildStoreShippingAddress(\App\Models\Store $store): array
+    {
+        // Check for store's primary shipping address
+        $primaryAddress = $store->getPrimaryShippingAddress();
+        if ($primaryAddress && $primaryAddress->isValidForShipping()) {
+            return $primaryAddress->toShippingFormat();
+        }
+
+        // Fall back to store's direct fields
+        return [
+            'name' => $store->business_name ?? $store->name,
+            'company' => $store->business_name ?? $store->name,
+            'street' => $store->address ?? '',
+            'street2' => $store->address2 ?? '',
+            'city' => $store->city ?? '',
+            'state' => $store->state ?? '',
+            'postal_code' => $store->zip ?? '',
+            'country' => 'US',
+            'phone' => $store->phone ?? '',
+        ];
+    }
+
+    public function pushToShipStation(Order $order): JsonResponse
+    {
+        $this->authorizeOrder($order);
+
+        if ($order->shipstation_store) {
+            return response()->json(['error' => 'Order has already been pushed to ShipStation.'], 422);
+        }
+
+        try {
+            $shipStationService = \App\Services\ShipStation\ShipStationService::forStore($order->store_id);
+
+            if (! $shipStationService->isConfigured()) {
+                return response()->json(['error' => 'ShipStation is not configured for this store.'], 422);
+            }
+
+            $result = $shipStationService->createOrder($order);
+
+            if (! $result['success']) {
+                return response()->json(['error' => $result['error'] ?? 'Failed to push to ShipStation.'], 422);
+            }
+
+            // Store the ShipStation order ID
+            $order->update(['shipstation_store' => $result['order_id']]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order pushed to ShipStation successfully.',
+                'shipstation_order_id' => $result['order_id'],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
     }
 
     public function deliver(Order $order): RedirectResponse
@@ -453,8 +672,13 @@ class OrderController extends Controller
             })
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
             ->with(['category', 'images', 'variants'])
-            ->limit(20)
+            ->limit(50) // Get more initially to filter
             ->get()
+            ->filter(function ($product) {
+                // Include if sell_out_of_stock is enabled OR has stock available
+                return $product->sell_out_of_stock || $product->total_quantity > 0;
+            })
+            ->take(20)
             ->map(function ($product) {
                 $variant = $product->variants->first();
                 $totalQuantity = $product->total_quantity;
@@ -471,7 +695,8 @@ class OrderController extends Controller
                     'category' => $product->category?->name,
                     'image' => $product->images->first()?->url,
                 ];
-            });
+            })
+            ->values();
 
         return response()->json(['products' => $products]);
     }
@@ -515,6 +740,15 @@ class OrderController extends Controller
 
         $product = $variant->product;
         $totalQuantity = $product->total_quantity;
+
+        // Check if product can be sold (has stock or sell_out_of_stock is enabled)
+        if (! $product->sell_out_of_stock && $totalQuantity <= 0) {
+            return response()->json([
+                'found' => false,
+                'product' => null,
+                'message' => 'Product is out of stock',
+            ]);
+        }
 
         return response()->json([
             'found' => true,
@@ -617,16 +851,25 @@ class OrderController extends Controller
             'category_id' => 'nullable|exists:categories,id',
         ]);
 
+        // Get the category to inherit charge_taxes setting
+        $category = isset($validated['category_id']) && $validated['category_id']
+            ? Category::find($validated['category_id'])
+            : null;
+
+        // Inherit charge_taxes from category (defaults to true if no category)
+        $chargeTaxes = $category ? $category->getEffectiveChargeTaxes() : true;
+
         $product = Product::create([
             'store_id' => $store->id,
             'title' => $validated['title'],
             'handle' => $this->generateUniqueHandle($store->id, $validated['title']),
             'category_id' => $validated['category_id'] ?? null,
             'quantity' => 1,
-            'is_published' => false,
-            'is_draft' => true,
+            'is_published' => true,
+            'is_draft' => false,
             'has_variants' => false,
             'track_quantity' => true,
+            'charge_taxes' => $chargeTaxes,
         ]);
 
         $variant = $product->variants()->create([
@@ -708,9 +951,18 @@ class OrderController extends Controller
             'total' => $order->total,
             'total_paid' => $order->total_paid,
             'balance_due' => $order->balance_due,
+
+            // Payment adjustment fields for CollectPaymentModal
+            ...$order->getPaymentAdjustments(),
+
             'notes' => $order->notes,
             'billing_address' => $order->billing_address,
             'shipping_address' => $order->shipping_address,
+            'tracking_number' => $order->tracking_number,
+            'shipping_carrier' => $order->shipping_carrier,
+            'shipped_at' => $order->shipped_at?->toISOString(),
+            'tracking_url' => $order->getTrackingUrl(),
+            'order_id' => $order->order_id,
             'date_of_purchase' => $order->date_of_purchase?->toISOString(),
             'source_platform' => $order->source_platform,
             'external_marketplace_id' => $order->external_marketplace_id,

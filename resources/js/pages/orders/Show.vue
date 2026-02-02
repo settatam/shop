@@ -21,8 +21,12 @@ import {
     MapPinIcon,
     ArrowsRightLeftIcon,
     ScaleIcon,
+    PencilIcon,
+    XMarkIcon,
+    CreditCardIcon,
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
+import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
 
 interface Customer {
     id: number;
@@ -105,6 +109,7 @@ interface TradeInTransaction {
 
 interface Order {
     id: number;
+    order_id?: string;
     invoice_number?: string;
     status: string;
     sub_total: number;
@@ -113,12 +118,19 @@ interface Order {
     shipping_cost: number;
     discount_cost: number;
     trade_in_credit: number;
+    service_fee_value?: number;
+    service_fee_unit?: string;
+    service_fee_reason?: string;
     total: number;
     total_paid?: number;
     balance_due?: number;
     notes?: string;
     billing_address?: Record<string, string>;
     shipping_address?: Record<string, string>;
+    tracking_number?: string;
+    shipping_carrier?: string;
+    shipped_at?: string;
+    tracking_url?: string;
     date_of_purchase?: string;
     source_platform?: string;
     external_marketplace_id?: string;
@@ -199,6 +211,8 @@ interface Props {
     statuses: Status[];
     paymentMethods: PaymentMethod[];
     activityLogs?: ActivityDay[];
+    fedexConfigured?: boolean;
+    shipstationConfigured?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -211,6 +225,72 @@ const breadcrumbs: BreadcrumbItem[] = [
 // Payment modal
 const showPaymentModal = ref(false);
 const isProcessing = ref(false);
+
+// Ship modal
+const showShipModal = ref(false);
+
+// Edit mode
+const isEditMode = ref(false);
+const editingItems = ref<Record<number, { quantity: number; price: number; discount: number }>>({});
+
+// Date editing
+const isEditingDate = ref(false);
+const editingDate = ref('');
+
+const canEditOrder = computed(() => {
+    return props.order.is_pending || props.order.is_draft;
+});
+
+function enterEditMode() {
+    // Initialize editing state for all items
+    editingItems.value = {};
+    props.order.items.forEach(item => {
+        editingItems.value[item.id] = {
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount,
+        };
+    });
+    isEditMode.value = true;
+}
+
+function cancelEditMode() {
+    isEditMode.value = false;
+    editingItems.value = {};
+}
+
+function updateItem(itemId: number) {
+    if (isProcessing.value) return;
+    const itemData = editingItems.value[itemId];
+    if (!itemData) return;
+
+    isProcessing.value = true;
+    router.patch(`/orders/${props.order.id}/items/${itemId}`, {
+        quantity: itemData.quantity,
+        price: itemData.price,
+        discount: itemData.discount,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Item updated, stay in edit mode for other items
+        },
+        onFinish: () => { isProcessing.value = false; },
+    });
+}
+
+function removeItem(itemId: number) {
+    if (isProcessing.value) return;
+    if (!confirm('Are you sure you want to remove this item?')) return;
+
+    isProcessing.value = true;
+    router.delete(`/orders/${props.order.id}/items/${itemId}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            delete editingItems.value[itemId];
+        },
+        onFinish: () => { isProcessing.value = false; },
+    });
+}
 
 const statusColors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
@@ -264,6 +344,17 @@ function formatAddress(address?: Record<string, string>): string {
     return parts.join('\n');
 }
 
+function formatCarrier(carrier?: string): string {
+    const carriers: Record<string, string> = {
+        fedex: 'FedEx',
+        ups: 'UPS',
+        usps: 'USPS',
+        dhl: 'DHL',
+        other: 'Other',
+    };
+    return carriers[carrier ?? ''] || carrier || 'Unknown';
+}
+
 // Actions
 function confirmOrder() {
     if (isProcessing.value) return;
@@ -274,13 +365,17 @@ function confirmOrder() {
     });
 }
 
-function shipOrder() {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
-    router.post(`/orders/${props.order.id}/ship`, {}, {
-        preserveScroll: true,
-        onFinish: () => { isProcessing.value = false; },
-    });
+function openShipModal() {
+    showShipModal.value = true;
+}
+
+function closeShipModal() {
+    showShipModal.value = false;
+}
+
+function onShipSuccess() {
+    showShipModal.value = false;
+    router.reload();
 }
 
 function deliverOrder() {
@@ -349,6 +444,60 @@ function downloadInvoice() {
 const totalProfit = computed(() => {
     return props.order.items.reduce((sum, item) => sum + (item.line_profit ?? 0), 0);
 });
+
+const serviceFeeAmount = computed(() => {
+    const value = props.order.service_fee_value ?? 0;
+    if (value <= 0) return 0;
+
+    if (props.order.service_fee_unit === 'percent') {
+        const subtotalAfterDiscount = props.order.sub_total - (props.order.discount_cost ?? 0);
+        return subtotalAfterDiscount * value / 100;
+    }
+    return value;
+});
+
+function formatPaymentMethod(method: string): string {
+    const labels: Record<string, string> = {
+        cash: 'Cash',
+        credit_card: 'Credit Card',
+        debit_card: 'Debit Card',
+        check: 'Check',
+        store_credit: 'Store Credit',
+        gift_card: 'Gift Card',
+        trade_in: 'Trade-In',
+        wire_transfer: 'Wire Transfer',
+        other: 'Other',
+    };
+    return labels[method] || method.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function startEditingDate() {
+    // Format the date for the input (YYYY-MM-DD)
+    const date = props.order.date_of_purchase
+        ? new Date(props.order.date_of_purchase).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+    editingDate.value = date;
+    isEditingDate.value = true;
+}
+
+function cancelEditingDate() {
+    isEditingDate.value = false;
+    editingDate.value = '';
+}
+
+function saveDate() {
+    if (isProcessing.value) return;
+    isProcessing.value = true;
+    router.patch(`/orders/${props.order.id}`, {
+        date_of_purchase: editingDate.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isEditingDate.value = false;
+        },
+        onFinish: () => { isProcessing.value = false; },
+    });
+}
 </script>
 
 <template>
@@ -395,12 +544,12 @@ const totalProfit = computed(() => {
                         <button
                             v-if="order.can_be_shipped"
                             type="button"
-                            @click="shipOrder"
+                            @click="openShipModal"
                             :disabled="isProcessing"
                             class="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
                         >
                             <TruckIcon class="size-4" />
-                            Mark Shipped
+                            Ship Order
                         </button>
 
                         <button
@@ -486,10 +635,30 @@ const totalProfit = computed(() => {
                     <div class="space-y-6 lg:col-span-2">
                         <!-- Items -->
                         <div class="rounded-lg bg-white shadow dark:bg-gray-800">
-                            <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                            <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                                 <h2 class="text-lg font-medium text-gray-900 dark:text-white">
                                     Items ({{ order.item_count }})
                                 </h2>
+                                <div v-if="canEditOrder" class="flex items-center gap-2">
+                                    <button
+                                        v-if="!isEditMode"
+                                        type="button"
+                                        @click="enterEditMode"
+                                        class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                    >
+                                        <PencilIcon class="size-4" />
+                                        Edit
+                                    </button>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        @click="cancelEditMode"
+                                        class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                    >
+                                        <XMarkIcon class="size-4" />
+                                        Done
+                                    </button>
+                                </div>
                             </div>
                             <div class="divide-y divide-gray-200 dark:divide-gray-700">
                                 <div
@@ -512,20 +681,82 @@ const totalProfit = computed(() => {
                                         <p v-else class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
                                         <p class="text-sm text-gray-500 dark:text-gray-400">
                                             <span v-if="item.sku">SKU: {{ item.sku }}</span>
-                                            <span v-if="item.sku && item.quantity > 1"> | </span>
-                                            <span v-if="item.quantity > 1">Qty: {{ item.quantity }}</span>
                                         </p>
                                         <p v-if="item.notes" class="mt-1 text-sm text-gray-400 dark:text-gray-500">{{ item.notes }}</p>
                                     </div>
-                                    <div class="text-right">
-                                        <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.line_total) }}</p>
-                                        <p v-if="item.discount > 0" class="text-sm text-green-600 dark:text-green-400">
-                                            -{{ formatCurrency(item.discount) }} discount
-                                        </p>
-                                        <p v-if="item.line_profit !== undefined" class="text-xs text-gray-400">
-                                            Profit: {{ formatCurrency(item.line_profit) }}
-                                        </p>
-                                    </div>
+
+                                    <!-- Edit Mode -->
+                                    <template v-if="isEditMode && editingItems[item.id]">
+                                        <div class="flex items-center gap-2">
+                                            <div>
+                                                <label class="block text-xs text-gray-500 dark:text-gray-400">Qty</label>
+                                                <input
+                                                    v-model.number="editingItems[item.id].quantity"
+                                                    type="number"
+                                                    min="1"
+                                                    class="w-16 rounded-md border-0 px-2 py-1 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-gray-500 dark:text-gray-400">Price</label>
+                                                <div class="relative">
+                                                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-500 text-sm">$</span>
+                                                    <input
+                                                        v-model.number="editingItems[item.id].price"
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        class="w-24 rounded-md border-0 py-1 pl-5 pr-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-gray-500 dark:text-gray-400">Discount</label>
+                                                <div class="relative">
+                                                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-500 text-sm">$</span>
+                                                    <input
+                                                        v-model.number="editingItems[item.id].discount"
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        class="w-20 rounded-md border-0 py-1 pl-5 pr-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                @click="updateItem(item.id)"
+                                                :disabled="isProcessing"
+                                                class="mt-4 rounded-md bg-indigo-600 px-2 py-1 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                type="button"
+                                                @click="removeItem(item.id)"
+                                                :disabled="isProcessing"
+                                                class="mt-4 rounded-md p-1 text-red-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-900/20"
+                                            >
+                                                <TrashIcon class="size-5" />
+                                            </button>
+                                        </div>
+                                    </template>
+
+                                    <!-- View Mode -->
+                                    <template v-else>
+                                        <div class="text-right">
+                                            <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.line_total) }}</p>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                {{ item.quantity }} × {{ formatCurrency(item.price) }}
+                                            </p>
+                                            <p v-if="item.discount > 0" class="text-sm text-green-600 dark:text-green-400">
+                                                -{{ formatCurrency(item.discount) }} discount
+                                            </p>
+                                            <p v-if="item.line_profit !== undefined" class="text-xs text-gray-400">
+                                                Profit: {{ formatCurrency(item.line_profit) }}
+                                            </p>
+                                        </div>
+                                    </template>
                                 </div>
                                 <div v-if="order.items.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
                                     No items in this order.
@@ -584,6 +815,63 @@ const totalProfit = computed(() => {
                             </div>
                         </div>
 
+                        <!-- Payment History -->
+                        <div v-if="order.payments && order.payments.length > 0" class="rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                                <h2 class="flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
+                                    <CreditCardIcon class="size-5 text-gray-500 dark:text-gray-400" />
+                                    Payments ({{ order.payments.length }})
+                                </h2>
+                            </div>
+                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <div v-for="payment in order.payments" :key="payment.id" class="p-4">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                                                <BanknotesIcon class="size-5 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-gray-900 dark:text-white">
+                                                    {{ formatCurrency(payment.amount) }}
+                                                </p>
+                                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                    {{ formatPaymentMethod(payment.payment_method) }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <span :class="[
+                                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                                payment.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                                            ]">
+                                                {{ payment.status }}
+                                            </span>
+                                            <p v-if="payment.paid_at" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                {{ formatDate(payment.paid_at) }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div v-if="payment.reference || payment.notes || payment.user" class="mt-2 ml-13 space-y-1">
+                                        <p v-if="payment.reference" class="text-sm text-gray-500 dark:text-gray-400">
+                                            <span class="font-medium">Ref:</span> {{ payment.reference }}
+                                        </p>
+                                        <p v-if="payment.notes" class="text-sm text-gray-500 dark:text-gray-400">
+                                            <span class="font-medium">Note:</span> {{ payment.notes }}
+                                        </p>
+                                        <p v-if="payment.user" class="text-xs text-gray-400 dark:text-gray-500">
+                                            Recorded by {{ payment.user.name }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-t border-gray-200 bg-gray-50 px-6 py-3 dark:border-gray-700 dark:bg-gray-700/50">
+                                <div class="flex justify-between text-sm">
+                                    <span class="font-medium text-gray-700 dark:text-gray-300">Total Paid</span>
+                                    <span class="font-medium text-green-600 dark:text-green-400">{{ formatCurrency(order.total_paid ?? 0) }}</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Notes -->
                         <div v-if="order.notes" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-3 text-lg font-medium text-gray-900 dark:text-white">Notes</h2>
@@ -607,6 +895,58 @@ const totalProfit = computed(() => {
                                 <p class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{{ formatAddress(order.billing_address) }}</p>
                             </div>
                         </div>
+
+                        <!-- Tracking Information -->
+                        <div v-if="order.tracking_number" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-3 flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
+                                <TruckIcon class="size-5" />
+                                Shipping Tracking
+                            </h2>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-500 dark:text-gray-400">Carrier</span>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ formatCarrier(order.shipping_carrier) }}
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-500 dark:text-gray-400">Tracking Number</span>
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ order.tracking_number }}
+                                    </span>
+                                </div>
+                                <div v-if="order.shipped_at" class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-500 dark:text-gray-400">Shipped</span>
+                                    <span class="text-sm text-gray-900 dark:text-white">
+                                        {{ formatDate(order.shipped_at) }}
+                                    </span>
+                                </div>
+                                <div v-if="order.tracking_url" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                    <a
+                                        :href="order.tracking_url"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                    >
+                                        <TruckIcon class="size-4" />
+                                        Track Package
+                                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <NotesSection
+                            :notes="order.note_entries"
+                            notable-type="order"
+                            :notable-id="order.id"
+                        />
+
+                        <!-- Activity Log -->
+                        <ActivityTimeline :activities="activityLogs" />
                     </div>
 
                     <!-- Sidebar -->
@@ -635,6 +975,13 @@ const totalProfit = computed(() => {
                                     <dt class="text-gray-500 dark:text-gray-400">Tax ({{ (order.tax_rate * 100).toFixed(2) }}%)</dt>
                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(order.sales_tax ?? 0) }}</dd>
                                 </div>
+                                <div v-if="serviceFeeAmount > 0" class="flex justify-between text-sm">
+                                    <dt class="text-gray-500 dark:text-gray-400">
+                                        Service Fee
+                                        <span v-if="order.service_fee_reason" class="text-xs">({{ order.service_fee_reason }})</span>
+                                    </dt>
+                                    <dd class="text-gray-900 dark:text-white">{{ formatCurrency(serviceFeeAmount) }}</dd>
+                                </div>
                                 <div class="flex justify-between border-t border-gray-200 pt-3 text-base font-medium dark:border-gray-700">
                                     <dt class="text-gray-900 dark:text-white">Total</dt>
                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(order.total) }}</dd>
@@ -654,47 +1001,59 @@ const totalProfit = computed(() => {
                             </dl>
                         </div>
 
-                        <!-- Payment History -->
-                        <div v-if="order.payments && order.payments.length > 0" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Payment History</h2>
-                            <div class="space-y-3">
-                                <div v-for="payment in order.payments" :key="payment.id" class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(payment.amount) }}</p>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                                            {{ payment.payment_method }}
-                                            <span v-if="payment.paid_at"> &bull; {{ formatDate(payment.paid_at) }}</span>
-                                        </p>
-                                        <p v-if="payment.user" class="text-xs text-gray-400 dark:text-gray-500">
-                                            by {{ payment.user.name }}
-                                        </p>
-                                    </div>
-                                    <span :class="[
-                                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                        payment.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
-                                    ]">
-                                        {{ payment.status }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Details -->
                         <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Details</h2>
                             <dl class="space-y-4">
                                 <div class="flex items-start gap-3">
                                     <CalendarIcon class="size-5 shrink-0 text-gray-400" />
+                                    <div class="flex-1">
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Sale Date</dt>
+                                        <template v-if="isEditingDate">
+                                            <div class="mt-1 flex items-center gap-2">
+                                                <input
+                                                    v-model="editingDate"
+                                                    type="date"
+                                                    class="block w-full rounded-md border-0 px-2 py-1 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    @click="saveDate"
+                                                    :disabled="isProcessing"
+                                                    class="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                                >
+                                                    Save
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    @click="cancelEditingDate"
+                                                    class="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-300"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </template>
+                                        <template v-else>
+                                            <div class="flex items-center gap-2">
+                                                <dd class="text-gray-900 dark:text-white">{{ order.date_of_purchase ? formatDate(order.date_of_purchase) : formatDate(order.created_at) }}</dd>
+                                                <button
+                                                    v-if="canEditOrder"
+                                                    type="button"
+                                                    @click="startEditingDate"
+                                                    class="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                                                    title="Edit date"
+                                                >
+                                                    <PencilIcon class="size-3.5" />
+                                                </button>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <CalendarIcon class="size-5 shrink-0 text-gray-400" />
                                     <div>
                                         <dt class="text-sm text-gray-500 dark:text-gray-400">Created</dt>
                                         <dd class="text-gray-900 dark:text-white">{{ formatDate(order.created_at) }}</dd>
-                                    </div>
-                                </div>
-                                <div v-if="order.date_of_purchase" class="flex items-start gap-3">
-                                    <CalendarIcon class="size-5 shrink-0 text-gray-400" />
-                                    <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Purchase Date</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ formatDate(order.date_of_purchase) }}</dd>
                                     </div>
                                 </div>
                                 <div v-if="order.source_platform" class="flex items-start gap-3">
@@ -740,16 +1099,6 @@ const totalProfit = computed(() => {
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Location</h2>
                             <p class="font-medium text-gray-900 dark:text-white">{{ order.warehouse.name }}</p>
                         </div>
-
-                        <!-- Notes -->
-                        <NotesSection
-                            :notes="order.note_entries"
-                            notable-type="order"
-                            :notable-id="order.id"
-                        />
-
-                        <!-- Activity Log -->
-                        <ActivityTimeline :activities="activityLogs" />
                     </div>
                 </div>
             </div>
@@ -764,6 +1113,22 @@ const totalProfit = computed(() => {
             :subtitle="order.customer?.full_name || ''"
             @close="closePaymentModal"
             @success="onPaymentSuccess"
+        />
+
+        <!-- Ship Order Modal -->
+        <ShipOrderModal
+            :show="showShipModal"
+            :order="{
+                id: order.id,
+                order_id: order.order_id || order.invoice_number || `Order #${order.id}`,
+                tracking_number: order.tracking_number,
+                shipping_carrier: order.shipping_carrier,
+                shipping_address: order.shipping_address,
+            }"
+            :fedex-configured="fedexConfigured"
+            :shipstation-configured="shipstationConfigured"
+            @close="closeShipModal"
+            @success="onShipSuccess"
         />
     </AppLayout>
 </template>

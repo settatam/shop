@@ -160,15 +160,33 @@ class PaymentService
     protected function createPayment(Payable $payable, array $paymentData, int $userId): Payment
     {
         // Calculate service fee amount
+        // Service fee is only collected on subtotal (price of items), not on shipping, taxes, etc.
+        // For partial payments, service fee is on the payment amount but capped at the subtotal
         $serviceFeeValue = $paymentData['service_fee_value'] ?? null;
         $serviceFeeUnit = $paymentData['service_fee_unit'] ?? null;
         $serviceFeeAmount = null;
 
         if ($serviceFeeValue && $serviceFeeValue > 0) {
+            // Get subtotal (price of items) after any discount
+            $adjustments = $payable->getPaymentAdjustments();
+            $subtotal = $payable->getSubtotal();
+            $discountValue = $adjustments['discount_value'] ?? 0;
+            $discountUnit = $adjustments['discount_unit'] ?? 'fixed';
+            $discountAmount = $discountUnit === 'percent'
+                ? ($subtotal * $discountValue / 100)
+                : $discountValue;
+            $subtotalAfterDiscount = $subtotal - $discountAmount;
+
+            // The base for service fee calculation is the payment amount, capped at subtotal
+            $serviceFeeBase = min($paymentData['amount'], $subtotalAfterDiscount);
+
             if ($serviceFeeUnit === 'percent') {
-                $serviceFeeAmount = round($paymentData['amount'] * $serviceFeeValue / 100, 2);
+                $serviceFeeAmount = round($serviceFeeBase * $serviceFeeValue / 100, 2);
             } else {
-                $serviceFeeAmount = $serviceFeeValue;
+                // For fixed fee, cap at the proportional amount if partial payment
+                $serviceFeeAmount = $paymentData['amount'] >= $subtotalAfterDiscount
+                    ? $serviceFeeValue
+                    : round($serviceFeeValue * ($paymentData['amount'] / $subtotalAfterDiscount), 2);
             }
         }
 

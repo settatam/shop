@@ -72,6 +72,9 @@ class Order extends Model implements Payable
         'shipping_weight',
         'order_id',
         'shipping_gateway_id',
+        'tracking_number',
+        'shipping_carrier',
+        'shipped_at',
         'invoice_number',
         'shipstation_store',
         'square_order_id',
@@ -96,6 +99,7 @@ class Order extends Model implements Payable
             'service_fee_value' => 'decimal:2',
             'shipping_weight' => 'decimal:4',
             'date_of_purchase' => 'date',
+            'shipped_at' => 'datetime',
             'billing_address' => 'array',
             'shipping_address' => 'array',
         ];
@@ -153,6 +157,14 @@ class Order extends Model implements Payable
     public function invoice(): MorphOne
     {
         return $this->morphOne(Invoice::class, 'invoiceable');
+    }
+
+    /**
+     * @return MorphMany<ShippingLabel, $this>
+     */
+    public function shippingLabels(): MorphMany
+    {
+        return $this->morphMany(ShippingLabel::class, 'shippable');
     }
 
     public function memo(): BelongsTo
@@ -259,11 +271,42 @@ class Order extends Model implements Payable
         return $this;
     }
 
-    public function markAsShipped(): self
+    public function markAsShipped(?string $trackingNumber = null, ?string $carrier = null): self
     {
-        $this->update(['status' => self::STATUS_SHIPPED]);
+        $data = [
+            'status' => self::STATUS_SHIPPED,
+            'shipped_at' => now(),
+        ];
+
+        if ($trackingNumber) {
+            $data['tracking_number'] = $trackingNumber;
+        }
+
+        if ($carrier) {
+            $data['shipping_carrier'] = $carrier;
+        }
+
+        $this->update($data);
 
         return $this;
+    }
+
+    /**
+     * Get the tracking URL based on carrier.
+     */
+    public function getTrackingUrl(): ?string
+    {
+        if (! $this->tracking_number) {
+            return null;
+        }
+
+        return match ($this->shipping_carrier) {
+            'fedex' => "https://www.fedex.com/fedextrack/?trknbr={$this->tracking_number}",
+            'ups' => "https://www.ups.com/track?tracknum={$this->tracking_number}",
+            'usps' => "https://tools.usps.com/go/TrackConfirmAction?tLabels={$this->tracking_number}",
+            'dhl' => "https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id={$this->tracking_number}",
+            default => null,
+        };
     }
 
     public function markAsDelivered(): self
@@ -456,20 +499,25 @@ class Order extends Model implements Payable
             'service_fee_unit' => $this->service_fee_unit ?? 'fixed',
             'service_fee_reason' => $this->service_fee_reason,
             'charge_taxes' => (float) ($this->tax_rate ?? 0) > 0,
-            'tax_rate' => (float) ($this->tax_rate ?? 0),
-            'tax_type' => 'exclusive',
+            'tax_rate' => (float) ($this->tax_rate ?? 0) * 100,
+            'tax_type' => 'percent',
             'shipping_cost' => (float) ($this->shipping_cost ?? 0),
         ];
     }
 
     public function updatePaymentAdjustments(array $adjustments): void
     {
+        // Convert tax rate from percentage (e.g. 8.25) to decimal (e.g. 0.0825)
+        $taxRate = isset($adjustments['tax_rate'])
+            ? $adjustments['tax_rate'] / 100
+            : $this->tax_rate;
+
         $this->update([
             'discount_cost' => $adjustments['discount_value'] ?? $this->discount_cost,
             'service_fee_value' => $adjustments['service_fee_value'] ?? $this->service_fee_value,
             'service_fee_unit' => $adjustments['service_fee_unit'] ?? $this->service_fee_unit,
             'service_fee_reason' => $adjustments['service_fee_reason'] ?? $this->service_fee_reason,
-            'tax_rate' => $adjustments['tax_rate'] ?? $this->tax_rate,
+            'tax_rate' => $taxRate,
             'shipping_cost' => $adjustments['shipping_cost'] ?? $this->shipping_cost,
         ]);
     }
@@ -481,5 +529,40 @@ class Order extends Model implements Payable
             'sales_tax' => $summary['tax_amount'] ?? $this->sales_tax,
             'total' => $summary['grand_total'] ?? $this->total,
         ]);
+
+        // Sync invoice totals after updating
+        $this->syncInvoiceTotals();
+    }
+
+    /**
+     * Sync the invoice totals (subtotal, tax, shipping, discount, total) with the order.
+     */
+    public function syncInvoiceTotals(): void
+    {
+        if (! $this->invoice) {
+            $this->load('invoice');
+        }
+
+        if ($this->invoice) {
+            // Calculate service fee amount for the invoice
+            $serviceFeeAmount = 0;
+            if (($this->service_fee_value ?? 0) > 0) {
+                $subtotalAfterDiscount = $this->sub_total - ($this->discount_cost ?? 0);
+                $serviceFeeAmount = ($this->service_fee_unit === 'percent')
+                    ? $subtotalAfterDiscount * $this->service_fee_value / 100
+                    : $this->service_fee_value;
+            }
+
+            $this->invoice->update([
+                'subtotal' => $this->sub_total ?? 0,
+                'tax' => $this->sales_tax ?? 0,
+                'shipping' => $this->shipping_cost ?? 0,
+                'discount' => $this->discount_cost ?? 0,
+                'total' => $this->total ?? 0,
+            ]);
+
+            // Also sync payment status
+            $this->syncInvoicePaymentStatus();
+        }
     }
 }

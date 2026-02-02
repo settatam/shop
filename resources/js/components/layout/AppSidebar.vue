@@ -50,10 +50,11 @@ const navigation: NavGroup[] = [
         ],
     },
     {
-        name: 'Orders',
+        name: 'Sales',
         icon: ShoppingCartIcon,
         children: [
             { name: 'All Orders', href: '/orders' },
+            { name: 'Layaways', href: '/layaways' },
             { name: 'Shipments', href: '/shipments' },
             { name: 'Returns', href: '/returns' },
         ],

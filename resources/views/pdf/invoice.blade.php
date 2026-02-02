@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Invoice {{ $invoice->invoice_number }}</title>
+@php
+    // Provide defaults for optional variables
+    $barcodeBase64 = $barcodeBase64 ?? '';
+    $tradeIns = $tradeIns ?? [];
+    $dateOfPurchase = $dateOfPurchase ?? null;
+    $primaryPaymentMethod = $primaryPaymentMethod ?? 'N/A';
+    $paymentModes = $paymentModes ?? [];
+    $salesperson = $salesperson ?? null;
+@endphp
     <style>
         * {
             margin: 0;
@@ -14,505 +23,522 @@
         body {
             font-family: DejaVu Sans, sans-serif;
             font-size: 12px;
-            line-height: 1.5;
-            color: #1f2937;
+            line-height: 1.4;
+            color: #334155;
+            background: #fff;
         }
 
         .container {
-            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
         }
 
+        /* Header */
         .header {
+            padding: 24px 36px;
             display: table;
             width: 100%;
-            margin-bottom: 40px;
         }
 
         .header-left {
             display: table-cell;
-            width: 50%;
+            width: 70%;
             vertical-align: top;
         }
 
         .header-right {
             display: table-cell;
-            width: 50%;
+            width: 30%;
             vertical-align: top;
             text-align: right;
         }
 
-        .company-name {
-            font-size: 24px;
-            font-weight: bold;
-            color: #111827;
+        .store-logo {
+            max-height: 48px;
             margin-bottom: 8px;
         }
 
-        .company-details {
-            color: #6b7280;
-            font-size: 11px;
+        .store-info {
+            font-size: 10px;
+            color: #64748b;
+            text-align: left;
         }
 
-        .invoice-title {
-            font-size: 28px;
-            font-weight: bold;
-            color: #111827;
-            margin-bottom: 8px;
+        .barcode img {
+            height: 40px;
         }
 
-        .invoice-number {
-            font-size: 14px;
-            color: #6b7280;
+        /* Invoice Meta */
+        .invoice-meta {
+            padding: 24px 36px;
+        }
+
+        .meta-grid {
+            display: table;
+            width: 100%;
+        }
+
+        .meta-col {
+            display: table-cell;
+            width: 25%;
+            vertical-align: top;
+            padding-right: 16px;
+        }
+
+        .meta-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #334155;
             margin-bottom: 4px;
         }
 
-        .invoice-date {
-            font-size: 11px;
-            color: #6b7280;
+        .meta-value {
+            font-size: 10px;
+            color: #64748b;
         }
 
-        .addresses {
-            display: table;
+        /* Content */
+        .content {
+            padding: 12px 36px;
+        }
+
+        /* Tables */
+        table {
             width: 100%;
-            margin-bottom: 30px;
+            border-collapse: collapse;
         }
 
-        .bill-to {
-            display: table-cell;
-            width: 50%;
-            vertical-align: top;
-        }
-
-        .invoice-details {
-            display: table-cell;
-            width: 50%;
-            vertical-align: top;
-            text-align: right;
+        /* Trade-ins Section */
+        .trade-ins-section {
+            margin-bottom: 16px;
         }
 
         .section-title {
-            font-size: 10px;
-            font-weight: bold;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #334155;
             margin-bottom: 8px;
         }
 
-        .customer-name {
-            font-weight: bold;
-            color: #111827;
-            margin-bottom: 4px;
-        }
-
-        .customer-details {
-            color: #6b7280;
-            font-size: 11px;
-        }
-
-        .detail-row {
-            margin-bottom: 4px;
-        }
-
-        .detail-label {
-            color: #6b7280;
-            font-size: 11px;
-        }
-
-        .detail-value {
-            font-weight: 600;
-            color: #111827;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .status-paid {
-            background-color: #d1fae5;
-            color: #065f46;
-        }
-
-        .status-pending {
-            background-color: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-partial {
-            background-color: #dbeafe;
-            color: #1e40af;
-        }
-
-        .status-overdue {
-            background-color: #fee2e2;
-            color: #991b1b;
-        }
-
-        .status-void {
-            background-color: #f3f4f6;
-            color: #6b7280;
-        }
-
-        table.items {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-        }
-
-        table.items th {
-            background-color: #f9fafb;
-            border-bottom: 2px solid #e5e7eb;
-            padding: 12px;
+        .trade-ins-table th,
+        .items-table th {
+            padding: 10px 8px;
             text-align: left;
             font-size: 10px;
-            font-weight: bold;
-            color: #6b7280;
-            text-transform: uppercase;
+            font-weight: 600;
+            color: #334155;
+            border-bottom: 2px solid #64748b;
         }
 
-        table.items th.text-right {
+        .trade-ins-table th.text-right,
+        .items-table th.text-right {
             text-align: right;
         }
 
-        table.items td {
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
+        .trade-ins-table td,
+        .items-table td {
+            padding: 8px;
+            font-size: 10px;
+            color: #64748b;
+            border-bottom: 1px solid #e2e8f0;
             vertical-align: top;
         }
 
-        table.items td.text-right {
+        .trade-ins-table td.text-right,
+        .items-table td.text-right {
             text-align: right;
         }
 
-        .item-description {
-            color: #111827;
+        .item-title {
+            font-weight: 500;
+            color: #334155;
         }
 
-        .totals {
-            width: 100%;
-            margin-bottom: 30px;
+        .item-sku {
+            color: #94a3b8;
         }
 
-        .totals-table {
-            width: 300px;
-            margin-left: auto;
+        .item-image {
+            width: 32px;
+            height: 32px;
+            object-fit: cover;
         }
 
-        .totals-row {
-            display: table;
-            width: 100%;
-            padding: 8px 0;
+        /* Totals Footer */
+        .totals-footer th,
+        .totals-footer td {
+            padding: 8px;
+            font-size: 10px;
         }
 
-        .totals-label {
-            display: table-cell;
-            width: 60%;
-            color: #6b7280;
+        .totals-footer th {
             text-align: right;
-            padding-right: 20px;
+            color: #64748b;
+            font-weight: 400;
+            border: none;
         }
 
-        .totals-value {
-            display: table-cell;
-            width: 40%;
+        .totals-footer td {
             text-align: right;
-            color: #111827;
+            color: #64748b;
+            border: none;
         }
 
-        .totals-row.total {
-            border-top: 2px solid #e5e7eb;
-            margin-top: 8px;
+        .totals-footer tr.total th,
+        .totals-footer tr.total td {
+            font-size: 12px;
+            font-weight: 600;
+            color: #334155;
             padding-top: 12px;
         }
 
-        .totals-row.total .totals-label,
-        .totals-row.total .totals-value {
-            font-weight: bold;
+        /* Payment Modes */
+        .payment-modes-table {
+            width: 100%;
+        }
+
+        .payment-modes-table td {
+            font-size: 10px;
+            padding: 2px 0;
+            border: none;
+        }
+
+        .payment-modes-table td:first-child {
+            text-align: left;
+        }
+
+        .payment-modes-table td:last-child {
+            text-align: right;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 48px;
+            padding: 24px 36px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .signature-table {
+            width: 100%;
+            margin-bottom: 24px;
+        }
+
+        .signature-table td {
+            width: 25%;
+            text-align: center;
+            padding: 8px;
+            font-size: 10px;
+            color: #64748b;
+            vertical-align: top;
+        }
+
+        .signature-table .label {
+            font-weight: 600;
+            color: #334155;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 40px;
+        }
+
+        .signature-table .value {
+            padding-top: 8px;
+        }
+
+        .disclaimer {
+            font-size: 9px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        .disclaimer-title {
             font-size: 14px;
-        }
-
-        .totals-row.balance-due {
-            background-color: #f9fafb;
-            padding: 12px;
-            margin-top: 8px;
-        }
-
-        .totals-row.balance-due .totals-label,
-        .totals-row.balance-due .totals-value {
-            font-weight: bold;
-            font-size: 16px;
-            color: #111827;
-        }
-
-        .payments-section {
-            margin-bottom: 30px;
-        }
-
-        .payments-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #111827;
+            font-weight: 700;
+            color: #334155;
+            text-align: center;
             margin-bottom: 12px;
         }
 
-        table.payments {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        table.payments th {
-            background-color: #f9fafb;
-            padding: 8px 12px;
-            text-align: left;
-            font-size: 10px;
-            font-weight: bold;
-            color: #6b7280;
-            text-transform: uppercase;
-        }
-
-        table.payments td {
-            padding: 8px 12px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 11px;
-        }
-
-        .notes {
-            margin-top: 30px;
-            padding: 16px;
-            background-color: #f9fafb;
-            border-radius: 4px;
-        }
-
-        .notes-title {
-            font-weight: bold;
-            color: #111827;
+        .disclaimer p {
             margin-bottom: 8px;
         }
 
-        .notes-content {
-            color: #6b7280;
-            font-size: 11px;
-        }
-
-        .footer {
-            margin-top: 40px;
-            text-align: center;
-            color: #9ca3af;
-            font-size: 10px;
-        }
-
-        .reference {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #e5e7eb;
-        }
-
-        .reference-title {
-            font-size: 11px;
-            font-weight: bold;
-            color: #6b7280;
-            margin-bottom: 4px;
-        }
-
-        .reference-value {
-            font-size: 12px;
-            color: #111827;
+        .page-break {
+            page-break-after: always;
         }
     </style>
 </head>
 <body>
     <div class="container">
+        {{-- Header --}}
         <div class="header">
             <div class="header-left">
-                <div class="company-name">{{ $store['name'] }}</div>
-                <div class="company-details">
-                    @if($store['address'])
-                        {{ $store['address'] }}<br>
+                @if(!empty($store['logo']))
+                    <img src="{{ $store['logo'] }}" class="store-logo" alt="{{ $store['name'] }}">
+                @else
+                    <div style="font-size: 18px; font-weight: bold; color: #1e293b; margin-bottom: 8px;">
+                        {{ $store['name'] }}
+                    </div>
+                @endif
+                <div class="store-info">
+                    @if(!empty($store['address']))
+                        {{ $store['address'] }} {{ $store['address2'] ?? '' }}<br>
                     @endif
-                    @if($store['address2'])
-                        {{ $store['address2'] }}<br>
+                    @if(!empty($store['city']) || !empty($store['state']) || !empty($store['zip']))
+                        {{ $store['city'] ?? '' }}, {{ $store['state'] ?? '' }} {{ $store['zip'] ?? '' }}<br>
                     @endif
-                    @if($store['city'] || $store['state'] || $store['zip'])
-                        {{ $store['city'] }}@if($store['city'] && $store['state']),@endif
-                        {{ $store['state'] }} {{ $store['zip'] }}<br>
-                    @endif
-                    @if($store['phone'])
+                    @if(!empty($store['phone']))
                         {{ $store['phone'] }}<br>
                     @endif
-                    @if($store['email'])
+                    @if(!empty($store['email']))
                         {{ $store['email'] }}
                     @endif
                 </div>
             </div>
             <div class="header-right">
-                <div class="invoice-title">INVOICE</div>
-                <div class="invoice-number">#{{ $invoice->invoice_number }}</div>
-                <div class="invoice-date">
-                    Issued: {{ $invoice->created_at->format('F j, Y') }}
-                </div>
+                @isset($barcodeBase64)
+                    @if(!empty($barcodeBase64))
+                        <div class="barcode">
+                            <img src="data:image/png;base64,{{ $barcodeBase64 }}" alt="Barcode">
+                        </div>
+                    @endif
+                @endisset
             </div>
         </div>
 
-        <div class="addresses">
-            <div class="bill-to">
-                <div class="section-title">Bill To</div>
-                @if($customer)
-                    <div class="customer-name">{{ $customer['name'] }}</div>
-                    <div class="customer-details">
-                        @if($customer['address'])
-                            {{ $customer['address'] }}<br>
+        {{-- Invoice Meta --}}
+        <div class="invoice-meta">
+            <div class="meta-grid">
+                <div class="meta-col">
+                    <div class="meta-label">Invoice Detail:</div>
+                    <div class="meta-value">
+                        {{ $store['name'] ?? '' }}<br>
+                        @if(!empty($store['address']))
+                            {{ $store['address'] }} {{ $store['address2'] ?? '' }}<br>
                         @endif
-                        @if($customer['address2'])
-                            {{ $customer['address2'] }}<br>
+                        @if(!empty($store['city']))
+                            {{ $store['city'] }}<br>
                         @endif
-                        @if($customer['city'] || $customer['zip'])
-                            {{ $customer['city'] }} {{ $customer['zip'] }}<br>
-                        @endif
-                        @if($customer['email'])
-                            {{ $customer['email'] }}<br>
-                        @endif
-                        @if($customer['phone'])
-                            {{ $customer['phone'] }}
+                        @if(!empty($store['state']) || !empty($store['zip']))
+                            {{ $store['state'] ?? '' }} {{ $store['zip'] ?? '' }}
                         @endif
                     </div>
-                @else
-                    <div class="customer-details">No customer information</div>
-                @endif
-            </div>
-            <div class="invoice-details">
-                <div class="detail-row">
-                    <span class="detail-label">Status:</span>
-                    <span class="status-badge status-{{ $invoice->status }}">
-                        {{ ucfirst($invoice->status) }}
-                    </span>
                 </div>
-                @if($invoice->due_date)
-                    <div class="detail-row">
-                        <span class="detail-label">Due Date:</span>
-                        <span class="detail-value">{{ $invoice->due_date->format('F j, Y') }}</span>
-                    </div>
-                @endif
-                <div class="detail-row">
-                    <span class="detail-label">Reference:</span>
-                    <span class="detail-value">{{ $invoiceableType }}</span>
-                </div>
-            </div>
-        </div>
 
-        <table class="items">
-            <thead>
-                <tr>
-                    <th style="width: 50%;">Description</th>
-                    <th class="text-right" style="width: 15%;">Quantity</th>
-                    <th class="text-right" style="width: 17.5%;">Unit Price</th>
-                    <th class="text-right" style="width: 17.5%;">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($lineItems as $item)
-                    <tr>
-                        <td class="item-description">{{ $item['description'] }}</td>
-                        <td class="text-right">{{ $item['quantity'] }}</td>
-                        <td class="text-right">${{ number_format($item['unit_price'], 2) }}</td>
-                        <td class="text-right">${{ number_format($item['total'], 2) }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="4" style="text-align: center; color: #9ca3af; padding: 20px;">
-                            No line items available
-                        </td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+                <div class="meta-col">
+                    <div class="meta-label">Billed To</div>
+                    <div class="meta-value">
+                        @if($customer)
+                            @if(!empty($customer['company_name']))
+                                {{ $customer['company_name'] }}<br>
+                            @endif
+                            {{ $customer['first_name'] ?? '' }} {{ $customer['last_name'] ?? '' }}<br>
+                            @if(!empty($customer['address']))
+                                {{ $customer['address'] }} {{ $customer['address2'] ?? '' }}<br>
+                            @endif
+                            @if(!empty($customer['city']))
+                                {{ $customer['city'] }}<br>
+                            @endif
+                            @if(!empty($customer['state']) || !empty($customer['zip']))
+                                {{ $customer['state'] ?? '' }} {{ $customer['zip'] ?? '' }}
+                            @endif
+                        @else
+                            No customer information
+                        @endif
+                    </div>
+                </div>
 
-        <div class="totals">
-            <div class="totals-table">
-                <div class="totals-row">
-                    <div class="totals-label">Subtotal</div>
-                    <div class="totals-value">${{ number_format($invoice->subtotal, 2) }}</div>
+                <div class="meta-col">
+                    <div class="meta-label">Invoice Number</div>
+                    <div class="meta-value">{{ $invoice->invoice_number }}</div>
+                    <div class="meta-label" style="margin-top: 8px;">Date of Issue</div>
+                    <div class="meta-value">
+                        {{ isset($dateOfPurchase) && $dateOfPurchase ? $dateOfPurchase->format('m-d-Y') : $invoice->created_at->format('m-d-Y') }}
+                    </div>
                 </div>
-                @if($invoice->discount > 0)
-                    <div class="totals-row">
-                        <div class="totals-label">Discount</div>
-                        <div class="totals-value">-${{ number_format($invoice->discount, 2) }}</div>
+
+                @if(($invoiceableType ?? '') === 'Order')
+                    <div class="meta-col">
+                        <div class="meta-label">Payment Method</div>
+                        <div class="meta-value">{{ $primaryPaymentMethod ?? 'N/A' }}</div>
                     </div>
                 @endif
-                @if($invoice->tax > 0)
-                    <div class="totals-row">
-                        <div class="totals-label">Tax</div>
-                        <div class="totals-value">${{ number_format($invoice->tax, 2) }}</div>
-                    </div>
-                @endif
-                @if($invoice->shipping > 0)
-                    <div class="totals-row">
-                        <div class="totals-label">Shipping</div>
-                        <div class="totals-value">${{ number_format($invoice->shipping, 2) }}</div>
-                    </div>
-                @endif
-                @if(isset($serviceFee) && $serviceFee['amount'] > 0)
-                    <div class="totals-row">
-                        <div class="totals-label">Service Fee{{ $serviceFee['reason'] ? ' ('.$serviceFee['reason'].')' : '' }}</div>
-                        <div class="totals-value">${{ number_format($serviceFee['amount'], 2) }}</div>
-                    </div>
-                @endif
-                <div class="totals-row total">
-                    <div class="totals-label">Total</div>
-                    <div class="totals-value">${{ number_format($invoice->total, 2) }}</div>
-                </div>
-                @if($invoice->total_paid > 0)
-                    <div class="totals-row">
-                        <div class="totals-label">Amount Paid</div>
-                        <div class="totals-value">-${{ number_format($invoice->total_paid, 2) }}</div>
-                    </div>
-                @endif
-                <div class="totals-row balance-due">
-                    <div class="totals-label">Balance Due</div>
-                    <div class="totals-value">${{ number_format($invoice->balance_due, 2) }}</div>
-                </div>
             </div>
         </div>
 
-        @if($payments->count() > 0)
-            <div class="payments-section">
-                <div class="payments-title">Payment History</div>
-                <table class="payments">
+        {{-- Content --}}
+        <div class="content">
+            {{-- Trade-Ins Section --}}
+            @if(count($tradeIns) > 0)
+                <div class="trade-ins-section">
+                    <div class="section-title">Trade-Ins</div>
+                    <table class="trade-ins-table">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th class="text-right">Unit Cost</th>
+                                <th class="text-right">Quantity</th>
+                                <th class="text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($tradeIns as $tradeIn)
+                                <tr>
+                                    <td>
+                                        <span class="item-title">{{ strip_tags($tradeIn['title']) }}</span>
+                                    </td>
+                                    <td class="text-right">${{ number_format($tradeIn['unit_cost'], 2) }}</td>
+                                    <td class="text-right">{{ $tradeIn['quantity'] }}</td>
+                                    <td class="text-right">${{ number_format($tradeIn['price'] * $tradeIn['quantity'], 2) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+
+            {{-- Items Table --}}
+            <div class="items-section">
+                <table class="items-table">
                     <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Method</th>
-                            <th>Reference</th>
-                            <th style="text-align: right;">Amount</th>
+                            <th style="width: 40px;">&nbsp;</th>
+                            <th>Description</th>
+                            <th>Type</th>
+                            <th class="text-right">Quantity</th>
+                            <th class="text-right">Amount</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($payments as $payment)
+                        @forelse($lineItems as $item)
                             <tr>
-                                <td>{{ $payment->created_at->format('M j, Y') }}</td>
-                                <td>{{ ucfirst(str_replace('_', ' ', $payment->payment_method)) }}</td>
-                                <td>{{ $payment->reference ?? '-' }}</td>
-                                <td style="text-align: right;">${{ number_format($payment->amount, 2) }}</td>
+                                <td>
+                                    @if(!empty($item['image']))
+                                        <img src="{{ $item['image'] }}" class="item-image" alt="">
+                                    @endif
+                                </td>
+                                <td>
+                                    <span class="item-title">{{ strip_tags($item['description'] ?? 'Item') }}</span>
+                                    @if(!empty($item['sku']))
+                                        <span class="item-sku"> - {{ $item['sku'] }}</span>
+                                    @endif
+                                </td>
+                                <td>{{ $item['category'] ?? '' }}</td>
+                                <td class="text-right">{{ $item['quantity'] ?? 1 }}</td>
+                                <td class="text-right">${{ number_format($item['total'] ?? 0, 2) }}</td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
+                                    No line items available
+                                </td>
+                            </tr>
+                        @endforelse
                     </tbody>
+                    <tfoot class="totals-footer">
+                        <tr>
+                            <th colspan="4">Subtotal</th>
+                            <td>${{ number_format($invoice->subtotal, 2) }}</td>
+                        </tr>
+
+                        @if($invoice->discount > 0)
+                            <tr>
+                                <th colspan="4">Discount</th>
+                                <td>-${{ number_format($invoice->discount, 2) }}</td>
+                            </tr>
+                        @endif
+
+                        @if($invoice->shipping > 0)
+                            <tr>
+                                <th colspan="4">Delivery</th>
+                                <td>${{ number_format($invoice->shipping, 2) }}</td>
+                            </tr>
+                        @endif
+
+                        @if(isset($serviceFee) && $serviceFee['amount'] > 0)
+                            <tr>
+                                <th colspan="4">
+                                    @if($serviceFee['reason'])
+                                        {{ $serviceFee['reason'] }}
+                                    @else
+                                        Service Fee
+                                    @endif
+                                </th>
+                                <td>${{ number_format($serviceFee['amount'], 2) }}</td>
+                            </tr>
+                        @endif
+
+                        @if($invoice->tax > 0)
+                            <tr>
+                                <th colspan="4">Sales Tax</th>
+                                <td>${{ number_format($invoice->tax, 2) }}</td>
+                            </tr>
+                        @endif
+
+                        @if(count($paymentModes) > 1)
+                            <tr>
+                                <th colspan="4">Payment Modes</th>
+                                <td>
+                                    <table class="payment-modes-table">
+                                        @foreach($paymentModes as $mode)
+                                            <tr>
+                                                <td>{{ $mode['mode'] }}</td>
+                                                <td>${{ number_format($mode['total_paid'], 2) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </table>
+                                </td>
+                            </tr>
+                        @endif
+
+                        <tr class="total">
+                            <th colspan="4">Total</th>
+                            <td>${{ number_format($invoice->total, 2) }}</td>
+                        </tr>
+
+                        @if($invoice->total_paid > 0 && $invoice->balance_due > 0)
+                            <tr>
+                                <th colspan="4">Amount Paid</th>
+                                <td>-${{ number_format($invoice->total_paid, 2) }}</td>
+                            </tr>
+                            <tr class="total">
+                                <th colspan="4">Balance Due</th>
+                                <td>${{ number_format($invoice->balance_due, 2) }}</td>
+                            </tr>
+                        @endif
+                    </tfoot>
                 </table>
             </div>
-        @endif
+        </div>
 
-        @if($invoice->notes)
-            <div class="notes">
-                <div class="notes-title">Notes</div>
-                <div class="notes-content">{{ $invoice->notes }}</div>
-            </div>
-        @endif
-
+        {{-- Footer / Disclaimer --}}
         <div class="footer">
-            Thank you for your business!
+            <table class="signature-table">
+                <tr>
+                    <td class="label">Fingerprint</td>
+                    <td class="label">Signature</td>
+                    <td class="label">Date</td>
+                    <td class="label">Sales Person</td>
+                </tr>
+                <tr>
+                    <td class="value">&nbsp;</td>
+                    <td class="value">&nbsp;</td>
+                    <td class="value">
+                        {{ $dateOfPurchase ? $dateOfPurchase->format('m-d-Y') : $invoice->created_at->format('m-d-Y') }}
+                    </td>
+                    <td class="value">{{ $salesperson ?? 'N/A' }}</td>
+                </tr>
+            </table>
+
+            <div class="disclaimer">
+                <p class="disclaimer-title">Disclaimer</p>
+                <p>1. Sellers of Merchandise warrant that he or she is the legal owner of any and all items presented for sale. The seller agrees to transfer the full title of said items to {{ $store['name'] }} (hereafter referred to as "{{ $store['name'] }}") upon acceptance of any form of payment and upon execution of this agreement. Sellers further certifies that the presented goods are genuine and not misrepresented in any way, shape, or form.</p>
+                <p>2. You consent to the law and jurisdiction of any court within the State for action arising from this transaction. You agree to pay all costs, including attorney's fees and expenses and court costs, incurred by {{ $store['name'] }} or its assigns in enforcing any part of this contract.</p>
+                <p>3. The price for which each item is sold represents the price that {{ $store['name'] }} has offered, and you have paid, independent of any description by {{ $store['name'] }}. The condition, description or grade of any item sold represents the opinion of {{ $store['name'] }} and is not a warranty of any kind. {{ $store['name'] }} disclaims all warranties, expressed or implied, including warranties of merchantability.</p>
+                <p>4. {{ $store['name'] }}'s sole liability for any claim shall be no greater than the purchase price of the merchandise with respect to which a claim is made after such merchandise is returned to {{ $store['name'] }}. Such liability shall not include consequential damages.</p>
+                <p><strong>Consignment - Memo</strong></p>
+                <p>5. The merchandise described on the front side of this invoice remains property of {{ $store['name'] }} and shall be returned to us on demand until payment is made in full and is received by {{ $store['name'] }}. No power is given to you to sell, pledge, hypothecate or otherwise dispose of this merchandise until paid in full.</p>
+                <p>6. For Consignment and Memos, you will bear all risk of loss from all hazards for this merchandise from its delivery to you until its returned to {{ $store['name'] }} or paid in full. A finance charge of 3% per month (36% annually) will be applied to any balance remaining unpaid 30 days after the date of this sale order.</p>
+            </div>
         </div>
     </div>
 </body>

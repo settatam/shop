@@ -65,18 +65,20 @@ class CreateOrderFromWizardRequest extends FormRequest
             'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:1'],
             'shipping_cost' => ['nullable', 'numeric', 'min:0'],
             'discount_cost' => ['nullable', 'numeric', 'min:0'],
+            'date_of_purchase' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:5000'],
 
             // Trade-in items
             'has_trade_in' => ['nullable', 'boolean'],
             'trade_in_items' => ['nullable', 'array'],
+            'trade_in_items.*.id' => ['nullable', 'string'],
             'trade_in_items.*.title' => ['required', 'string', 'max:255'],
             'trade_in_items.*.description' => ['nullable', 'string', 'max:1000'],
             'trade_in_items.*.category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'trade_in_items.*.buy_price' => ['required', 'numeric', 'min:0'],
-            'trade_in_items.*.precious_metal' => ['nullable', 'string', 'max:50'],
-            'trade_in_items.*.condition' => ['nullable', 'string', 'max:50'],
-            'trade_in_items.*.dwt' => ['nullable', 'numeric', 'min:0'],
+            'trade_in_items.*.attributes' => ['nullable', 'array'],
+            'trade_in_items.*.images' => ['nullable', 'array'],
+            'trade_in_items.*.images.*' => ['nullable', 'file', 'image', 'max:10240'],
             'excess_credit_payout_method' => ['nullable', 'string', 'in:cash,check'],
 
             // Bucket items (selling from junk buckets)

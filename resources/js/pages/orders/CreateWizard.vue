@@ -12,6 +12,7 @@ import {
     PlusIcon,
     TrashIcon,
     UserIcon,
+    UserGroupIcon,
     CubeIcon,
     ShoppingCartIcon,
     ClipboardDocumentListIcon,
@@ -20,8 +21,19 @@ import {
     ArrowsRightLeftIcon,
     ScaleIcon,
     ArchiveBoxIcon,
+    PencilIcon,
+    CheckCircleIcon,
 } from '@heroicons/vue/24/outline';
+import { ChevronUpDownIcon } from '@heroicons/vue/20/solid';
+import {
+    Combobox,
+    ComboboxInput,
+    ComboboxButton,
+    ComboboxOptions,
+    ComboboxOption,
+} from '@headlessui/vue';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
+import AddItemModal from '@/components/transactions/AddItemModal.vue';
 
 interface StoreUser {
     id: number;
@@ -31,6 +43,15 @@ interface StoreUser {
 interface Category {
     value: number;
     label: string;
+}
+
+interface TradeInCategory {
+    id: number;
+    name: string;
+    full_path: string;
+    parent_id: number | null;
+    level: number;
+    template_id: number | null;
 }
 
 interface Warehouse {
@@ -50,13 +71,13 @@ interface ItemCondition {
 }
 
 interface TradeInItem {
+    id: string;
     title: string;
     description?: string;
     category_id?: number;
     buy_price: number;
-    precious_metal?: string;
-    condition?: string;
-    dwt?: number;
+    attributes: Record<number, string>;
+    images: File[];
 }
 
 interface BucketItemData {
@@ -121,6 +142,7 @@ interface Props {
     storeUsers: StoreUser[];
     currentStoreUserId?: number;
     categories: Category[];
+    tradeInCategories: TradeInCategory[];
     warehouses: Warehouse[];
     defaultWarehouseId?: number;
     defaultTaxRate: number;
@@ -145,6 +167,7 @@ const form = useForm({
     tax_rate: props.defaultTaxRate,
     shipping_cost: 0,
     discount_cost: 0,
+    date_of_purchase: new Date().toISOString().split('T')[0],
     notes: '',
     billing_address: null as Record<string, string> | null,
     shipping_address: null as Record<string, string> | null,
@@ -205,13 +228,21 @@ function searchCustomers() {
     }, 300);
 }
 
-function selectCustomer(customer: Customer) {
-    selectedCustomer.value = customer;
-    form.customer_id = customer.id;
-    form.customer = null;
-    customerSearchQuery.value = '';
-    customerSearchResults.value = [];
-    isCreatingNewCustomer.value = false;
+function selectCustomer(customer: Customer | null) {
+    if (customer && 'isCreateOption' in customer) {
+        // Handle "Create new customer" option
+        isCreatingNewCustomer.value = true;
+        newCustomer.value.first_name = customerSearchQuery.value.trim();
+        selectedCustomer.value = null;
+        form.customer_id = null;
+    } else if (customer) {
+        selectedCustomer.value = customer;
+        form.customer_id = customer.id;
+        form.customer = null;
+        customerSearchQuery.value = '';
+        customerSearchResults.value = [];
+        isCreatingNewCustomer.value = false;
+    }
 }
 
 function clearSelectedCustomer() {
@@ -257,40 +288,64 @@ function confirmNewCustomer() {
 
 watch(customerSearchQuery, searchCustomers);
 
-// Step 3: Trade-In
-const newTradeInItem = ref<TradeInItem>({
-    title: '',
-    description: '',
-    category_id: undefined,
-    buy_price: 0,
-    precious_metal: '',
-    condition: '',
-    dwt: undefined,
+const customerFilteredOptions = computed(() => {
+    const results = [...customerSearchResults.value];
+    if (customerSearchQuery.value.length > 0) {
+        results.push({ isCreateOption: true, full_name: 'Create new customer' } as any);
+    }
+    return results;
 });
 
-function addTradeInItem() {
-    if (!newTradeInItem.value.title || newTradeInItem.value.buy_price <= 0) return;
+function switchToCustomerSearch() {
+    isCreatingNewCustomer.value = false;
+    newCustomer.value = { first_name: '', last_name: '', email: '', phone: '', lead_source_id: null };
+}
 
-    form.trade_in_items.push({
-        title: newTradeInItem.value.title,
-        description: newTradeInItem.value.description || undefined,
-        category_id: newTradeInItem.value.category_id || undefined,
-        buy_price: newTradeInItem.value.buy_price,
-        precious_metal: newTradeInItem.value.precious_metal || undefined,
-        condition: newTradeInItem.value.condition || undefined,
-        dwt: newTradeInItem.value.dwt || undefined,
-    });
+function switchToCustomerCreate() {
+    isCreatingNewCustomer.value = true;
+    selectedCustomer.value = null;
+    form.customer_id = null;
+}
 
-    // Reset form
-    newTradeInItem.value = {
-        title: '',
-        description: '',
-        category_id: undefined,
-        buy_price: 0,
-        precious_metal: '',
-        condition: '',
-        dwt: undefined,
+// Step 3: Trade-In
+const showAddTradeInModal = ref(false);
+const editingTradeInItem = ref<TradeInItem | null>(null);
+const editingTradeInIndex = ref<number | null>(null);
+
+function openAddTradeInModal() {
+    editingTradeInItem.value = null;
+    editingTradeInIndex.value = null;
+    showAddTradeInModal.value = true;
+}
+
+function openEditTradeInModal(item: TradeInItem, index: number) {
+    editingTradeInItem.value = { ...item };
+    editingTradeInIndex.value = index;
+    showAddTradeInModal.value = true;
+}
+
+function handleTradeInItemSave(item: { id: string; title: string; description?: string; category_id?: number; price?: number; buy_price: number; attributes: Record<number, string>; images: File[] }) {
+    const tradeInItem: TradeInItem = {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        category_id: item.category_id,
+        buy_price: item.buy_price,
+        attributes: item.attributes,
+        images: item.images,
     };
+
+    if (editingTradeInIndex.value !== null) {
+        // Update existing item
+        form.trade_in_items[editingTradeInIndex.value] = tradeInItem;
+    } else {
+        // Add new item
+        form.trade_in_items.push(tradeInItem);
+    }
+
+    showAddTradeInModal.value = false;
+    editingTradeInItem.value = null;
+    editingTradeInIndex.value = null;
 }
 
 function removeTradeInItem(index: number) {
@@ -299,6 +354,32 @@ function removeTradeInItem(index: number) {
 
 const tradeInTotal = computed(() => {
     return form.trade_in_items.reduce((sum, item) => sum + item.buy_price, 0);
+});
+
+// Build a sorted category tree for display (only leaves are selectable)
+const sortedCategories = computed(() => {
+    const categories = [...props.tradeInCategories];
+    const parentIds = new Set(categories.map(c => c.parent_id).filter(id => id !== null));
+
+    const result: Array<typeof categories[0] & { isLeaf: boolean }> = [];
+    const addedIds = new Set<number>();
+
+    function addWithChildren(parentId: number | null) {
+        const children = categories
+            .filter(c => c.parent_id === parentId)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        for (const child of children) {
+            if (!addedIds.has(child.id)) {
+                addedIds.add(child.id);
+                const isLeaf = !parentIds.has(child.id);
+                result.push({ ...child, isLeaf });
+                addWithChildren(child.id);
+            }
+        }
+    }
+
+    addWithChildren(null);
+    return result;
 });
 
 function toggleTradeIn() {
@@ -447,19 +528,8 @@ async function createNewProduct() {
     if (!newProduct.value.title || newProduct.value.price < 0) return;
 
     try {
-        const response = await fetch('/orders/create-product', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            },
-            body: JSON.stringify(newProduct.value),
-        });
-
-        if (!response.ok) throw new Error('Failed to create product');
-
-        const data = await response.json();
-        addProductToOrder(data.product);
+        const response = await window.axios.post('/orders/create-product', newProduct.value);
+        addProductToOrder(response.data.product);
         cancelCreatingProduct();
     } catch (error) {
         console.error('Error creating product:', error);
@@ -533,6 +603,14 @@ const { isEnabled: scannerEnabled } = useBarcodeScanner({
 
 onMounted(() => {
     searchProducts();
+
+    // Auto-select warehouse if there's only one, and set its tax rate
+    if (props.warehouses.length === 1 && !form.warehouse_id) {
+        form.warehouse_id = props.warehouses[0].value;
+        if (props.warehouses[0].tax_rate !== undefined && props.warehouses[0].tax_rate !== null) {
+            form.tax_rate = props.warehouses[0].tax_rate;
+        }
+    }
 });
 
 // Step 4: Review & Settings
@@ -648,51 +726,132 @@ const steps = [
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
             <div class="mx-auto w-full max-w-6xl">
-                <!-- Header -->
-                <div class="mb-6 flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <Link href="/orders" class="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-700">
-                            <ArrowLeftIcon class="size-5 text-gray-500 dark:text-gray-400" />
-                        </Link>
-                        <div>
-                            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">New Order</h1>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Create a new sales order</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Progress Steps -->
-                <nav class="mb-8">
-                    <ol class="flex items-center">
-                        <li v-for="(step, index) in steps" :key="step.number" class="flex items-center" :class="{ 'flex-1': index < steps.length - 1 }">
+                <!-- Wizard Steps -->
+                <nav aria-label="Progress" class="mb-8">
+                    <ol role="list" class="flex items-center justify-between">
+                        <li v-for="(step, stepIdx) in steps" :key="step.title" class="relative flex flex-1 items-center">
+                            <div v-if="stepIdx !== 0" class="absolute left-0 top-1/2 h-0.5 w-full -translate-y-1/2" :class="step.number <= currentStep ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'" />
                             <button
                                 type="button"
-                                @click="goToStep(step.number)"
+                                @click="step.number < currentStep && goToStep(step.number)"
+                                :disabled="step.number > currentStep"
+                                class="relative z-10 flex size-10 items-center justify-center rounded-full border-2 transition-colors"
                                 :class="[
-                                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-                                    currentStep.value >= step.number
-                                        ? 'text-indigo-600 dark:text-indigo-400'
-                                        : 'text-gray-500 dark:text-gray-400',
+                                    step.number < currentStep ? 'border-indigo-600 bg-indigo-600 text-white' : '',
+                                    step.number === currentStep ? 'border-indigo-600 bg-white text-indigo-600 dark:bg-gray-800' : '',
+                                    step.number > currentStep ? 'border-gray-300 bg-white text-gray-400 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-500' : '',
                                 ]"
                             >
-                                <span :class="[
-                                    'flex size-8 items-center justify-center rounded-full',
-                                    currentStep.value > step.number ? 'bg-indigo-600 text-white' : '',
-                                    currentStep.value === step.number ? 'border-2 border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400' : '',
-                                    currentStep.value < step.number ? 'border-2 border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-400' : '',
-                                ]">
-                                    <CheckIcon v-if="currentStep.value > step.number" class="size-5" />
-                                    <span v-else>{{ step.number }}</span>
-                                </span>
-                                <span class="hidden sm:inline">{{ step.title }}</span>
+                                <CheckCircleIcon v-if="step.number < currentStep" class="size-5" />
+                                <component :is="step.icon" v-else class="size-5" />
                             </button>
-                            <div v-if="index < steps.length - 1" class="mx-2 h-px flex-1 bg-gray-300 dark:bg-gray-600" />
+                            <span class="sr-only">{{ step.title }}</span>
                         </li>
                     </ol>
+                    <div class="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span v-for="step in steps" :key="step.title" class="flex-1 text-center">{{ step.title }}</span>
+                    </div>
                 </nav>
 
-                <!-- Step Content -->
-                <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                <!-- Main content area with summary sidebar -->
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <!-- Summary Sidebar -->
+                    <div class="lg:col-span-1">
+                        <div class="sticky top-4 space-y-4">
+                            <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Order Summary</h3>
+
+                                <!-- Employee Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Employee</span>
+                                        <button v-if="selectedEmployee && currentStep !== 1" type="button" @click="goToStep(1)" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <p v-if="selectedEmployee" class="mt-1 text-sm text-gray-900 dark:text-white">{{ selectedEmployee.name }}</p>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">Not selected</p>
+                                </div>
+
+                                <!-- Customer Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Customer</span>
+                                        <button v-if="selectedCustomer && currentStep !== 2" type="button" @click="goToStep(2)" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <div v-if="selectedCustomer" class="mt-1">
+                                        <p class="text-sm text-gray-900 dark:text-white">{{ selectedCustomer.full_name }}</p>
+                                        <p v-if="selectedCustomer.email" class="text-xs text-gray-500 dark:text-gray-400">{{ selectedCustomer.email }}</p>
+                                    </div>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">Walk-in Customer</p>
+                                </div>
+
+                                <!-- Trade-In Summary -->
+                                <div v-if="form.has_trade_in && form.trade_in_items.length > 0" class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Trade-In</span>
+                                        <button v-if="currentStep !== 3" type="button" @click="goToStep(3)" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <div class="mt-2 space-y-1">
+                                        <div v-for="(item, idx) in form.trade_in_items.slice(0, 2)" :key="idx" class="flex items-center justify-between text-sm">
+                                            <span class="truncate text-gray-700 dark:text-gray-300">{{ item.title }}</span>
+                                            <span class="ml-2 font-medium text-green-600 dark:text-green-400">{{ formatCurrency(item.buy_price) }}</span>
+                                        </div>
+                                        <p v-if="form.trade_in_items.length > 2" class="text-xs text-gray-500 dark:text-gray-400">+{{ form.trade_in_items.length - 2 }} more items</p>
+                                        <div class="flex items-center justify-between border-t border-gray-100 pt-2 dark:border-gray-700">
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Trade-In Credit</span>
+                                            <span class="text-sm font-bold text-green-600 dark:text-green-400">{{ formatCurrency(tradeInTotal) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Items Summary -->
+                                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Items</span>
+                                        <button v-if="form.items.length > 0 && currentStep !== 4" type="button" @click="goToStep(4)" class="text-indigo-600 hover:text-indigo-500">
+                                            <PencilIcon class="size-3.5" />
+                                        </button>
+                                    </div>
+                                    <div v-if="form.items.length > 0 || form.bucket_items.length > 0" class="mt-2 space-y-1">
+                                        <div v-for="(item, idx) in form.items.slice(0, 3)" :key="idx" class="flex items-center justify-between text-sm">
+                                            <span class="truncate text-gray-700 dark:text-gray-300">{{ item.title }} x {{ item.quantity }}</span>
+                                            <span class="ml-2 font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.price * item.quantity) }}</span>
+                                        </div>
+                                        <p v-if="form.items.length > 3" class="text-xs text-gray-500 dark:text-gray-400">+{{ form.items.length - 3 }} more items</p>
+                                        <div v-if="form.bucket_items.length > 0" class="text-xs text-amber-600 dark:text-amber-400">+ {{ form.bucket_items.length }} bucket items</div>
+                                        <div class="mt-2 space-y-1 border-t border-gray-100 pt-2 dark:border-gray-700">
+                                            <div class="flex items-center justify-between text-sm">
+                                                <span class="text-gray-500 dark:text-gray-400">Subtotal</span>
+                                                <span class="text-gray-900 dark:text-white">{{ formatCurrency(subtotal) }}</span>
+                                            </div>
+                                            <div v-if="tradeInCredit > 0" class="flex items-center justify-between text-sm text-green-600 dark:text-green-400">
+                                                <span>Trade-In Credit</span>
+                                                <span>-{{ formatCurrency(tradeInCredit) }}</span>
+                                            </div>
+                                            <div v-if="taxAmount > 0" class="flex items-center justify-between text-sm">
+                                                <span class="text-gray-500 dark:text-gray-400">Tax</span>
+                                                <span class="text-gray-900 dark:text-white">{{ formatCurrency(taxAmount) }}</span>
+                                            </div>
+                                            <div class="flex items-center justify-between font-medium">
+                                                <span class="text-sm text-gray-700 dark:text-gray-300">Total</span>
+                                                <span class="text-sm font-bold text-gray-900 dark:text-white">{{ formatCurrency(total) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-1 text-sm italic text-gray-400 dark:text-gray-500">No items added</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step content -->
+                    <div class="lg:col-span-2">
+                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                     <!-- Step 1: Employee Selection -->
                     <div v-if="currentStep === 1">
                         <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Select Employee</h2>
@@ -720,133 +879,106 @@ const steps = [
                     </div>
 
                     <!-- Step 2: Customer Selection -->
-                    <div v-if="currentStep === 2">
-                        <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Select Customer</h2>
-                        <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">Search for an existing customer or create a new one. Leave empty for walk-in sales.</p>
-
-                        <!-- Selected Customer Display -->
-                        <div v-if="selectedCustomer" class="mb-6 flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-800">
-                                    <UserIcon class="size-6 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div>
-                                    <p class="font-medium text-gray-900 dark:text-white">{{ selectedCustomer.full_name }}</p>
-                                    <p v-if="selectedCustomer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ selectedCustomer.email }}</p>
-                                    <p v-if="selectedCustomer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ selectedCustomer.phone }}</p>
-                                    <p v-if="selectedCustomer.id === 0" class="text-xs text-indigo-600 dark:text-indigo-400">New customer (will be created)</p>
-                                </div>
+                    <div v-if="currentStep === 2" class="space-y-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Customer Information</h2>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Search for an existing customer or create a new one. Leave empty for walk-in sales.</p>
                             </div>
-                            <button type="button" @click="clearSelectedCustomer" class="text-gray-400 hover:text-gray-500">
-                                <XMarkIcon class="size-5" />
-                            </button>
+                            <div class="flex gap-2">
+                                <button type="button" @click="switchToCustomerSearch" :class="['rounded-md px-3 py-1.5 text-sm font-medium', !isCreatingNewCustomer ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Search</button>
+                                <button type="button" @click="switchToCustomerCreate" :class="['rounded-md px-3 py-1.5 text-sm font-medium', isCreatingNewCustomer ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Create New</button>
+                            </div>
                         </div>
 
-                        <!-- Search or Create -->
-                        <div v-else-if="!isCreatingNewCustomer">
-                            <div class="relative mb-4">
-                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-                                <input
-                                    v-model="customerSearchQuery"
-                                    type="text"
-                                    placeholder="Search customers by name, email, or phone..."
-                                    class="w-full rounded-lg border-gray-300 pl-10 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-
-                            <!-- Search Results -->
-                            <div v-if="customerSearchResults.length > 0" class="mb-4 max-h-60 space-y-2 overflow-y-auto">
-                                <button
-                                    v-for="customer in customerSearchResults"
-                                    :key="customer.id"
-                                    type="button"
-                                    @click="selectCustomer(customer)"
-                                    class="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
-                                >
-                                    <div class="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
-                                        <UserIcon class="size-5 text-gray-500 dark:text-gray-400" />
+                        <!-- Search Mode -->
+                        <template v-if="!isCreatingNewCustomer">
+                            <div v-if="selectedCustomer" class="flex items-center justify-between rounded-lg border border-gray-300 bg-white p-4 dark:border-gray-600 dark:bg-gray-700">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+                                        <UserGroupIcon class="size-6 text-indigo-600 dark:text-indigo-400" />
                                     </div>
                                     <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">{{ customer.full_name }}</p>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ customer.email || customer.phone }}</p>
+                                        <p class="text-base font-medium text-gray-900 dark:text-white">{{ selectedCustomer.full_name }}</p>
+                                        <p v-if="selectedCustomer.email || selectedCustomer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ selectedCustomer.email || selectedCustomer.phone }}</p>
+                                        <p v-if="selectedCustomer.id === 0" class="text-xs text-indigo-600 dark:text-indigo-400">New customer (will be created)</p>
                                     </div>
+                                </div>
+                                <button type="button" class="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-600" @click="clearSelectedCustomer">
+                                    <XMarkIcon class="size-5" />
                                 </button>
                             </div>
 
-                            <button
-                                type="button"
-                                @click="startCreatingCustomer"
-                                class="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                            >
-                                <PlusIcon class="size-4" />
-                                Create New Customer
-                            </button>
-                        </div>
+                            <Combobox v-else v-model="selectedCustomer" @update:model-value="selectCustomer" as="div" class="relative">
+                                <ComboboxInput
+                                    class="w-full rounded-lg border-0 bg-white py-3 pl-12 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Search by name, email, or phone..."
+                                    @change="customerSearchQuery = $event.target.value"
+                                />
+                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                                    <MagnifyingGlassIcon class="size-5 text-gray-400" />
+                                </div>
+                                <ComboboxButton class="absolute inset-y-0 right-0 flex items-center pr-3">
+                                    <ChevronUpDownIcon class="size-5 text-gray-400" />
+                                </ComboboxButton>
+                                <ComboboxOptions v-if="customerSearchQuery.length > 0" class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm dark:bg-gray-800">
+                                    <div v-if="isSearchingCustomers" class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">Searching...</div>
+                                    <div v-else-if="customerSearchResults.length === 0 && customerSearchQuery.length > 0" class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No customers found.</div>
+                                    <ComboboxOption v-for="customer in customerFilteredOptions" :key="'isCreateOption' in customer ? 'create' : customer.id" v-slot="{ active }" :value="customer" as="template">
+                                        <li :class="['relative cursor-pointer select-none py-3 pl-4 pr-9', active ? 'bg-indigo-600 text-white' : 'text-gray-900 dark:text-white', 'isCreateOption' in customer ? 'border-t border-gray-200 dark:border-gray-700' : '']">
+                                            <template v-if="'isCreateOption' in customer">
+                                                <div class="flex items-center gap-2">
+                                                    <PlusIcon class="size-5" />
+                                                    <span class="font-medium">Create new customer</span>
+                                                    <span v-if="customerSearchQuery" :class="active ? 'text-indigo-200' : 'text-gray-500'">"{{ customerSearchQuery }}"</span>
+                                                </div>
+                                            </template>
+                                            <template v-else>
+                                                <div class="flex items-center gap-3">
+                                                    <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-600">
+                                                        <UserGroupIcon :class="['size-5', active ? 'text-white' : 'text-gray-500']" />
+                                                    </div>
+                                                    <div>
+                                                        <p class="truncate font-medium">{{ customer.full_name }}</p>
+                                                        <p :class="['truncate text-sm', active ? 'text-indigo-200' : 'text-gray-500']">{{ customer.email || customer.phone || 'No contact info' }}</p>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </li>
+                                    </ComboboxOption>
+                                </ComboboxOptions>
+                            </Combobox>
+                        </template>
 
-                        <!-- New Customer Form -->
-                        <div v-else class="space-y-4">
-                            <div class="grid gap-4 sm:grid-cols-2">
+                        <!-- Create Mode -->
+                        <template v-else>
+                            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name *</label>
-                                    <input
-                                        v-model="newCustomer.first_name"
-                                        type="text"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name <span class="text-red-500">*</span></label>
+                                    <input v-model="newCustomer.first_name" type="text" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name *</label>
-                                    <input
-                                        v-model="newCustomer.last_name"
-                                        type="text"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name <span class="text-red-500">*</span></label>
+                                    <input v-model="newCustomer.last_name" type="text" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
                                 </div>
-                            </div>
-                            <div class="grid gap-4 sm:grid-cols-2">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                    <input
-                                        v-model="newCustomer.email"
-                                        type="email"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
+                                    <input v-model="newCustomer.email" type="email" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                    <input
-                                        v-model="newCustomer.phone"
-                                        type="tel"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    <input v-model="newCustomer.phone" type="tel" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
+                                    <LeadSourceSelect
+                                        v-model="newCustomer.lead_source_id"
+                                        placeholder="Select or create lead source..."
+                                        class="mt-1"
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
-                                <LeadSourceSelect
-                                    v-model="newCustomer.lead_source_id"
-                                    placeholder="Select or create lead source..."
-                                    class="mt-1"
-                                />
-                            </div>
-                            <div class="flex gap-3">
-                                <button
-                                    type="button"
-                                    @click="confirmNewCustomer"
-                                    :disabled="!newCustomer.first_name || !newCustomer.last_name"
-                                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                                >
-                                    Add Customer
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="cancelCreatingCustomer"
-                                    class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
+                        </template>
                     </div>
 
                     <!-- Step 3: Trade-In -->
@@ -870,96 +1002,6 @@ const steps = [
 
                         <!-- Trade-In Form (shown when trade-in is enabled) -->
                         <div v-if="form.has_trade_in" class="space-y-6">
-                            <!-- Add Trade-In Item Form -->
-                            <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-600">
-                                <h3 class="mb-4 font-medium text-gray-900 dark:text-white">Add Trade-In Item</h3>
-                                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    <div class="sm:col-span-2 lg:col-span-3">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Item Title *</label>
-                                        <input
-                                            v-model="newTradeInItem.title"
-                                            type="text"
-                                            placeholder="e.g., 14K Gold Ring, Silver Necklace"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-                                        <select
-                                            v-model="newTradeInItem.category_id"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                        >
-                                            <option :value="undefined">Select Category</option>
-                                            <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Precious Metal</label>
-                                        <select
-                                            v-model="newTradeInItem.precious_metal"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                        >
-                                            <option value="">Select Metal</option>
-                                            <option v-for="metal in preciousMetals" :key="metal.value" :value="metal.value">{{ metal.label }}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Condition</label>
-                                        <select
-                                            v-model="newTradeInItem.condition"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                        >
-                                            <option value="">Select Condition</option>
-                                            <option v-for="cond in itemConditions" :key="cond.value" :value="cond.value">{{ cond.label }}</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Weight (DWT)</label>
-                                        <input
-                                            v-model.number="newTradeInItem.dwt"
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            placeholder="Pennyweight"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Buy Price *</label>
-                                        <div class="relative mt-1">
-                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                                            <input
-                                                v-model.number="newTradeInItem.buy_price"
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div class="sm:col-span-2 lg:col-span-3">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                                        <textarea
-                                            v-model="newTradeInItem.description"
-                                            rows="2"
-                                            placeholder="Additional details about the item..."
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="mt-4">
-                                    <button
-                                        type="button"
-                                        @click="addTradeInItem"
-                                        :disabled="!newTradeInItem.title || newTradeInItem.buy_price <= 0"
-                                        class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                                    >
-                                        <PlusIcon class="size-4" />
-                                        Add Item
-                                    </button>
-                                </div>
-                            </div>
-
                             <!-- Trade-In Items List -->
                             <div class="rounded-lg border border-gray-200 dark:border-gray-600">
                                 <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-600">
@@ -969,30 +1011,39 @@ const steps = [
                                     </div>
                                 </div>
                                 <div v-if="form.trade_in_items.length > 0" class="divide-y divide-gray-200 dark:divide-gray-600">
-                                    <div v-for="(item, index) in form.trade_in_items" :key="index" class="flex items-center gap-4 p-4">
+                                    <div v-for="(item, index) in form.trade_in_items" :key="item.id" class="flex items-center gap-4 p-4">
                                         <div class="flex size-12 shrink-0 items-center justify-center rounded bg-green-100 dark:bg-green-900">
                                             <ScaleIcon class="size-6 text-green-600 dark:text-green-400" />
                                         </div>
                                         <div class="min-w-0 flex-1">
                                             <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                <span v-if="item.precious_metal">{{ preciousMetals.find(m => m.value === item.precious_metal)?.label }}</span>
-                                                <span v-if="item.precious_metal && item.condition"> | </span>
-                                                <span v-if="item.condition">{{ itemConditions.find(c => c.value === item.condition)?.label }}</span>
-                                                <span v-if="(item.precious_metal || item.condition) && item.dwt"> | </span>
-                                                <span v-if="item.dwt">{{ item.dwt }} DWT</span>
+                                            <p v-if="item.description" class="text-sm text-gray-500 dark:text-gray-400">
+                                                {{ item.description }}
                                             </p>
                                         </div>
                                         <p class="font-medium text-green-600 dark:text-green-400">
                                             {{ formatCurrency(item.buy_price) }}
                                         </p>
+                                        <button type="button" @click="openEditTradeInModal(item, index)" class="text-gray-500 hover:text-gray-600 dark:hover:text-gray-400">
+                                            <PencilIcon class="size-5" />
+                                        </button>
                                         <button type="button" @click="removeTradeInItem(index)" class="text-red-500 hover:text-red-600">
                                             <TrashIcon class="size-5" />
                                         </button>
                                     </div>
                                 </div>
                                 <div v-else class="p-6 text-center text-gray-500 dark:text-gray-400">
-                                    No trade-in items added yet. Add items above.
+                                    No trade-in items added yet. Click "Add Item" to get started.
+                                </div>
+                                <div class="border-t border-gray-200 p-4 dark:border-gray-600">
+                                    <button
+                                        type="button"
+                                        @click="openAddTradeInModal"
+                                        class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+                                    >
+                                        <PlusIcon class="size-4" />
+                                        Add Item
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1151,20 +1202,28 @@ const steps = [
                         <!-- Product Search -->
                         <div class="mb-6 flex gap-4">
                             <div class="relative flex-1">
-                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
+                                <MagnifyingGlassIcon class="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
                                 <input
                                     v-model="productSearchQuery"
                                     type="text"
                                     placeholder="Search products by name or SKU..."
-                                    class="w-full rounded-lg border-gray-300 pl-10 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    class="w-full rounded-lg border-0 bg-white py-3 pl-12 pr-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                 />
                             </div>
                             <select
                                 v-model="selectedCategoryId"
-                                class="rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                class="rounded-lg border-0 bg-white py-3 pl-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                             >
                                 <option :value="null">All Categories</option>
-                                <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+                                <option
+                                    v-for="cat in sortedCategories"
+                                    :key="cat.id"
+                                    :value="cat.id"
+                                    :disabled="!cat.isLeaf"
+                                    :class="{ 'text-gray-400': !cat.isLeaf }"
+                                >
+                                    {{ '\u00A0'.repeat(cat.level * 3) }}{{ cat.level > 0 ? '└ ' : '' }}{{ cat.name }}
+                                </option>
                             </select>
                         </div>
 
@@ -1215,7 +1274,7 @@ const steps = [
                                     <input
                                         v-model="newProduct.title"
                                         type="text"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     />
                                 </div>
                                 <div>
@@ -1223,38 +1282,52 @@ const steps = [
                                     <input
                                         v-model="newProduct.sku"
                                         type="text"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
                                     <select
                                         v-model="newProduct.category_id"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >
                                         <option :value="null">Select Category</option>
-                                        <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
+                                        <option
+                                            v-for="cat in sortedCategories"
+                                            :key="cat.id"
+                                            :value="cat.id"
+                                            :disabled="!cat.isLeaf"
+                                            :class="{ 'text-gray-400': !cat.isLeaf }"
+                                        >
+                                            {{ '\u00A0'.repeat(cat.level * 3) }}{{ cat.level > 0 ? '└ ' : '' }}{{ cat.name }}
+                                        </option>
                                     </select>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Price *</label>
-                                    <input
-                                        v-model.number="newProduct.price"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
+                                    <div class="relative mt-1">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                                        <input
+                                            v-model.number="newProduct.price"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Cost</label>
-                                    <input
-                                        v-model.number="newProduct.cost"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
+                                    <div class="relative mt-1">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                                        <input
+                                            v-model.number="newProduct.cost"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             <div class="mt-4 flex gap-3">
@@ -1334,7 +1407,7 @@ const steps = [
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Location (Warehouse)</label>
                                     <select
                                         v-model="form.warehouse_id"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >
                                         <option :value="null">Select Location</option>
                                         <option v-for="warehouse in warehouses" :key="warehouse.value" :value="warehouse.value">
@@ -1351,28 +1424,43 @@ const steps = [
                                         step="0.01"
                                         min="0"
                                         max="100"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     />
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Shipping Cost</label>
-                                    <input
-                                        v-model.number="form.shipping_cost"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
+                                    <div class="relative mt-1">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                                        <input
+                                            v-model.number="form.shipping_cost"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Discount</label>
+                                    <div class="relative mt-1">
+                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
+                                        <input
+                                            v-model.number="form.discount_cost"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sale Date</label>
                                     <input
-                                        v-model.number="form.discount_cost"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        v-model="form.date_of_purchase"
+                                        type="date"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     />
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Change this to backdate the sale</p>
                                 </div>
                             </div>
 
@@ -1382,7 +1470,7 @@ const steps = [
                                 <textarea
                                     v-model="form.notes"
                                     rows="3"
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     placeholder="Add any notes for this order..."
                                 />
                             </div>
@@ -1449,43 +1537,60 @@ const steps = [
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Navigation Buttons -->
-                <div class="mt-6 flex justify-between">
-                    <button
-                        v-if="currentStep > 1"
-                        type="button"
-                        @click="prevStep"
-                        class="inline-flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                    >
-                        <ArrowLeftIcon class="size-4" />
-                        Previous
-                    </button>
-                    <div v-else />
+                            <!-- Navigation Buttons inside step content -->
+                            <div class="mt-6 flex justify-between border-t border-gray-200 pt-6 dark:border-gray-700">
+                                <button
+                                    v-if="currentStep > 1"
+                                    type="button"
+                                    @click="prevStep"
+                                    class="inline-flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                >
+                                    <ArrowLeftIcon class="size-4" />
+                                    Back
+                                </button>
+                                <div v-else />
 
-                    <button
-                        v-if="currentStep < totalSteps"
-                        type="button"
-                        @click="nextStep"
-                        :disabled="!canProceed()"
-                        class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                    >
-                        Next
-                        <ArrowRightIcon class="size-4" />
-                    </button>
-                    <button
-                        v-else
-                        type="button"
-                        @click="submitOrder"
-                        :disabled="form.processing || !canProceed()"
-                        class="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
-                    >
-                        <CheckIcon class="size-4" />
-                        {{ form.processing ? 'Creating...' : 'Create Order' }}
-                    </button>
+                                <div class="flex items-center gap-4">
+                                    <span v-if="currentStep >= 4" class="text-sm text-gray-500 dark:text-gray-400">
+                                        Total: <span class="font-semibold text-gray-900 dark:text-white">{{ formatCurrency(total) }}</span>
+                                    </span>
+
+                                    <button
+                                        v-if="currentStep < totalSteps"
+                                        type="button"
+                                        @click="nextStep"
+                                        :disabled="!canProceed()"
+                                        class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                    >
+                                        Continue
+                                        <ArrowRightIcon class="size-4" />
+                                    </button>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        @click="submitOrder"
+                                        :disabled="form.processing || !canProceed()"
+                                        class="inline-flex items-center gap-2 rounded-md bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
+                                    >
+                                        <CheckIcon class="size-4" />
+                                        {{ form.processing ? 'Creating...' : 'Create Order' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Add Trade-In Item Modal -->
+        <AddItemModal
+            :open="showAddTradeInModal"
+            :categories="tradeInCategories"
+            :editing-item="editingTradeInItem"
+            @close="showAddTradeInModal = false"
+            @save="handleTradeInItemSave"
+        />
     </AppLayout>
 </template>

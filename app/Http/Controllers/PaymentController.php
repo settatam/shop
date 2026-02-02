@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Contracts\Payable;
 use App\Http\Requests\ProcessPaymentRequest;
 use App\Http\Requests\UpdatePaymentAdjustmentsRequest;
+use App\Models\Layaway;
 use App\Models\Memo;
 use App\Models\Order;
 use App\Models\Payment;
@@ -22,6 +23,8 @@ class PaymentController extends Controller
      * @var array<string, class-string<Payable>>
      */
     protected array $modelTypes = [
+        'layaway' => Layaway::class,
+        'layaways' => Layaway::class,
         'memo' => Memo::class,
         'memos' => Memo::class,
         'order' => Order::class,
