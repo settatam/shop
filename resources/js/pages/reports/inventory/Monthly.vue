@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
@@ -11,12 +11,19 @@ import BarChart from '@/components/charts/BarChart.vue';
 interface MonthRow {
     period: string;
     month_start: string;
+    month_key: string;
     items_added: number;
     cost_added: number;
     items_removed: number;
     cost_removed: number;
     net_items: number;
     net_cost: number;
+}
+
+interface FilterInfo {
+    type: string;
+    value: string;
+    label: string;
 }
 
 interface Totals {
@@ -31,13 +38,29 @@ interface Totals {
 const props = defineProps<{
     monthlyData: MonthRow[];
     totals: Totals;
+    filter?: FilterInfo;
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Reports', href: '#' },
-    { title: 'Inventory', href: '/reports/inventory' },
-    { title: 'Month over Month', href: '/reports/inventory/monthly' },
-];
+const breadcrumbs = computed<BreadcrumbItem[]>(() => {
+    const items: BreadcrumbItem[] = [
+        { title: 'Reports', href: '#' },
+        { title: 'Inventory', href: '/reports/inventory' },
+        { title: 'Month over Month', href: '/reports/inventory/monthly' },
+    ];
+
+    if (props.filter) {
+        items.push({ title: props.filter.label, href: '#' });
+    }
+
+    return items;
+});
+
+const subtitle = computed(() => {
+    if (props.filter) {
+        return `Monthly Breakdown for ${props.filter.label}`;
+    }
+    return 'Month over Month - Past 13 Months';
+});
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
@@ -102,7 +125,7 @@ const avgMonthlyAdded = computed(() => {
                 <div>
                     <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Inventory Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Month over Month - Past 13 Months
+                        {{ subtitle }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
@@ -211,8 +234,15 @@ const avgMonthlyAdded = computed(() => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in monthlyData" :key="row.month_start" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.period }}</td>
+                            <tr
+                                v-for="row in monthlyData"
+                                :key="row.month_start"
+                                class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                                @click="router.visit(`/reports/inventory/weekly?month=${row.month_key}`)"
+                            >
+                                <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                                    {{ row.period }}
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
                                     <span v-if="row.items_added > 0">+{{ formatNumber(row.items_added) }}</span>
                                     <span v-else class="text-gray-400">-</span>

@@ -28,16 +28,38 @@ interface Totals {
     net_cost: number;
 }
 
+interface FilterInfo {
+    type: string;
+    value: string;
+    label: string;
+}
+
 const props = defineProps<{
     weeklyData: WeekRow[];
     totals: Totals;
+    filter?: FilterInfo;
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Reports', href: '#' },
-    { title: 'Inventory', href: '/reports/inventory' },
-    { title: 'Week over Week', href: '/reports/inventory/weekly' },
-];
+const breadcrumbs = computed<BreadcrumbItem[]>(() => {
+    const items: BreadcrumbItem[] = [
+        { title: 'Reports', href: '#' },
+        { title: 'Inventory', href: '/reports/inventory' },
+        { title: 'Week over Week', href: '/reports/inventory/weekly' },
+    ];
+
+    if (props.filter) {
+        items.push({ title: props.filter.label, href: '#' });
+    }
+
+    return items;
+});
+
+const subtitle = computed(() => {
+    if (props.filter) {
+        return `Weekly Breakdown for ${props.filter.label}`;
+    }
+    return 'Week over Week - Past 13 Weeks';
+});
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
@@ -96,7 +118,7 @@ const netTrend = computed(() => {
                 <div>
                     <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Inventory Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Week over Week - Past 13 Weeks
+                        {{ subtitle }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">

@@ -4,6 +4,7 @@ namespace App\Services\AI;
 
 use App\Models\AiSuggestion;
 use App\Models\AiUsageLog;
+use App\Models\StoreIntegration;
 use App\Models\TransactionItem;
 use Illuminate\Support\Facades\Http;
 
@@ -17,6 +18,7 @@ class TransactionItemResearcher
 
     public function __construct()
     {
+        // Default from config, can be overridden by store integration
         $this->apiKey = config('services.anthropic.api_key', '');
         $this->model = config('services.anthropic.model', 'claude-sonnet-4-20250514');
     }
@@ -29,6 +31,21 @@ class TransactionItemResearcher
     public function generateResearch(TransactionItem $item): array
     {
         $item->load(['category', 'images', 'transaction']);
+
+        // Check for store-specific Anthropic integration
+        $storeId = $item->transaction->store_id;
+        $integration = StoreIntegration::findActiveForStore($storeId, StoreIntegration::PROVIDER_ANTHROPIC);
+
+        if ($integration) {
+            $this->apiKey = $integration->getAnthropicApiKey();
+            $this->model = $integration->getAnthropicModel();
+        }
+
+        if (empty($this->apiKey)) {
+            return [
+                'error' => 'Anthropic API key not configured. Please add your API key in Settings → Integrations.',
+            ];
+        }
 
         $prompt = $this->buildPrompt($item);
         $messages = [['role' => 'user', 'content' => $prompt]];

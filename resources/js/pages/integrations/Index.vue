@@ -5,7 +5,7 @@ import { Head, useForm, router } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package } from 'lucide-vue-next';
+import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package, Sparkles } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 
 interface Integration {
@@ -148,6 +148,35 @@ function deleteShipstation() {
     if (!confirm('Are you sure you want to remove the ShipStation integration?')) return;
 
     router.delete(`/integrations/${shipstationIntegration.value.id}`, {
+        preserveScroll: true,
+    });
+}
+
+// Anthropic form
+const anthropicForm = useForm({
+    api_key: '',
+    model: 'claude-sonnet-4-20250514',
+});
+
+const showAnthropicForm = ref(false);
+
+const anthropicIntegration = computed(() => props.integrations?.anthropic);
+
+function saveAnthropic() {
+    anthropicForm.post('/integrations/anthropic', {
+        preserveScroll: true,
+        onSuccess: () => {
+            showAnthropicForm.value = false;
+            anthropicForm.reset();
+        },
+    });
+}
+
+function deleteAnthropic() {
+    if (!anthropicIntegration.value?.id) return;
+    if (!confirm('Are you sure you want to remove the Anthropic integration?')) return;
+
+    router.delete(`/integrations/${anthropicIntegration.value.id}`, {
         preserveScroll: true,
     });
 }
@@ -615,6 +644,92 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                         </form>
                     </CardContent>
                 </Card>
+
+                <!-- Anthropic -->
+                <Card>
+                    <CardHeader>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900">
+                                    <Sparkles class="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                                </div>
+                                <div>
+                                    <CardTitle class="text-lg">Anthropic</CardTitle>
+                                    <CardDescription>AI research & pricing analysis</CardDescription>
+                                </div>
+                            </div>
+                            <Badge
+                                v-if="anthropicIntegration?.has_credentials"
+                                :variant="getStatusBadgeVariant(anthropicIntegration.status)"
+                            >
+                                <Check v-if="anthropicIntegration.status === 'active'" class="mr-1 h-3 w-3" />
+                                <AlertCircle v-else-if="anthropicIntegration.status === 'error'" class="mr-1 h-3 w-3" />
+                                {{ anthropicIntegration.status === 'active' ? 'Connected' : anthropicIntegration.status }}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <!-- Show configured state -->
+                        <div v-if="anthropicIntegration?.has_credentials && !showAnthropicForm" class="space-y-4">
+                            <div class="rounded-lg border p-3 text-sm">
+                                <p class="text-muted-foreground">API credentials configured</p>
+                                <p class="text-xs text-muted-foreground mt-1">Powers AI Research on transaction items</p>
+                                <div v-if="anthropicIntegration.last_error" class="mt-2 text-red-600 dark:text-red-400">
+                                    {{ anthropicIntegration.last_error }}
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button variant="outline" size="sm" @click="showAnthropicForm = true">
+                                    Update Credentials
+                                </Button>
+                                <Button variant="ghost" size="sm" class="text-red-600" @click="deleteAnthropic">
+                                    <Trash2 class="mr-1 h-4 w-4" />
+                                    Remove
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- Show form -->
+                        <form v-else @submit.prevent="saveAnthropic" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Key</label>
+                                <input
+                                    v-model="anthropicForm.api_key"
+                                    type="password"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="sk-ant-..."
+                                />
+                                <p v-if="anthropicForm.errors.api_key" class="mt-1 text-sm text-red-600">{{ anthropicForm.errors.api_key }}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">Get your API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-indigo-600 hover:underline">console.anthropic.com</a></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Model <span class="text-muted-foreground">(optional)</span></label>
+                                <select
+                                    v-model="anthropicForm.model"
+                                    class="w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                >
+                                    <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (Recommended)</option>
+                                    <option value="claude-opus-4-20250514">Claude Opus 4 (Most Capable)</option>
+                                    <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (Fastest)</option>
+                                </select>
+                                <p class="mt-1 text-xs text-muted-foreground">Sonnet offers the best balance of speed and quality</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button type="submit" :disabled="anthropicForm.processing">
+                                    {{ anthropicForm.processing ? 'Saving...' : 'Save Anthropic' }}
+                                </Button>
+                                <Button
+                                    v-if="anthropicIntegration?.has_credentials"
+                                    type="button"
+                                    variant="ghost"
+                                    @click="showAnthropicForm = false"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
             </div>
 
             <!-- E-commerce Platforms -->
@@ -641,18 +756,31 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                 </div>
             </div>
 
-            <!-- AI Services -->
+            <!-- AI Features (powered by Anthropic) -->
             <Card>
                 <CardHeader>
                     <CardTitle class="flex items-center gap-2">
-                        <ExternalLink class="h-5 w-5" />
-                        AI Services
+                        <Sparkles class="h-5 w-5" />
+                        AI Features
                     </CardTitle>
                     <CardDescription>
-                        Configure AI-powered features for your store
+                        AI-powered features for your store (requires Anthropic integration)
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-4">
+                    <div class="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                            <h4 class="font-medium">Item Research</h4>
+                            <p class="text-sm text-muted-foreground">
+                                AI-powered market research, pricing analysis, and item descriptions
+                            </p>
+                        </div>
+                        <Badge v-if="anthropicIntegration?.has_credentials" variant="default">
+                            <Check class="mr-1 h-3 w-3" />
+                            Active
+                        </Badge>
+                        <Badge v-else variant="secondary">Requires Anthropic</Badge>
+                    </div>
                     <div class="flex items-center justify-between p-4 border rounded-lg">
                         <div>
                             <h4 class="font-medium">Description Generator</h4>
@@ -660,16 +788,11 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 AI-powered product descriptions optimized for each platform
                             </p>
                         </div>
-                        <Badge>Configured</Badge>
-                    </div>
-                    <div class="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                            <h4 class="font-medium">Auto-Categorization</h4>
-                            <p class="text-sm text-muted-foreground">
-                                Automatically categorize products for each marketplace
-                            </p>
-                        </div>
-                        <Badge>Configured</Badge>
+                        <Badge v-if="anthropicIntegration?.has_credentials" variant="default">
+                            <Check class="mr-1 h-3 w-3" />
+                            Active
+                        </Badge>
+                        <Badge v-else variant="secondary">Requires Anthropic</Badge>
                     </div>
                     <div class="flex items-center justify-between p-4 border rounded-lg">
                         <div>
@@ -678,7 +801,11 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                 Get AI-powered pricing suggestions based on market data
                             </p>
                         </div>
-                        <Badge>Configured</Badge>
+                        <Badge v-if="anthropicIntegration?.has_credentials" variant="default">
+                            <Check class="mr-1 h-3 w-3" />
+                            Active
+                        </Badge>
+                        <Badge v-else variant="secondary">Requires Anthropic</Badge>
                     </div>
                 </CardContent>
             </Card>

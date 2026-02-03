@@ -163,6 +163,34 @@ class IntegrationsController extends Controller
         return back()->with('success', 'ShipStation integration saved successfully.');
     }
 
+    public function storeAnthropic(Request $request, StoreContext $storeContext): RedirectResponse
+    {
+        $validated = $request->validate([
+            'api_key' => ['required', 'string'],
+            'model' => ['nullable', 'string'],
+        ]);
+
+        $storeId = $storeContext->getCurrentStoreId();
+
+        StoreIntegration::updateOrCreate(
+            [
+                'store_id' => $storeId,
+                'provider' => StoreIntegration::PROVIDER_ANTHROPIC,
+            ],
+            [
+                'name' => 'Anthropic',
+                'environment' => StoreIntegration::ENV_PRODUCTION,
+                'credentials' => [
+                    'api_key' => $validated['api_key'],
+                    'model' => $validated['model'] ?? 'claude-sonnet-4-20250514',
+                ],
+                'status' => StoreIntegration::STATUS_ACTIVE,
+            ]
+        );
+
+        return back()->with('success', 'Anthropic integration saved successfully.');
+    }
+
     public function destroy(StoreIntegration $integration, StoreContext $storeContext): RedirectResponse
     {
         $storeId = $storeContext->getCurrentStoreId();

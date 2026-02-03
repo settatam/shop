@@ -24,6 +24,8 @@ class StoreIntegration extends Model
 
     public const PROVIDER_SHIPSTATION = 'shipstation';
 
+    public const PROVIDER_ANTHROPIC = 'anthropic';
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_INACTIVE = 'inactive';
@@ -249,5 +251,29 @@ class StoreIntegration extends Model
     public function getShipStationApiUrl(): string
     {
         return 'https://ssapi.shipstation.com';
+    }
+
+    /**
+     * Get Anthropic API Key.
+     */
+    public function getAnthropicApiKey(): ?string
+    {
+        return $this->credentials['api_key'] ?? null;
+    }
+
+    /**
+     * Get Anthropic Model (defaults to claude-sonnet-4-20250514).
+     */
+    public function getAnthropicModel(): string
+    {
+        return $this->credentials['model'] ?? 'claude-sonnet-4-20250514';
+    }
+
+    /**
+     * Get Anthropic API base URL.
+     */
+    public function getAnthropicApiUrl(): string
+    {
+        return 'https://api.anthropic.com/v1';
     }
 }

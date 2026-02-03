@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
@@ -211,8 +211,15 @@ const avgYearlyAdded = computed(() => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in yearlyData" :key="row.year" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.period }}</td>
+                            <tr
+                                v-for="row in yearlyData"
+                                :key="row.year"
+                                class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                                @click="router.visit(`/reports/inventory/monthly?year=${row.year}`)"
+                            >
+                                <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                                    {{ row.period }}
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
                                     <span v-if="row.items_added > 0">+{{ formatNumber(row.items_added) }}</span>
                                     <span v-else class="text-gray-400">-</span>

@@ -340,13 +340,15 @@ class InventoryReportController extends Controller
 
     /**
      * Week over week inventory report.
+     * Supports filtering by month (e.g., ?month=2024-01).
      */
     public function weekly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
+        $month = $request->query('month'); // Format: YYYY-MM
 
-        // Get past 13 weeks of data
-        $weeklyData = $this->getWeekOverWeekData($store->id);
+        // Get weekly data (filtered by month if provided)
+        $weeklyData = $this->getWeekOverWeekData($store->id, $month);
 
         // Calculate totals
         $totals = [
@@ -358,21 +360,34 @@ class InventoryReportController extends Controller
             'net_cost' => $weeklyData->sum('net_cost'),
         ];
 
+        // Build filter info for display
+        $filterInfo = null;
+        if ($month) {
+            $filterInfo = [
+                'type' => 'month',
+                'value' => $month,
+                'label' => Carbon::parse($month.'-01')->format('F Y'),
+            ];
+        }
+
         return Inertia::render('reports/inventory/Weekly', [
             'weeklyData' => $weeklyData,
             'totals' => $totals,
+            'filter' => $filterInfo,
         ]);
     }
 
     /**
      * Month over month inventory report.
+     * Supports filtering by year (e.g., ?year=2024).
      */
     public function monthly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
+        $year = $request->query('year'); // Format: YYYY
 
-        // Get past 13 months of data
-        $monthlyData = $this->getMonthOverMonthData($store->id);
+        // Get monthly data (filtered by year if provided)
+        $monthlyData = $this->getMonthOverMonthData($store->id, $year);
 
         // Calculate totals
         $totals = [
@@ -384,9 +399,20 @@ class InventoryReportController extends Controller
             'net_cost' => $monthlyData->sum('net_cost'),
         ];
 
+        // Build filter info for display
+        $filterInfo = null;
+        if ($year) {
+            $filterInfo = [
+                'type' => 'year',
+                'value' => $year,
+                'label' => $year,
+            ];
+        }
+
         return Inertia::render('reports/inventory/Monthly', [
             'monthlyData' => $monthlyData,
             'totals' => $totals,
+            'filter' => $filterInfo,
         ]);
     }
 
@@ -757,95 +783,147 @@ class InventoryReportController extends Controller
     }
 
     /**
-     * Get week over week inventory data (past 13 weeks).
+     * Get week over week inventory data.
+     * If month is provided (YYYY-MM), shows weeks within that month.
+     * Otherwise shows past 13 weeks.
      */
-    protected function getWeekOverWeekData(int $storeId)
+    protected function getWeekOverWeekData(int $storeId, ?string $month = null)
     {
         $weeks = collect();
-        $current = now()->startOfWeek();
 
-        for ($i = 12; $i >= 0; $i--) {
-            $weekStart = $current->copy()->subWeeks($i);
-            $weekEnd = $weekStart->copy()->endOfWeek();
+        if ($month) {
+            // Get all weeks within the specified month
+            $monthStart = Carbon::parse($month.'-01')->startOfMonth();
+            $monthEnd = $monthStart->copy()->endOfMonth();
 
-            $additions = DB::table('inventory_adjustments')
-                ->where('store_id', $storeId)
-                ->whereBetween('created_at', [$weekStart, $weekEnd])
-                ->where('quantity_change', '>', 0)
-                ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
-                ->first();
+            // Start from the first week that contains days from this month
+            $weekStart = $monthStart->copy()->startOfWeek();
 
-            $deletions = DB::table('inventory_adjustments')
-                ->where('store_id', $storeId)
-                ->whereBetween('created_at', [$weekStart, $weekEnd])
-                ->where('quantity_change', '<', 0)
-                ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
-                ->first();
+            while ($weekStart->lte($monthEnd)) {
+                $weekEnd = $weekStart->copy()->endOfWeek();
 
-            $itemsAdded = (int) ($additions->items_added ?? 0);
-            $costAdded = (float) ($additions->cost_added ?? 0);
-            $itemsRemoved = (int) ($deletions->items_removed ?? 0);
-            $costRemoved = (float) ($deletions->cost_removed ?? 0);
+                // Only include weeks that overlap with the month
+                if ($weekEnd->gte($monthStart) && $weekStart->lte($monthEnd)) {
+                    $weeks->push($this->getWeekData($storeId, $weekStart, $weekEnd));
+                }
 
-            $weeks->push([
-                'period' => $weekStart->format('M d, Y'),
-                'week_start' => $weekStart->format('Y-m-d'),
-                'items_added' => $itemsAdded,
-                'cost_added' => $costAdded,
-                'items_removed' => $itemsRemoved,
-                'cost_removed' => $costRemoved,
-                'net_items' => $itemsAdded - $itemsRemoved,
-                'net_cost' => $costAdded - $costRemoved,
-            ]);
+                $weekStart->addWeek();
+            }
+        } else {
+            // Default: past 13 weeks
+            $current = now()->startOfWeek();
+
+            for ($i = 12; $i >= 0; $i--) {
+                $weekStart = $current->copy()->subWeeks($i);
+                $weekEnd = $weekStart->copy()->endOfWeek();
+                $weeks->push($this->getWeekData($storeId, $weekStart, $weekEnd));
+            }
         }
 
         return $weeks;
     }
 
     /**
-     * Get month over month inventory data (past 13 months).
+     * Get inventory data for a specific week.
      */
-    protected function getMonthOverMonthData(int $storeId)
+    protected function getWeekData(int $storeId, Carbon $weekStart, Carbon $weekEnd): array
+    {
+        $additions = DB::table('inventory_adjustments')
+            ->where('store_id', $storeId)
+            ->whereBetween('created_at', [$weekStart, $weekEnd])
+            ->where('quantity_change', '>', 0)
+            ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+            ->first();
+
+        $deletions = DB::table('inventory_adjustments')
+            ->where('store_id', $storeId)
+            ->whereBetween('created_at', [$weekStart, $weekEnd])
+            ->where('quantity_change', '<', 0)
+            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+            ->first();
+
+        $itemsAdded = (int) ($additions->items_added ?? 0);
+        $costAdded = (float) ($additions->cost_added ?? 0);
+        $itemsRemoved = (int) ($deletions->items_removed ?? 0);
+        $costRemoved = (float) ($deletions->cost_removed ?? 0);
+
+        return [
+            'period' => $weekStart->format('M d, Y'),
+            'week_start' => $weekStart->format('Y-m-d'),
+            'items_added' => $itemsAdded,
+            'cost_added' => $costAdded,
+            'items_removed' => $itemsRemoved,
+            'cost_removed' => $costRemoved,
+            'net_items' => $itemsAdded - $itemsRemoved,
+            'net_cost' => $costAdded - $costRemoved,
+        ];
+    }
+
+    /**
+     * Get month over month inventory data.
+     * If year is provided, shows all 12 months of that year.
+     * Otherwise shows past 13 months.
+     */
+    protected function getMonthOverMonthData(int $storeId, ?string $year = null)
     {
         $months = collect();
-        $current = now()->startOfMonth();
 
-        for ($i = 12; $i >= 0; $i--) {
-            $monthStart = $current->copy()->subMonths($i);
-            $monthEnd = $monthStart->copy()->endOfMonth();
+        if ($year) {
+            // Get all 12 months of the specified year
+            for ($m = 1; $m <= 12; $m++) {
+                $monthStart = Carbon::createFromDate((int) $year, $m, 1)->startOfDay();
+                $monthEnd = $monthStart->copy()->endOfMonth();
+                $months->push($this->getMonthData($storeId, $monthStart, $monthEnd));
+            }
+        } else {
+            // Default: past 13 months
+            $current = now()->startOfMonth();
 
-            $additions = DB::table('inventory_adjustments')
-                ->where('store_id', $storeId)
-                ->whereBetween('created_at', [$monthStart, $monthEnd])
-                ->where('quantity_change', '>', 0)
-                ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
-                ->first();
-
-            $deletions = DB::table('inventory_adjustments')
-                ->where('store_id', $storeId)
-                ->whereBetween('created_at', [$monthStart, $monthEnd])
-                ->where('quantity_change', '<', 0)
-                ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
-                ->first();
-
-            $itemsAdded = (int) ($additions->items_added ?? 0);
-            $costAdded = (float) ($additions->cost_added ?? 0);
-            $itemsRemoved = (int) ($deletions->items_removed ?? 0);
-            $costRemoved = (float) ($deletions->cost_removed ?? 0);
-
-            $months->push([
-                'period' => $monthStart->format('M Y'),
-                'month_start' => $monthStart->format('Y-m-d'),
-                'items_added' => $itemsAdded,
-                'cost_added' => $costAdded,
-                'items_removed' => $itemsRemoved,
-                'cost_removed' => $costRemoved,
-                'net_items' => $itemsAdded - $itemsRemoved,
-                'net_cost' => $costAdded - $costRemoved,
-            ]);
+            for ($i = 12; $i >= 0; $i--) {
+                $monthStart = $current->copy()->subMonths($i);
+                $monthEnd = $monthStart->copy()->endOfMonth();
+                $months->push($this->getMonthData($storeId, $monthStart, $monthEnd));
+            }
         }
 
         return $months;
+    }
+
+    /**
+     * Get inventory data for a specific month.
+     */
+    protected function getMonthData(int $storeId, Carbon $monthStart, Carbon $monthEnd): array
+    {
+        $additions = DB::table('inventory_adjustments')
+            ->where('store_id', $storeId)
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->where('quantity_change', '>', 0)
+            ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+            ->first();
+
+        $deletions = DB::table('inventory_adjustments')
+            ->where('store_id', $storeId)
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->where('quantity_change', '<', 0)
+            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+            ->first();
+
+        $itemsAdded = (int) ($additions->items_added ?? 0);
+        $costAdded = (float) ($additions->cost_added ?? 0);
+        $itemsRemoved = (int) ($deletions->items_removed ?? 0);
+        $costRemoved = (float) ($deletions->cost_removed ?? 0);
+
+        return [
+            'period' => $monthStart->format('M Y'),
+            'month_start' => $monthStart->format('Y-m-d'),
+            'month_key' => $monthStart->format('Y-m'), // For linking to weekly view
+            'items_added' => $itemsAdded,
+            'cost_added' => $costAdded,
+            'items_removed' => $itemsRemoved,
+            'cost_removed' => $costRemoved,
+            'net_items' => $itemsAdded - $itemsRemoved,
+            'net_cost' => $costAdded - $costRemoved,
+        ];
     }
 
     /**

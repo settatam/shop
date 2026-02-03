@@ -412,6 +412,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('integrations/twilio', [IntegrationsController::class, 'storeTwilio'])->name('integrations.twilio.store');
     Route::post('integrations/gia', [IntegrationsController::class, 'storeGia'])->name('integrations.gia.store');
     Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
+    Route::post('integrations/anthropic', [IntegrationsController::class, 'storeAnthropic'])->name('integrations.anthropic.store');
     Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
 
     // Invoices

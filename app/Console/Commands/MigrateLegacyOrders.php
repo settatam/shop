@@ -2,11 +2,14 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Payment;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Store;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -21,9 +24,9 @@ class MigrateLegacyOrders extends Command
                             {--limit=0 : Number of orders to migrate (0 for all)}
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing orders and start fresh}
-                            {--with-invoices : Create invoices for migrated orders}';
+                            {--with-payments : Migrate payments for orders}';
 
-    protected $description = 'Migrate orders and order items from the legacy database';
+    protected $description = 'Migrate orders, order items, and payments from the legacy database';
 
     protected array $orderMap = [];
 
@@ -33,7 +36,15 @@ class MigrateLegacyOrders extends Command
 
     protected array $productMap = [];
 
+    protected array $categoryMap = [];
+
+    protected ?Store $newStore = null;
+
     protected ?Warehouse $warehouse = null;
+
+    protected int $paymentCount = 0;
+
+    protected int $invoiceCount = 0;
 
     public function handle(): int
     {
@@ -41,7 +52,7 @@ class MigrateLegacyOrders extends Command
         $newStoreId = $this->option('new-store-id') ? (int) $this->option('new-store-id') : null;
         $limit = (int) $this->option('limit');
         $isDryRun = $this->option('dry-run');
-        $withInvoices = $this->option('with-invoices');
+        $withPayments = $this->option('with-payments');
 
         $this->info("Starting order migration from legacy store ID: {$legacyStoreId}");
 
@@ -62,30 +73,29 @@ class MigrateLegacyOrders extends Command
         }
 
         // Find the new store
-        $newStore = null;
         if ($newStoreId) {
-            $newStore = Store::find($newStoreId);
+            $this->newStore = Store::find($newStoreId);
         } else {
-            $newStore = Store::where('name', $legacyStore->name)->first();
+            $this->newStore = Store::where('name', $legacyStore->name)->first();
         }
 
-        if (! $newStore) {
+        if (! $this->newStore) {
             $this->error('New store not found. Run migrate:legacy first to create the store.');
 
             return 1;
         }
 
         // Get default warehouse
-        $this->warehouse = Warehouse::where('store_id', $newStore->id)->where('is_default', true)->first();
+        $this->warehouse = Warehouse::where('store_id', $this->newStore->id)->where('is_default', true)->first();
 
-        $this->info("Migrating orders to store: {$newStore->name} (ID: {$newStore->id})");
+        $this->info("Migrating orders to store: {$this->newStore->name} (ID: {$this->newStore->id})");
 
         // Load mapping files from previous migrations
         $this->loadMappingFiles($legacyStoreId);
 
         if ($this->option('fresh') && ! $isDryRun) {
             if ($this->confirm('This will delete all existing orders for this store. Continue?')) {
-                $this->cleanupExistingOrders($newStore);
+                $this->cleanupExistingOrders();
             }
         }
 
@@ -93,13 +103,13 @@ class MigrateLegacyOrders extends Command
             DB::beginTransaction();
 
             // Build customer mapping
-            $this->buildCustomerMapping($legacyStoreId, $newStore);
+            $this->buildCustomerMapping($legacyStoreId);
 
             // Build user mapping
-            $this->buildUserMapping($legacyStoreId, $newStore);
+            $this->buildUserMapping($legacyStoreId);
 
             // Migrate orders
-            $this->migrateOrders($legacyStoreId, $newStore, $isDryRun, $limit, $withInvoices);
+            $this->migrateOrders($legacyStoreId, $isDryRun, $limit, $withPayments);
 
             if ($isDryRun) {
                 DB::rollBack();
@@ -109,7 +119,7 @@ class MigrateLegacyOrders extends Command
                 $this->info('Order migration complete!');
             }
 
-            $this->displaySummary($newStore);
+            $this->displaySummary();
 
             // Save mapping files
             if (! $isDryRun && count($this->orderMap) > 0) {
@@ -165,7 +175,7 @@ class MigrateLegacyOrders extends Command
         $this->line("  Order map saved to: {$orderMapFile}");
     }
 
-    protected function buildCustomerMapping(int $legacyStoreId, Store $newStore): void
+    protected function buildCustomerMapping(int $legacyStoreId): void
     {
         if (! empty($this->customerMap)) {
             return;
@@ -176,10 +186,9 @@ class MigrateLegacyOrders extends Command
         $legacyCustomers = DB::connection('legacy')
             ->table('customers')
             ->where('store_id', $legacyStoreId)
-
             ->get();
 
-        $newCustomers = Customer::where('store_id', $newStore->id)->get();
+        $newCustomers = Customer::where('store_id', $this->newStore->id)->get();
         $newCustomersByEmail = $newCustomers->filter(fn ($c) => $c->email)->keyBy(fn ($c) => strtolower($c->email));
 
         foreach ($legacyCustomers as $legacy) {
@@ -191,7 +200,7 @@ class MigrateLegacyOrders extends Command
         $this->line('  Mapped '.count($this->customerMap).' customers');
     }
 
-    protected function buildUserMapping(int $legacyStoreId, Store $newStore): void
+    protected function buildUserMapping(int $legacyStoreId): void
     {
         if (! empty($this->userMap)) {
             return;
@@ -221,14 +230,13 @@ class MigrateLegacyOrders extends Command
         $this->line('  Mapped '.count($this->userMap).' users');
     }
 
-    protected function migrateOrders(int $legacyStoreId, Store $newStore, bool $isDryRun, int $limit, bool $withInvoices): void
+    protected function migrateOrders(int $legacyStoreId, bool $isDryRun, int $limit, bool $withPayments): void
     {
         $this->info('Migrating orders...');
 
         $query = DB::connection('legacy')
             ->table('orders')
             ->where('store_id', $legacyStoreId)
-
             ->orderBy('id', 'asc');
 
         if ($limit > 0) {
@@ -238,15 +246,14 @@ class MigrateLegacyOrders extends Command
         $legacyOrders = $query->get();
         $orderCount = 0;
         $itemCount = 0;
-        $invoiceCount = 0;
         $skipped = 0;
 
         foreach ($legacyOrders as $legacyOrder) {
-            // Check if order already exists by invoice_number
+            // Check if order already exists by order_id (maintain the original)
             $existingOrder = null;
-            if ($legacyOrder->invoice_number) {
-                $existingOrder = Order::where('store_id', $newStore->id)
-                    ->where('invoice_number', $legacyOrder->invoice_number)
+            if ($legacyOrder->order_id) {
+                $existingOrder = Order::where('store_id', $this->newStore->id)
+                    ->where('order_id', $legacyOrder->order_id)
                     ->first();
             }
 
@@ -258,7 +265,7 @@ class MigrateLegacyOrders extends Command
             }
 
             if ($isDryRun) {
-                $this->line("  Would create order: {$legacyOrder->invoice_number} (\${$legacyOrder->total})");
+                $this->line("  Would create order: {$legacyOrder->order_id} (\${$legacyOrder->total})");
                 $orderCount++;
 
                 continue;
@@ -279,8 +286,9 @@ class MigrateLegacyOrders extends Command
             // Map status
             $status = $this->mapOrderStatus($legacyOrder->status);
 
-            $newOrder = Order::create([
-                'store_id' => $newStore->id,
+            // Use DB::table to preserve timestamps
+            $newOrderId = DB::table('orders')->insertGetId([
+                'store_id' => $this->newStore->id,
                 'customer_id' => $customerId,
                 'user_id' => $userId,
                 'warehouse_id' => $this->warehouse?->id,
@@ -292,10 +300,10 @@ class MigrateLegacyOrders extends Command
                 'shipping_cost' => $legacyOrder->shipping_cost ?? 0,
                 'discount_cost' => $legacyOrder->discount_cost ?? 0,
                 'service_fee_value' => $legacyOrder->service_fee_value ?? 0,
-                'service_fee_unit' => $this->mapServiceFeeUnit($legacyOrder->service_fee_unit),
+                'service_fee_unit' => $this->mapServiceFeeUnit($legacyOrder->service_fee_unit ?? null),
                 'service_fee_reason' => $legacyOrder->service_fee_reason ?? '',
                 'invoice_number' => $legacyOrder->invoice_number,
-                'order_id' => $legacyOrder->order_id,
+                'order_id' => $legacyOrder->order_id, // Maintain original order_id
                 'external_marketplace_id' => $legacyOrder->external_marketplace_id,
                 'square_order_id' => $legacyOrder->square_order_id,
                 'date_of_purchase' => $legacyOrder->date_of_purchase,
@@ -304,79 +312,246 @@ class MigrateLegacyOrders extends Command
                 'updated_at' => $legacyOrder->updated_at,
             ]);
 
-            $this->orderMap[$legacyOrder->id] = $newOrder->id;
+            $this->orderMap[$legacyOrder->id] = $newOrderId;
             $orderCount++;
 
             // Migrate order items
-            $legacyItems = DB::connection('legacy')
-                ->table('order_items')
-                ->where('order_id', $legacyOrder->id)
+            $itemCount += $this->migrateOrderItems($legacyOrder->id, $newOrderId, $legacyStoreId);
 
-                ->get();
-
-            foreach ($legacyItems as $legacyItem) {
-                // Map product
-                $productId = null;
-                if ($legacyItem->product_id && isset($this->productMap[$legacyItem->product_id])) {
-                    $productId = $this->productMap[$legacyItem->product_id];
-                }
-
-                OrderItem::create([
-                    'order_id' => $newOrder->id,
-                    'product_id' => $productId,
-                    'sku' => $legacyItem->sku,
-                    'title' => $legacyItem->title ?? 'Item',
-                    'quantity' => $legacyItem->quantity ?? 1,
-                    'price' => $legacyItem->price ?? 0,
-                    'cost' => $legacyItem->cost_per_item,
-                    'discount' => $legacyItem->discount ?? 0,
-                    'tax' => $legacyItem->sales_tax ?? 0,
-                    'created_at' => $legacyItem->created_at,
-                    'updated_at' => $legacyItem->updated_at,
-                ]);
-
-                $itemCount++;
+            // Calculate total paid from legacy payments
+            $totalPaid = 0;
+            if ($withPayments) {
+                $totalPaid = $this->migrateOrderPayments($legacyOrder, $newOrderId, $customerId, $userId);
             }
 
-            // Create invoice if requested
-            if ($withInvoices && $customerId) {
-                $customer = Customer::find($customerId);
-                if ($customer) {
-                    Invoice::create([
-                        'store_id' => $newStore->id,
-                        'invoiceable_type' => Order::class,
-                        'invoiceable_id' => $newOrder->id,
-                        'customer_id' => $customerId,
-                        'invoice_number' => $legacyOrder->invoice_number ?: ('INV-'.strtoupper(substr(md5($newOrder->id), 0, 8))),
-                        'type' => 'sale',
-                        'status' => $this->mapInvoiceStatus($status),
-                        'due_date' => now()->addDays(30),
-                        'subtotal' => $newOrder->sub_total ?? 0,
-                        'tax_amount' => $newOrder->sales_tax ?? 0,
-                        'discount_amount' => $newOrder->discount_cost ?? 0,
-                        'total_amount' => $newOrder->total ?? 0,
-                        'total_paid' => in_array($status, Order::PAID_STATUSES) ? ($newOrder->total ?? 0) : 0,
-                        'balance_due' => in_array($status, Order::PAID_STATUSES) ? 0 : ($newOrder->total ?? 0),
-                        'customer_name' => $customer->full_name ?? '',
-                        'customer_email' => $customer->email ?? '',
-                        'store_name' => $newStore->business_name ?? $newStore->name ?? '',
-                        'store_address' => $newStore->address ?? '',
-                        'store_city' => $newStore->city ?? '',
-                        'store_state' => $newStore->state ?? '',
-                        'store_zip' => $newStore->zip ?? '',
-                        'created_at' => $legacyOrder->created_at,
-                        'updated_at' => $legacyOrder->updated_at,
-                    ]);
-                    $invoiceCount++;
-                }
-            }
+            // Create invoice for this order
+            $this->createOrderInvoice($legacyOrder, $newOrderId, $customerId, $userId, $totalPaid);
 
             if ($orderCount % 50 === 0) {
                 $this->line("  Processed {$orderCount} orders...");
             }
         }
 
-        $this->line("  Created {$orderCount} orders with {$itemCount} items, {$invoiceCount} invoices, skipped {$skipped} existing");
+        $this->line("  Created {$orderCount} orders with {$itemCount} items, {$this->invoiceCount} invoices, {$this->paymentCount} payments, skipped {$skipped} existing");
+    }
+
+    protected function migrateOrderItems(int $legacyOrderId, int $newOrderId, int $legacyStoreId): int
+    {
+        $legacyItems = DB::connection('legacy')
+            ->table('order_items')
+            ->where('order_id', $legacyOrderId)
+            ->get();
+
+        $itemCount = 0;
+
+        foreach ($legacyItems as $legacyItem) {
+            // Find product by multiple methods:
+            // 1. Via product map (legacy product_id -> new product_id)
+            // 2. By SKU in new store
+            $productId = null;
+            $variantId = null;
+
+            // Method 1: Product map
+            if ($legacyItem->product_id && isset($this->productMap[$legacyItem->product_id])) {
+                $productId = $this->productMap[$legacyItem->product_id];
+                // Try to find variant
+                $variant = ProductVariant::where('product_id', $productId)->first();
+                $variantId = $variant?->id;
+            }
+
+            // Method 2: Find by SKU if no product found yet
+            if (! $productId && $legacyItem->sku) {
+                $variant = ProductVariant::whereHas('product', function ($q) {
+                    $q->where('store_id', $this->newStore->id);
+                })->where('sku', $legacyItem->sku)->first();
+
+                if ($variant) {
+                    $productId = $variant->product_id;
+                    $variantId = $variant->id;
+                }
+            }
+
+            // Method 3: Try to find product by legacy product_id's SKU
+            if (! $productId && $legacyItem->product_id) {
+                $legacyProduct = DB::connection('legacy')
+                    ->table('products')
+                    ->where('id', $legacyItem->product_id)
+                    ->first();
+
+                if ($legacyProduct && $legacyProduct->sku) {
+                    $variant = ProductVariant::whereHas('product', function ($q) {
+                        $q->where('store_id', $this->newStore->id);
+                    })->where('sku', $legacyProduct->sku)->first();
+
+                    if ($variant) {
+                        $productId = $variant->product_id;
+                        $variantId = $variant->id;
+                    }
+                }
+            }
+
+            // Find category by name if order item has category
+            $categoryId = null;
+            if ($legacyItem->category) {
+                $categoryId = $this->findCategoryByName($legacyItem->category);
+            }
+
+            // Use DB::table to preserve timestamps
+            DB::table('order_items')->insert([
+                'order_id' => $newOrderId,
+                'product_id' => $productId,
+                'product_variant_id' => $variantId,
+                'sku' => $legacyItem->sku,
+                'title' => $legacyItem->title ?? 'Item',
+                'quantity' => $legacyItem->quantity ?? 1,
+                'price' => $legacyItem->price ?? 0,
+                'cost' => $legacyItem->cost_per_item,
+                'discount' => $legacyItem->discount ?? 0,
+                'tax' => $legacyItem->sales_tax ?? 0,
+                'notes' => null,
+                'created_at' => $legacyItem->created_at,
+                'updated_at' => $legacyItem->updated_at,
+            ]);
+
+            $itemCount++;
+        }
+
+        return $itemCount;
+    }
+
+    protected function migrateOrderPayments(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId): float
+    {
+        // Get payments from legacy database for this order
+        $legacyPayments = DB::connection('legacy')
+            ->table('payments')
+            ->where(function ($q) use ($legacyOrder) {
+                $q->where('order_id', $legacyOrder->id)
+                    ->orWhere(function ($q2) use ($legacyOrder) {
+                        $q2->where('paymentable_type', 'App\\Models\\Order')
+                            ->where('paymentable_id', $legacyOrder->id);
+                    });
+            })
+            ->whereNull('deleted_at')
+            ->get();
+
+        $totalPaid = 0;
+
+        foreach ($legacyPayments as $legacyPayment) {
+            // Map user
+            $paymentUserId = $userId;
+            if ($legacyPayment->user_id && isset($this->userMap[$legacyPayment->user_id])) {
+                $paymentUserId = $this->userMap[$legacyPayment->user_id];
+            }
+
+            // Map payment method
+            $paymentMethod = $this->mapPaymentMethod($legacyPayment->short_payment_type ?? $legacyPayment->type);
+
+            // Map status
+            $paymentStatus = $this->mapPaymentStatus($legacyPayment->status);
+
+            // Use DB::table to preserve timestamps
+            DB::table('payments')->insert([
+                'store_id' => $this->newStore->id,
+                'payable_type' => Order::class,
+                'payable_id' => $newOrderId,
+                'order_id' => $newOrderId,
+                'customer_id' => $customerId,
+                'user_id' => $paymentUserId,
+                'payment_method' => $paymentMethod,
+                'status' => $paymentStatus,
+                'amount' => $legacyPayment->amount ?? 0,
+                'service_fee_value' => $legacyPayment->service_fee_value ?? 0,
+                'service_fee_unit' => $this->mapServiceFeeUnit($legacyPayment->service_fee_unit),
+                'service_fee_amount' => $legacyPayment->service_fee ?? 0,
+                'currency' => $legacyPayment->currency ?? 'USD',
+                'reference' => $legacyPayment->reference_id,
+                'transaction_id' => $legacyPayment->payment_gateway_transaction_id,
+                'gateway' => $this->mapPaymentGateway($legacyPayment->payment_gateway_id),
+                'gateway_payment_id' => $legacyPayment->payment_gateway_transaction_id,
+                'gateway_response' => $legacyPayment->payment_gateway_data ? json_encode(['legacy' => $legacyPayment->payment_gateway_data]) : null,
+                'notes' => $legacyPayment->description,
+                'metadata' => json_encode([
+                    'legacy_id' => $legacyPayment->id,
+                    'card_type' => $legacyPayment->card_type,
+                    'last_4' => $legacyPayment->last_4,
+                    'entry_type' => $legacyPayment->entry_type,
+                ]),
+                'paid_at' => $paymentStatus === Payment::STATUS_COMPLETED ? ($legacyPayment->created_at ?? now()) : null,
+                'created_at' => $legacyPayment->created_at,
+                'updated_at' => $legacyPayment->updated_at,
+            ]);
+
+            if ($paymentStatus === Payment::STATUS_COMPLETED) {
+                $totalPaid += (float) ($legacyPayment->amount ?? 0);
+            }
+
+            $this->paymentCount++;
+        }
+
+        return $totalPaid;
+    }
+
+    protected function createOrderInvoice(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId, float $totalPaid): void
+    {
+        $orderTotal = (float) ($legacyOrder->total ?? 0);
+        $balanceDue = max(0, $orderTotal - $totalPaid);
+
+        // Determine invoice status
+        $invoiceStatus = match (true) {
+            $balanceDue <= 0 => Invoice::STATUS_PAID,
+            $totalPaid > 0 => Invoice::STATUS_PARTIAL,
+            default => Invoice::STATUS_PENDING,
+        };
+
+        // Use DB::table to preserve timestamps
+        $invoiceId = DB::table('invoices')->insertGetId([
+            'store_id' => $this->newStore->id,
+            'customer_id' => $customerId,
+            'user_id' => $userId,
+            'invoice_number' => $legacyOrder->invoice_number ?: ('INV-'.strtoupper(substr(md5($newOrderId), 0, 8))),
+            'invoiceable_type' => Order::class,
+            'invoiceable_id' => $newOrderId,
+            'subtotal' => $legacyOrder->sub_total ?? 0,
+            'tax' => $legacyOrder->sales_tax ?? 0,
+            'shipping' => $legacyOrder->shipping_cost ?? 0,
+            'discount' => $legacyOrder->discount_cost ?? 0,
+            'total' => $orderTotal,
+            'total_paid' => $totalPaid,
+            'balance_due' => $balanceDue,
+            'status' => $invoiceStatus,
+            'currency' => 'USD',
+            'due_date' => $legacyOrder->created_at ? date('Y-m-d', strtotime($legacyOrder->created_at.' +30 days')) : null,
+            'paid_at' => $balanceDue <= 0 ? $legacyOrder->updated_at : null,
+            'notes' => null,
+            'created_at' => $legacyOrder->created_at,
+            'updated_at' => $legacyOrder->updated_at,
+        ]);
+
+        // Update payments to link to invoice
+        DB::table('payments')
+            ->where('order_id', $newOrderId)
+            ->update(['invoice_id' => $invoiceId]);
+
+        $this->invoiceCount++;
+    }
+
+    protected function findCategoryByName(string $categoryName): ?int
+    {
+        if (isset($this->categoryMap[$categoryName])) {
+            return $this->categoryMap[$categoryName];
+        }
+
+        $category = Category::where('store_id', $this->newStore->id)
+            ->where('name', $categoryName)
+            ->first();
+
+        if ($category) {
+            $this->categoryMap[$categoryName] = $category->id;
+
+            return $category->id;
+        }
+
+        return null;
     }
 
     protected function mapOrderStatus(?string $legacyStatus): string
@@ -400,15 +575,52 @@ class MigrateLegacyOrders extends Command
         };
     }
 
-    protected function mapInvoiceStatus(string $orderStatus): string
+    protected function mapPaymentMethod(?string $legacyMethod): string
     {
-        return match ($orderStatus) {
-            Order::STATUS_CONFIRMED, Order::STATUS_PROCESSING, Order::STATUS_SHIPPED,
-            Order::STATUS_DELIVERED, Order::STATUS_COMPLETED => Invoice::STATUS_PAID,
-            Order::STATUS_PARTIAL_PAYMENT => Invoice::STATUS_PARTIAL,
-            Order::STATUS_CANCELLED => Invoice::STATUS_VOID,
-            Order::STATUS_REFUNDED => Invoice::STATUS_REFUNDED,
-            default => Invoice::STATUS_PENDING,
+        if (! $legacyMethod) {
+            return Payment::METHOD_CASH;
+        }
+
+        return match (strtolower($legacyMethod)) {
+            'cash' => Payment::METHOD_CASH,
+            'card', 'credit', 'credit_card', 'debit', 'debit_card' => Payment::METHOD_CARD,
+            'store_credit', 'credit' => Payment::METHOD_STORE_CREDIT,
+            'layaway' => Payment::METHOD_LAYAWAY,
+            'check', 'cheque' => Payment::METHOD_CHECK,
+            'bank_transfer', 'wire', 'ach' => Payment::METHOD_BANK_TRANSFER,
+            'external', 'other' => Payment::METHOD_EXTERNAL,
+            default => Payment::METHOD_CASH,
+        };
+    }
+
+    protected function mapPaymentStatus(?string $legacyStatus): string
+    {
+        if (! $legacyStatus) {
+            return Payment::STATUS_COMPLETED;
+        }
+
+        return match (strtolower($legacyStatus)) {
+            'pending', 'processing' => Payment::STATUS_PENDING,
+            'completed', 'complete', 'success', 'approved', 'paid' => Payment::STATUS_COMPLETED,
+            'failed', 'declined', 'error' => Payment::STATUS_FAILED,
+            'refunded' => Payment::STATUS_REFUNDED,
+            'partially_refunded', 'partial_refund' => Payment::STATUS_PARTIALLY_REFUNDED,
+            default => Payment::STATUS_COMPLETED,
+        };
+    }
+
+    protected function mapPaymentGateway(?int $legacyGatewayId): ?string
+    {
+        if (! $legacyGatewayId) {
+            return null;
+        }
+
+        // Map common gateway IDs (adjust based on your legacy data)
+        return match ($legacyGatewayId) {
+            1 => 'square',
+            2 => 'stripe',
+            3 => 'paypal',
+            default => 'other',
         };
     }
 
@@ -424,29 +636,46 @@ class MigrateLegacyOrders extends Command
         };
     }
 
-    protected function cleanupExistingOrders(Store $newStore): void
+    protected function cleanupExistingOrders(): void
     {
         $this->warn('Cleaning up existing orders...');
 
-        $orderIds = Order::where('store_id', $newStore->id)->pluck('id');
+        $orderIds = Order::where('store_id', $this->newStore->id)->pluck('id');
 
+        // Delete payments linked to orders
+        Payment::where('payable_type', Order::class)->whereIn('payable_id', $orderIds)->forceDelete();
+
+        // Delete invoices linked to orders
         Invoice::where('invoiceable_type', Order::class)->whereIn('invoiceable_id', $orderIds)->forceDelete();
+
+        // Delete order items
         OrderItem::whereIn('order_id', $orderIds)->forceDelete();
-        Order::where('store_id', $newStore->id)->forceDelete();
+
+        // Delete orders
+        Order::where('store_id', $this->newStore->id)->forceDelete();
 
         $this->line('  Cleanup complete');
     }
 
-    protected function displaySummary(Store $newStore): void
+    protected function displaySummary(): void
     {
         $this->newLine();
         $this->info('=== Order Migration Summary ===');
-        $this->line('Store: '.$newStore->name.' (ID: '.$newStore->id.')');
+        $this->line('Store: '.$this->newStore->name.' (ID: '.$this->newStore->id.')');
         $this->line('Orders mapped: '.count($this->orderMap));
 
-        $orderCount = Order::where('store_id', $newStore->id)->count();
-        $itemCount = OrderItem::whereIn('order_id', Order::where('store_id', $newStore->id)->pluck('id'))->count();
+        $orderCount = Order::where('store_id', $this->newStore->id)->count();
+        $itemCount = OrderItem::whereIn('order_id', Order::where('store_id', $this->newStore->id)->pluck('id'))->count();
+        $paymentCount = Payment::where('store_id', $this->newStore->id)
+            ->where('payable_type', Order::class)
+            ->count();
+        $invoiceCount = Invoice::where('store_id', $this->newStore->id)
+            ->where('invoiceable_type', Order::class)
+            ->count();
+
         $this->line("Total orders in store: {$orderCount}");
         $this->line("Total order items in store: {$itemCount}");
+        $this->line("Total payments in store: {$paymentCount}");
+        $this->line("Total invoices in store: {$invoiceCount}");
     }
 }
