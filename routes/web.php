@@ -132,6 +132,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::get('orders/lookup-barcode', [OrderController::class, 'lookupBarcode'])->name('web.orders.lookup-barcode');
     Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
     Route::get('orders/{order}', [OrderController::class, 'show'])->name('web.orders.show');
+    Route::get('orders/{order}/print-invoice', [OrderController::class, 'printInvoice'])->name('web.orders.print-invoice');
     Route::patch('orders/{order}', [OrderController::class, 'update'])->name('web.orders.update');
     Route::delete('orders/{order}', [OrderController::class, 'destroy'])->name('web.orders.destroy');
     Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('web.orders.confirm');

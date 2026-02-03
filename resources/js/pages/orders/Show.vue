@@ -432,8 +432,7 @@ function onPaymentSuccess() {
 const hasInvoice = computed(() => !!props.order.invoice);
 
 function printInvoice() {
-    if (!props.order.invoice) return;
-    window.open(`/invoices/${props.order.invoice.id}/pdf/stream`, '_blank');
+    window.open(`/orders/${props.order.id}/print-invoice`, '_blank');
 }
 
 function downloadInvoice() {
@@ -609,7 +608,6 @@ function saveDate() {
 
                         <!-- Invoice Actions -->
                         <button
-                            v-if="hasInvoice"
                             type="button"
                             @click="printInvoice"
                             class="inline-flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
