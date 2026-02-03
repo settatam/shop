@@ -7,6 +7,7 @@ use App\Models\NotificationChannel;
 use App\Models\NotificationLog;
 use App\Models\NotificationTemplate;
 use App\Models\Transaction;
+use App\Services\StoreContext;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,11 +17,11 @@ class SmsController extends Controller
     /**
      * Display the SMS message center.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, StoreContext $storeContext): Response
     {
-        $store = $request->user()->store;
+        $storeId = $storeContext->getCurrentStoreId();
 
-        $query = NotificationLog::where('store_id', $store->id)
+        $query = NotificationLog::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->with(['notifiable', 'recipientModel']);
 
@@ -70,14 +71,14 @@ class SmsController extends Controller
             ->through(fn ($log) => $this->formatMessage($log));
 
         // Get SMS templates for quick replies
-        $templates = NotificationTemplate::where('store_id', $store->id)
+        $templates = NotificationTemplate::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->where('is_enabled', true)
             ->orderBy('name')
             ->get(['id', 'name', 'content', 'category']);
 
         // Get unread count
-        $unreadCount = NotificationLog::where('store_id', $store->id)
+        $unreadCount = NotificationLog::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->where('direction', NotificationLog::DIRECTION_INBOUND)
             ->whereNull('read_at')
@@ -94,11 +95,11 @@ class SmsController extends Controller
     /**
      * Show a specific conversation thread.
      */
-    public function show(Request $request, int $id): Response
+    public function show(Request $request, StoreContext $storeContext, int $id): Response
     {
-        $store = $request->user()->store;
+        $storeId = $storeContext->getCurrentStoreId();
 
-        $message = NotificationLog::where('store_id', $store->id)
+        $message = NotificationLog::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->findOrFail($id);
 
@@ -108,7 +109,7 @@ class SmsController extends Controller
         }
 
         // Get all messages for this conversation (same customer/transaction)
-        $conversationQuery = NotificationLog::where('store_id', $store->id)
+        $conversationQuery = NotificationLog::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS);
 
         if ($message->notifiable_type === Transaction::class && $message->notifiable_id) {
@@ -121,7 +122,7 @@ class SmsController extends Controller
         $conversation = $conversationQuery->orderBy('created_at', 'asc')->get();
 
         // Get SMS templates for quick replies
-        $templates = NotificationTemplate::where('store_id', $store->id)
+        $templates = NotificationTemplate::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->where('is_enabled', true)
             ->orderBy('name')
@@ -137,11 +138,11 @@ class SmsController extends Controller
     /**
      * Mark a message as read.
      */
-    public function markAsRead(Request $request, int $id)
+    public function markAsRead(Request $request, StoreContext $storeContext, int $id)
     {
-        $store = $request->user()->store;
+        $storeId = $storeContext->getCurrentStoreId();
 
-        $message = NotificationLog::where('store_id', $store->id)
+        $message = NotificationLog::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->findOrFail($id);
 
@@ -153,16 +154,16 @@ class SmsController extends Controller
     /**
      * Mark multiple messages as read.
      */
-    public function markMultipleAsRead(Request $request)
+    public function markMultipleAsRead(Request $request, StoreContext $storeContext)
     {
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'integer',
         ]);
 
-        $store = $request->user()->store;
+        $storeId = $storeContext->getCurrentStoreId();
 
-        NotificationLog::where('store_id', $store->id)
+        NotificationLog::where('store_id', $storeId)
             ->where('channel', NotificationChannel::TYPE_SMS)
             ->whereIn('id', $request->ids)
             ->whereNull('read_at')

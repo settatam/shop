@@ -292,21 +292,21 @@ class MigrateLegacyOrders extends Command
                 'customer_id' => $customerId,
                 'user_id' => $userId,
                 'warehouse_id' => $this->warehouse?->id,
-                'total' => $legacyOrder->total ?? 0,
-                'sub_total' => $legacyOrder->sub_total ?? 0,
+                'total' => $this->toDecimal($legacyOrder->total),
+                'sub_total' => $this->toDecimal($legacyOrder->sub_total),
                 'status' => $status,
-                'sales_tax' => $legacyOrder->sales_tax ?? 0,
-                'tax_rate' => $legacyOrder->tax_rate ?? 0,
-                'shipping_cost' => $legacyOrder->shipping_cost ?? 0,
-                'discount_cost' => $legacyOrder->discount_cost ?? 0,
-                'service_fee_value' => $legacyOrder->service_fee_value ?? 0,
+                'sales_tax' => $this->toDecimal($legacyOrder->sales_tax),
+                'tax_rate' => $this->toDecimal($legacyOrder->tax_rate),
+                'shipping_cost' => $this->toDecimal($legacyOrder->shipping_cost),
+                'discount_cost' => $this->toDecimal($legacyOrder->discount_cost),
+                'service_fee_value' => $this->toDecimal($legacyOrder->service_fee_value),
                 'service_fee_unit' => $this->mapServiceFeeUnit($legacyOrder->service_fee_unit ?? null),
                 'service_fee_reason' => $legacyOrder->service_fee_reason ?? '',
                 'invoice_number' => $legacyOrder->invoice_number,
                 'order_id' => $legacyOrder->order_id, // Maintain original order_id
                 'external_marketplace_id' => $legacyOrder->external_marketplace_id,
                 'square_order_id' => $legacyOrder->square_order_id,
-                'date_of_purchase' => $legacyOrder->date_of_purchase,
+                'date_of_purchase' => $legacyOrder->date_of_purchase ?: null,
                 'notes' => $legacyOrder->customer_note,
                 'created_at' => $legacyOrder->created_at,
                 'updated_at' => $legacyOrder->updated_at,
@@ -401,13 +401,13 @@ class MigrateLegacyOrders extends Command
                 'order_id' => $newOrderId,
                 'product_id' => $productId,
                 'product_variant_id' => $variantId,
-                'sku' => $legacyItem->sku,
-                'title' => $legacyItem->title ?? 'Item',
-                'quantity' => $legacyItem->quantity ?? 1,
-                'price' => $legacyItem->price ?? 0,
-                'cost' => $legacyItem->cost_per_item,
-                'discount' => $legacyItem->discount ?? 0,
-                'tax' => $legacyItem->sales_tax ?? 0,
+                'sku' => $legacyItem->sku ?: null,
+                'title' => $legacyItem->title ?: 'Item',
+                'quantity' => (int) ($legacyItem->quantity ?: 1),
+                'price' => $this->toDecimal($legacyItem->price),
+                'cost' => $this->toDecimal($legacyItem->cost_per_item),
+                'discount' => $this->toDecimal($legacyItem->discount),
+                'tax' => $this->toDecimal($legacyItem->sales_tax),
                 'notes' => null,
                 'created_at' => $legacyItem->created_at,
                 'updated_at' => $legacyItem->updated_at,
@@ -459,22 +459,22 @@ class MigrateLegacyOrders extends Command
                 'user_id' => $paymentUserId,
                 'payment_method' => $paymentMethod,
                 'status' => $paymentStatus,
-                'amount' => $legacyPayment->amount ?? 0,
-                'service_fee_value' => $legacyPayment->service_fee_value ?? 0,
+                'amount' => $this->toDecimal($legacyPayment->amount),
+                'service_fee_value' => $this->toDecimal($legacyPayment->service_fee_value),
                 'service_fee_unit' => $this->mapServiceFeeUnit($legacyPayment->service_fee_unit),
-                'service_fee_amount' => $legacyPayment->service_fee ?? 0,
-                'currency' => $legacyPayment->currency ?? 'USD',
-                'reference' => $legacyPayment->reference_id,
-                'transaction_id' => $legacyPayment->payment_gateway_transaction_id,
+                'service_fee_amount' => $this->toDecimal($legacyPayment->service_fee),
+                'currency' => $legacyPayment->currency ?: 'USD',
+                'reference' => $legacyPayment->reference_id ?: null,
+                'transaction_id' => $legacyPayment->payment_gateway_transaction_id ?: null,
                 'gateway' => $this->mapPaymentGateway($legacyPayment->payment_gateway_id),
-                'gateway_payment_id' => $legacyPayment->payment_gateway_transaction_id,
+                'gateway_payment_id' => $legacyPayment->payment_gateway_transaction_id ?: null,
                 'gateway_response' => $legacyPayment->payment_gateway_data ? json_encode(['legacy' => $legacyPayment->payment_gateway_data]) : null,
-                'notes' => $legacyPayment->description,
+                'notes' => $legacyPayment->description ?: null,
                 'metadata' => json_encode([
                     'legacy_id' => $legacyPayment->id,
-                    'card_type' => $legacyPayment->card_type,
-                    'last_4' => $legacyPayment->last_4,
-                    'entry_type' => $legacyPayment->entry_type,
+                    'card_type' => $legacyPayment->card_type ?? null,
+                    'last_4' => $legacyPayment->last_4 ?? null,
+                    'entry_type' => $legacyPayment->entry_type ?? null,
                 ]),
                 'paid_at' => $paymentStatus === Payment::STATUS_COMPLETED ? ($legacyPayment->created_at ?? now()) : null,
                 'created_at' => $legacyPayment->created_at,
@@ -493,7 +493,7 @@ class MigrateLegacyOrders extends Command
 
     protected function createOrderInvoice(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId, float $totalPaid): void
     {
-        $orderTotal = (float) ($legacyOrder->total ?? 0);
+        $orderTotal = $this->toDecimal($legacyOrder->total);
         $balanceDue = max(0, $orderTotal - $totalPaid);
 
         // Determine invoice status
@@ -508,13 +508,13 @@ class MigrateLegacyOrders extends Command
             'store_id' => $this->newStore->id,
             'customer_id' => $customerId,
             'user_id' => $userId,
-            'invoice_number' => $legacyOrder->invoice_number ?: ('INV-'.strtoupper(substr(md5($newOrderId), 0, 8))),
+            'invoice_number' => $legacyOrder->invoice_number ?: ('INV-'.strtoupper(substr(md5((string) $newOrderId), 0, 8))),
             'invoiceable_type' => Order::class,
             'invoiceable_id' => $newOrderId,
-            'subtotal' => $legacyOrder->sub_total ?? 0,
-            'tax' => $legacyOrder->sales_tax ?? 0,
-            'shipping' => $legacyOrder->shipping_cost ?? 0,
-            'discount' => $legacyOrder->discount_cost ?? 0,
+            'subtotal' => $this->toDecimal($legacyOrder->sub_total),
+            'tax' => $this->toDecimal($legacyOrder->sales_tax),
+            'shipping' => $this->toDecimal($legacyOrder->shipping_cost),
+            'discount' => $this->toDecimal($legacyOrder->discount_cost),
             'total' => $orderTotal,
             'total_paid' => $totalPaid,
             'balance_due' => $balanceDue,
@@ -655,6 +655,18 @@ class MigrateLegacyOrders extends Command
         Order::where('store_id', $this->newStore->id)->forceDelete();
 
         $this->line('  Cleanup complete');
+    }
+
+    /**
+     * Safely convert a value to float, handling empty strings and nulls.
+     */
+    protected function toDecimal(mixed $value, float $default = 0): float
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        return (float) $value;
     }
 
     protected function displaySummary(): void
