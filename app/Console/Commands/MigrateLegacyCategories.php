@@ -156,14 +156,26 @@ class MigrateLegacyCategories extends Command
             ->orderBy('sort_order')
             ->get();
 
+        $usedFieldNames = []; // Track used field names within this template
+
         foreach ($legacyFields as $legacyField) {
             $fieldType = $this->mapFieldType($legacyField->component);
 
+            // Make field name unique within the template
+            $baseName = Str::snake($legacyField->name);
+            $fieldName = $baseName;
+            $counter = 1;
+            while (in_array($fieldName, $usedFieldNames)) {
+                $counter++;
+                $fieldName = "{$baseName}_{$counter}";
+            }
+            $usedFieldNames[] = $fieldName;
+
             $field = ProductTemplateField::create([
                 'product_template_id' => $template->id,
-                'name' => Str::snake($legacyField->name),
-                'canonical_name' => Str::snake($legacyField->name),
-                'label' => $legacyField->label,
+                'name' => $fieldName,
+                'canonical_name' => $baseName,
+                'label' => $legacyField->label.($counter > 1 ? " ({$counter})" : ''),
                 'type' => $fieldType,
                 'placeholder' => null,
                 'help_text' => null,
