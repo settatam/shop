@@ -233,9 +233,9 @@ class MigrateLegacyCategories extends Command
     {
         $this->info('Migrating categories...');
 
-        // Get legacy categories
+        // Get legacy categories from store_categories table
         $legacyCategories = DB::connection('legacy')
-            ->table('categories')
+            ->table('store_categories')
             ->where('store_id', $this->legacyStoreId)
             ->whereNull('deleted_at')
             ->orderBy('parent_id')
@@ -244,18 +244,10 @@ class MigrateLegacyCategories extends Command
 
         $this->info("Found {$legacyCategories->count()} categories to migrate");
 
-        // Build store_product_types lookup for template associations
-        $productTypeTemplates = DB::connection('legacy')
-            ->table('store_product_types')
-            ->where('store_id', $this->legacyStoreId)
-            ->whereNotNull('template_id')
-            ->pluck('template_id', 'name')
-            ->toArray();
-
         // First pass: migrate all categories without parent relationships
         foreach ($legacyCategories as $legacyCategory) {
             try {
-                $this->migrateCategory($legacyCategory, $productTypeTemplates);
+                $this->migrateCategory($legacyCategory);
             } catch (\Exception $e) {
                 Log::error('Failed to migrate category', [
                     'legacy_id' => $legacyCategory->id,
@@ -271,36 +263,32 @@ class MigrateLegacyCategories extends Command
         }
     }
 
-    protected function migrateCategory(object $legacyCategory, array $productTypeTemplates): void
+    protected function migrateCategory(object $legacyCategory): void
     {
-        // Check if already migrated
+        // Check if already migrated - match by name and level since store_categories can have duplicate names at different levels
         $existing = Category::withoutGlobalScopes()
             ->where('store_id', $this->newStoreId)
             ->where('name', $legacyCategory->name)
-            ->where('type', $legacyCategory->type ?? 'transaction_item_category')
+            ->where('level', $legacyCategory->level ?? 0)
             ->first();
 
         if ($existing) {
             $this->categoryMap[$legacyCategory->id] = $existing->id;
-            $this->line("  Category '{$legacyCategory->name}' already exists, mapping to ID {$existing->id}");
+            $this->line("  Category '{$legacyCategory->name}' (level {$legacyCategory->level}) already exists, mapping to ID {$existing->id}");
 
             return;
         }
 
         if ($this->dryRun) {
-            $this->line("  [DRY RUN] Would create category: {$legacyCategory->name}");
+            $this->line("  [DRY RUN] Would create category: {$legacyCategory->name} (level {$legacyCategory->level})");
 
             return;
         }
 
-        // Find template for this category
+        // Find template for this category - store_categories uses html_form_id
         $templateId = null;
-        if ($legacyCategory->template_id && isset($this->templateMap[$legacyCategory->template_id])) {
-            $templateId = $this->templateMap[$legacyCategory->template_id];
-        } elseif (isset($productTypeTemplates[$legacyCategory->name])) {
-            // Try to find template via store_product_types
-            $legacyTemplateId = $productTypeTemplates[$legacyCategory->name];
-            $templateId = $this->templateMap[$legacyTemplateId] ?? null;
+        if ($legacyCategory->html_form_id && isset($this->templateMap[$legacyCategory->html_form_id])) {
+            $templateId = $this->templateMap[$legacyCategory->html_form_id];
         }
 
         // Create the category
@@ -308,8 +296,8 @@ class MigrateLegacyCategories extends Command
             'store_id' => $this->newStoreId,
             'name' => $legacyCategory->name,
             'slug' => Str::slug($legacyCategory->name).'-'.Str::random(4),
-            'description' => $legacyCategory->description,
-            'type' => $legacyCategory->type ?? 'transaction_item_category',
+            'description' => null, // store_categories doesn't have description
+            'type' => 'transaction_item_category', // Default type for store categories
             'template_id' => $templateId,
             'sort_order' => $legacyCategory->sort_order ?? 0,
             'level' => $legacyCategory->level ?? 0,
@@ -317,7 +305,7 @@ class MigrateLegacyCategories extends Command
         ]);
 
         $this->categoryMap[$legacyCategory->id] = $category->id;
-        $this->line("  Created category: {$legacyCategory->name} (ID: {$category->id})");
+        $this->line("  Created category: {$legacyCategory->name} (level {$legacyCategory->level}, ID: {$category->id})");
     }
 
     protected function updateParentRelationships($legacyCategories): void
