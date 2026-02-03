@@ -69,6 +69,7 @@ interface CustomerInfo {
     address2: string | null;
     city: string | null;
     zip: string | null;
+    phone_number: string | null;
     has_addresses: boolean;
 }
 
@@ -129,6 +130,26 @@ const hasValidShippingAddress = computed(() => {
     }
     // Check customer has at least address, city, zip
     return !!(props.customer?.address && props.customer?.city && props.customer?.zip);
+});
+
+const hasPhoneNumber = computed(() => {
+    // Check shipping address phone first
+    if (props.shippingAddress?.phone) {
+        return true;
+    }
+    // Check selected customer address
+    if (props.shippingAddressId) {
+        const selectedAddress = props.customerAddresses?.find(a => a.id === props.shippingAddressId);
+        if (selectedAddress?.phone) {
+            return true;
+        }
+    }
+    // Fall back to customer phone
+    return !!props.customer?.phone_number;
+});
+
+const canCreateLabel = computed(() => {
+    return hasValidShippingAddress.value && hasPhoneNumber.value;
 });
 
 function selectShippingAddress(addressId: number | null) {
@@ -335,7 +356,7 @@ const statusBadgeClass = (status: string) => {
                         <p class="text-sm text-gray-500 dark:text-gray-400">No label created yet</p>
                         <button
                             type="button"
-                            :disabled="creatingOutboundLabel || !hasValidShippingAddress"
+                            :disabled="creatingOutboundLabel || !canCreateLabel"
                             class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
                             @click="openShippingLabelModal('outbound')"
                         >
@@ -344,6 +365,9 @@ const statusBadgeClass = (status: string) => {
                         </button>
                         <p v-if="!hasValidShippingAddress" class="text-xs text-amber-600 dark:text-amber-400">
                             Set shipping address first
+                        </p>
+                        <p v-else-if="!hasPhoneNumber" class="text-xs text-amber-600 dark:text-amber-400">
+                            Phone number required for shipping
                         </p>
                     </div>
 
@@ -398,7 +422,7 @@ const statusBadgeClass = (status: string) => {
                         <p class="text-sm text-gray-500 dark:text-gray-400">No label created yet</p>
                         <button
                             type="button"
-                            :disabled="creatingReturnLabel || !hasValidShippingAddress"
+                            :disabled="creatingReturnLabel || !canCreateLabel"
                             class="inline-flex items-center gap-x-1.5 rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-500 disabled:opacity-50"
                             @click="openShippingLabelModal('return')"
                         >
@@ -407,6 +431,9 @@ const statusBadgeClass = (status: string) => {
                         </button>
                         <p v-if="!hasValidShippingAddress" class="text-xs text-amber-600 dark:text-amber-400">
                             Set shipping address first
+                        </p>
+                        <p v-else-if="!hasPhoneNumber" class="text-xs text-amber-600 dark:text-amber-400">
+                            Phone number required for shipping
                         </p>
                     </div>
 

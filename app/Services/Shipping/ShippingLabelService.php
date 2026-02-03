@@ -5,6 +5,7 @@ namespace App\Services\Shipping;
 use App\Models\Address;
 use App\Models\Customer;
 use App\Models\ShippingLabel;
+use App\Models\State;
 use App\Models\Store;
 use App\Models\Transaction;
 use App\Services\StoreContext;
@@ -253,13 +254,21 @@ class ShippingLabelService
      */
     protected function formatStoreAddress(Store $store): array
     {
+        // Convert state name to abbreviation if needed
+        $stateCode = $store->state ?? '';
+        if ($stateCode && strlen($stateCode) > 2) {
+            // It's a full state name, look up the abbreviation
+            $state = State::where('name', $stateCode)->first();
+            $stateCode = $state?->abbreviation ?? $stateCode;
+        }
+
         return [
             'name' => $store->business_name ?? $store->name,
             'company' => $store->business_name ?? $store->name,
             'street' => $store->address ?? '',
             'street2' => $store->address2,
             'city' => $store->city ?? '',
-            'state' => $store->state ?? '',
+            'state' => $stateCode,
             'postal_code' => $store->zip ?? '',
             'country' => 'US',
             'phone' => $store->phone ?? '',
@@ -279,7 +288,7 @@ class ShippingLabelService
             'street' => $customer->address ?? '',
             'street2' => $customer->address2,
             'city' => $customer->city ?? '',
-            'state' => $customer->state?->code ?? '',
+            'state' => $customer->state?->abbreviation ?? '',
             'postal_code' => $customer->zip ?? '',
             'country' => $customer->country?->code ?? 'US',
             'phone' => $customer->phone_number ?? '',

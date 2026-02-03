@@ -331,6 +331,10 @@ class FedExService
         string $labelFormat,
         string $packagingType = 'FEDEX_ENVELOPE'
     ): array {
+        // Format phone numbers - strip non-numeric characters and use fallback if empty
+        $senderPhone = $this->formatPhoneNumber($senderAddress['phone'] ?? '');
+        $recipientPhone = $this->formatPhoneNumber($recipientAddress['phone'] ?? '');
+
         $payload = [
             'mergeLabelDocOption' => 'LABELS_ONLY',
             'labelResponseOptions' => 'LABEL',
@@ -338,7 +342,7 @@ class FedExService
                 'shipper' => [
                     'contact' => [
                         'personName' => $senderAddress['name'] ?? $senderAddress['company'] ?? '',
-                        'phoneNumber' => $senderAddress['phone'] ?? '2679809681',
+                        'phoneNumber' => $senderPhone,
                         'companyName' => $senderAddress['company'] ?? $senderAddress['name'] ?? '',
                     ],
                     'address' => $this->formatAddress($senderAddress),
@@ -347,7 +351,7 @@ class FedExService
                     [
                         'contact' => [
                             'personName' => $recipientAddress['name'] ?? $recipientAddress['company'] ?? '',
-                            'phoneNumber' => $recipientAddress['phone'] ?? '2679809681',
+                            'phoneNumber' => $recipientPhone,
                             'companyName' => $recipientAddress['company'] ?? '',
                         ],
                         'address' => $this->formatAddress($recipientAddress),
@@ -412,6 +416,27 @@ class FedExService
                 'signatureOptionType' => 'SERVICE_DEFAULT',
             ],
         ];
+    }
+
+    /**
+     * Format a phone number for FedEx API.
+     * Strips non-numeric characters and returns fallback if empty.
+     */
+    protected function formatPhoneNumber(?string $phone, string $fallback = '2679809681'): string
+    {
+        if (empty($phone)) {
+            return $fallback;
+        }
+
+        // Strip all non-numeric characters
+        $cleaned = preg_replace('/[^0-9]/', '', $phone);
+
+        // Return fallback if still empty after cleaning
+        if (empty($cleaned)) {
+            return $fallback;
+        }
+
+        return $cleaned;
     }
 
     /**

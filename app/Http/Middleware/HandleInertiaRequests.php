@@ -55,6 +55,12 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'info' => fn () => $request->session()->get('info'),
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'stores' => fn () => $request->user() ? $this->getUserStores($request->user()) : [],
             'currentStore' => fn () => app(StoreContext::class)->getCurrentStore(),
@@ -87,6 +93,12 @@ class HandleInertiaRequests extends Middleware
             'isPortal' => true,
             'auth' => [
                 'customer' => auth('customer')->user(),
+            ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'info' => fn () => $request->session()->get('info'),
             ],
             'currentStore' => $store ? [
                 'id' => $store->id,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import {
     Dialog,
@@ -18,6 +18,7 @@ import AppHeader from '@/components/layout/AppHeader.vue';
 import { ChatPanel } from '@/components/chat';
 import { CommandPalette } from '@/components/search';
 import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
+import { Toaster, toast } from 'sonner';
 import type { BreadcrumbItemType } from '@/types';
 
 interface Props {
@@ -38,6 +39,42 @@ const openSearch = () => {
 
 // Global Barcode Scanner
 const page = usePage();
+
+// Flash message handling
+interface FlashMessages {
+    success?: string;
+    error?: string;
+    warning?: string;
+    info?: string;
+}
+
+function showFlashMessages() {
+    const flash = page.props.flash as FlashMessages | undefined;
+    if (!flash) return;
+
+    if (flash.success) {
+        toast.success(flash.success);
+    }
+    if (flash.error) {
+        toast.error(flash.error, { duration: 6000 });
+    }
+    if (flash.warning) {
+        toast.warning(flash.warning);
+    }
+    if (flash.info) {
+        toast.info(flash.info);
+    }
+}
+
+// Show flash messages on mount and after navigation
+onMounted(() => {
+    showFlashMessages();
+});
+
+// Watch for navigation events to show flash messages
+router.on('finish', () => {
+    showFlashMessages();
+});
 
 // Pages that handle their own barcode scanning
 const pagesWithOwnScanner = [
@@ -233,5 +270,20 @@ onUnmounted(() => {
                 <span class="text-sm font-medium">{{ scannerFeedback.message }}</span>
             </div>
         </Transition>
+
+        <!-- Toast Notifications -->
+        <Toaster
+            position="top-right"
+            :toastOptions="{
+                classNames: {
+                    toast: 'group toast group-[.toaster]:bg-white group-[.toaster]:text-gray-900 group-[.toaster]:border-gray-200 group-[.toaster]:shadow-lg dark:group-[.toaster]:bg-gray-800 dark:group-[.toaster]:text-gray-100 dark:group-[.toaster]:border-gray-700',
+                    error: 'group-[.toaster]:bg-red-50 group-[.toaster]:text-red-900 group-[.toaster]:border-red-200 dark:group-[.toaster]:bg-red-900/20 dark:group-[.toaster]:text-red-100 dark:group-[.toaster]:border-red-800',
+                    success: 'group-[.toaster]:bg-green-50 group-[.toaster]:text-green-900 group-[.toaster]:border-green-200 dark:group-[.toaster]:bg-green-900/20 dark:group-[.toaster]:text-green-100 dark:group-[.toaster]:border-green-800',
+                    warning: 'group-[.toaster]:bg-yellow-50 group-[.toaster]:text-yellow-900 group-[.toaster]:border-yellow-200 dark:group-[.toaster]:bg-yellow-900/20 dark:group-[.toaster]:text-yellow-100 dark:group-[.toaster]:border-yellow-800',
+                    info: 'group-[.toaster]:bg-blue-50 group-[.toaster]:text-blue-900 group-[.toaster]:border-blue-200 dark:group-[.toaster]:bg-blue-900/20 dark:group-[.toaster]:text-blue-100 dark:group-[.toaster]:border-blue-800',
+                },
+            }"
+            richColors
+        />
     </div>
 </template>

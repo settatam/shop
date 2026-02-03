@@ -14,7 +14,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem, type Store } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { ArchiveIcon, Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, Package, ShoppingCart, Plug, ChevronDown, Users, Store } from 'lucide-vue-next';
+import { ArchiveIcon, Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, MessageSquare, Package, ShoppingCart, Plug, ChevronDown, Users, Store as StoreIcon } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import {
     DropdownMenu,
@@ -66,9 +66,17 @@ const mainNavItems: NavItem[] = [
         ],
     },
     {
-        title: 'Orders',
-        href: '/orders',
+        title: 'Sales',
         icon: ShoppingCart,
+        children: [
+            { title: 'Orders', href: '/orders' },
+            { title: 'Transactions', href: '/transactions' },
+        ],
+    },
+    {
+        title: 'SMS Messages',
+        href: '/messages',
+        icon: MessageSquare,
     },
     {
         title: 'Buys',
@@ -101,7 +109,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Vendors',
         href: '/vendors',
-        icon: Store,
+        icon: StoreIcon,
     },
     {
         title: 'Integrations',

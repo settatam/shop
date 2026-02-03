@@ -108,7 +108,6 @@ class Address extends Model
             $this->address,
             $this->address2,
             $this->getCityStateZipLine(),
-            $this->country_id ? "Country ID: {$this->country_id}" : null,
         ]);
 
         return implode("\n", $lines);
@@ -123,7 +122,7 @@ class Address extends Model
             $this->address,
             $this->address2,
             $this->city,
-            $this->state_id ? "State {$this->state_id}" : null,
+            $this->state?->abbreviation,
             $this->zip,
         ]);
 
@@ -137,7 +136,7 @@ class Address extends Model
     {
         $parts = array_filter([
             $this->city,
-            $this->state_id ? "State {$this->state_id}" : null,
+            $this->state?->abbreviation,
             $this->zip,
         ]);
 
@@ -157,7 +156,7 @@ class Address extends Model
             'street' => $this->address ?? '',
             'street2' => $this->address2,
             'city' => $this->city ?? '',
-            'state' => $this->state_id ? (string) $this->state_id : '',
+            'state' => $this->state?->abbreviation ?? '',
             'postal_code' => $this->zip ?? '',
             'country' => 'US', // Default to US, can be expanded later
             'phone' => $this->phone ?? '',

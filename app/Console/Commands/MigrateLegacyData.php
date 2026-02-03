@@ -1034,11 +1034,11 @@ class MigrateLegacyData extends Command
             $itemPrices = $this->calculateItemPrices($legacyItems, $legacyTxn->final_offer ?? 0);
 
             foreach ($legacyItems as $index => $legacyItem) {
-                // Map category
-                $newCategoryId = null;
-                if ($legacyItem->category_id && isset($this->categoryMap[$legacyItem->category_id])) {
-                    $newCategoryId = $this->categoryMap[$legacyItem->category_id];
-                }
+                // Find or create category by looking up the product_type_id in store_categories
+                $newCategoryId = $this->findOrCreateCategoryByLegacyProductType(
+                    $legacyItem->product_type_id ?? $legacyItem->category_id ?? null,
+                    $legacyStoreId
+                );
 
                 // Get the calculated price for this item
                 $estimatedValue = $itemPrices[$index]['price'];
@@ -1991,6 +1991,62 @@ class MigrateLegacyData extends Command
         }
 
         $this->line("  Migrated {$count} addresses, skipped {$skipped}");
+    }
+
+    /**
+     * Find a category by looking up the legacy product_type_id in store_categories.
+     *
+     * Categories must be pre-migrated using migrate:legacy-categories to preserve
+     * the proper tree structure, templates, and metadata. This method only finds
+     * existing categories by name - it does not create new ones.
+     *
+     * 1. Legacy transaction_items use product_type_id referencing store_categories
+     * 2. We look up the category name from the legacy store_categories table
+     * 3. We find the matching category by name in the new store
+     */
+    protected function findOrCreateCategoryByLegacyProductType(?int $productTypeId, int $legacyStoreId): ?int
+    {
+        if (! $productTypeId) {
+            return null;
+        }
+
+        // Check if we've already mapped this product_type_id
+        if (isset($this->categoryMap[$productTypeId])) {
+            return $this->categoryMap[$productTypeId];
+        }
+
+        // Look up the category name from legacy store_categories
+        $legacyCategory = DB::connection('legacy')
+            ->table('store_categories')
+            ->where('id', $productTypeId)
+            ->first();
+
+        if (! $legacyCategory || empty($legacyCategory->name)) {
+            return null;
+        }
+
+        $categoryName = $legacyCategory->name;
+
+        // Find existing category by name in the new store (categories must be pre-migrated)
+        $existingCategory = Category::where('store_id', $this->newStore->id)
+            ->where('name', $categoryName)
+            ->first();
+
+        if ($existingCategory) {
+            $this->categoryMap[$productTypeId] = $existingCategory->id;
+
+            return $existingCategory->id;
+        }
+
+        // Category not found - it should have been pre-migrated
+        // Log warning but don't create (category tree must be set up properly first)
+        static $missingCategories = [];
+        if (! isset($missingCategories[$categoryName])) {
+            $this->warn("  Category '{$categoryName}' not found. Run migrate:legacy-categories first.");
+            $missingCategories[$categoryName] = true;
+        }
+
+        return null;
     }
 
     protected function displaySummary(): void

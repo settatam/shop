@@ -248,6 +248,12 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     // SMS Messaging
     Route::post('transactions/{transaction}/send-sms', [\App\Http\Controllers\Web\TransactionController::class, 'sendSms'])->name('web.transactions.send-sms');
 
+    // SMS Message Center
+    Route::get('messages', [\App\Http\Controllers\Web\SmsController::class, 'index'])->name('web.sms.index');
+    Route::get('messages/{id}', [\App\Http\Controllers\Web\SmsController::class, 'show'])->name('web.sms.show');
+    Route::post('messages/{id}/mark-read', [\App\Http\Controllers\Web\SmsController::class, 'markAsRead'])->name('web.sms.mark-read');
+    Route::post('messages/mark-read', [\App\Http\Controllers\Web\SmsController::class, 'markMultipleAsRead'])->name('web.sms.mark-multiple-read');
+
     // Buys (Completed Transactions with Payments)
     Route::get('buys', [BuysController::class, 'index'])->name('buys.index');
     Route::get('buys/items', [BuysController::class, 'items'])->name('buys.items');

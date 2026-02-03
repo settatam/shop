@@ -1286,48 +1286,48 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                     </button>
 
                     <!-- Assign (Online only) -->
-                    <button
-                        v-if="transaction.is_online"
-                        type="button"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
-                        @click="showAssignModal = true"
-                    >
-                        <UserIcon class="-ml-0.5 size-5" />
-                        Assign
-                    </button>
+<!--                    <button-->
+<!--                        v-if="transaction.is_online"-->
+<!--                        type="button"-->
+<!--                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"-->
+<!--                        @click="showAssignModal = true"-->
+<!--                    >-->
+<!--                        <UserIcon class="-ml-0.5 size-5" />-->
+<!--                        Assign-->
+<!--                    </button>-->
 
                     <!-- Change Status Dropdown -->
-                    <Menu as="div" class="relative">
-                        <MenuButton
-                            class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
-                        >
-                            Status
-                            <ChevronDownIcon class="-mr-1 size-5 text-gray-400" />
-                        </MenuButton>
-                        <transition
-                            enter-active-class="transition ease-out duration-100"
-                            enter-from-class="transform opacity-0 scale-95"
-                            enter-to-class="transform opacity-100 scale-100"
-                            leave-active-class="transition ease-in duration-75"
-                            leave-from-class="transform opacity-100 scale-100"
-                            leave-to-class="transform opacity-0 scale-95"
-                        >
-                            <MenuItems class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10 max-h-64 overflow-y-auto">
-                                <MenuItem v-for="status in availableStatuses" :key="status.value" v-slot="{ active }">
-                                    <button
-                                        type="button"
-                                        :class="[
-                                            active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                                            'block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200',
-                                        ]"
-                                        @click="changeStatus(status.value)"
-                                    >
-                                        {{ status.label }}
-                                    </button>
-                                </MenuItem>
-                            </MenuItems>
-                        </transition>
-                    </Menu>
+<!--                    <Menu as="div" class="relative">-->
+<!--                        <MenuButton-->
+<!--                            class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"-->
+<!--                        >-->
+<!--                            Status-->
+<!--                            <ChevronDownIcon class="-mr-1 size-5 text-gray-400" />-->
+<!--                        </MenuButton>-->
+<!--                        <transition-->
+<!--                            enter-active-class="transition ease-out duration-100"-->
+<!--                            enter-from-class="transform opacity-0 scale-95"-->
+<!--                            enter-to-class="transform opacity-100 scale-100"-->
+<!--                            leave-active-class="transition ease-in duration-75"-->
+<!--                            leave-from-class="transform opacity-100 scale-100"-->
+<!--                            leave-to-class="transform opacity-0 scale-95"-->
+<!--                        >-->
+<!--                            <MenuItems class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10 max-h-64 overflow-y-auto">-->
+<!--                                <MenuItem v-for="status in availableStatuses" :key="status.value" v-slot="{ active }">-->
+<!--                                    <button-->
+<!--                                        type="button"-->
+<!--                                        :class="[-->
+<!--                                            active ? 'bg-gray-100 dark:bg-gray-700' : '',-->
+<!--                                            'block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200',-->
+<!--                                        ]"-->
+<!--                                        @click="changeStatus(status.value)"-->
+<!--                                    >-->
+<!--                                        {{ status.label }}-->
+<!--                                    </button>-->
+<!--                                </MenuItem>-->
+<!--                            </MenuItems>-->
+<!--                        </transition>-->
+<!--                    </Menu>-->
 
                     <!-- Delete -->
                     <button
@@ -1393,185 +1393,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                             </div>
                         </div>
                     </div>
-
-                    <!-- Items Section (for in-store transactions - shown first for prominence) -->
-                    <div v-if="!transaction.is_online" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">
-                                    Items ({{ transaction.items.length }})
-                                </h3>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                                    @click="openAddItemModal"
-                                >
-                                    <PlusIcon class="-ml-0.5 size-5" />
-                                    Add Item
-                                </button>
-                            </div>
-
-                            <div v-if="transaction.items.length > 0" class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead>
-                                        <tr>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Image</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Title</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Metal</th>
-                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
-                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
-                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Review</th>
-                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                        <tr v-for="item in transaction.items" :key="item.id">
-                                            <!-- Image Column -->
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm">
-                                                <div class="relative w-16 h-16 flex-shrink-0">
-                                                    <!-- Clickable Image Thumbnail -->
-                                                    <template v-if="item.images && item.images.length > 0">
-                                                        <button
-                                                            type="button"
-                                                            class="w-16 h-16 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                                            @click="openImageModal(item)"
-                                                        >
-                                                            <img
-                                                                :src="item.images[0]?.thumbnail_url || item.images[0]?.url"
-                                                                :alt="item.title || 'Item image'"
-                                                                class="w-full h-full object-cover hover:opacity-80 transition-opacity"
-                                                            />
-                                                        </button>
-                                                        <!-- Image count badge -->
-                                                        <span
-                                                            v-if="item.images.length > 1"
-                                                            class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] px-1 rounded"
-                                                        >
-                                                            {{ item.images.length }}
-                                                        </span>
-                                                    </template>
-                                                    <!-- Silhouette Placeholder -->
-                                                    <template v-else>
-                                                        <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
-                                                            <PhotoIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white">
-                                                <Link
-                                                    :href="`/transactions/${transaction.id}/items/${item.id}`"
-                                                    class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                                >
-                                                    {{ item.title || 'Untitled Item' }}
-                                                </Link>
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                                {{ item.category?.name || '-' }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                                {{ item.metal_type || '-' }} {{ item.karat ? `(${item.karat})` : '' }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
-                                                {{ formatWeight(item.dwt) }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
-                                                {{ formatCurrency(item.price) }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white text-right font-medium">
-                                                {{ formatCurrency(item.buy_price) }}
-                                            </td>
-                                            <!-- Status Column -->
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-center">
-                                                <span
-                                                    v-if="item.reviewed_at"
-                                                    class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                    :title="`Reviewed on ${formatReviewDate(item.reviewed_at)}`"
-                                                >
-                                                    <CheckBadgeIcon class="size-3.5" />
-                                                    Reviewed
-                                                </span>
-                                                <button
-                                                    v-else
-                                                    type="button"
-                                                    class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-colors"
-                                                    title="Mark as reviewed"
-                                                    @click="handleReviewItem(item)"
-                                                >
-                                                    <CheckBadgeIcon class="size-3.5" />
-                                                    Review
-                                                </button>
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
-                                                <button
-                                                    type="button"
-                                                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 mr-2"
-                                                    title="Edit item"
-                                                    @click="openEditItemModal(item)"
-                                                >
-                                                    <PencilIcon class="size-4" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    class="text-red-400 hover:text-red-500"
-                                                    title="Delete item"
-                                                    @click="handleDeleteItem(item.id)"
-                                                >
-                                                    <TrashIcon class="size-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot>
-                                        <tr class="bg-gray-50 dark:bg-gray-700/50">
-                                            <td colspan="4" class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white">
-                                                Totals
-                                            </td>
-                                            <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
-                                                {{ formatWeight(transaction.total_dwt) }}
-                                            </td>
-                                            <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
-                                                {{ formatCurrency(transaction.total_value) }}
-                                            </td>
-                                            <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
-                                                {{ formatCurrency(transaction.total_buy_price) }}
-                                            </td>
-                                            <td colspan="2"></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-
-                            <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic">
-                                No items added yet. Click "Add Item" to start adding items to this transaction.
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Shipping Labels Section (for online transactions) -->
-                    <ShippingLabelsSection
-                        v-if="transaction.is_online"
-                        :transaction-id="transaction.id"
-                        :outbound-label="transaction.outbound_label || null"
-                        :return-label="transaction.return_label || null"
-                        :can-create-outbound="canCreateOutboundLabel"
-                        :can-create-return="canCreateReturnLabel"
-                        :shipping-options="shippingOptions"
-                        :customer-addresses="customerAddresses || []"
-                        :shipping-address="transaction.shipping_address || null"
-                        :shipping-address-id="transaction.shipping_address_id || null"
-                        :customer="transaction.customer"
-                    />
-
-                    <!-- SMS Messaging Section (for online transactions with customer) -->
-                    <SmsMessagesSection
-                        v-if="transaction.is_online && transaction.customer"
-                        :messages="smsMessages || []"
-                        :transaction-id="transaction.id"
-                        :customer-phone="transaction.customer?.phone_number || null"
-                    />
 
                     <!-- Online Transaction Actions -->
                     <div v-if="transaction.is_online" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
@@ -1856,6 +1677,168 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         </div>
                     </div>
 
+                    <!-- Items Section (for in-store transactions) -->
+                    <div v-if="!transaction.is_online" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                                    Items ({{ transaction.items.length }})
+                                </h3>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                                    @click="openAddItemModal"
+                                >
+                                    <PlusIcon class="-ml-0.5 size-5" />
+                                    Add Item
+                                </button>
+                            </div>
+
+                            <div v-if="transaction.items.length > 0" class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Image</th>
+                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Title</th>
+                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
+                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Metal</th>
+                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
+                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
+                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
+                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Review</th>
+                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr v-for="item in transaction.items" :key="item.id">
+                                            <!-- Image Column -->
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm">
+                                                <div class="relative w-16 h-16 flex-shrink-0">
+                                                    <!-- Clickable Image Thumbnail -->
+                                                    <template v-if="item.images && item.images.length > 0">
+                                                        <button
+                                                            type="button"
+                                                            class="w-16 h-16 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                                            @click="openImageModal(item)"
+                                                        >
+                                                            <img
+                                                                :src="item.images[0]?.thumbnail_url || item.images[0]?.url"
+                                                                :alt="item.title || 'Item image'"
+                                                                class="w-full h-full object-cover hover:opacity-80 transition-opacity"
+                                                            />
+                                                        </button>
+                                                        <!-- Image count badge -->
+                                                        <span
+                                                            v-if="item.images.length > 1"
+                                                            class="absolute bottom-0.5 right-0.5 bg-black/60 text-white text-[10px] px-1 rounded"
+                                                        >
+                                                            {{ item.images.length }}
+                                                        </span>
+                                                    </template>
+                                                    <!-- Silhouette Placeholder -->
+                                                    <template v-else>
+                                                        <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center">
+                                                            <PhotoIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </td>
+                                            <td class="px-3 py-4 text-sm text-gray-900 dark:text-white">
+                                                <Link
+                                                    :href="`/transactions/${transaction.id}/items/${item.id}`"
+                                                    class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                >
+                                                    {{ item.title || 'Untitled Item' }}
+                                                </Link>
+                                                <p
+                                                    v-if="item.description"
+                                                    class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2"
+                                                >
+                                                    {{ item.description }}
+                                                </p>
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                                                {{ item.category?.name || '-' }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                                                {{ item.metal_type || '-' }} {{ item.karat ? `(${item.karat})` : '' }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
+                                                {{ formatWeight(item.dwt) }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
+                                                {{ formatCurrency(item.price) }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white text-right font-medium">
+                                                {{ formatCurrency(item.buy_price) }}
+                                            </td>
+                                            <!-- Status Column -->
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-center">
+                                                <span
+                                                    v-if="item.reviewed_at"
+                                                    class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                    :title="`Reviewed on ${formatReviewDate(item.reviewed_at)}`"
+                                                >
+                                                    <CheckBadgeIcon class="size-3.5" />
+                                                    Reviewed
+                                                </span>
+                                                <button
+                                                    v-else
+                                                    type="button"
+                                                    class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-colors"
+                                                    title="Mark as reviewed"
+                                                    @click="handleReviewItem(item)"
+                                                >
+                                                    <CheckBadgeIcon class="size-3.5" />
+                                                    Review
+                                                </button>
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
+                                                <button
+                                                    type="button"
+                                                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 mr-2"
+                                                    title="Edit item"
+                                                    @click="openEditItemModal(item)"
+                                                >
+                                                    <PencilIcon class="size-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="text-red-400 hover:text-red-500"
+                                                    title="Delete item"
+                                                    @click="handleDeleteItem(item.id)"
+                                                >
+                                                    <TrashIcon class="size-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="bg-gray-50 dark:bg-gray-700/50">
+                                            <td colspan="4" class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white">
+                                                Totals
+                                            </td>
+                                            <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                                                {{ formatWeight(transaction.total_dwt) }}
+                                            </td>
+                                            <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                                                {{ formatCurrency(transaction.total_value) }}
+                                            </td>
+                                            <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
+                                                {{ formatCurrency(transaction.total_buy_price) }}
+                                            </td>
+                                            <td colspan="2"></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic">
+                                No items added yet. Click "Add Item" to start adding items to this transaction.
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- Customer Request Details (Online only) -->
                     <div v-if="transaction.is_online && (transaction.customer_description || transaction.customer_amount || transaction.customer_categories)" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
@@ -1949,13 +1932,19 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     </template>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white">
+                                            <td class="px-3 py-4 text-sm text-gray-900 dark:text-white">
                                                 <Link
                                                     :href="`/transactions/${transaction.id}/items/${item.id}`"
                                                     class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                                                 >
                                                     {{ item.title || 'Untitled Item' }}
                                                 </Link>
+                                                <p
+                                                    v-if="item.description"
+                                                    class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2"
+                                                >
+                                                    {{ item.description }}
+                                                </p>
                                             </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
                                                 {{ item.category?.name || '-' }}
@@ -2038,6 +2027,29 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                             </p>
                         </div>
                     </div>
+
+                    <!-- Shipping Labels Section (for online transactions) -->
+                    <ShippingLabelsSection
+                        v-if="transaction.is_online"
+                        :transaction-id="transaction.id"
+                        :outbound-label="transaction.outbound_label || null"
+                        :return-label="transaction.return_label || null"
+                        :can-create-outbound="canCreateOutboundLabel"
+                        :can-create-return="canCreateReturnLabel"
+                        :shipping-options="shippingOptions"
+                        :customer-addresses="customerAddresses || []"
+                        :shipping-address="transaction.shipping_address || null"
+                        :shipping-address-id="transaction.shipping_address_id || null"
+                        :customer="transaction.customer"
+                    />
+
+                    <!-- SMS Messaging Section (for transactions with customer) -->
+                    <SmsMessagesSection
+                        v-if="transaction.customer"
+                        :messages="smsMessages || []"
+                        :transaction-id="transaction.id"
+                        :customer-phone="transaction.customer?.phone_number || null"
+                    />
 
                     <!-- Notes -->
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
