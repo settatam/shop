@@ -22,7 +22,8 @@ class MigrateLegacyTransactions extends Command
                             {--dry-run : Run without making any changes}
                             {--skip-customers : Skip migrating customers}
                             {--skip-images : Skip migrating images}
-                            {--skip-activities : Skip migrating activities}';
+                            {--skip-activities : Skip migrating activities}
+                            {--skip-category-mapping : Skip using category mappings (set category_id to null)}';
 
     protected $description = 'Migrate legacy transactions from shopmata-new database for a specific store';
 
@@ -74,6 +75,13 @@ class MigrateLegacyTransactions extends Command
      */
     protected array $addressMap = [];
 
+    /**
+     * Map legacy category_id to new category_id.
+     *
+     * @var array<int, int>
+     */
+    protected array $categoryMap = [];
+
     protected bool $dryRun = false;
 
     protected int $legacyStoreId;
@@ -101,6 +109,18 @@ class MigrateLegacyTransactions extends Command
             $this->info('Please ensure you have configured the "legacy" database connection in config/database.php');
 
             return self::FAILURE;
+        }
+
+        // Load category mappings if available
+        if (! $this->option('skip-category-mapping')) {
+            $mappings = MigrateLegacyCategories::loadMappings($this->legacyStoreId, $this->newStoreId);
+            if ($mappings) {
+                $this->categoryMap = $mappings['categories'];
+                $this->info('Loaded '.count($this->categoryMap).' category mappings');
+            } else {
+                $this->warn('No category mappings found. Run migrate:legacy-categories first for proper category linking.');
+                $this->warn('Continuing with category_id set to null for all items.');
+            }
         }
 
         // Get transactions from legacy database
@@ -459,9 +479,15 @@ class MigrateLegacyTransactions extends Command
                 continue;
             }
 
+            // Try to map the legacy category_id to the new category_id
+            $categoryId = null;
+            if ($legacyItem->category_id && isset($this->categoryMap[$legacyItem->category_id])) {
+                $categoryId = $this->categoryMap[$legacyItem->category_id];
+            }
+
             $item = TransactionItem::create([
                 'transaction_id' => $transaction->id,
-                'category_id' => null, // Categories may not match
+                'category_id' => $categoryId,
                 'sku' => $legacyItem->sku,
                 'title' => $legacyItem->title ?? $legacyItem->item ?? 'Item',
                 'description' => $legacyItem->description,
@@ -478,6 +504,7 @@ class MigrateLegacyTransactions extends Command
                     'legacy_id' => $legacyItem->id,
                     'legacy_category_id' => $legacyItem->category_id,
                     'legacy_product_type_id' => $legacyItem->product_type_id ?? null,
+                    'legacy_html_form_id' => $legacyItem->html_form_id ?? null,
                 ],
                 'created_at' => $legacyItem->created_at,
                 'updated_at' => $legacyItem->updated_at,

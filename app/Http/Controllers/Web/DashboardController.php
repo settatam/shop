@@ -34,6 +34,21 @@ class DashboardController extends Controller
                 'lowStockProducts' => [],
                 'recentOrders' => [],
                 'salesChart' => [],
+                'ordersByStatus' => [],
+                'recentBuys' => [],
+                'buysByStatus' => [],
+                'recentRepairs' => [],
+                'repairsByStatus' => [],
+                'recentMemos' => [],
+                'memosByStatus' => [],
+                'todaySummary' => [
+                    'date' => now()->format('Y-m-d'),
+                    'dateFormatted' => now()->format('F j, Y'),
+                    'sales' => ['count' => 0, 'total' => 0],
+                    'buys' => ['count' => 0, 'total' => 0],
+                    'repairs' => ['count' => 0],
+                    'memos' => ['count' => 0],
+                ],
             ]);
         }
 

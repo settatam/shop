@@ -79,13 +79,19 @@ class SetCurrentStore
             return Store::withoutGlobalScopes()->find($storeId);
         }
 
-        // Verify user has access to this store
+        // Verify user has access to this store via store_users
         $hasAccess = StoreUser::where('user_id', $user->id)
             ->where('store_id', $storeId)
             ->exists();
 
         if ($hasAccess) {
             return Store::withoutGlobalScopes()->find($storeId);
+        }
+
+        // Also check if user owns the store directly
+        $store = Store::withoutGlobalScopes()->find($storeId);
+        if ($store && $store->user_id === $user->id) {
+            return $store;
         }
 
         return null;

@@ -235,6 +235,14 @@ function handleDelete() {
                 showDeleteModal.value = false;
                 deleteVendor.value = null;
             },
+            onError: () => {
+                showDeleteModal.value = false;
+                deleteVendor.value = null;
+            },
+            onFinish: () => {
+                // Close modal regardless of outcome
+                showDeleteModal.value = false;
+            },
         });
     }
 }
