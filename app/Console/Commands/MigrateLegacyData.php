@@ -233,48 +233,74 @@ class MigrateLegacyData extends Command
             ->first();
 
         $owner = null;
-        if ($legacyOwner) {
-            $owner = User::where('email', $legacyOwner->email)->first();
-            if (! $owner) {
-                $owner = User::create([
-                    'name' => trim(($legacyOwner->first_name ?? '').' '.($legacyOwner->last_name ?? '')) ?: 'Store Owner',
-                    'email' => $legacyOwner->email,
-                    'password' => $legacyOwner->password ?? Hash::make('changeme123'),
-                    'email_verified_at' => now(),
-                ]);
-                $this->line("  Created owner user: {$owner->email}");
-                $this->userMap[$legacyStore->user_id] = $owner->id;
+        try {
+            if ($legacyOwner) {
+                $owner = User::where('email', $legacyOwner->email)->first();
+                if (! $owner) {
+                    $owner = User::create([
+                        'name' => trim(($legacyOwner->first_name ?? '').' '.($legacyOwner->last_name ?? '')) ?: 'Store Owner',
+                        'email' => $legacyOwner->email,
+                        'password' => $legacyOwner->password ?? Hash::make('changeme123'),
+                        'email_verified_at' => now(),
+                    ]);
+                    $this->line("  Created owner user: {$owner->email}");
+                    $this->userMap[$legacyStore->user_id] = $owner->id;
+                } else {
+                    $this->line("  Using existing owner user: {$owner->email}");
+                    $this->userMap[$legacyStore->user_id] = $owner->id;
+                }
+            } else {
+                // Create a placeholder owner
+                $placeholderEmail = $legacyStore->account_email ?? "owner-{$legacyStore->id}@migrated.local";
+                $owner = User::where('email', $placeholderEmail)->first();
+                if (! $owner) {
+                    $owner = User::create([
+                        'name' => 'Store Owner',
+                        'email' => $placeholderEmail,
+                        'password' => Hash::make('changeme123'),
+                        'email_verified_at' => now(),
+                    ]);
+                    $this->line("  Created placeholder owner: {$owner->email}");
+                }
             }
-        } else {
-            // Create a placeholder owner
-            $owner = User::create([
-                'name' => 'Store Owner',
-                'email' => $legacyStore->account_email ?? "owner-{$legacyStore->id}@migrated.local",
-                'password' => Hash::make('changeme123'),
-                'email_verified_at' => now(),
-            ]);
+        } catch (\Exception $e) {
+            $this->error("  Failed to create owner user: {$e->getMessage()}");
+            throw $e;
+        }
+
+        // Make slug unique if it already exists
+        $slug = $legacyStore->slug;
+        $counter = 1;
+        while (Store::where('slug', $slug)->exists()) {
+            $slug = $legacyStore->slug.'-'.$counter;
+            $counter++;
         }
 
         // Create the store
-        $store = Store::create([
-            'user_id' => $owner->id,
-            'name' => $legacyStore->name,
-            'slug' => $legacyStore->slug,
-            'business_name' => $legacyStore->business_name,
-            'account_email' => $legacyStore->account_email,
-            'customer_email' => $legacyStore->customer_email,
-            'phone' => $legacyStore->phone,
-            'address' => $legacyStore->street_address,
-            'address2' => $legacyStore->street_address2,
-            'city' => $legacyStore->city,
-            'state' => $legacyStore->state,
-            'zip' => $legacyStore->zip,
-            'url' => $legacyStore->url,
-            'store_domain' => $legacyStore->store_domain,
-            'step' => 2, // Mark onboarding complete
-        ]);
+        try {
+            $store = Store::create([
+                'user_id' => $owner->id,
+                'name' => $legacyStore->name,
+                'slug' => $slug,
+                'business_name' => $legacyStore->business_name,
+                'account_email' => $legacyStore->account_email,
+                'customer_email' => $legacyStore->customer_email,
+                'phone' => $legacyStore->phone,
+                'address' => $legacyStore->street_address,
+                'address2' => $legacyStore->street_address2,
+                'city' => $legacyStore->city,
+                'state' => $legacyStore->state,
+                'zip' => $legacyStore->zip,
+                'url' => $legacyStore->url,
+                'store_domain' => $legacyStore->store_domain,
+                'step' => 2, // Mark onboarding complete
+            ]);
 
-        $this->line("  Created store: {$store->name} (ID: {$store->id})");
+            $this->line("  Created store: {$store->name} (ID: {$store->id})");
+        } catch (\Exception $e) {
+            $this->error("  Failed to create store: {$e->getMessage()}");
+            throw $e;
+        }
 
         // Create owner role and store_user
         $ownerRole = Role::create([

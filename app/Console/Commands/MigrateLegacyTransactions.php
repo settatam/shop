@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\ActivityLog;
 use App\Models\Address;
 use App\Models\Customer;
 use App\Models\Image;
@@ -192,9 +191,9 @@ class MigrateLegacyTransactions extends Command
 
     protected function migrateTransaction(object $legacyTransaction): bool
     {
-        // Check if already migrated (by looking for existing transaction with same legacy_id in metadata)
+        // Check if already migrated (by looking for existing transaction with same transaction_number)
         $existing = Transaction::where('store_id', $this->newStoreId)
-            ->whereJsonContains('payment_details->legacy_id', $legacyTransaction->id)
+            ->where('transaction_number', (string) $legacyTransaction->id)
             ->first();
 
         if ($existing) {
@@ -207,14 +206,15 @@ class MigrateLegacyTransactions extends Command
             $customerId = $this->migrateCustomer($legacyTransaction->customer_id);
         }
 
-        // Get legacy status
+        // Get legacy status - use exact status name from legacy system
         $legacyStatus = DB::connection('legacy')
             ->table('statuses')
+            ->where('store_id', $this->legacyStoreId)
             ->where('status_id', $legacyTransaction->status_id)
             ->first();
 
-        // Map status
-        $newStatus = $this->statusMap[$legacyTransaction->status_id] ?? Transaction::STATUS_PENDING;
+        // Use the exact legacy status name - no mapping
+        $statusName = $legacyStatus?->name ?? 'Pending';
 
         // Determine type based on is_in_house flag
         $type = $legacyTransaction->is_in_house ? Transaction::TYPE_IN_STORE : Transaction::TYPE_MAIL_IN;
@@ -246,25 +246,25 @@ class MigrateLegacyTransactions extends Command
             return true;
         }
 
-        // Create the transaction
+        // Create the transaction using DB insert to preserve timestamps exactly
         $transactionData = [
             'store_id' => $this->newStoreId,
             'customer_id' => $customerId,
             'user_id' => null, // We don't migrate users
-            'transaction_number' => Transaction::generateTransactionNumber(),
-            'status' => $newStatus,
+            'transaction_number' => (string) $legacyTransaction->id, // Use legacy ID as transaction number
+            'status' => $statusName, // Use exact legacy status name
             'type' => $type,
             'source' => $legacyTransaction->is_in_house ? null : 'legacy_online',
             'preliminary_offer' => $legacyTransaction->preliminary_offer ?? 0,
             'final_offer' => $legacyTransaction->final_offer ?? 0,
             'estimated_value' => $legacyTransaction->est_value ?? 0,
             'payment_method' => $paymentMethod,
-            'payment_details' => [
+            'payment_details' => json_encode([
                 'legacy_id' => $legacyTransaction->id,
                 'legacy_status_id' => $legacyTransaction->status_id,
                 'legacy_status_name' => $legacyStatus?->name,
                 'legacy_payment_address' => $legacyPaymentAddress ? (array) $legacyPaymentAddress : null,
-            ],
+            ]),
             'status_id' => null, // Don't use legacy status_id - it references a different statuses table
             'bin_location' => $legacyTransaction->bin_location,
             'customer_notes' => $legacyTransaction->pub_note ?? null,
@@ -284,7 +284,9 @@ class MigrateLegacyTransactions extends Command
             $transactionData['return_carrier'] = 'fedex';
         }
 
-        $transaction = Transaction::create($transactionData);
+        // Use DB::table to preserve exact timestamps (Model::create overrides them)
+        $transactionId = DB::table('transactions')->insertGetId($transactionData);
+        $transaction = Transaction::find($transactionId);
 
         // Migrate items
         $this->migrateTransactionItems($legacyTransaction->id, $transaction);
@@ -354,8 +356,8 @@ class MigrateLegacyTransactions extends Command
                 ->first();
         }
 
-        // Create customer
-        $customer = Customer::create([
+        // Create customer using DB insert to preserve exact timestamps
+        $customerId = DB::table('customers')->insertGetId([
             'store_id' => $this->newStoreId,
             'first_name' => $legacyCustomer->first_name,
             'last_name' => $legacyCustomer->last_name,
@@ -370,13 +372,15 @@ class MigrateLegacyTransactions extends Command
             'ethnicity' => $legacyCustomer->ethnicity,
             'accepts_marketing' => (bool) ($legacyCustomer->accepts_marketing ?? false),
             'is_active' => (bool) ($legacyCustomer->is_active ?? true),
-            'additional_fields' => [
+            'additional_fields' => json_encode([
                 'legacy_id' => $legacyCustomerId,
                 'legacy_notes' => $legacyCustomer->customer_notes ?? null,
-            ],
+            ]),
             'created_at' => $legacyCustomer->created_at,
             'updated_at' => $legacyCustomer->updated_at,
         ]);
+
+        $customer = Customer::find($customerId);
 
         // Migrate customer address if exists
         $this->migrateCustomerAddress($legacyCustomerId, $customer);
@@ -407,7 +411,8 @@ class MigrateLegacyTransactions extends Command
                 ->first();
         }
 
-        Address::create([
+        // Use DB insert to preserve exact timestamps
+        DB::table('addresses')->insert([
             'store_id' => $this->newStoreId,
             'addressable_type' => Customer::class,
             'addressable_id' => $customer->id,
@@ -447,7 +452,8 @@ class MigrateLegacyTransactions extends Command
                 ->first();
         }
 
-        $address = Address::create([
+        // Use DB insert to preserve exact timestamps
+        $addressId = DB::table('addresses')->insertGetId([
             'store_id' => $this->newStoreId,
             'addressable_type' => Transaction::class,
             'addressable_id' => $transaction->id,
@@ -464,7 +470,7 @@ class MigrateLegacyTransactions extends Command
             'updated_at' => $legacyAddress->updated_at,
         ]);
 
-        $transaction->update(['shipping_address_id' => $address->id]);
+        $transaction->update(['shipping_address_id' => $addressId]);
     }
 
     protected function migrateTransactionItems(int $legacyTransactionId, Transaction $transaction): void
@@ -485,7 +491,8 @@ class MigrateLegacyTransactions extends Command
                 $categoryId = $this->categoryMap[$legacyItem->category_id];
             }
 
-            $item = TransactionItem::create([
+            // Use DB insert to preserve exact timestamps
+            $itemId = DB::table('transaction_items')->insertGetId([
                 'transaction_id' => $transaction->id,
                 'category_id' => $categoryId,
                 'sku' => $legacyItem->sku,
@@ -500,15 +507,17 @@ class MigrateLegacyTransactions extends Command
                 'is_added_to_inventory' => (bool) ($legacyItem->is_added_to_inventory ?? false),
                 'date_added_to_inventory' => $legacyItem->date_added_to_inventory,
                 'reviewed_at' => $legacyItem->reviewed_date_time ?? null,
-                'attributes' => [
+                'attributes' => json_encode([
                     'legacy_id' => $legacyItem->id,
                     'legacy_category_id' => $legacyItem->category_id,
                     'legacy_product_type_id' => $legacyItem->product_type_id ?? null,
                     'legacy_html_form_id' => $legacyItem->html_form_id ?? null,
-                ],
+                ]),
                 'created_at' => $legacyItem->created_at,
                 'updated_at' => $legacyItem->updated_at,
             ]);
+
+            $item = TransactionItem::find($itemId);
 
             // Migrate item images
             if (! $this->option('skip-images')) {
@@ -540,7 +549,8 @@ class MigrateLegacyTransactions extends Command
             // Extract path from URL for legacy images
             $path = parse_url($legacyImage->url, PHP_URL_PATH) ?? $legacyImage->url;
 
-            Image::create([
+            // Use DB insert to preserve exact timestamps
+            DB::table('images')->insert([
                 'store_id' => $this->newStoreId,
                 'imageable_type' => TransactionItem::class,
                 'imageable_id' => $item->id,
@@ -567,7 +577,8 @@ class MigrateLegacyTransactions extends Command
             if (! $exists) {
                 $path = parse_url($legacyImage->url, PHP_URL_PATH) ?? $legacyImage->url;
 
-                Image::create([
+                // Use DB insert to preserve exact timestamps
+                DB::table('images')->insert([
                     'store_id' => $this->newStoreId,
                     'imageable_type' => TransactionItem::class,
                     'imageable_id' => $item->id,
@@ -597,7 +608,8 @@ class MigrateLegacyTransactions extends Command
 
             $path = parse_url($legacyImage->url, PHP_URL_PATH) ?? $legacyImage->url;
 
-            Image::create([
+            // Use DB insert to preserve exact timestamps
+            DB::table('images')->insert([
                 'store_id' => $this->newStoreId,
                 'imageable_type' => Transaction::class,
                 'imageable_id' => $transaction->id,
@@ -629,7 +641,8 @@ class MigrateLegacyTransactions extends Command
             // Map legacy activity to new activity slug
             $activitySlug = $this->mapActivitySlug($legacyActivity->activity);
 
-            ActivityLog::create([
+            // Use DB insert to preserve exact timestamps
+            DB::table('activity_logs')->insert([
                 'store_id' => $this->newStoreId,
                 'user_id' => $legacyActivity->user_id,
                 'activity_slug' => $activitySlug,
@@ -637,11 +650,11 @@ class MigrateLegacyTransactions extends Command
                 'subject_id' => $transaction->id,
                 'causer_type' => $legacyActivity->creatable_type ? $this->mapCauserType($legacyActivity->creatable_type) : null,
                 'causer_id' => $legacyActivity->creatable_id,
-                'properties' => [
+                'properties' => json_encode([
                     'legacy_activity' => $legacyActivity->activity,
                     'legacy_description' => $legacyActivity->description,
                     'legacy_id' => $legacyActivity->id,
-                ],
+                ]),
                 'description' => $legacyActivity->description,
                 'created_at' => $legacyActivity->created_at,
                 'updated_at' => $legacyActivity->updated_at,
