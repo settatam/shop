@@ -458,6 +458,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
             Route::post('process', [\App\Http\Controllers\PaymentController::class, 'processPayment'])
                 ->name("{$type}.payment.process")
                 ->defaults('type', $type);
+            Route::post('terminal-checkout', [\App\Http\Controllers\PaymentController::class, 'terminalCheckout'])
+                ->name("{$type}.payment.terminal-checkout")
+                ->defaults('type', $type);
             Route::get('history', [\App\Http\Controllers\PaymentController::class, 'paymentHistory'])
                 ->name("{$type}.payment.history")
                 ->defaults('type', $type);

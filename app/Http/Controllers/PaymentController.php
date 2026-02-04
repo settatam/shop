@@ -9,7 +9,10 @@ use App\Models\Layaway;
 use App\Models\Memo;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\PaymentTerminal;
 use App\Models\Repair;
+use App\Models\TerminalCheckout;
+use App\Services\Gateways\PaymentGatewayFactory;
 use App\Services\PaymentService;
 use App\Services\StoreContext;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +38,8 @@ class PaymentController extends Controller
 
     public function __construct(
         protected PaymentService $paymentService,
-        protected StoreContext $storeContext
+        protected StoreContext $storeContext,
+        protected PaymentGatewayFactory $gatewayFactory,
     ) {}
 
     /**
@@ -139,6 +143,89 @@ class PaymentController extends Controller
         return response()->json([
             'payments' => $payments,
             'summary' => $this->paymentService->calculateSummary($payable),
+        ]);
+    }
+
+    /**
+     * Initiate a terminal checkout for a payable.
+     */
+    public function terminalCheckout(Request $request, int $id, string $type): JsonResponse
+    {
+        $payable = $this->resolvePayable($type, $id);
+
+        if (! $payable->canReceivePayment()) {
+            return response()->json([
+                'message' => 'This '.$type.' cannot receive payment in its current state.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'terminal_id' => ['required', 'exists:payment_terminals,id'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'service_fee_value' => ['nullable', 'numeric', 'min:0'],
+            'service_fee_unit' => ['nullable', 'string', 'in:fixed,percent'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $terminal = PaymentTerminal::findOrFail($validated['terminal_id']);
+        $store = $this->storeContext->getCurrentStore();
+
+        if ($terminal->store_id !== $store->id) {
+            return response()->json([
+                'message' => 'Terminal does not belong to this store.',
+            ], 403);
+        }
+
+        if (! $terminal->isActive()) {
+            return response()->json([
+                'message' => 'Terminal is not active.',
+            ], 422);
+        }
+
+        $amount = (float) $validated['amount'];
+
+        // Create checkout with the gateway
+        $gateway = $this->gatewayFactory->makeTerminal($terminal->gateway);
+        $timeout = config('payment-gateways.terminal.default_timeout', 300);
+
+        $result = $gateway->createCheckout($terminal, $amount, [
+            'timeout' => $timeout,
+            'reference' => $payable->getDisplayIdentifier(),
+            'customer_id' => $payable->customer_id ?? null,
+        ]);
+
+        if (! $result->success) {
+            return response()->json([
+                'message' => $result->errorMessage ?? 'Failed to create terminal checkout',
+            ], 422);
+        }
+
+        // Create checkout record
+        $checkout = TerminalCheckout::create([
+            'store_id' => $store->id,
+            'payable_type' => get_class($payable),
+            'payable_id' => $payable->id,
+            'terminal_id' => $terminal->id,
+            'user_id' => auth()->id(),
+            'checkout_id' => $result->checkoutId,
+            'amount' => $amount,
+            'currency' => 'USD',
+            'status' => TerminalCheckout::STATUS_PENDING,
+            'timeout_seconds' => $timeout,
+            'expires_at' => $result->expiresAt ?? now()->addSeconds($timeout),
+            'gateway_response' => $result->gatewayResponse,
+            'metadata' => [
+                'service_fee_value' => $validated['service_fee_value'] ?? null,
+                'service_fee_unit' => $validated['service_fee_unit'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+            ],
+        ]);
+
+        return response()->json([
+            'message' => 'Terminal checkout initiated.',
+            'checkout_id' => $checkout->id,
+            'gateway_checkout_id' => $result->checkoutId,
+            'expires_at' => $checkout->expires_at,
         ]);
     }
 

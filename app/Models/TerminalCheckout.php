@@ -6,6 +6,7 @@ use App\Traits\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class TerminalCheckout extends Model
 {
@@ -38,6 +39,8 @@ class TerminalCheckout extends Model
     protected $fillable = [
         'store_id',
         'invoice_id',
+        'payable_type',
+        'payable_id',
         'terminal_id',
         'user_id',
         'payment_id',
@@ -48,6 +51,7 @@ class TerminalCheckout extends Model
         'external_payment_id',
         'error_message',
         'gateway_response',
+        'metadata',
         'timeout_seconds',
         'expires_at',
         'completed_at',
@@ -58,6 +62,7 @@ class TerminalCheckout extends Model
         return [
             'amount' => 'decimal:2',
             'gateway_response' => 'array',
+            'metadata' => 'array',
             'timeout_seconds' => 'integer',
             'expires_at' => 'datetime',
             'completed_at' => 'datetime',
@@ -77,6 +82,14 @@ class TerminalCheckout extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    /**
+     * Get the owning payable model (Order, Repair, Memo, Layaway).
+     */
+    public function payable(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     public function terminal(): BelongsTo
