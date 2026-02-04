@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\PasswordController;
+use App\Http\Controllers\Settings\PaymentTerminalController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\RolesController;
 use App\Http\Controllers\Settings\StatusesController;
@@ -75,6 +76,17 @@ Route::middleware('auth')->group(function () {
         Route::put('settings/printers/{printerSetting}', [PrinterSettingsController::class, 'update'])->name('settings.printers.update');
         Route::delete('settings/printers/{printerSetting}', [PrinterSettingsController::class, 'destroy'])->name('settings.printers.destroy');
         Route::post('settings/printers/{printerSetting}/make-default', [PrinterSettingsController::class, 'makeDefault'])->name('settings.printers.make-default');
+    });
+
+    // Payment Terminal Settings
+    Route::middleware(['store', 'onboarding'])->prefix('settings/terminals')->name('settings.terminals.')->group(function () {
+        Route::get('/', [PaymentTerminalController::class, 'index'])->name('index');
+        Route::post('/', [PaymentTerminalController::class, 'store'])->name('store');
+        Route::put('/{terminal}', [PaymentTerminalController::class, 'update'])->name('update');
+        Route::delete('/{terminal}', [PaymentTerminalController::class, 'destroy'])->name('destroy');
+        Route::post('/{terminal}/test', [PaymentTerminalController::class, 'test'])->name('test');
+        Route::post('/{terminal}/activate', [PaymentTerminalController::class, 'activate'])->name('activate');
+        Route::post('/{terminal}/deactivate', [PaymentTerminalController::class, 'deactivate'])->name('deactivate');
     });
 
     // Notification Settings

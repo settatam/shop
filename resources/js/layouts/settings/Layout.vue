@@ -48,6 +48,10 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/printers',
     },
     {
+        title: 'Payment Terminals',
+        href: '/settings/terminals',
+    },
+    {
         title: 'Notifications',
         href: '/settings/notifications',
     },
