@@ -18,7 +18,7 @@ import {
     PencilIcon,
 } from '@heroicons/vue/24/outline';
 import debounce from 'lodash/debounce';
-import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
+import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
 
 interface StoreUser {
     id: number;
@@ -45,6 +45,14 @@ interface Customer {
     phone_number?: string;
     company_name?: string;
     lead_source_id?: number | null;
+    address?: {
+        address_line1?: string;
+        address_line2?: string;
+        city?: string;
+        state?: string;
+        postal_code?: string;
+        country?: string;
+    };
 }
 
 interface Vendor {
@@ -156,14 +164,7 @@ const customerQuery = ref('');
 const customerResults = ref<Customer[]>([]);
 const isSearchingCustomers = ref(false);
 const showNewCustomerForm = ref(false);
-const newCustomer = ref({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone_number: '',
-    company_name: '',
-    lead_source_id: null as number | null,
-});
+const newCustomer = ref<CustomerFormData>(getEmptyCustomerForm());
 
 // Vendor search
 const vendorQuery = ref('');
@@ -257,7 +258,7 @@ function clearCustomer() {
 function startNewCustomer() {
     showNewCustomerForm.value = true;
     formData.value.customer_id = null;
-    newCustomer.value = { first_name: '', last_name: '', email: '', phone_number: '', company_name: '', lead_source_id: null };
+    newCustomer.value = getEmptyCustomerForm();
 }
 
 function cancelNewCustomer() {
@@ -271,9 +272,17 @@ function confirmNewCustomer() {
         last_name: newCustomer.value.last_name,
         full_name: `${newCustomer.value.first_name} ${newCustomer.value.last_name}`,
         email: newCustomer.value.email,
-        phone_number: newCustomer.value.phone_number,
+        phone_number: newCustomer.value.phone,
         company_name: newCustomer.value.company_name,
         lead_source_id: newCustomer.value.lead_source_id,
+        address: newCustomer.value.address?.address_line1 ? {
+            address_line1: newCustomer.value.address.address_line1,
+            address_line2: newCustomer.value.address.address_line2 || undefined,
+            city: newCustomer.value.address.city || undefined,
+            state: newCustomer.value.address.state || undefined,
+            postal_code: newCustomer.value.address.postal_code || undefined,
+            country: newCustomer.value.address.country || 'US',
+        } : undefined,
     };
     showNewCustomerForm.value = false;
 }
@@ -678,38 +687,12 @@ async function submit() {
 
                                         <!-- New Customer Form -->
                                         <div v-else class="space-y-4">
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name *</label>
-                                                    <input v-model="newCustomer.first_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                                </div>
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name *</label>
-                                                    <input v-model="newCustomer.last_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Company Name</label>
-                                                <input v-model="newCustomer.company_name" type="text" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                                    <input v-model="newCustomer.email" type="email" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                                </div>
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                                    <input v-model="newCustomer.phone_number" type="tel" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
-                                                <LeadSourceSelect
-                                                    v-model="newCustomer.lead_source_id"
-                                                    placeholder="Select or create lead source..."
-                                                    class="mt-1"
-                                                />
-                                            </div>
+                                            <CreateCustomerForm
+                                                v-model="newCustomer"
+                                                :show-company-name="true"
+                                                :show-lead-source="true"
+                                            />
+
                                             <div class="flex gap-2">
                                                 <button type="button" @click="cancelNewCustomer" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
                                                     Cancel

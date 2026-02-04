@@ -12,6 +12,7 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\ShippingLabel;
 use App\Models\TransactionItem;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
@@ -398,10 +399,23 @@ class OrderController extends Controller
             'carrier' => 'nullable|string|in:fedex,ups,usps,dhl,other',
         ]);
 
-        $order->markAsShipped(
-            $validated['tracking_number'] ?? null,
-            $validated['carrier'] ?? null
-        );
+        $trackingNumber = $validated['tracking_number'] ?? null;
+        $carrier = $validated['carrier'] ?? null;
+
+        // Create a ShippingLabel record for manual shipments with tracking
+        if ($trackingNumber) {
+            $order->shippingLabels()->create([
+                'store_id' => $order->store_id,
+                'type' => ShippingLabel::TYPE_OUTBOUND,
+                'carrier' => $carrier,
+                'tracking_number' => $trackingNumber,
+                'status' => ShippingLabel::STATUS_CREATED,
+                'shipped_at' => now(),
+                'recipient_address' => $order->shipping_address,
+            ]);
+        }
+
+        $order->markAsShipped($trackingNumber, $carrier);
 
         if ($request->wantsJson()) {
             return response()->json([

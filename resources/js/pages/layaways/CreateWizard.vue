@@ -28,6 +28,7 @@ import {
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
 import axios from 'axios';
+import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
 
 interface StoreUser {
     id: number;
@@ -67,6 +68,14 @@ interface Customer {
     full_name?: string;
     email?: string;
     phone?: string;
+    address?: {
+        address_line1?: string;
+        address_line2?: string;
+        city?: string;
+        state?: string;
+        postal_code?: string;
+        country?: string;
+    };
 }
 
 interface Product {
@@ -192,12 +201,7 @@ const customerSearchResults = ref<Customer[]>([]);
 const isSearchingCustomers = ref(false);
 const isCreatingCustomer = ref(false);
 const selectedCustomer = ref<Customer | null>(null);
-const newCustomer = ref<Customer>({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-});
+const newCustomer = ref<CustomerFormData>(getEmptyCustomerForm());
 
 const searchCustomers = useDebounceFn(async (query: string) => {
     if (!query || query.length < 1) {
@@ -251,7 +255,7 @@ function switchToCustomerCreate() {
 
 function switchToCustomerSearch() {
     isCreatingCustomer.value = false;
-    newCustomer.value = { first_name: '', last_name: '', email: '', phone: '' };
+    newCustomer.value = getEmptyCustomerForm();
     formData.value.customer = null;
 }
 
@@ -713,24 +717,12 @@ function submit() {
 
                                     <!-- Create Mode -->
                                     <template v-else>
-                                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name <span class="text-red-500">*</span></label>
-                                                <input v-model="newCustomer.first_name" type="text" @input="updateNewCustomer" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
-                                                <input v-model="newCustomer.last_name" type="text" @input="updateNewCustomer" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                                <input v-model="newCustomer.email" type="email" @input="updateNewCustomer" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                                <input v-model="newCustomer.phone" type="tel" @input="updateNewCustomer" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                        </div>
+                                        <CreateCustomerForm
+                                            v-model="newCustomer"
+                                            :show-lead-source="false"
+                                            :last-name-required="false"
+                                            @update:model-value="updateNewCustomer"
+                                        />
                                     </template>
                                 </div>
 

@@ -33,6 +33,7 @@ import {
     ComboboxOption,
 } from '@headlessui/vue';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
+import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
 
 interface StoreUser {
@@ -193,13 +194,7 @@ const customerSearchResults = ref<Customer[]>([]);
 const isSearchingCustomers = ref(false);
 const selectedCustomer = ref<Customer | null>(null);
 const isCreatingNewCustomer = ref(false);
-const newCustomer = ref({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    lead_source_id: null as number | null,
-});
+const newCustomer = ref<CustomerFormData>(getEmptyCustomerForm());
 
 let customerSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -259,7 +254,7 @@ function startCreatingCustomer() {
 
 function cancelCreatingCustomer() {
     isCreatingNewCustomer.value = false;
-    newCustomer.value = { first_name: '', last_name: '', email: '', phone: '', lead_source_id: null };
+    newCustomer.value = getEmptyCustomerForm();
 }
 
 function confirmNewCustomer() {
@@ -271,6 +266,14 @@ function confirmNewCustomer() {
         email: newCustomer.value.email || undefined,
         phone: newCustomer.value.phone || undefined,
         lead_source_id: newCustomer.value.lead_source_id || undefined,
+        address: newCustomer.value.address.address_line1 ? {
+            address_line1: newCustomer.value.address.address_line1,
+            address_line2: newCustomer.value.address.address_line2 || undefined,
+            city: newCustomer.value.address.city || undefined,
+            state: newCustomer.value.address.state || undefined,
+            postal_code: newCustomer.value.address.postal_code || undefined,
+            country: newCustomer.value.address.country || 'US',
+        } : undefined,
     };
     form.customer_id = null;
 
@@ -298,7 +301,7 @@ const customerFilteredOptions = computed(() => {
 
 function switchToCustomerSearch() {
     isCreatingNewCustomer.value = false;
-    newCustomer.value = { first_name: '', last_name: '', email: '', phone: '', lead_source_id: null };
+    newCustomer.value = getEmptyCustomerForm();
 }
 
 function switchToCustomerCreate() {
@@ -465,13 +468,15 @@ function searchProducts() {
         clearTimeout(productSearchTimeout);
     }
 
+    if (!productSearchQuery.value || productSearchQuery.value.length < 2) {
+        productSearchResults.value = [];
+        return;
+    }
+
     productSearchTimeout = setTimeout(async () => {
         isSearchingProducts.value = true;
         try {
-            let url = `/orders/search-products?query=${encodeURIComponent(productSearchQuery.value)}`;
-            if (selectedCategoryId.value) {
-                url += `&category_id=${selectedCategoryId.value}`;
-            }
+            const url = `/orders/search-products?query=${encodeURIComponent(productSearchQuery.value)}`;
             const response = await fetch(url);
             const data = await response.json();
             productSearchResults.value = data.products || [];
@@ -536,7 +541,7 @@ async function createNewProduct() {
     }
 }
 
-watch([productSearchQuery, selectedCategoryId], searchProducts);
+watch(productSearchQuery, searchProducts);
 
 // Barcode Scanner
 const lastScannedBarcode = ref('');
@@ -952,32 +957,7 @@ const steps = [
 
                         <!-- Create Mode -->
                         <template v-else>
-                            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name <span class="text-red-500">*</span></label>
-                                    <input v-model="newCustomer.first_name" type="text" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name <span class="text-red-500">*</span></label>
-                                    <input v-model="newCustomer.last_name" type="text" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                    <input v-model="newCustomer.email" type="email" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                    <input v-model="newCustomer.phone" type="tel" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                <div class="sm:col-span-2">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
-                                    <LeadSourceSelect
-                                        v-model="newCustomer.lead_source_id"
-                                        placeholder="Select or create lead source..."
-                                        class="mt-1"
-                                    />
-                                </div>
-                            </div>
+                            <CreateCustomerForm v-model="newCustomer" :show-lead-source="true" />
                         </template>
                     </div>
 
@@ -1257,8 +1237,8 @@ const steps = [
                         </Transition>
 
                         <!-- Product Search -->
-                        <div class="mb-6 flex gap-4">
-                            <div class="relative flex-1">
+                        <div class="mb-6">
+                            <div class="relative">
                                 <MagnifyingGlassIcon class="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
                                 <input
                                     v-model="productSearchQuery"
@@ -1267,21 +1247,6 @@ const steps = [
                                     class="w-full rounded-lg border-0 bg-white py-3 pl-12 pr-4 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                 />
                             </div>
-                            <select
-                                v-model="selectedCategoryId"
-                                class="rounded-lg border-0 bg-white py-3 pl-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            >
-                                <option :value="null">All Categories</option>
-                                <option
-                                    v-for="cat in sortedCategories"
-                                    :key="cat.id"
-                                    :value="cat.id"
-                                    :disabled="!cat.isLeaf"
-                                    :class="{ 'text-gray-400': !cat.isLeaf }"
-                                >
-                                    {{ '\u00A0'.repeat(cat.level * 3) }}{{ cat.level > 0 ? '└ ' : '' }}{{ cat.name }}
-                                </option>
-                            </select>
                         </div>
 
                         <!-- Product Search Results -->
@@ -1312,6 +1277,15 @@ const steps = [
                                 <PlusIcon class="size-5 text-indigo-600 dark:text-indigo-400" />
                             </button>
                         </div>
+
+                        <!-- Products List - Commented out, may need later
+                        <div class="mb-6">
+                            <h3 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Available Products</h3>
+                            <div class="max-h-60 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-600">
+                                Products list would go here
+                            </div>
+                        </div>
+                        -->
 
                         <button
                             type="button"

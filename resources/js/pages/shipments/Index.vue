@@ -4,8 +4,9 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
-import { onMounted, ref, watch } from 'vue';
-import { TruckIcon } from '@heroicons/vue/24/outline';
+import { DatePicker } from '@/components/ui/date-picker';
+import { computed, onMounted, ref, watch } from 'vue';
+import { TruckIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
 interface Option {
     value: string;
@@ -30,6 +31,8 @@ function getUrlParams(): WidgetFilter {
     const filter: WidgetFilter = {};
     if (params.get('status')) filter.status = params.get('status') || undefined;
     if (params.get('carrier')) filter.carrier = params.get('carrier') || undefined;
+    if (params.get('date_from')) filter.date_from = params.get('date_from') || undefined;
+    if (params.get('date_to')) filter.date_to = params.get('date_to') || undefined;
     return filter;
 }
 
@@ -41,6 +44,8 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } =
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status || '');
 const selectedCarrier = ref<string>(initialParams.carrier || '');
+const dateFrom = ref<string>(initialParams.date_from as string || '');
+const dateTo = ref<string>(initialParams.date_to as string || '');
 
 // Reference to DataTable for clearing selection
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
@@ -51,12 +56,25 @@ onMounted(() => {
 });
 
 // Watch filter changes
-watch([selectedStatus, selectedCarrier], () => {
+watch([selectedStatus, selectedCarrier, dateFrom, dateTo], () => {
     updateFilter({
         status: selectedStatus.value || undefined,
         carrier: selectedCarrier.value || undefined,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
         page: 1,
     });
+});
+
+function clearFilters() {
+    selectedStatus.value = '';
+    selectedCarrier.value = '';
+    dateFrom.value = '';
+    dateTo.value = '';
+}
+
+const hasActiveFilters = computed(() => {
+    return selectedStatus.value || selectedCarrier.value || dateFrom.value || dateTo.value;
 });
 
 function handlePageChange(page: number) {
@@ -111,26 +129,60 @@ function handleVoid(row: { id: { data: number } }) {
             </div>
 
             <!-- Filters -->
-            <div class="flex flex-wrap items-center gap-4">
-                <select
-                    v-model="selectedStatus"
-                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                >
-                    <option value="">All Statuses</option>
-                    <option v-for="status in statuses" :key="status.value" :value="status.value">
-                        {{ status.label }}
-                    </option>
-                </select>
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select
+                        v-model="selectedStatus"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Statuses</option>
+                        <option v-for="status in statuses" :key="status.value" :value="status.value">
+                            {{ status.label }}
+                        </option>
+                    </select>
+                </div>
 
-                <select
-                    v-model="selectedCarrier"
-                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Carrier</label>
+                    <select
+                        v-model="selectedCarrier"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Carriers</option>
+                        <option v-for="carrier in carriers" :key="carrier.value" :value="carrier.value">
+                            {{ carrier.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From Date</label>
+                    <DatePicker
+                        v-model="dateFrom"
+                        placeholder="From date"
+                        class="w-[160px]"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To Date</label>
+                    <DatePicker
+                        v-model="dateTo"
+                        placeholder="To date"
+                        class="w-[160px]"
+                    />
+                </div>
+
+                <button
+                    v-if="hasActiveFilters"
+                    type="button"
+                    @click="clearFilters"
+                    class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                 >
-                    <option value="">All Carriers</option>
-                    <option v-for="carrier in carriers" :key="carrier.value" :value="carrier.value">
-                        {{ carrier.label }}
-                    </option>
-                </select>
+                    <XMarkIcon class="size-4" />
+                    Clear
+                </button>
             </div>
 
             <!-- Data Table -->

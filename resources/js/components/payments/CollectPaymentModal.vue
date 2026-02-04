@@ -665,17 +665,21 @@ watch(() => props.show, (newVal) => {
                                                     <dt class="text-gray-500 dark:text-gray-400">Shipping</dt>
                                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.shipping_cost) }}</dd>
                                                 </div>
+                                                <div v-if="totalServiceFees > 0" class="flex justify-between text-amber-600 dark:text-amber-400">
+                                                    <dt>Payment Processing Fee</dt>
+                                                    <dd>{{ formatCurrency(totalServiceFees) }}</dd>
+                                                </div>
                                                 <div class="flex justify-between border-t border-indigo-200 pt-2 font-semibold dark:border-indigo-700">
                                                     <dt class="text-gray-900 dark:text-white">Grand Total</dt>
-                                                    <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.grand_total) }}</dd>
+                                                    <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.grand_total + totalServiceFees) }}</dd>
                                                 </div>
                                                 <div v-if="summary.total_paid > 0" class="flex justify-between text-green-600 dark:text-green-400">
                                                     <dt>Amount Paid</dt>
                                                     <dd>-{{ formatCurrency(summary.total_paid) }}</dd>
                                                 </div>
                                                 <div class="flex justify-between border-t border-indigo-200 pt-2 dark:border-indigo-700">
-                                                    <dt class="text-lg font-bold text-gray-900 dark:text-white">Balance Due</dt>
-                                                    <dd class="text-lg font-bold text-indigo-600 dark:text-indigo-400">{{ formatCurrency(summary.balance_due) }}</dd>
+                                                    <dt class="text-lg font-bold text-gray-900 dark:text-white">Payment Due</dt>
+                                                    <dd class="text-lg font-bold text-indigo-600 dark:text-indigo-400">{{ formatCurrency(summary.balance_due + totalServiceFees) }}</dd>
                                                 </div>
                                             </dl>
                                         </div>

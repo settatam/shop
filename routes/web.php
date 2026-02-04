@@ -65,18 +65,18 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::get('dashboard', [\App\Http\Controllers\Web\DashboardController::class, 'index'])->name('dashboard');
     Route::get('dashboard/data', [\App\Http\Controllers\Web\DashboardController::class, 'getData'])->name('dashboard.data');
 
-    // Product routes - static routes must come before resource routes
-    Route::middleware('permission:products.view')->group(function () {
-        Route::get('products/lookup-barcode', [ProductController::class, 'lookupBarcode'])->name('products.lookup-barcode');
-        Route::get('products', [ProductController::class, 'index'])->name('products.index');
-        Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
-        Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');
-    });
+    // Product routes - static routes must come before dynamic routes
     Route::middleware('permission:products.create')->group(function () {
         Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
         Route::post('products', [ProductController::class, 'store'])->name('products.store');
         Route::post('products/generate-sku', [ProductController::class, 'generateSku'])->name('products.generate-sku');
         Route::post('products/preview-category-sku', [ProductController::class, 'previewCategorySku'])->name('products.preview-category-sku');
+    });
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('products/lookup-barcode', [ProductController::class, 'lookupBarcode'])->name('products.lookup-barcode');
+        Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
+        Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');
     });
     Route::middleware('permission:products.update')->group(function () {
         Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
@@ -115,19 +115,19 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('/lookup', [GiaController::class, 'lookup'])->name('lookup');
     });
 
-    // Templates
-    Route::middleware('permission:templates.view')->group(function () {
-        Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');
-        Route::get('templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
-        Route::get('templates-generator', [TemplateGeneratorController::class, 'index'])->name('templates.generator');
-        Route::post('templates-generator/preview', [TemplateGeneratorController::class, 'preview'])->name('templates.generator.preview');
-        Route::post('templates-generator/preview-ebay', [TemplateGeneratorController::class, 'previewFromEbayCategory'])->name('templates.generator.preview-ebay');
-    });
+    // Templates - static routes must come before dynamic routes
     Route::middleware('permission:templates.create')->group(function () {
         Route::get('templates/create', [TemplateController::class, 'create'])->name('templates.create');
         Route::post('templates', [TemplateController::class, 'store'])->name('templates.store');
         Route::post('templates/{template}/duplicate', [TemplateController::class, 'duplicate'])->name('templates.duplicate');
         Route::post('templates-generator', [TemplateGeneratorController::class, 'store'])->name('templates.generator.store');
+    });
+    Route::middleware('permission:templates.view')->group(function () {
+        Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');
+        Route::get('templates-generator', [TemplateGeneratorController::class, 'index'])->name('templates.generator');
+        Route::post('templates-generator/preview', [TemplateGeneratorController::class, 'preview'])->name('templates.generator.preview');
+        Route::post('templates-generator/preview-ebay', [TemplateGeneratorController::class, 'previewFromEbayCategory'])->name('templates.generator.preview-ebay');
+        Route::get('templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
     });
     Route::middleware('permission:templates.update')->group(function () {
         Route::get('templates/{template}/edit', [TemplateController::class, 'edit'])->name('templates.edit');
@@ -162,7 +162,12 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::put('product-types/{category}/settings', [ProductTypeController::class, 'updateSettings'])->name('product-types.update-settings')->middleware('permission:categories.update');
 
-    // Orders (Sales)
+    // Orders (Sales) - static routes must come before dynamic routes
+    Route::middleware('permission:orders.create')->group(function () {
+        Route::get('orders/create', [OrderController::class, 'createWizard'])->name('web.orders.create-wizard');
+        Route::post('orders', [OrderController::class, 'storeFromWizard'])->name('web.orders.store');
+        Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
+    });
     Route::middleware('permission:orders.view')->group(function () {
         Route::get('orders', [OrderController::class, 'index'])->name('web.orders.index');
         Route::get('orders/search-products', [OrderController::class, 'searchProducts'])->name('web.orders.search-products');
@@ -171,11 +176,6 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('orders/lookup-barcode', [OrderController::class, 'lookupBarcode'])->name('web.orders.lookup-barcode');
         Route::get('orders/{order}', [OrderController::class, 'show'])->name('web.orders.show');
         Route::get('orders/{order}/print-invoice', [OrderController::class, 'printInvoice'])->name('web.orders.print-invoice');
-    });
-    Route::middleware('permission:orders.create')->group(function () {
-        Route::get('orders/create', [OrderController::class, 'createWizard'])->name('web.orders.create-wizard');
-        Route::post('orders', [OrderController::class, 'storeFromWizard'])->name('web.orders.store');
-        Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
     });
     Route::middleware('permission:orders.update')->group(function () {
         Route::patch('orders/{order}', [OrderController::class, 'update'])->name('web.orders.update');
@@ -224,19 +224,19 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('returns/bulk-action', [\App\Http\Controllers\Web\ReturnController::class, 'bulkAction'])->name('web.returns.bulk-action');
     });
 
-    // Transactions (Buys) - use 'web.' prefix to avoid conflict with API routes
-    Route::middleware('permission:transactions.view')->group(function () {
-        Route::get('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'index'])->name('web.transactions.index');
-        Route::get('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'show'])->name('web.transactions.show');
-        Route::get('transactions/{transaction}/print-barcode', [\App\Http\Controllers\Web\TransactionController::class, 'printBarcode'])->name('web.transactions.print-barcode');
-        Route::get('transactions/{transaction}/print-invoice', [\App\Http\Controllers\Web\TransactionController::class, 'printInvoice'])->name('web.transactions.print-invoice');
-        Route::post('transactions/export', [\App\Http\Controllers\Web\TransactionController::class, 'export'])->name('web.transactions.export');
-    });
+    // Transactions (Buys) - static routes must come before dynamic routes
     Route::middleware('permission:transactions.create')->group(function () {
         Route::get('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'createWizard'])->name('web.transactions.create-wizard');
         Route::post('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'storeFromWizard'])->name('web.transactions.store-wizard');
         Route::get('transactions/create', [\App\Http\Controllers\Web\TransactionController::class, 'create'])->name('web.transactions.create');
         Route::post('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'store'])->name('web.transactions.store');
+    });
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'index'])->name('web.transactions.index');
+        Route::post('transactions/export', [\App\Http\Controllers\Web\TransactionController::class, 'export'])->name('web.transactions.export');
+        Route::get('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'show'])->name('web.transactions.show');
+        Route::get('transactions/{transaction}/print-barcode', [\App\Http\Controllers\Web\TransactionController::class, 'printBarcode'])->name('web.transactions.print-barcode');
+        Route::get('transactions/{transaction}/print-invoice', [\App\Http\Controllers\Web\TransactionController::class, 'printInvoice'])->name('web.transactions.print-invoice');
     });
     Route::middleware('permission:transactions.update')->group(function () {
         Route::get('transactions/{transaction}/edit', [\App\Http\Controllers\Web\TransactionController::class, 'edit'])->name('web.transactions.edit');
@@ -370,17 +370,17 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::get('lead-sources', [\App\Http\Controllers\Web\LeadSourceController::class, 'index'])->name('web.lead-sources.index');
     Route::post('lead-sources', [\App\Http\Controllers\Web\LeadSourceController::class, 'store'])->name('web.lead-sources.store');
 
-    // Memos (Consignment)
+    // Memos (Consignment) - static routes must come before dynamic routes
+    Route::middleware('permission:memos.create')->group(function () {
+        Route::get('memos/create', [MemoController::class, 'createWizard'])->name('web.memos.create-wizard');
+        Route::post('memos', [MemoController::class, 'storeFromWizard'])->name('web.memos.store');
+        Route::post('memos/create-product', [MemoController::class, 'storeQuickProduct'])->name('web.memos.create-product');
+    });
     Route::middleware('permission:memos.view')->group(function () {
         Route::get('memos', [MemoController::class, 'index'])->name('web.memos.index');
         Route::get('memos/search-products', [MemoController::class, 'searchProducts'])->name('web.memos.search-products');
         Route::get('memos/search-vendors', [MemoController::class, 'searchVendors'])->name('web.memos.search-vendors');
         Route::get('memos/{memo}', [MemoController::class, 'show'])->name('web.memos.show');
-    });
-    Route::middleware('permission:memos.create')->group(function () {
-        Route::get('memos/create', [MemoController::class, 'createWizard'])->name('web.memos.create-wizard');
-        Route::post('memos', [MemoController::class, 'storeFromWizard'])->name('web.memos.store');
-        Route::post('memos/create-product', [MemoController::class, 'storeQuickProduct'])->name('web.memos.create-product');
     });
     Route::middleware('permission:memos.update')->group(function () {
         Route::patch('memos/{memo}', [MemoController::class, 'update'])->name('web.memos.update');
@@ -397,16 +397,16 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('memos/{memo}/cancel', [MemoController::class, 'cancel'])->name('web.memos.cancel')->middleware('permission:memos.cancel');
     Route::delete('memos/{memo}', [MemoController::class, 'destroy'])->name('web.memos.destroy')->middleware('permission:memos.delete');
 
-    // Layaways
+    // Layaways - static routes must come before dynamic routes
+    Route::middleware('permission:layaways.create')->group(function () {
+        Route::get('layaways/create', [LayawayController::class, 'createWizard'])->name('web.layaways.create-wizard');
+        Route::post('layaways', [LayawayController::class, 'storeFromWizard'])->name('web.layaways.store');
+    });
     Route::middleware('permission:layaways.view')->group(function () {
         Route::get('layaways', [LayawayController::class, 'index'])->name('web.layaways.index');
         Route::get('layaways/search-products', [LayawayController::class, 'searchProducts'])->name('web.layaways.search-products');
         Route::get('layaways/search-customers', [LayawayController::class, 'searchCustomers'])->name('web.layaways.search-customers');
         Route::get('layaways/{layaway}', [LayawayController::class, 'show'])->name('web.layaways.show');
-    });
-    Route::middleware('permission:layaways.create')->group(function () {
-        Route::get('layaways/create', [LayawayController::class, 'createWizard'])->name('web.layaways.create-wizard');
-        Route::post('layaways', [LayawayController::class, 'storeFromWizard'])->name('web.layaways.store');
     });
     Route::middleware('permission:layaways.update')->group(function () {
         Route::patch('layaways/{layaway}', [LayawayController::class, 'update'])->name('web.layaways.update');
@@ -420,16 +420,16 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('layaways/{layaway}/cancel', [LayawayController::class, 'cancel'])->name('web.layaways.cancel')->middleware('permission:layaways.cancel');
     Route::delete('layaways/{layaway}', [LayawayController::class, 'destroy'])->name('web.layaways.destroy')->middleware('permission:layaways.delete');
 
-    // Repair management
+    // Repair management - static routes must come before dynamic routes
+    Route::middleware('permission:repairs.create')->group(function () {
+        Route::get('repairs/create', [RepairController::class, 'createWizard'])->name('web.repairs.create-wizard');
+        Route::post('repairs', [RepairController::class, 'storeFromWizard'])->name('web.repairs.store');
+    });
     Route::middleware('permission:repairs.view')->group(function () {
         Route::get('repairs', [RepairController::class, 'index'])->name('web.repairs.index');
         Route::get('repairs/search-customers', [RepairController::class, 'searchCustomers'])->name('web.repairs.search-customers');
         Route::get('repairs/search-vendors', [RepairController::class, 'searchVendors'])->name('web.repairs.search-vendors');
         Route::get('repairs/{repair}', [RepairController::class, 'show'])->name('web.repairs.show');
-    });
-    Route::middleware('permission:repairs.create')->group(function () {
-        Route::get('repairs/create', [RepairController::class, 'createWizard'])->name('web.repairs.create-wizard');
-        Route::post('repairs', [RepairController::class, 'storeFromWizard'])->name('web.repairs.store');
     });
     Route::middleware('permission:repairs.update')->group(function () {
         Route::patch('repairs/{repair}', [RepairController::class, 'update'])->name('web.repairs.update');
@@ -483,10 +483,11 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy')->middleware('permission:warehouses.delete');
 
     // Vendor management - use 'web.' prefix to avoid conflict with API routes
+    // Static routes must come before dynamic routes
     Route::middleware('permission:vendors.view')->group(function () {
         Route::get('vendors', [VendorController::class, 'index'])->name('web.vendors.index');
-        Route::get('vendors/{vendor}', [VendorController::class, 'show'])->name('web.vendors.show');
         Route::get('vendors/export', [VendorController::class, 'export'])->name('web.vendors.export');
+        Route::get('vendors/{vendor}', [VendorController::class, 'show'])->name('web.vendors.show');
     });
     Route::post('vendors', [VendorController::class, 'store'])->name('web.vendors.store')->middleware('permission:vendors.create');
     Route::put('vendors/{vendor}', [VendorController::class, 'update'])->name('web.vendors.update')->middleware('permission:vendors.update');
