@@ -250,6 +250,11 @@ class MigrateLegacyTransactions extends Command
             return true;
         }
 
+        // Determine if this is a payment_processed status (for setting timestamps)
+        $isPaymentProcessed = $statusName === Transaction::STATUS_PAYMENT_PROCESSED
+            || str_contains(strtolower($statusName), 'payment processed')
+            || str_contains(strtolower($statusName), 'paid');
+
         // Create the transaction using DB insert to preserve timestamps exactly
         $transactionData = [
             'store_id' => $this->newStoreId,
@@ -276,6 +281,8 @@ class MigrateLegacyTransactions extends Command
             'customer_description' => $legacyTransaction->customer_description ?? null,
             'created_at' => $legacyTransaction->created_at,
             'updated_at' => $legacyTransaction->updated_at,
+            // Set payment_processed_at for transactions that have reached that status
+            'payment_processed_at' => $isPaymentProcessed ? ($legacyTransaction->updated_at ?? $legacyTransaction->created_at) : null,
         ];
 
         // Only add tracking fields if we have actual tracking data (to let defaults apply)

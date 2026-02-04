@@ -4,6 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
+import { DatePicker } from '@/components/ui/date-picker';
 import { computed, onMounted, ref, watch } from 'vue';
 import { PlusIcon, XMarkIcon } from '@heroicons/vue/20/solid';
 
@@ -25,6 +26,8 @@ function getUrlParams(): WidgetFilter {
     if (params.get('status')) filter.status = params.get('status') || undefined;
     if (params.get('type')) filter.type = params.get('type') || undefined;
     if (params.get('tags')) filter.tags = params.get('tags') || undefined;
+    if (params.get('date_from')) filter.date_from = params.get('date_from') || undefined;
+    if (params.get('date_to')) filter.date_to = params.get('date_to') || undefined;
     return filter;
 }
 
@@ -37,6 +40,8 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } =
 const selectedStatus = ref<string>(initialParams.status || '');
 const selectedType = ref<string>((initialParams.type as string) || '');
 const selectedTags = ref<string[]>(initialParams.tags ? String(initialParams.tags).split(',') : []);
+const dateFrom = ref<string>(initialParams.date_from as string || '');
+const dateTo = ref<string>(initialParams.date_to as string || '');
 
 // Reference to DataTable for clearing selection
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
@@ -58,11 +63,13 @@ onMounted(() => {
 });
 
 // Watch filter changes
-watch([selectedStatus, selectedType, selectedTags], () => {
+watch([selectedStatus, selectedType, selectedTags, dateFrom, dateTo], () => {
     updateFilter({
         status: selectedStatus.value || undefined,
         type: selectedType.value || undefined,
         tags: selectedTags.value.length > 0 ? selectedTags.value.join(',') : undefined,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
         page: 1,
     });
 });
@@ -98,10 +105,12 @@ function clearFilters() {
     selectedStatus.value = '';
     selectedType.value = '';
     selectedTags.value = [];
+    dateFrom.value = '';
+    dateTo.value = '';
 }
 
 const hasActiveFilters = computed(() => {
-    return selectedStatus.value || selectedType.value || selectedTags.value.length > 0;
+    return selectedStatus.value || selectedType.value || selectedTags.value.length > 0 || dateFrom.value || dateTo.value;
 });
 </script>
 
@@ -128,26 +137,50 @@ const hasActiveFilters = computed(() => {
             </div>
 
             <!-- Filters -->
-            <div class="flex flex-wrap items-center gap-4">
-                <select
-                    v-model="selectedStatus"
-                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                >
-                    <option value="">All Statuses</option>
-                    <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
-                        {{ status.label }}
-                    </option>
-                </select>
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select
+                        v-model="selectedStatus"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Statuses</option>
+                        <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
+                            {{ status.label }}
+                        </option>
+                    </select>
+                </div>
 
-                <select
-                    v-model="selectedType"
-                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                >
-                    <option value="">All Types</option>
-                    <option v-for="type in availableTypes" :key="type.value" :value="type.value">
-                        {{ type.label }}
-                    </option>
-                </select>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
+                    <select
+                        v-model="selectedType"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Types</option>
+                        <option v-for="type in availableTypes" :key="type.value" :value="type.value">
+                            {{ type.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From Date</label>
+                    <DatePicker
+                        v-model="dateFrom"
+                        placeholder="From date"
+                        class="w-[160px]"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To Date</label>
+                    <DatePicker
+                        v-model="dateTo"
+                        placeholder="To date"
+                        class="w-[160px]"
+                    />
+                </div>
 
                 <!-- Tags filter -->
                 <div v-if="availableTags.length > 0" class="flex flex-wrap items-center gap-2">

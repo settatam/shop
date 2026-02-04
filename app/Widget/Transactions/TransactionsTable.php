@@ -105,6 +105,14 @@ class TransactionsTable extends Table
             });
         }
 
+        // Apply date range filter
+        if ($dateFrom = data_get($filter, 'date_from')) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo = data_get($filter, 'date_to')) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
         // Apply status filter (supports both status slug and status_id)
         if ($status = data_get($filter, 'status')) {
             // First try to find by slug

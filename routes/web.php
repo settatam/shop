@@ -30,6 +30,7 @@ use App\Http\Controllers\Web\StoreController;
 use App\Http\Controllers\Web\TagController;
 use App\Http\Controllers\Web\TemplateController;
 use App\Http\Controllers\Web\TemplateGeneratorController;
+use App\Http\Controllers\Web\TransactionsReportController;
 use App\Http\Controllers\Web\VendorController;
 use App\Http\Controllers\Web\WarehouseController;
 use App\Http\Controllers\WidgetsController;
@@ -641,6 +642,18 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('trade-in/export', [BuysReportController::class, 'exportTradeIn'])->name('trade-in.export');
         Route::get('trade-in/monthly', [BuysReportController::class, 'tradeInMonthly'])->name('trade-in.monthly');
         Route::get('trade-in/monthly/export', [BuysReportController::class, 'exportTradeInMonthly'])->name('trade-in.monthly.export');
+    });
+
+    // Transactions Reports
+    Route::prefix('reports/transactions')->name('reports.transactions.')->middleware('permission:reports.view_transactions')->group(function () {
+        Route::get('daily', [TransactionsReportController::class, 'daily'])->name('daily');
+        Route::get('daily/export', [TransactionsReportController::class, 'exportDaily'])->name('daily.export');
+        Route::get('weekly', [TransactionsReportController::class, 'weekly'])->name('weekly');
+        Route::get('weekly/export', [TransactionsReportController::class, 'exportWeekly'])->name('weekly.export');
+        Route::get('monthly', [TransactionsReportController::class, 'monthly'])->name('monthly');
+        Route::get('monthly/export', [TransactionsReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::get('yearly', [TransactionsReportController::class, 'yearly'])->name('yearly');
+        Route::get('yearly/export', [TransactionsReportController::class, 'exportYearly'])->name('yearly.export');
     });
 });
 

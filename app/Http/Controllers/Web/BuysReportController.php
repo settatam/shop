@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Payment;
 use App\Models\Transaction;
 use App\Services\StoreContext;
 use Carbon\Carbon;
@@ -300,14 +299,15 @@ class BuysReportController extends Controller
 
     /**
      * Get daily buys data with custom filter.
+     * Includes all transactions that have passed through payment_processed status.
      */
     protected function getDailyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
     {
         $query = Transaction::query()
             ->where('store_id', $storeId)
-            ->where('status', Transaction::STATUS_PAYMENT_PROCESSED)
+            ->whereNotNull('payment_processed_at')
             ->whereBetween('payment_processed_at', [$startDate, $endDate])
-            ->with(['items', 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED)]);
+            ->with(['items']);
 
         $filter($query);
 
@@ -324,8 +324,9 @@ class BuysReportController extends Controller
             $dayTransactions = $grouped->get($key, collect());
 
             $buysCount = $dayTransactions->count();
-            $purchaseAmt = $dayTransactions->sum(fn ($t) => $t->payments->sum('amount'));
-            $estimatedValue = $dayTransactions->sum('estimated_value');
+            $purchaseAmt = $dayTransactions->sum('final_offer');
+            // Estimated value comes from sum of item prices (resale value)
+            $estimatedValue = $dayTransactions->sum(fn ($t) => $t->items->sum('price'));
             $profit = $estimatedValue - $purchaseAmt;
             $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
             $avgBuyPrice = $buysCount > 0 ? $purchaseAmt / $buysCount : 0;
@@ -348,14 +349,15 @@ class BuysReportController extends Controller
 
     /**
      * Get monthly buys data with custom filter.
+     * Includes all transactions that have passed through payment_processed status.
      */
     protected function getMonthlyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
     {
         $query = Transaction::query()
             ->where('store_id', $storeId)
-            ->where('status', Transaction::STATUS_PAYMENT_PROCESSED)
+            ->whereNotNull('payment_processed_at')
             ->whereBetween('payment_processed_at', [$startDate, $endDate])
-            ->with(['items', 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED)]);
+            ->with(['items']);
 
         $filter($query);
 
@@ -372,8 +374,9 @@ class BuysReportController extends Controller
             $monthTransactions = $grouped->get($key, collect());
 
             $buysCount = $monthTransactions->count();
-            $purchaseAmt = $monthTransactions->sum(fn ($t) => $t->payments->sum('amount'));
-            $estimatedValue = $monthTransactions->sum('estimated_value');
+            $purchaseAmt = $monthTransactions->sum('final_offer');
+            // Estimated value comes from sum of item prices (resale value)
+            $estimatedValue = $monthTransactions->sum(fn ($t) => $t->items->sum('price'));
             $profit = $estimatedValue - $purchaseAmt;
             $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
             $avgBuyPrice = $buysCount > 0 ? $purchaseAmt / $buysCount : 0;
