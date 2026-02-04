@@ -18,6 +18,7 @@ import {
     ClipboardDocumentListIcon,
     XMarkIcon,
     QrCodeIcon,
+    CameraIcon,
     ArrowsRightLeftIcon,
     ScaleIcon,
     ArchiveBoxIcon,
@@ -35,6 +36,7 @@ import {
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
+import CameraScannerModal from '@/components/scanner/CameraScannerModal.vue';
 
 interface StoreUser {
     id: number;
@@ -546,6 +548,7 @@ watch(productSearchQuery, searchProducts);
 // Barcode Scanner
 const lastScannedBarcode = ref('');
 const scannerFeedback = ref<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+const showCameraScanner = ref(false);
 let feedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function showScannerFeedback(type: 'success' | 'error' | 'info', message: string) {
@@ -1207,9 +1210,19 @@ const steps = [
                                 <h2 class="text-lg font-medium text-gray-900 dark:text-white">Add Products</h2>
                                 <p class="text-sm text-gray-500 dark:text-gray-400">Search and add products to this order.</p>
                             </div>
-                            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                                <QrCodeIcon class="size-5" />
-                                <span>Barcode scanner ready</span>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <QrCodeIcon class="size-5" />
+                                    <span>Scanner ready</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="showCameraScanner = true"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                >
+                                    <CameraIcon class="size-4" />
+                                    Scan
+                                </button>
                             </div>
                         </div>
 
@@ -1622,6 +1635,13 @@ const steps = [
             :editing-item="editingTradeInItem"
             @close="showAddTradeInModal = false"
             @save="handleTradeInItemSave"
+        />
+
+        <!-- Camera Scanner Modal -->
+        <CameraScannerModal
+            :show="showCameraScanner"
+            @close="showCameraScanner = false"
+            @scan="handleBarcodeScan"
         />
     </AppLayout>
 </template>
