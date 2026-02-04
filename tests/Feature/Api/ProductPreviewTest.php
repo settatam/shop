@@ -74,7 +74,7 @@ class ProductPreviewTest extends TestCase
             ->assertJsonFragment([
                 'id' => $product->id,
                 'title' => 'Test Product',
-                'status' => 'Published',
+                'status' => 'Active',
             ]);
     }
 

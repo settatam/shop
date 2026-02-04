@@ -405,9 +405,12 @@ function handleGiaScanSuccess(productId: number) {
                     class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                 >
                     <option value="">All Statuses</option>
-                    <option value="published">Published</option>
                     <option value="draft">Draft</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="active">Active</option>
+                    <option value="archive">Archive</option>
+                    <option value="sold">Sold</option>
+                    <option value="in_memo">In Memo</option>
+                    <option value="in_repair">In Repair</option>
                 </select>
 
                 <!-- Stock -->

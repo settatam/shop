@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Category;
 use App\Models\Image;
+use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductTemplate;
@@ -11,6 +12,7 @@ use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\Store;
 use App\Models\Vendor;
+use App\Models\Warehouse;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -51,6 +53,12 @@ class MigrateLegacyProducts extends Command
     protected int $attributeValueCount = 0;
 
     protected int $imageCount = 0;
+
+    protected int $inventoryCount = 0;
+
+    protected ?Warehouse $defaultWarehouse = null;
+
+    protected ?int $legacyStoreLocationId = null;
 
     public function handle(): int
     {
@@ -339,6 +347,34 @@ class MigrateLegacyProducts extends Command
     {
         $this->info('Migrating products...');
 
+        // Get or create default warehouse for inventory
+        $this->defaultWarehouse = Warehouse::where('store_id', $newStore->id)
+            ->where('is_default', true)
+            ->first();
+
+        if (! $this->defaultWarehouse) {
+            $this->defaultWarehouse = Warehouse::where('store_id', $newStore->id)->first();
+        }
+
+        if (! $this->defaultWarehouse && ! $isDryRun) {
+            $this->defaultWarehouse = Warehouse::create([
+                'store_id' => $newStore->id,
+                'name' => 'Main Warehouse',
+                'code' => 'MAIN',
+                'is_default' => true,
+                'is_active' => true,
+            ]);
+            $this->line("  Created default warehouse: {$this->defaultWarehouse->name}");
+        }
+
+        // Get legacy store location for inventory quantities
+        $this->getLegacyStoreLocationId($legacyStoreId);
+        if ($this->legacyStoreLocationId) {
+            $this->line("  Using legacy store location ID: {$this->legacyStoreLocationId}");
+        } else {
+            $this->warn('  No legacy store location found - inventory quantities will be 0');
+        }
+
         $query = DB::connection('legacy')
             ->table('products')
             ->where('store_id', $legacyStoreId);
@@ -433,6 +469,7 @@ class MigrateLegacyProducts extends Command
                 'has_variants' => (bool) $legacyProduct->has_variants,
                 'is_published' => (bool) $legacyProduct->is_published,
                 'is_draft' => (bool) $legacyProduct->is_draft,
+                'status' => $legacyProduct->status ?? 'draft',
                 'seo_description' => $legacyProduct->seo_description,
                 'seo_page_title' => $legacyProduct->seo_page_title,
                 'track_quantity' => (bool) $legacyProduct->track_quantity,
@@ -459,13 +496,16 @@ class MigrateLegacyProducts extends Command
 
             if ($legacyVariants->isEmpty()) {
                 // Create default variant from product data - use DB::table to preserve timestamps
-                DB::table('product_variants')->insert([
+                $quantity = $legacyProduct->quantity ?? $legacyProduct->total_quantity ?? 0;
+                $cost = $legacyProduct->cost_per_item;
+
+                $newVariantId = DB::table('product_variants')->insertGetId([
                     'product_id' => $newProduct->id,
                     'sku' => $legacyProduct->sku ?? "SKU-{$newProduct->id}",
                     'price' => $legacyProduct->price ?? 0,
                     'wholesale_price' => $legacyProduct->wholesale_price ?? 0,
-                    'cost' => $legacyProduct->cost_per_item,
-                    'quantity' => $legacyProduct->quantity ?? $legacyProduct->total_quantity ?? 0,
+                    'cost' => $cost,
+                    'quantity' => $quantity,
                     'barcode' => $legacyProduct->upc,
                     'status' => $legacyProduct->status ?? 'active',
                     'is_active' => true,
@@ -473,15 +513,25 @@ class MigrateLegacyProducts extends Command
                     'updated_at' => $legacyProduct->updated_at,
                 ]);
                 $variantCount++;
+
+                // Create inventory record if quantity > 0
+                if ($quantity > 0 && $this->defaultWarehouse) {
+                    $this->createInventoryRecord($newStore->id, $newVariantId, $quantity, $cost, $legacyProduct->created_at);
+                }
             } else {
                 foreach ($legacyVariants as $legacyVariant) {
+                    // Get quantity from location quantities table, not from variant directly
+                    $quantity = $this->getLegacyVariantQuantity($legacyVariant->id);
+                    // Use variant cost, fall back to product cost
+                    $cost = $legacyVariant->cost_per_item ?? $legacyProduct->cost_per_item;
+
                     // Use DB::table to preserve timestamps
                     $newVariantId = DB::table('product_variants')->insertGetId([
                         'product_id' => $newProduct->id,
                         'sku' => $legacyVariant->sku ?? "SKU-{$newProduct->id}-{$legacyVariant->id}",
                         'price' => $legacyVariant->price ?? 0,
-                        'cost' => $legacyVariant->cost_per_item,
-                        'quantity' => $legacyVariant->quantity ?? 0,
+                        'cost' => $cost,
+                        'quantity' => $quantity,
                         'barcode' => $legacyVariant->barcode,
                         'status' => $legacyVariant->status ?? 'active',
                         'sort_order' => $legacyVariant->sort_order ?? 0,
@@ -492,6 +542,11 @@ class MigrateLegacyProducts extends Command
 
                     $this->variantMap[$legacyVariant->id] = $newVariantId;
                     $variantCount++;
+
+                    // Create inventory record if quantity > 0
+                    if ($quantity > 0 && $this->defaultWarehouse) {
+                        $this->createInventoryRecord($newStore->id, $newVariantId, $quantity, $cost, $legacyVariant->created_at);
+                    }
                 }
             }
 
@@ -508,6 +563,65 @@ class MigrateLegacyProducts extends Command
 
         $this->line("  Created {$productCount} products with {$variantCount} variants, skipped {$skipped} existing");
         $this->line("  Migrated {$this->attributeValueCount} attribute values and {$this->imageCount} images");
+        $this->line("  Created {$this->inventoryCount} inventory records");
+    }
+
+    /**
+     * Create an inventory record for a variant.
+     */
+    protected function createInventoryRecord(int $storeId, int $variantId, int $quantity, ?float $cost, ?string $createdAt): void
+    {
+        DB::table('inventory')->insert([
+            'store_id' => $storeId,
+            'product_variant_id' => $variantId,
+            'warehouse_id' => $this->defaultWarehouse->id,
+            'quantity' => $quantity,
+            'reserved_quantity' => 0,
+            'incoming_quantity' => 0,
+            'safety_stock' => 0,
+            'unit_cost' => $cost ?? 0,
+            'created_at' => $createdAt ?? now(),
+            'updated_at' => $createdAt ?? now(),
+        ]);
+        $this->inventoryCount++;
+    }
+
+    /**
+     * Get the legacy store location ID for a given store.
+     */
+    protected function getLegacyStoreLocationId(int $legacyStoreId): ?int
+    {
+        if ($this->legacyStoreLocationId !== null) {
+            return $this->legacyStoreLocationId;
+        }
+
+        $location = DB::connection('legacy')
+            ->table('store_locations')
+            ->where('store_id', $legacyStoreId)
+            ->first();
+
+        $this->legacyStoreLocationId = $location?->id;
+
+        return $this->legacyStoreLocationId;
+    }
+
+    /**
+     * Get quantity for a variant from the legacy product_variant_location_quantities table.
+     */
+    protected function getLegacyVariantQuantity(int $legacyVariantId): int
+    {
+        if (! $this->legacyStoreLocationId) {
+            return 0;
+        }
+
+        $locationQty = DB::connection('legacy')
+            ->table('product_variant_location_quantities')
+            ->where('product_variant_id', $legacyVariantId)
+            ->where('store_location_id', $this->legacyStoreLocationId)
+            ->whereNull('deleted_at')
+            ->first();
+
+        return $locationQty?->quantity ?? 0;
     }
 
     /**
@@ -696,5 +810,9 @@ class MigrateLegacyProducts extends Command
         $this->line("Total variants in store: {$variantCount}");
         $this->line("Total attribute values in store: {$attributeCount}");
         $this->line("Total images in store: {$imageCount}");
+
+        $inventoryCount = Inventory::where('store_id', $newStore->id)->count();
+        $totalQuantity = Inventory::where('store_id', $newStore->id)->sum('quantity');
+        $this->line("Total inventory records: {$inventoryCount} ({$totalQuantity} items)");
     }
 }

@@ -124,7 +124,7 @@ class ProductController extends Controller
             'title' => $product->title,
             'image_url' => $product->primaryImage?->url,
             'price' => $price,
-            'status' => $product->is_published ? 'Published' : 'Draft',
+            'status' => $product->status_label,
             'category_name' => $product->category?->name,
             'brand_name' => $product->brand?->name,
             'total_quantity' => $product->total_quantity,

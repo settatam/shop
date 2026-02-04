@@ -135,15 +135,7 @@ class ProductsTable extends Table
 
         // Apply status filter
         if ($status = data_get($filter, 'status')) {
-            if ($status === 'published') {
-                $query->where('is_published', true);
-            } elseif ($status === 'draft') {
-                $query->where('is_draft', true);
-            } elseif ($status === 'inactive') {
-                $query->where('is_published', false)->where(function ($q) {
-                    $q->where('is_draft', false)->orWhereNull('is_draft');
-                });
-            }
+            $query->where('status', $status);
         }
 
         // Apply stock filter
@@ -327,8 +319,16 @@ class ProductsTable extends Table
             ],
             'status' => [
                 'type' => 'badge',
-                'data' => $product->is_published ? 'Published' : ($product->is_draft ? 'Draft' : 'Inactive'),
-                'variant' => $product->is_published ? 'success' : ($product->is_draft ? 'warning' : 'secondary'),
+                'data' => $product->status_label,
+                'variant' => match ($product->status) {
+                    Product::STATUS_ACTIVE => 'success',
+                    Product::STATUS_DRAFT => 'warning',
+                    Product::STATUS_ARCHIVE => 'secondary',
+                    Product::STATUS_SOLD => 'info',
+                    Product::STATUS_IN_MEMO => 'purple',
+                    Product::STATUS_IN_REPAIR => 'orange',
+                    default => 'secondary',
+                },
             ],
             'created_at' => [
                 'data' => Carbon::parse($product->created_at)->format('M d, Y'),
@@ -378,15 +378,15 @@ class ProductsTable extends Table
                 'confirm' => 'Are you sure you want to delete the selected products?',
             ],
             [
-                'key' => 'publish',
-                'label' => 'Publish Selected',
+                'key' => 'activate',
+                'label' => 'Set Active',
                 'icon' => 'CheckCircleIcon',
                 'variant' => 'success',
             ],
             [
-                'key' => 'unpublish',
-                'label' => 'Unpublish Selected',
-                'icon' => 'XCircleIcon',
+                'key' => 'archive',
+                'label' => 'Archive Selected',
+                'icon' => 'ArchiveBoxIcon',
                 'variant' => 'warning',
             ],
         ];
@@ -538,9 +538,12 @@ class ProductsTable extends Table
                 'stone_shapes' => $allStoneShapes,
                 'ring_sizes' => $allRingSizes,
                 'statuses' => [
-                    ['value' => 'published', 'label' => 'Published'],
-                    ['value' => 'draft', 'label' => 'Draft'],
-                    ['value' => 'inactive', 'label' => 'Inactive'],
+                    ['value' => Product::STATUS_DRAFT, 'label' => 'Draft'],
+                    ['value' => Product::STATUS_ACTIVE, 'label' => 'Active'],
+                    ['value' => Product::STATUS_ARCHIVE, 'label' => 'Archive'],
+                    ['value' => Product::STATUS_SOLD, 'label' => 'Sold'],
+                    ['value' => Product::STATUS_IN_MEMO, 'label' => 'In Memo'],
+                    ['value' => Product::STATUS_IN_REPAIR, 'label' => 'In Repair'],
                 ],
                 'stock_options' => [
                     ['value' => 'in_stock', 'label' => 'In Stock'],

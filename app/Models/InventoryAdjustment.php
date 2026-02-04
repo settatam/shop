@@ -32,6 +32,12 @@ class InventoryAdjustment extends Model
 
     public const TYPE_PURCHASE_ORDER = 'purchase_order';
 
+    public const TYPE_SOLD = 'sold';
+
+    public const TYPE_INITIAL = 'initial';
+
+    public const TYPE_DELETED = 'deleted';
+
     public const TYPES = [
         self::TYPE_DAMAGED,
         self::TYPE_LOST,
@@ -43,6 +49,9 @@ class InventoryAdjustment extends Model
         self::TYPE_RECEIVED,
         self::TYPE_RETURNED,
         self::TYPE_PURCHASE_ORDER,
+        self::TYPE_SOLD,
+        self::TYPE_INITIAL,
+        self::TYPE_DELETED,
     ];
 
     protected $fillable = [

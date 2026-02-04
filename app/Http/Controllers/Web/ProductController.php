@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Image;
 use App\Models\Inventory;
+use App\Models\InventoryAdjustment;
 use App\Models\PrinterSetting;
 use App\Models\Product;
 use App\Models\ProductTemplateField;
@@ -392,18 +393,27 @@ class ProductController extends Controller
                 'option1_value' => $optionValue,
             ]);
 
-            // Create inventory record if quantity > 0
-            if (($variantData['quantity'] ?? 0) > 0) {
-                $warehouseId = $variantData['warehouse_id'] ?? $defaultWarehouse?->id;
+            // Create inventory record with adjustment tracking
+            $warehouseId = $variantData['warehouse_id'] ?? $defaultWarehouse?->id;
+            $newQuantity = (int) ($variantData['quantity'] ?? 0);
 
-                if ($warehouseId) {
-                    Inventory::create([
-                        'store_id' => $store->id,
-                        'product_variant_id' => $variant->id,
-                        'warehouse_id' => $warehouseId,
-                        'quantity' => $variantData['quantity'],
-                        'unit_cost' => $variantData['cost'] ?? null,
-                    ]);
+            if ($warehouseId) {
+                $inventory = Inventory::create([
+                    'store_id' => $store->id,
+                    'product_variant_id' => $variant->id,
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => 0, // Start at 0, adjustment will set correct quantity
+                    'unit_cost' => $variantData['cost'] ?? null,
+                ]);
+
+                if ($newQuantity > 0) {
+                    $inventory->adjustQuantity(
+                        $newQuantity,
+                        InventoryAdjustment::TYPE_INITIAL,
+                        $request->user()?->id,
+                        'Initial inventory',
+                        'Initial quantity set via product creation'
+                    );
                 }
             }
         }
@@ -890,19 +900,51 @@ class ProductController extends Controller
                 ]);
                 $existingIds[] = $variantData['id'];
 
-                // Update or create inventory record
+                // Update or create inventory record with adjustment tracking
                 if ($warehouseId) {
-                    Inventory::updateOrCreate(
-                        [
+                    $newQuantity = (int) $variantData['quantity'];
+                    $inventory = Inventory::where('product_variant_id', $variantData['id'])
+                        ->where('warehouse_id', $warehouseId)
+                        ->first();
+
+                    if ($inventory) {
+                        $oldQuantity = $inventory->quantity;
+                        $difference = $newQuantity - $oldQuantity;
+
+                        // Update cost regardless
+                        $inventory->unit_cost = $variantData['cost'] ?? $inventory->unit_cost;
+                        $inventory->save();
+
+                        // Create adjustment if quantity changed
+                        if ($difference !== 0) {
+                            $inventory->adjustQuantity(
+                                $difference,
+                                InventoryAdjustment::TYPE_CORRECTION,
+                                $request->user()?->id,
+                                'Product edit',
+                                'Quantity updated via product edit page'
+                            );
+                        }
+                    } else {
+                        // Create new inventory with initial adjustment
+                        $inventory = Inventory::create([
+                            'store_id' => $store->id,
                             'product_variant_id' => $variantData['id'],
                             'warehouse_id' => $warehouseId,
-                        ],
-                        [
-                            'store_id' => $store->id,
-                            'quantity' => $variantData['quantity'],
+                            'quantity' => 0, // Start at 0, adjustment will set correct quantity
                             'unit_cost' => $variantData['cost'] ?? null,
-                        ]
-                    );
+                        ]);
+
+                        if ($newQuantity > 0) {
+                            $inventory->adjustQuantity(
+                                $newQuantity,
+                                InventoryAdjustment::TYPE_INITIAL,
+                                $request->user()?->id,
+                                'Initial inventory',
+                                'Initial quantity set via product edit page'
+                            );
+                        }
+                    }
                 }
             } else {
                 $variant = $product->variants()->create([
@@ -920,15 +962,26 @@ class ProductController extends Controller
                 ]);
                 $existingIds[] = $variant->id;
 
-                // Create inventory record for new variant
-                if ($warehouseId && ($variantData['quantity'] ?? 0) > 0) {
-                    Inventory::create([
+                // Create inventory record for new variant with adjustment tracking
+                if ($warehouseId) {
+                    $newQuantity = (int) ($variantData['quantity'] ?? 0);
+                    $inventory = Inventory::create([
                         'store_id' => $store->id,
                         'product_variant_id' => $variant->id,
                         'warehouse_id' => $warehouseId,
-                        'quantity' => $variantData['quantity'],
+                        'quantity' => 0, // Start at 0, adjustment will set correct quantity
                         'unit_cost' => $variantData['cost'] ?? null,
                     ]);
+
+                    if ($newQuantity > 0) {
+                        $inventory->adjustQuantity(
+                            $newQuantity,
+                            InventoryAdjustment::TYPE_INITIAL,
+                            $request->user()?->id,
+                            'Initial inventory',
+                            'Initial quantity set via product creation'
+                        );
+                    }
                 }
             }
         }
@@ -1036,7 +1089,7 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'action' => 'required|string|in:delete,publish,unpublish',
+            'action' => 'required|string|in:delete,activate,archive,draft',
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:products,id',
         ]);
@@ -1049,14 +1102,16 @@ class ProductController extends Controller
 
         match ($validated['action']) {
             'delete' => $products->each->delete(),
-            'publish' => $products->each->update(['is_published' => true, 'is_draft' => false]),
-            'unpublish' => $products->each->update(['is_published' => false, 'is_draft' => true]),
+            'activate' => $products->each->update(['status' => Product::STATUS_ACTIVE]),
+            'archive' => $products->each->update(['status' => Product::STATUS_ARCHIVE]),
+            'draft' => $products->each->update(['status' => Product::STATUS_DRAFT]),
         };
 
         $actionLabel = match ($validated['action']) {
             'delete' => 'deleted',
-            'publish' => 'published',
-            'unpublish' => 'unpublished',
+            'activate' => 'set to active',
+            'archive' => 'archived',
+            'draft' => 'set to draft',
         };
 
         return redirect()->route('products.index')

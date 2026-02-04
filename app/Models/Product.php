@@ -17,6 +17,18 @@ class Product extends Model
 {
     use BelongsToStore, HasFactory, HasImages, HasTags, LogsActivity, Searchable, SoftDeletes;
 
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_ARCHIVE = 'archive';
+
+    public const STATUS_SOLD = 'sold';
+
+    public const STATUS_IN_MEMO = 'in_memo';
+
+    public const STATUS_IN_REPAIR = 'in_repair';
+
     protected $fillable = [
         'title',
         'description',
@@ -65,6 +77,7 @@ class Product extends Model
         'quantity',
         'custom_product_type_id',
         'product_type_id',
+        'status',
     ];
 
     protected function casts(): array
@@ -233,7 +246,78 @@ class Product extends Model
 
     public function scopeDraft($query)
     {
-        return $query->where('is_draft', '1');
+        return $query->where('status', self::STATUS_DRAFT);
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    public function scopeArchived($query)
+    {
+        return $query->where('status', self::STATUS_ARCHIVE);
+    }
+
+    public function scopeInMemo($query)
+    {
+        return $query->where('status', self::STATUS_IN_MEMO);
+    }
+
+    public function scopeInRepair($query)
+    {
+        return $query->where('status', self::STATUS_IN_REPAIR);
+    }
+
+    public function scopeSold($query)
+    {
+        return $query->where('status', self::STATUS_SOLD);
+    }
+
+    public function scopeByStatus($query, string $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Get all available statuses.
+     *
+     * @return array<string, string>
+     */
+    public static function getStatuses(): array
+    {
+        return [
+            self::STATUS_DRAFT => 'Draft',
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_ARCHIVE => 'Archive',
+            self::STATUS_SOLD => 'Sold',
+            self::STATUS_IN_MEMO => 'In Memo',
+            self::STATUS_IN_REPAIR => 'In Repair',
+        ];
+    }
+
+    /**
+     * Get human-readable status label.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return self::getStatuses()[$this->status] ?? ucfirst($this->status ?? 'Unknown');
+    }
+
+    /**
+     * Check if product can be edited.
+     */
+    public function canBeEdited(): bool
+    {
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_ACTIVE]);
+    }
+
+    /**
+     * Check if product is available for sale.
+     */
+    public function isAvailableForSale(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE && $this->total_quantity > 0;
     }
 
     protected function getActivityPrefix(): string
