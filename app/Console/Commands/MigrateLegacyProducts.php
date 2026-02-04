@@ -208,23 +208,69 @@ class MigrateLegacyProducts extends Command
         $legacyCategories = DB::connection('legacy')
             ->table('store_categories')
             ->where('store_id', $legacyStoreId)
+            ->get()
+            ->keyBy('id');
 
-            ->get();
+        // Build legacy category full paths
+        $legacyPaths = [];
+        foreach ($legacyCategories as $legacy) {
+            $legacyPaths[$legacy->id] = $this->buildLegacyCategoryPath($legacy, $legacyCategories);
+        }
 
-        // Get new categories
+        // Get new categories with parent relationship loaded
         $newCategories = Category::where('store_id', $newStore->id)->get();
 
-        // Map by name (normalized)
-        $newCategoriesByName = $newCategories->keyBy(fn ($c) => Str::slug($c->name));
+        // Build new category full paths and index by path
+        $newCategoriesByPath = [];
+        foreach ($newCategories as $category) {
+            $path = Str::slug($category->full_path, '-');
+            $newCategoriesByPath[$path] = $category;
+        }
 
+        // Also index by name only as fallback for categories without path conflicts
+        $newCategoriesByName = [];
+        $nameConflicts = [];
+        foreach ($newCategories as $category) {
+            $slug = Str::slug($category->name);
+            if (isset($newCategoriesByName[$slug])) {
+                $nameConflicts[$slug] = true;
+            }
+            $newCategoriesByName[$slug] = $category;
+        }
+
+        // Map categories - prefer full path match, fall back to name if no conflict
         foreach ($legacyCategories as $legacy) {
-            $slug = Str::slug($legacy->name);
-            if ($newCategoriesByName->has($slug)) {
-                $this->categoryMap[$legacy->id] = $newCategoriesByName->get($slug)->id;
+            $legacyPath = $legacyPaths[$legacy->id];
+            $pathSlug = Str::slug($legacyPath, '-');
+            $nameSlug = Str::slug($legacy->name);
+
+            // Try full path match first
+            if (isset($newCategoriesByPath[$pathSlug])) {
+                $this->categoryMap[$legacy->id] = $newCategoriesByPath[$pathSlug]->id;
+            }
+            // Fall back to name match only if there's no conflict
+            elseif (isset($newCategoriesByName[$nameSlug]) && ! isset($nameConflicts[$nameSlug])) {
+                $this->categoryMap[$legacy->id] = $newCategoriesByName[$nameSlug]->id;
             }
         }
 
         $this->line('  Mapped '.count($this->categoryMap).' categories');
+    }
+
+    /**
+     * Build the full path for a legacy category.
+     */
+    protected function buildLegacyCategoryPath(object $category, $allCategories): string
+    {
+        $path = [$category->name];
+        $current = $category;
+
+        while ($current->parent_id && isset($allCategories[$current->parent_id])) {
+            $current = $allCategories[$current->parent_id];
+            array_unshift($path, $current->name);
+        }
+
+        return implode(' > ', $path);
     }
 
     protected function buildTemplateMapping(int $legacyStoreId, Store $newStore): void
