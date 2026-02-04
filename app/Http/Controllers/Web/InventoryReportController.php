@@ -205,7 +205,7 @@ class InventoryReportController extends Controller
             }
         }
 
-        return $result->sortByDesc('total_value')->values();
+        return $result->sortBy('category')->values();
     }
 
     /**
@@ -743,7 +743,7 @@ class InventoryReportController extends Controller
             ]);
         }
 
-        return $result->sortByDesc('total_value')->values();
+        return $result->sortBy('category')->values();
     }
 
     /**
@@ -848,7 +848,7 @@ class InventoryReportController extends Controller
         $costRemoved = (float) ($deletions->cost_removed ?? 0);
 
         return [
-            'period' => $weekStart->format('M d, Y'),
+            'period' => $weekStart->format('M d').' - '.$weekEnd->format('M d, Y'),
             'week_start' => $weekStart->format('Y-m-d'),
             'items_added' => $itemsAdded,
             'cost_added' => $costAdded,
