@@ -240,7 +240,7 @@ const debouncedSearchVendors = useDebounceFn(async (query: string) => {
     }
     isSearchingVendors.value = true;
     try {
-        const response = await fetch(`/repairs/vendors/search?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/repairs/search-vendors?q=${encodeURIComponent(query)}`);
         const data = await response.json();
         vendorResults.value = data.vendors || [];
     } catch (error) {
