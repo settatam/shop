@@ -27,12 +27,14 @@ class StoreUser extends Model
         'created_by',
         'store_location_id',
         'default_warehouse_id',
+        'can_be_assigned',
     ];
 
     protected function casts(): array
     {
         return [
             'is_owner' => 'boolean',
+            'can_be_assigned' => 'boolean',
         ];
     }
 

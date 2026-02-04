@@ -495,6 +495,82 @@ class Activity extends Model
     }
 
     /**
+     * Get permission groups for quick-select functionality.
+     * Groups bundle related categories together for common access patterns.
+     */
+    public static function getPermissionGroups(): array
+    {
+        return [
+            'sales' => [
+                'name' => 'Sales',
+                'description' => 'Orders, layaways, repairs, and customer management',
+                'categories' => [
+                    self::CATEGORY_ORDERS,
+                    self::CATEGORY_LAYAWAYS,
+                    self::CATEGORY_REPAIRS,
+                    self::CATEGORY_CUSTOMERS,
+                ],
+            ],
+            'inventory' => [
+                'name' => 'Inventory',
+                'description' => 'Products and stock management',
+                'categories' => [
+                    self::CATEGORY_PRODUCTS,
+                    self::CATEGORY_INVENTORY,
+                ],
+            ],
+            'purchasing' => [
+                'name' => 'Purchasing',
+                'description' => 'Buy transactions, vendors, and consignment memos',
+                'categories' => [
+                    self::CATEGORY_TRANSACTIONS,
+                    self::CATEGORY_VENDORS,
+                    self::CATEGORY_MEMOS,
+                ],
+            ],
+            'reports' => [
+                'name' => 'Reports',
+                'description' => 'Sales and inventory analytics',
+                'categories' => [
+                    self::CATEGORY_REPORTS,
+                ],
+            ],
+            'administration' => [
+                'name' => 'Administration',
+                'description' => 'Team, store settings, and integrations',
+                'categories' => [
+                    self::CATEGORY_TEAM,
+                    self::CATEGORY_STORE,
+                    self::CATEGORY_INTEGRATIONS,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Get display names for all permission categories.
+     */
+    public static function getCategoryDisplayNames(): array
+    {
+        return [
+            self::CATEGORY_PRODUCTS => 'Products',
+            self::CATEGORY_ORDERS => 'Orders',
+            self::CATEGORY_TRANSACTIONS => 'Buy Transactions',
+            self::CATEGORY_INVENTORY => 'Inventory',
+            self::CATEGORY_CUSTOMERS => 'Customers',
+            self::CATEGORY_INTEGRATIONS => 'Integrations',
+            self::CATEGORY_STORE => 'Store Settings',
+            self::CATEGORY_TEAM => 'Team',
+            self::CATEGORY_REPORTS => 'Reports',
+            self::CATEGORY_MEMOS => 'Consignment Memos',
+            self::CATEGORY_REPAIRS => 'Repairs',
+            self::CATEGORY_VENDORS => 'Vendors',
+            self::CATEGORY_BUCKETS => 'Buckets',
+            self::CATEGORY_LAYAWAYS => 'Layaways',
+        ];
+    }
+
+    /**
      * Get role presets for common roles.
      */
     public static function getRolePresets(): array

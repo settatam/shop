@@ -9,6 +9,7 @@ import {
     ShieldCheckIcon,
     ChevronDownIcon,
     ChevronRightIcon,
+    CheckIcon,
 } from '@heroicons/vue/24/outline';
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue';
 
@@ -45,11 +46,18 @@ interface Preset {
     permissions: string[];
 }
 
+interface PermissionGroup {
+    name: string;
+    description: string;
+    categories: string[];
+}
+
 interface Props {
     roles: Role[];
     permissionsGrouped: Record<string, Permission[]>;
     categories: Record<string, string>;
     presets: Record<string, Preset>;
+    permissionGroups: Record<string, PermissionGroup>;
 }
 
 const props = defineProps<Props>();
@@ -179,6 +187,45 @@ function isCategoryPartiallySelected(category: string): boolean {
     const categoryPermissions = props.permissionsGrouped[category]?.map(p => p.slug) || [];
     const selectedCount = categoryPermissions.filter(p => formData.value.permissions.includes(p)).length;
     return selectedCount > 0 && selectedCount < categoryPermissions.length;
+}
+
+function getGroupPermissions(groupKey: string): string[] {
+    const group = props.permissionGroups[groupKey];
+    if (!group) return [];
+
+    const permissions: string[] = [];
+    for (const category of group.categories) {
+        const categoryPermissions = props.permissionsGrouped[category]?.map(p => p.slug) || [];
+        permissions.push(...categoryPermissions);
+    }
+    return permissions;
+}
+
+function isGroupFullySelected(groupKey: string): boolean {
+    const groupPermissions = getGroupPermissions(groupKey);
+    return groupPermissions.length > 0 && groupPermissions.every(p => formData.value.permissions.includes(p));
+}
+
+function isGroupPartiallySelected(groupKey: string): boolean {
+    const groupPermissions = getGroupPermissions(groupKey);
+    const selectedCount = groupPermissions.filter(p => formData.value.permissions.includes(p)).length;
+    return selectedCount > 0 && selectedCount < groupPermissions.length;
+}
+
+function toggleGroup(groupKey: string) {
+    const groupPermissions = getGroupPermissions(groupKey);
+    const allSelected = isGroupFullySelected(groupKey);
+
+    if (allSelected) {
+        // Remove all permissions in this group
+        formData.value.permissions = formData.value.permissions.filter(
+            p => !groupPermissions.includes(p)
+        );
+    } else {
+        // Add all permissions in this group
+        const newPermissions = new Set([...formData.value.permissions, ...groupPermissions]);
+        formData.value.permissions = Array.from(newPermissions);
+    }
 }
 
 function getCsrfToken(): string {
@@ -501,6 +548,31 @@ const hasWildcard = computed(() => formData.value.permissions.includes('*'));
                                         </div>
                                     </div>
 
+                                    <!-- Permission Groups -->
+                                    <div>
+                                        <Label>Quick select by group</Label>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            <button
+                                                v-for="(group, key) in permissionGroups"
+                                                :key="key"
+                                                type="button"
+                                                @click="toggleGroup(key)"
+                                                :class="[
+                                                    isGroupFullySelected(key)
+                                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                                        : isGroupPartiallySelected(key)
+                                                            ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20',
+                                                    'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors'
+                                                ]"
+                                                :title="group.description"
+                                            >
+                                                {{ group.name }}
+                                                <CheckIcon v-if="isGroupFullySelected(key)" class="ml-1.5 h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <!-- Permissions -->
                                     <div>
                                         <Label>Permissions</Label>
@@ -633,6 +705,31 @@ const hasWildcard = computed(() => formData.value.permissions.includes('*'));
                                             type="text"
                                             class="mt-1"
                                         />
+                                    </div>
+
+                                    <!-- Permission Groups -->
+                                    <div>
+                                        <Label>Quick select by group</Label>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            <button
+                                                v-for="(group, key) in permissionGroups"
+                                                :key="key"
+                                                type="button"
+                                                @click="toggleGroup(key)"
+                                                :class="[
+                                                    isGroupFullySelected(key)
+                                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                                        : isGroupPartiallySelected(key)
+                                                            ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-500/20 dark:text-indigo-400 dark:hover:bg-indigo-500/30'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20',
+                                                    'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors'
+                                                ]"
+                                                :title="group.description"
+                                            >
+                                                {{ group.name }}
+                                                <CheckIcon v-if="isGroupFullySelected(key)" class="ml-1.5 h-4 w-4" />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <!-- Permissions -->

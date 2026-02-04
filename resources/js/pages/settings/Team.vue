@@ -37,6 +37,7 @@ interface TeamMember {
     role: Role | null;
     is_owner: boolean;
     status: string;
+    can_be_assigned: boolean;
     created_at: string;
 }
 
@@ -284,6 +285,35 @@ function transferOwnership() {
         });
 }
 
+function toggleCanBeAssigned(member: TeamMember) {
+    fetch(`/api/v1/team/${member.id}`, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-XSRF-TOKEN': decodeURIComponent(
+                document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('XSRF-TOKEN='))
+                    ?.split('=')[1] || ''
+            ),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ can_be_assigned: !member.can_be_assigned }),
+    })
+        .then(async (response) => {
+            if (!response.ok) {
+                const data = await response.json();
+                alert(data.message || 'Failed to update setting');
+                return;
+            }
+            router.reload({ only: ['members'] });
+        })
+        .catch(() => {
+            alert('An error occurred. Please try again.');
+        });
+}
+
 function acceptInvitation() {
     if (!selectedMember.value || isAccepting.value) return;
 
@@ -403,6 +433,29 @@ function getStatusBadgeClass(status: string): string {
                                 >
                                     {{ member.status }}
                                 </span>
+                            </div>
+
+                            <!-- Assignable toggle -->
+                            <div v-if="!member.is_owner" class="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    @click="toggleCanBeAssigned(member)"
+                                    :class="[
+                                        member.can_be_assigned ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700',
+                                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2',
+                                    ]"
+                                    role="switch"
+                                    :aria-checked="member.can_be_assigned"
+                                    :title="member.can_be_assigned ? 'Assignable to transactions' : 'Not assignable to transactions'"
+                                >
+                                    <span
+                                        :class="[
+                                            member.can_be_assigned ? 'translate-x-4' : 'translate-x-0',
+                                            'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                                        ]"
+                                    />
+                                </button>
+                                <span class="hidden lg:block text-xs text-gray-500 dark:text-gray-400">Assignable</span>
                             </div>
 
                             <!-- Actions menu -->

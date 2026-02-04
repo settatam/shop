@@ -46,6 +46,7 @@ class TeamController extends Controller
                 ] : null,
                 'is_owner' => $member->is_owner,
                 'status' => $member->status,
+                'can_be_assigned' => $member->can_be_assigned,
                 'created_at' => $member->created_at->toDateTimeString(),
             ]);
 

@@ -37,9 +37,15 @@ class VendorController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        $sortField = $request->input('sort', 'name');
+        $sortField = $request->input('sort', 'company_name');
         $sortDirection = $request->input('direction', 'asc');
-        $query->orderBy($sortField, $sortDirection);
+
+        // Handle sorting - company_name might be null, so use COALESCE with name
+        if ($sortField === 'company_name') {
+            $query->orderByRaw("COALESCE(company_name, name) {$sortDirection}");
+        } else {
+            $query->orderBy($sortField, $sortDirection);
+        }
 
         $vendors = $query->paginate($request->input('per_page', 15))
             ->through(fn ($v) => [
@@ -71,6 +77,8 @@ class VendorController extends Controller
                 'search' => $request->input('search', ''),
                 'is_active' => $request->input('is_active'),
                 'per_page' => $request->input('per_page', 15),
+                'sort' => $sortField,
+                'direction' => $sortDirection,
             ],
             'paymentTerms' => Vendor::PAYMENT_TERMS,
         ]);

@@ -60,6 +60,8 @@ interface PaginatedCustomers {
 interface Filters {
     search: string;
     lead_source_id: string;
+    from_date: string;
+    to_date: string;
 }
 
 interface Props {
@@ -77,6 +79,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 // Local filter state
 const searchQuery = ref(props.filters.search || '');
 const selectedLeadSource = ref(props.filters.lead_source_id || '');
+const fromDate = ref(props.filters.from_date || '');
+const toDate = ref(props.filters.to_date || '');
 
 // Debounced search
 const debouncedSearch = useDebounceFn(() => {
@@ -95,6 +99,8 @@ const applyFilters = () => {
     router.get('/customers', {
         search: searchQuery.value || undefined,
         lead_source_id: selectedLeadSource.value || undefined,
+        from_date: fromDate.value || undefined,
+        to_date: toDate.value || undefined,
     }, {
         preserveState: true,
         preserveScroll: true,
@@ -105,6 +111,8 @@ const applyFilters = () => {
 const clearFilters = () => {
     searchQuery.value = '';
     selectedLeadSource.value = '';
+    fromDate.value = '';
+    toDate.value = '';
     router.get('/customers', {}, {
         preserveState: true,
         preserveScroll: true,
@@ -188,9 +196,26 @@ const closeLightbox = () => {
                     </option>
                 </select>
 
+                <!-- Date Range Filter -->
+                <div class="flex items-center gap-2">
+                    <input
+                        v-model="fromDate"
+                        type="date"
+                        class="rounded-md border-0 bg-white py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @change="applyFilters"
+                    />
+                    <span class="text-gray-500 dark:text-gray-400">to</span>
+                    <input
+                        v-model="toDate"
+                        type="date"
+                        class="rounded-md border-0 bg-white py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @change="applyFilters"
+                    />
+                </div>
+
                 <!-- Clear Filters -->
                 <button
-                    v-if="searchQuery || selectedLeadSource"
+                    v-if="searchQuery || selectedLeadSource || fromDate || toDate"
                     type="button"
                     class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                     @click="clearFilters"

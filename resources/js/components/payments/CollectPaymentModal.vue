@@ -635,106 +635,12 @@ watch(() => props.show, (newVal) => {
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                                    <!-- Left column: Adjustments -->
-                                    <div v-if="showAdjustments" class="space-y-5">
-                                        <h4 class="font-medium text-gray-900 dark:text-white">Payment Adjustments</h4>
-
-                                        <!-- Discount -->
-                                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Discount</label>
-                                            <div class="mt-2 flex gap-2">
-                                                <div class="relative flex-1">
-                                                    <span v-if="adjustments.discount_unit === 'fixed'" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
-                                                    <input
-                                                        v-model.number="adjustments.discount_value"
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        :class="[
-                                                            'block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600',
-                                                            adjustments.discount_unit === 'fixed' ? 'pl-7 pr-2' : 'px-2'
-                                                        ]"
-                                                    />
-                                                    <span v-if="adjustments.discount_unit === 'percent'" class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span>
-                                                </div>
-                                                <select
-                                                    v-model="adjustments.discount_unit"
-                                                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="fixed">$</option>
-                                                    <option value="percent">%</option>
-                                                </select>
-                                            </div>
-                                            <input
-                                                v-model="adjustments.discount_reason"
-                                                type="text"
-                                                placeholder="Reason (optional)"
-                                                class="mt-2 block w-full rounded-md border-0 px-2 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-
-                                        <!-- Tax -->
-                                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                            <div class="flex items-center justify-between">
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tax</label>
-                                                <label class="flex items-center gap-2">
-                                                    <input
-                                                        v-model="adjustments.charge_taxes"
-                                                        type="checkbox"
-                                                        class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                                    />
-                                                    <span class="text-sm text-gray-600 dark:text-gray-400">Enable</span>
-                                                </label>
-                                            </div>
-                                            <div v-if="adjustments.charge_taxes" class="mt-2 flex gap-2">
-                                                <div class="relative flex-1">
-                                                    <span v-if="adjustments.tax_type === 'fixed'" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
-                                                    <input
-                                                        v-model.number="adjustments.tax_rate"
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        :class="[
-                                                            'block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600',
-                                                            adjustments.tax_type === 'fixed' ? 'pl-7 pr-2' : 'px-2'
-                                                        ]"
-                                                    />
-                                                    <span v-if="adjustments.tax_type === 'percent'" class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span>
-                                                </div>
-                                                <select
-                                                    v-model="adjustments.tax_type"
-                                                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="percent">%</option>
-                                                    <option value="fixed">$</option>
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <!-- Shipping -->
-                                        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Shipping Cost</label>
-                                            <div class="relative mt-2">
-                                                <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
-                                                <input
-                                                    v-model.number="adjustments.shipping_cost"
-                                                    type="number"
-                                                    min="0"
-                                                    step="0.01"
-                                                    class="block w-full rounded-md border-0 py-1.5 pl-7 pr-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <!-- Totals update automatically as you type -->
-                                    </div>
-
-                                    <!-- Right column: Summary & Payment (full width if no adjustments) -->
-                                    <div :class="['space-y-5', { 'lg:col-span-2': !showAdjustments }]">
-                                        <!-- Summary -->
-                                        <div class="rounded-lg bg-gray-50 p-4 dark:bg-gray-900">
-                                            <h4 class="mb-3 font-medium text-gray-900 dark:text-white">Payment Summary</h4>
+                                <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+                                    <!-- Left column: Summary (2 cols) -->
+                                    <div class="lg:col-span-2 space-y-4">
+                                        <!-- Payment Summary -->
+                                        <div class="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-900/30">
+                                            <h4 class="mb-3 font-medium text-gray-900 dark:text-white">Order Summary</h4>
                                             <dl class="space-y-2 text-sm">
                                                 <div class="flex justify-between">
                                                     <dt class="text-gray-500 dark:text-gray-400">Subtotal</dt>
@@ -759,7 +665,7 @@ watch(() => props.show, (newVal) => {
                                                     <dt class="text-gray-500 dark:text-gray-400">Shipping</dt>
                                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.shipping_cost) }}</dd>
                                                 </div>
-                                                <div class="flex justify-between border-t border-gray-200 pt-2 font-semibold dark:border-gray-700">
+                                                <div class="flex justify-between border-t border-indigo-200 pt-2 font-semibold dark:border-indigo-700">
                                                     <dt class="text-gray-900 dark:text-white">Grand Total</dt>
                                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(summary.grand_total) }}</dd>
                                                 </div>
@@ -767,13 +673,111 @@ watch(() => props.show, (newVal) => {
                                                     <dt>Amount Paid</dt>
                                                     <dd>-{{ formatCurrency(summary.total_paid) }}</dd>
                                                 </div>
-                                                <div class="flex justify-between border-t border-gray-200 pt-2 text-base font-bold dark:border-gray-700">
-                                                    <dt class="text-gray-900 dark:text-white">Balance Due</dt>
-                                                    <dd class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(summary.balance_due) }}</dd>
+                                                <div class="flex justify-between border-t border-indigo-200 pt-2 dark:border-indigo-700">
+                                                    <dt class="text-lg font-bold text-gray-900 dark:text-white">Balance Due</dt>
+                                                    <dd class="text-lg font-bold text-indigo-600 dark:text-indigo-400">{{ formatCurrency(summary.balance_due) }}</dd>
                                                 </div>
                                             </dl>
                                         </div>
 
+                                        <!-- Adjustments (collapsible, deemphasized) -->
+                                        <details v-if="showAdjustments" class="rounded-lg border border-gray-200 dark:border-gray-700">
+                                            <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                Adjustments (Discount, Tax, Shipping)
+                                            </summary>
+                                            <div class="space-y-4 border-t border-gray-200 p-4 dark:border-gray-700">
+                                                <!-- Discount -->
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Discount</label>
+                                                    <div class="mt-1 flex gap-2">
+                                                        <div class="relative flex-1">
+                                                            <span v-if="adjustments.discount_unit === 'fixed'" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-500 text-sm">$</span>
+                                                            <input
+                                                                v-model.number="adjustments.discount_value"
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                :class="[
+                                                                    'block w-full rounded-md border-0 py-1.5 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600',
+                                                                    adjustments.discount_unit === 'fixed' ? 'pl-6 pr-2' : 'px-2'
+                                                                ]"
+                                                            />
+                                                            <span v-if="adjustments.discount_unit === 'percent'" class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-sm">%</span>
+                                                        </div>
+                                                        <select
+                                                            v-model="adjustments.discount_unit"
+                                                            class="rounded-md border-0 bg-white py-1.5 pl-2 pr-6 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        >
+                                                            <option value="fixed">$</option>
+                                                            <option value="percent">%</option>
+                                                        </select>
+                                                    </div>
+                                                    <input
+                                                        v-model="adjustments.discount_reason"
+                                                        type="text"
+                                                        placeholder="Reason (optional)"
+                                                        class="mt-1 block w-full rounded-md border-0 px-2 py-1 text-xs text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    />
+                                                </div>
+
+                                                <!-- Tax -->
+                                                <div>
+                                                    <div class="flex items-center justify-between">
+                                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Tax</label>
+                                                        <label class="flex items-center gap-2">
+                                                            <input
+                                                                v-model="adjustments.charge_taxes"
+                                                                type="checkbox"
+                                                                class="size-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                                            />
+                                                            <span class="text-xs text-gray-600 dark:text-gray-400">Enable</span>
+                                                        </label>
+                                                    </div>
+                                                    <div v-if="adjustments.charge_taxes" class="mt-1 flex gap-2">
+                                                        <div class="relative flex-1">
+                                                            <span v-if="adjustments.tax_type === 'fixed'" class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-500 text-sm">$</span>
+                                                            <input
+                                                                v-model.number="adjustments.tax_rate"
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                :class="[
+                                                                    'block w-full rounded-md border-0 py-1.5 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600',
+                                                                    adjustments.tax_type === 'fixed' ? 'pl-6 pr-2' : 'px-2'
+                                                                ]"
+                                                            />
+                                                            <span v-if="adjustments.tax_type === 'percent'" class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-500 text-sm">%</span>
+                                                        </div>
+                                                        <select
+                                                            v-model="adjustments.tax_type"
+                                                            class="rounded-md border-0 bg-white py-1.5 pl-2 pr-6 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        >
+                                                            <option value="percent">%</option>
+                                                            <option value="fixed">$</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Shipping -->
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Shipping Cost</label>
+                                                    <div class="relative mt-1">
+                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-500 text-sm">$</span>
+                                                        <input
+                                                            v-model.number="adjustments.shipping_cost"
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            class="block w-full rounded-md border-0 py-1.5 pl-6 pr-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
+
+                                    <!-- Right column: Payment Methods (3 cols, emphasized) -->
+                                    <div class="lg:col-span-3 space-y-5">
                                         <!-- Payment Lines Header -->
                                         <div class="flex items-center justify-between">
                                             <h4 class="font-medium text-gray-900 dark:text-white">Payment Methods</h4>
@@ -911,12 +915,12 @@ watch(() => props.show, (newVal) => {
                                                 <!-- Reference Number (for card, check, etc.) -->
                                                 <div v-if="requiresReference(line.payment_method) && !isTerminalPayment(line.payment_method)" class="mt-3">
                                                     <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">
-                                                        {{ line.payment_method === 'card' ? 'Transaction ID / Last 4' : 'Reference' }}
+                                                        {{ line.payment_method === 'card' ? 'Transaction ID / Last 4' : line.payment_method === 'check' ? 'Check Number' : 'Reference' }}
                                                     </label>
                                                     <input
                                                         v-model="line.reference"
                                                         type="text"
-                                                        placeholder="Reference number"
+                                                        :placeholder="line.payment_method === 'check' ? 'Enter check number' : 'Reference number'"
                                                         class="mt-1 block w-full rounded-md border-0 px-2 py-1.5 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                     />
                                                 </div>

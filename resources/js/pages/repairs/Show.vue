@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
+import { useDebounceFn } from '@vueuse/core';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { NotesSection } from '@/components/notes';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -20,6 +21,9 @@ import {
     ArrowDownTrayIcon,
     WrenchScrewdriverIcon,
     DocumentTextIcon,
+    ArrowsRightLeftIcon,
+    MagnifyingGlassIcon,
+    PlusIcon,
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
@@ -221,7 +225,55 @@ const breadcrumbs: BreadcrumbItem[] = [
 const showPaymentModal = ref(false);
 const showCustomerEditModal = ref(false);
 const showVendorEditModal = ref(false);
+const showVendorSelectModal = ref(false);
 const isProcessing = ref(false);
+
+// Vendor selection
+const vendorQuery = ref('');
+const vendorResults = ref<Vendor[]>([]);
+const isSearchingVendors = ref(false);
+
+const debouncedSearchVendors = useDebounceFn(async (query: string) => {
+    if (!query || query.length < 2) {
+        vendorResults.value = [];
+        return;
+    }
+    isSearchingVendors.value = true;
+    try {
+        const response = await fetch(`/repairs/vendors/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        vendorResults.value = data.vendors || [];
+    } catch (error) {
+        console.error('Failed to search vendors:', error);
+    } finally {
+        isSearchingVendors.value = false;
+    }
+}, 300);
+
+watch(vendorQuery, (value) => {
+    debouncedSearchVendors(value);
+});
+
+function selectVendor(vendor: Vendor) {
+    router.patch(`/repairs/${props.repair.id}`, {
+        vendor_id: vendor.id,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showVendorSelectModal.value = false;
+            vendorQuery.value = '';
+            vendorResults.value = [];
+        },
+    });
+}
+
+function clearVendor() {
+    router.patch(`/repairs/${props.repair.id}`, {
+        vendor_id: null,
+    }, {
+        preserveScroll: true,
+    });
+}
 
 // Computed repair model for payment modal with converted tax_rate
 const repairForPayment = computed(() => ({
@@ -681,14 +733,24 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                         <div v-if="repair.vendor" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <div class="flex items-center justify-between mb-4">
                                 <h2 class="text-lg font-medium text-gray-900 dark:text-white">Repair Vendor</h2>
-                                <button
-                                    type="button"
-                                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                                    title="Edit vendor"
-                                    @click="showVendorEditModal = true"
-                                >
-                                    <PencilIcon class="size-4" />
-                                </button>
+                                <div class="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                                        title="Change vendor"
+                                        @click="showVendorSelectModal = true"
+                                    >
+                                        <ArrowsRightLeftIcon class="size-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                                        title="Edit vendor"
+                                        @click="showVendorEditModal = true"
+                                    >
+                                        <PencilIcon class="size-4" />
+                                    </button>
+                                </div>
                             </div>
                             <div class="flex items-center gap-3">
                                 <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
@@ -705,7 +767,17 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                             </div>
                         </div>
                         <div v-else class="rounded-lg border-2 border-dashed border-yellow-300 bg-yellow-50 p-6 dark:border-yellow-600 dark:bg-yellow-900/20">
-                            <h2 class="mb-2 text-lg font-medium text-yellow-800 dark:text-yellow-300">No Vendor Assigned</h2>
+                            <div class="flex items-center justify-between mb-2">
+                                <h2 class="text-lg font-medium text-yellow-800 dark:text-yellow-300">No Vendor Assigned</h2>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 text-sm font-medium text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
+                                    @click="showVendorSelectModal = true"
+                                >
+                                    <PlusIcon class="size-4" />
+                                    Assign Vendor
+                                </button>
+                            </div>
                             <p class="text-sm text-yellow-700 dark:text-yellow-400">
                                 A vendor must be assigned before this repair can be sent out.
                             </p>
@@ -828,5 +900,85 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
             @close="showVendorEditModal = false"
             @saved="showVendorEditModal = false"
         />
+
+        <!-- Vendor Select Modal -->
+        <Teleport to="body">
+            <div v-if="showVendorSelectModal" class="relative z-50">
+                <div class="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75" @click="showVendorSelectModal = false" />
+                <div class="fixed inset-0 z-10 overflow-y-auto">
+                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                        <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 dark:bg-gray-800">
+                            <div class="mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                    {{ repair.vendor ? 'Change Vendor' : 'Assign Vendor' }}
+                                </h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Search for a vendor to assign to this repair.
+                                </p>
+                            </div>
+
+                            <!-- Search Input -->
+                            <div class="relative">
+                                <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
+                                <input
+                                    v-model="vendorQuery"
+                                    type="text"
+                                    placeholder="Search vendors by name, company, or email..."
+                                    class="block w-full rounded-md border-0 py-2 pl-10 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                />
+                            </div>
+
+                            <!-- Search Results -->
+                            <div class="mt-4 max-h-64 overflow-y-auto">
+                                <div v-if="isSearchingVendors" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    Searching...
+                                </div>
+                                <div v-else-if="vendorQuery.length >= 2 && vendorResults.length === 0" class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    No vendors found matching "{{ vendorQuery }}"
+                                </div>
+                                <div v-else-if="vendorResults.length > 0" class="space-y-2">
+                                    <button
+                                        v-for="vendor in vendorResults"
+                                        :key="vendor.id"
+                                        type="button"
+                                        class="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        @click="selectVendor(vendor)"
+                                    >
+                                        <div class="flex size-10 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+                                            <WrenchScrewdriverIcon class="size-5 text-indigo-600 dark:text-indigo-400" />
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="font-medium text-gray-900 dark:text-white">
+                                                {{ vendor.display_name || vendor.name }}
+                                            </p>
+                                            <p v-if="vendor.company_name" class="text-sm text-gray-500 dark:text-gray-400">
+                                                {{ vendor.company_name }}
+                                            </p>
+                                            <p v-if="vendor.email" class="text-xs text-gray-400 dark:text-gray-500">
+                                                {{ vendor.email }}
+                                            </p>
+                                        </div>
+                                    </button>
+                                </div>
+                                <div v-else class="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    Start typing to search for vendors
+                                </div>
+                            </div>
+
+                            <!-- Footer -->
+                            <div class="mt-5 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                    @click="showVendorSelectModal = false; vendorQuery = ''; vendorResults = []"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

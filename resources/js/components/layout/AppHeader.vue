@@ -4,8 +4,9 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { Bars3Icon, BellIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
 import { ChevronDownIcon } from '@heroicons/vue/20/solid';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
-import type { BreadcrumbItemType, User } from '@/types';
+import type { BreadcrumbItemType, User, Store } from '@/types';
 import { useInitials } from '@/composables/useInitials';
+import { BuildingStorefrontIcon } from '@heroicons/vue/24/outline';
 
 interface Props {
     breadcrumbs?: BreadcrumbItemType[];
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 
 const page = usePage();
 const user = page.props.auth?.user as User | undefined;
+const currentStore = page.props.currentStore as Store | undefined;
 const { getInitials } = useInitials();
 
 const userNavigation = [
@@ -45,6 +47,17 @@ const userNavigation = [
 
             <!-- Separator -->
             <div class="h-6 w-px bg-gray-200 lg:hidden dark:bg-gray-700" aria-hidden="true" />
+
+            <!-- Current Store Name -->
+            <div v-if="currentStore" class="flex items-center gap-x-2">
+                <BuildingStorefrontIcon class="size-5 text-gray-400" />
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ currentStore.name }}
+                </span>
+            </div>
+
+            <!-- Separator -->
+            <div v-if="currentStore" class="hidden sm:block h-6 w-px bg-gray-200 dark:bg-gray-700" aria-hidden="true" />
 
             <div class="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
                 <!-- Search -->

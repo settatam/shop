@@ -166,17 +166,17 @@ class StoreUserController extends Controller
 
         $validated = $request->validate([
             'role_id' => [
+                'sometimes',
                 'required',
                 'exists:roles,id',
                 Rule::exists('roles', 'id')->where('store_id', $store->id),
             ],
+            'can_be_assigned' => ['sometimes', 'boolean'],
         ]);
 
         $oldRole = $storeUser->role;
 
-        $storeUser->update([
-            'role_id' => $validated['role_id'],
-        ]);
+        $storeUser->update($validated);
 
         $storeUser->load(['user:id,name,email', 'role:id,name,slug']);
 

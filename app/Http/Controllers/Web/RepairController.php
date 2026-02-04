@@ -89,14 +89,17 @@ class RepairController extends Controller
         }
 
         // Get store users for the employee dropdown
+        // Show only staff who are marked as assignable
         $storeUsers = $store->storeUsers()
             ->with(['user', 'role'])
+            ->whereNotNull('user_id')
+            ->where('can_be_assigned', true)
             ->get()
-            ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('repairs.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
-                'name' => $storeUser->user?->name ?? $storeUser->name ?? 'Unknown',
+                'name' => $storeUser->user?->name ?? $storeUser->full_name ?? 'Unknown',
             ])
+            ->sortBy('name')
             ->values();
 
         // Get the current user's store user ID
@@ -163,6 +166,7 @@ class RepairController extends Controller
             'tax_rate' => 'nullable|numeric|min:0|max:1',
             'shipping_cost' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
+            'vendor_id' => 'nullable|exists:vendors,id',
         ]);
 
         $repair->update($validated);

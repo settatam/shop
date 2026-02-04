@@ -66,20 +66,39 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::get('dashboard/data', [\App\Http\Controllers\Web\DashboardController::class, 'getData'])->name('dashboard.data');
 
     // Product routes - static routes must come before resource routes
-    Route::get('products/lookup-barcode', [ProductController::class, 'lookupBarcode'])->name('products.lookup-barcode');
-    Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])->name('products.bulk-action');
-    Route::post('products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
-    Route::post('products/generate-sku', [ProductController::class, 'generateSku'])->name('products.generate-sku');
-    Route::post('products/preview-category-sku', [ProductController::class, 'previewCategorySku'])->name('products.preview-category-sku');
-    Route::resource('products', ProductController::class);
-    Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');
-    Route::delete('products/{product}/images/{image}', [ProductController::class, 'deleteImage'])->name('products.delete-image');
-    Route::post('products/{product}/images/{image}/primary', [ProductController::class, 'setPrimaryImage'])->name('products.set-primary-image');
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('products/lookup-barcode', [ProductController::class, 'lookupBarcode'])->name('products.lookup-barcode');
+        Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
+        Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');
+    });
+    Route::middleware('permission:products.create')->group(function () {
+        Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
+        Route::post('products', [ProductController::class, 'store'])->name('products.store');
+        Route::post('products/generate-sku', [ProductController::class, 'generateSku'])->name('products.generate-sku');
+        Route::post('products/preview-category-sku', [ProductController::class, 'previewCategorySku'])->name('products.preview-category-sku');
+    });
+    Route::middleware('permission:products.update')->group(function () {
+        Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+        Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::patch('products/{product}', [ProductController::class, 'update']);
+        Route::post('products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
+    });
+    Route::middleware('permission:products.delete')->group(function () {
+        Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+        Route::post('products/bulk-action', [ProductController::class, 'bulkAction'])->name('products.bulk-action');
+    });
+    Route::middleware('permission:products.manage_images')->group(function () {
+        Route::delete('products/{product}/images/{image}', [ProductController::class, 'deleteImage'])->name('products.delete-image');
+        Route::post('products/{product}/images/{image}/primary', [ProductController::class, 'setPrimaryImage'])->name('products.set-primary-image');
+    });
 
     // Custom Product routes (for stores with has_custom_product_module enabled)
-    Route::get('products-custom', [CustomProductController::class, 'index'])->name('products-custom.index');
-    Route::get('products-custom/{product}', [CustomProductController::class, 'show'])->name('products-custom.show');
-    Route::get('products-custom/{product}/edit', [CustomProductController::class, 'edit'])->name('products-custom.edit');
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('products-custom', [CustomProductController::class, 'index'])->name('products-custom.index');
+        Route::get('products-custom/{product}', [CustomProductController::class, 'show'])->name('products-custom.show');
+        Route::get('products-custom/{product}/edit', [CustomProductController::class, 'edit'])->name('products-custom.edit');
+    });
 
     // GIA Card Scanner
     Route::prefix('gia-scanner')->name('gia-scanner.')->group(function () {
@@ -96,107 +115,156 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('/lookup', [GiaController::class, 'lookup'])->name('lookup');
     });
 
-    Route::resource('templates', TemplateController::class);
-    Route::post('templates/{template}/duplicate', [TemplateController::class, 'duplicate'])->name('templates.duplicate');
-    Route::get('templates-generator', [TemplateGeneratorController::class, 'index'])->name('templates.generator');
-    Route::post('templates-generator/preview', [TemplateGeneratorController::class, 'preview'])->name('templates.generator.preview');
-    Route::post('templates-generator/preview-ebay', [TemplateGeneratorController::class, 'previewFromEbayCategory'])->name('templates.generator.preview-ebay');
-    Route::post('templates-generator', [TemplateGeneratorController::class, 'store'])->name('templates.generator.store');
+    // Templates
+    Route::middleware('permission:templates.view')->group(function () {
+        Route::get('templates', [TemplateController::class, 'index'])->name('templates.index');
+        Route::get('templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
+        Route::get('templates-generator', [TemplateGeneratorController::class, 'index'])->name('templates.generator');
+        Route::post('templates-generator/preview', [TemplateGeneratorController::class, 'preview'])->name('templates.generator.preview');
+        Route::post('templates-generator/preview-ebay', [TemplateGeneratorController::class, 'previewFromEbayCategory'])->name('templates.generator.preview-ebay');
+    });
+    Route::middleware('permission:templates.create')->group(function () {
+        Route::get('templates/create', [TemplateController::class, 'create'])->name('templates.create');
+        Route::post('templates', [TemplateController::class, 'store'])->name('templates.store');
+        Route::post('templates/{template}/duplicate', [TemplateController::class, 'duplicate'])->name('templates.duplicate');
+        Route::post('templates-generator', [TemplateGeneratorController::class, 'store'])->name('templates.generator.store');
+    });
+    Route::middleware('permission:templates.update')->group(function () {
+        Route::get('templates/{template}/edit', [TemplateController::class, 'edit'])->name('templates.edit');
+        Route::put('templates/{template}', [TemplateController::class, 'update'])->name('templates.update');
+        Route::patch('templates/{template}', [TemplateController::class, 'update']);
+    });
+    Route::delete('templates/{template}', [TemplateController::class, 'destroy'])->name('templates.destroy')->middleware('permission:templates.delete');
 
-    Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
-    Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
-    Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
-    Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
-    Route::post('categories/reorder', [CategoryController::class, 'reorder'])->name('categories.reorder');
-    Route::get('categories/{category}/template-fields', [CategoryController::class, 'templateFields'])->name('categories.template-fields');
-
-    // Category Settings (SKU format, templates)
-    Route::get('categories/{category}/settings', [CategoryController::class, 'settings'])->name('categories.settings');
-    Route::put('categories/{category}/settings', [CategoryController::class, 'updateSettings'])->name('categories.settings.update');
-    Route::post('categories/{category}/preview-sku', [CategoryController::class, 'previewSku'])->name('categories.preview-sku');
-    Route::post('categories/{category}/reset-sequence', [CategoryController::class, 'resetSequence'])->name('categories.reset-sequence');
+    // Categories
+    Route::middleware('permission:categories.view')->group(function () {
+        Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::get('categories/{category}/template-fields', [CategoryController::class, 'templateFields'])->name('categories.template-fields');
+        Route::get('categories/{category}/settings', [CategoryController::class, 'settings'])->name('categories.settings');
+    });
+    Route::middleware('permission:categories.create')->group(function () {
+        Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
+    });
+    Route::middleware('permission:categories.update')->group(function () {
+        Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::post('categories/reorder', [CategoryController::class, 'reorder'])->name('categories.reorder');
+        Route::put('categories/{category}/settings', [CategoryController::class, 'updateSettings'])->name('categories.settings.update');
+        Route::post('categories/{category}/preview-sku', [CategoryController::class, 'previewSku'])->name('categories.preview-sku');
+        Route::post('categories/{category}/reset-sequence', [CategoryController::class, 'resetSequence'])->name('categories.reset-sequence');
+    });
+    Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy')->middleware('permission:categories.delete');
 
     // Product Types (leaf categories with additional settings)
-    Route::get('product-types', [ProductTypeController::class, 'index'])->name('product-types.index');
-    Route::get('product-types/{category}/settings', [ProductTypeController::class, 'settings'])->name('product-types.settings');
-    Route::put('product-types/{category}/settings', [ProductTypeController::class, 'updateSettings'])->name('product-types.update-settings');
-    Route::get('product-types/{category}/attributes', [ProductTypeController::class, 'getAvailableAttributes'])->name('product-types.attributes');
+    Route::middleware('permission:categories.view')->group(function () {
+        Route::get('product-types', [ProductTypeController::class, 'index'])->name('product-types.index');
+        Route::get('product-types/{category}/settings', [ProductTypeController::class, 'settings'])->name('product-types.settings');
+        Route::get('product-types/{category}/attributes', [ProductTypeController::class, 'getAvailableAttributes'])->name('product-types.attributes');
+    });
+    Route::put('product-types/{category}/settings', [ProductTypeController::class, 'updateSettings'])->name('product-types.update-settings')->middleware('permission:categories.update');
 
     // Orders (Sales)
-    Route::get('orders', [OrderController::class, 'index'])->name('web.orders.index');
-    Route::get('orders/create', [OrderController::class, 'createWizard'])->name('web.orders.create-wizard');
-    Route::post('orders', [OrderController::class, 'storeFromWizard'])->name('web.orders.store');
-    Route::get('orders/search-products', [OrderController::class, 'searchProducts'])->name('web.orders.search-products');
-    Route::get('orders/search-customers', [OrderController::class, 'searchCustomers'])->name('web.orders.search-customers');
-    Route::get('orders/search-bucket-items', [OrderController::class, 'searchBucketItems'])->name('web.orders.search-bucket-items');
-    Route::get('orders/lookup-barcode', [OrderController::class, 'lookupBarcode'])->name('web.orders.lookup-barcode');
-    Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
-    Route::get('orders/{order}', [OrderController::class, 'show'])->name('web.orders.show');
-    Route::get('orders/{order}/print-invoice', [OrderController::class, 'printInvoice'])->name('web.orders.print-invoice');
-    Route::patch('orders/{order}', [OrderController::class, 'update'])->name('web.orders.update');
-    Route::delete('orders/{order}', [OrderController::class, 'destroy'])->name('web.orders.destroy');
-    Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('web.orders.confirm');
-    Route::post('orders/{order}/ship', [OrderController::class, 'ship'])->name('web.orders.ship');
-    Route::post('orders/{order}/create-shipping-label', [OrderController::class, 'createShippingLabel'])->name('web.orders.create-shipping-label');
-    Route::post('orders/{order}/push-to-shipstation', [OrderController::class, 'pushToShipStation'])->name('web.orders.push-to-shipstation');
-    Route::post('orders/{order}/deliver', [OrderController::class, 'deliver'])->name('web.orders.deliver');
-    Route::post('orders/{order}/complete', [OrderController::class, 'complete'])->name('web.orders.complete');
-    Route::post('orders/{order}/receive-payment', [OrderController::class, 'receivePayment'])->name('web.orders.receive-payment');
-    Route::post('orders/{order}/cancel', [OrderController::class, 'cancel'])->name('web.orders.cancel');
-    Route::patch('orders/{order}/items/{item}', [OrderController::class, 'updateItem'])->name('web.orders.update-item');
-    Route::delete('orders/{order}/items/{item}', [OrderController::class, 'removeItem'])->name('web.orders.remove-item');
-    Route::post('orders/bulk-action', [OrderController::class, 'bulkAction'])->name('web.orders.bulk-action');
+    Route::middleware('permission:orders.view')->group(function () {
+        Route::get('orders', [OrderController::class, 'index'])->name('web.orders.index');
+        Route::get('orders/search-products', [OrderController::class, 'searchProducts'])->name('web.orders.search-products');
+        Route::get('orders/search-customers', [OrderController::class, 'searchCustomers'])->name('web.orders.search-customers');
+        Route::get('orders/search-bucket-items', [OrderController::class, 'searchBucketItems'])->name('web.orders.search-bucket-items');
+        Route::get('orders/lookup-barcode', [OrderController::class, 'lookupBarcode'])->name('web.orders.lookup-barcode');
+        Route::get('orders/{order}', [OrderController::class, 'show'])->name('web.orders.show');
+        Route::get('orders/{order}/print-invoice', [OrderController::class, 'printInvoice'])->name('web.orders.print-invoice');
+    });
+    Route::middleware('permission:orders.create')->group(function () {
+        Route::get('orders/create', [OrderController::class, 'createWizard'])->name('web.orders.create-wizard');
+        Route::post('orders', [OrderController::class, 'storeFromWizard'])->name('web.orders.store');
+        Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
+    });
+    Route::middleware('permission:orders.update')->group(function () {
+        Route::patch('orders/{order}', [OrderController::class, 'update'])->name('web.orders.update');
+        Route::patch('orders/{order}/items/{item}', [OrderController::class, 'updateItem'])->name('web.orders.update-item');
+        Route::delete('orders/{order}/items/{item}', [OrderController::class, 'removeItem'])->name('web.orders.remove-item');
+        Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('web.orders.confirm');
+        Route::post('orders/{order}/receive-payment', [OrderController::class, 'receivePayment'])->name('web.orders.receive-payment');
+        Route::post('orders/{order}/complete', [OrderController::class, 'complete'])->name('web.orders.complete');
+    });
+    Route::middleware('permission:orders.fulfill')->group(function () {
+        Route::post('orders/{order}/ship', [OrderController::class, 'ship'])->name('web.orders.ship');
+        Route::post('orders/{order}/deliver', [OrderController::class, 'deliver'])->name('web.orders.deliver');
+    });
+    Route::middleware('permission:orders.manage_shipping')->group(function () {
+        Route::post('orders/{order}/create-shipping-label', [OrderController::class, 'createShippingLabel'])->name('web.orders.create-shipping-label');
+        Route::post('orders/{order}/push-to-shipstation', [OrderController::class, 'pushToShipStation'])->name('web.orders.push-to-shipstation');
+    });
+    Route::post('orders/{order}/cancel', [OrderController::class, 'cancel'])->name('web.orders.cancel')->middleware('permission:orders.cancel');
+    Route::delete('orders/{order}', [OrderController::class, 'destroy'])->name('web.orders.destroy')->middleware('permission:orders.delete');
+    Route::post('orders/bulk-action', [OrderController::class, 'bulkAction'])->name('web.orders.bulk-action')->middleware('permission:orders.update');
 
     // Shipments
-    Route::get('shipments', [\App\Http\Controllers\Web\ShipmentController::class, 'index'])->name('web.shipments.index');
-    Route::get('shipments/{shippingLabel}/track', [\App\Http\Controllers\Web\ShipmentController::class, 'track'])->name('web.shipments.track');
-    Route::get('shipments/{shippingLabel}/download', [\App\Http\Controllers\Web\ShipmentController::class, 'download'])->name('web.shipments.download');
-    Route::post('shipments/{shippingLabel}/void', [\App\Http\Controllers\Web\ShipmentController::class, 'void'])->name('web.shipments.void');
-    Route::post('shipments/bulk-action', [\App\Http\Controllers\Web\ShipmentController::class, 'bulkAction'])->name('web.shipments.bulk-action');
+    Route::middleware('permission:orders.manage_shipping')->group(function () {
+        Route::get('shipments', [\App\Http\Controllers\Web\ShipmentController::class, 'index'])->name('web.shipments.index');
+        Route::get('shipments/{shippingLabel}/track', [\App\Http\Controllers\Web\ShipmentController::class, 'track'])->name('web.shipments.track');
+        Route::get('shipments/{shippingLabel}/download', [\App\Http\Controllers\Web\ShipmentController::class, 'download'])->name('web.shipments.download');
+        Route::post('shipments/{shippingLabel}/void', [\App\Http\Controllers\Web\ShipmentController::class, 'void'])->name('web.shipments.void');
+        Route::post('shipments/bulk-action', [\App\Http\Controllers\Web\ShipmentController::class, 'bulkAction'])->name('web.shipments.bulk-action');
+    });
 
     // Returns
-    Route::get('returns', [\App\Http\Controllers\Web\ReturnController::class, 'index'])->name('web.returns.index');
-    Route::get('returns/create', [\App\Http\Controllers\Web\ReturnController::class, 'create'])->name('web.returns.create');
-    Route::post('returns', [\App\Http\Controllers\Web\ReturnController::class, 'store'])->name('web.returns.store');
-    Route::get('returns/search-orders', [\App\Http\Controllers\Web\ReturnController::class, 'searchOrders'])->name('web.returns.search-orders');
-    Route::get('returns/{return}', [\App\Http\Controllers\Web\ReturnController::class, 'show'])->name('web.returns.show');
-    Route::post('returns/{return}/approve', [\App\Http\Controllers\Web\ReturnController::class, 'approve'])->name('web.returns.approve');
-    Route::post('returns/{return}/reject', [\App\Http\Controllers\Web\ReturnController::class, 'reject'])->name('web.returns.reject');
-    Route::post('returns/{return}/process', [\App\Http\Controllers\Web\ReturnController::class, 'process'])->name('web.returns.process');
-    Route::post('returns/{return}/receive', [\App\Http\Controllers\Web\ReturnController::class, 'receive'])->name('web.returns.receive');
-    Route::post('returns/{return}/complete', [\App\Http\Controllers\Web\ReturnController::class, 'complete'])->name('web.returns.complete');
-    Route::post('returns/{return}/items/{item}/restock', [\App\Http\Controllers\Web\ReturnController::class, 'restockItem'])->name('web.returns.restock-item');
-    Route::post('returns/{return}/create-label', [\App\Http\Controllers\Web\ReturnController::class, 'createLabel'])->name('web.returns.create-label');
-    Route::post('returns/{return}/cancel', [\App\Http\Controllers\Web\ReturnController::class, 'cancel'])->name('web.returns.cancel');
-    Route::post('returns/bulk-action', [\App\Http\Controllers\Web\ReturnController::class, 'bulkAction'])->name('web.returns.bulk-action');
+    Route::middleware('permission:orders.refund')->group(function () {
+        Route::get('returns', [\App\Http\Controllers\Web\ReturnController::class, 'index'])->name('web.returns.index');
+        Route::get('returns/create', [\App\Http\Controllers\Web\ReturnController::class, 'create'])->name('web.returns.create');
+        Route::post('returns', [\App\Http\Controllers\Web\ReturnController::class, 'store'])->name('web.returns.store');
+        Route::get('returns/search-orders', [\App\Http\Controllers\Web\ReturnController::class, 'searchOrders'])->name('web.returns.search-orders');
+        Route::get('returns/{return}', [\App\Http\Controllers\Web\ReturnController::class, 'show'])->name('web.returns.show');
+        Route::post('returns/{return}/approve', [\App\Http\Controllers\Web\ReturnController::class, 'approve'])->name('web.returns.approve');
+        Route::post('returns/{return}/reject', [\App\Http\Controllers\Web\ReturnController::class, 'reject'])->name('web.returns.reject');
+        Route::post('returns/{return}/process', [\App\Http\Controllers\Web\ReturnController::class, 'process'])->name('web.returns.process');
+        Route::post('returns/{return}/receive', [\App\Http\Controllers\Web\ReturnController::class, 'receive'])->name('web.returns.receive');
+        Route::post('returns/{return}/complete', [\App\Http\Controllers\Web\ReturnController::class, 'complete'])->name('web.returns.complete');
+        Route::post('returns/{return}/items/{item}/restock', [\App\Http\Controllers\Web\ReturnController::class, 'restockItem'])->name('web.returns.restock-item');
+        Route::post('returns/{return}/create-label', [\App\Http\Controllers\Web\ReturnController::class, 'createLabel'])->name('web.returns.create-label');
+        Route::post('returns/{return}/cancel', [\App\Http\Controllers\Web\ReturnController::class, 'cancel'])->name('web.returns.cancel');
+        Route::post('returns/bulk-action', [\App\Http\Controllers\Web\ReturnController::class, 'bulkAction'])->name('web.returns.bulk-action');
+    });
 
     // Transactions (Buys) - use 'web.' prefix to avoid conflict with API routes
-    // Buy Wizard routes (must be before resource routes to avoid conflicts)
-    Route::get('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'createWizard'])->name('web.transactions.create-wizard');
-    Route::post('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'storeFromWizard'])->name('web.transactions.store-wizard');
-
-    Route::resource('transactions', \App\Http\Controllers\Web\TransactionController::class)->names([
-        'index' => 'web.transactions.index',
-        'create' => 'web.transactions.create',
-        'store' => 'web.transactions.store',
-        'show' => 'web.transactions.show',
-        'edit' => 'web.transactions.edit',
-        'update' => 'web.transactions.update',
-        'destroy' => 'web.transactions.destroy',
-    ]);
-    Route::post('transactions/{transaction}/offer', [\App\Http\Controllers\Web\TransactionController::class, 'submitOffer'])->name('web.transactions.offer');
-    Route::post('transactions/{transaction}/accept', [\App\Http\Controllers\Web\TransactionController::class, 'acceptOffer'])->name('web.transactions.accept');
-    Route::post('transactions/{transaction}/decline', [\App\Http\Controllers\Web\TransactionController::class, 'declineOffer'])->name('web.transactions.decline');
-    Route::post('transactions/{transaction}/process-payment', [\App\Http\Controllers\Web\TransactionController::class, 'processPayment'])->name('web.transactions.process-payment');
-    Route::post('transactions/{transaction}/change-status', [\App\Http\Controllers\Web\TransactionController::class, 'changeStatus'])->name('web.transactions.change-status');
-    Route::get('transactions/{transaction}/print-barcode', [\App\Http\Controllers\Web\TransactionController::class, 'printBarcode'])->name('web.transactions.print-barcode');
-    Route::get('transactions/{transaction}/print-invoice', [\App\Http\Controllers\Web\TransactionController::class, 'printInvoice'])->name('web.transactions.print-invoice');
-    Route::post('transactions/bulk-action', [\App\Http\Controllers\Web\TransactionController::class, 'bulkAction'])->name('web.transactions.bulk-action');
-    Route::post('transactions/export', [\App\Http\Controllers\Web\TransactionController::class, 'export'])->name('web.transactions.export');
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'index'])->name('web.transactions.index');
+        Route::get('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'show'])->name('web.transactions.show');
+        Route::get('transactions/{transaction}/print-barcode', [\App\Http\Controllers\Web\TransactionController::class, 'printBarcode'])->name('web.transactions.print-barcode');
+        Route::get('transactions/{transaction}/print-invoice', [\App\Http\Controllers\Web\TransactionController::class, 'printInvoice'])->name('web.transactions.print-invoice');
+        Route::post('transactions/export', [\App\Http\Controllers\Web\TransactionController::class, 'export'])->name('web.transactions.export');
+    });
+    Route::middleware('permission:transactions.create')->group(function () {
+        Route::get('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'createWizard'])->name('web.transactions.create-wizard');
+        Route::post('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'storeFromWizard'])->name('web.transactions.store-wizard');
+        Route::get('transactions/create', [\App\Http\Controllers\Web\TransactionController::class, 'create'])->name('web.transactions.create');
+        Route::post('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'store'])->name('web.transactions.store');
+    });
+    Route::middleware('permission:transactions.update')->group(function () {
+        Route::get('transactions/{transaction}/edit', [\App\Http\Controllers\Web\TransactionController::class, 'edit'])->name('web.transactions.edit');
+        Route::put('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'update'])->name('web.transactions.update');
+        Route::patch('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'update']);
+        Route::post('transactions/{transaction}/change-status', [\App\Http\Controllers\Web\TransactionController::class, 'changeStatus'])->name('web.transactions.change-status');
+        Route::post('transactions/bulk-action', [\App\Http\Controllers\Web\TransactionController::class, 'bulkAction'])->name('web.transactions.bulk-action');
+    });
+    Route::middleware('permission:transactions.submit_offer')->group(function () {
+        Route::post('transactions/{transaction}/offer', [\App\Http\Controllers\Web\TransactionController::class, 'submitOffer'])->name('web.transactions.offer');
+    });
+    Route::middleware('permission:transactions.accept_offer')->group(function () {
+        Route::post('transactions/{transaction}/accept', [\App\Http\Controllers\Web\TransactionController::class, 'acceptOffer'])->name('web.transactions.accept');
+    });
+    Route::middleware('permission:transactions.decline_offer')->group(function () {
+        Route::post('transactions/{transaction}/decline', [\App\Http\Controllers\Web\TransactionController::class, 'declineOffer'])->name('web.transactions.decline');
+    });
+    Route::middleware('permission:transactions.process_payment')->group(function () {
+        Route::post('transactions/{transaction}/process-payment', [\App\Http\Controllers\Web\TransactionController::class, 'processPayment'])->name('web.transactions.process-payment');
+    });
+    Route::delete('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'destroy'])->name('web.transactions.destroy')->middleware('permission:transactions.delete');
 
     // Transaction Item Detail routes
-    Route::prefix('transactions/{transaction}/items/{item}')->name('web.transactions.items.')->group(function () {
+    Route::prefix('transactions/{transaction}/items/{item}')->name('web.transactions.items.')->middleware('permission:transactions.view')->group(function () {
         Route::get('/', [\App\Http\Controllers\Web\TransactionItemController::class, 'show'])->name('show');
+        Route::get('/similar', [\App\Http\Controllers\Web\TransactionItemController::class, 'similarItems'])->name('similar');
+    });
+    Route::prefix('transactions/{transaction}/items/{item}')->name('web.transactions.items.')->middleware('permission:transactions.update')->group(function () {
         Route::get('/edit', [\App\Http\Controllers\Web\TransactionItemController::class, 'edit'])->name('edit');
         Route::put('/', [\App\Http\Controllers\Web\TransactionItemController::class, 'update'])->name('update');
         Route::post('/images', [\App\Http\Controllers\Web\TransactionItemController::class, 'uploadImages'])->name('upload-images');
@@ -204,81 +272,98 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('/move-to-inventory', [\App\Http\Controllers\Web\TransactionItemController::class, 'moveToInventory'])->name('move-to-inventory');
         Route::post('/move-to-bucket', [\App\Http\Controllers\Web\TransactionItemController::class, 'moveToBucket'])->name('move-to-bucket');
         Route::post('/review', [\App\Http\Controllers\Web\TransactionItemController::class, 'review'])->name('review');
-        Route::get('/similar', [\App\Http\Controllers\Web\TransactionItemController::class, 'similarItems'])->name('similar');
         Route::post('/ai-research', [\App\Http\Controllers\Web\TransactionItemController::class, 'generateAiResearch'])->name('ai-research');
         Route::post('/chat', [\App\Http\Controllers\Web\TransactionItemController::class, 'chatStream'])->name('chat');
     });
 
     // Online transaction workflow routes
-    Route::post('transactions/{transaction}/confirm-kit-request', [\App\Http\Controllers\Web\TransactionController::class, 'confirmKitRequest'])->name('web.transactions.confirm-kit-request');
-    Route::post('transactions/{transaction}/reject-kit-request', [\App\Http\Controllers\Web\TransactionController::class, 'rejectKitRequest'])->name('web.transactions.reject-kit-request');
-    Route::post('transactions/{transaction}/hold-kit-request', [\App\Http\Controllers\Web\TransactionController::class, 'holdKitRequest'])->name('web.transactions.hold-kit-request');
-    Route::post('transactions/{transaction}/mark-kit-sent', [\App\Http\Controllers\Web\TransactionController::class, 'markKitSent'])->name('web.transactions.mark-kit-sent');
-    Route::post('transactions/{transaction}/mark-kit-delivered', [\App\Http\Controllers\Web\TransactionController::class, 'markKitDelivered'])->name('web.transactions.mark-kit-delivered');
-    Route::post('transactions/{transaction}/mark-items-received', [\App\Http\Controllers\Web\TransactionController::class, 'markItemsReceived'])->name('web.transactions.mark-items-received');
-    Route::post('transactions/{transaction}/mark-items-reviewed', [\App\Http\Controllers\Web\TransactionController::class, 'markItemsReviewed'])->name('web.transactions.mark-items-reviewed');
-    Route::post('transactions/{transaction}/request-return', [\App\Http\Controllers\Web\TransactionController::class, 'requestReturn'])->name('web.transactions.request-return');
-    Route::post('transactions/{transaction}/mark-return-shipped', [\App\Http\Controllers\Web\TransactionController::class, 'markReturnShipped'])->name('web.transactions.mark-return-shipped');
-    Route::post('transactions/{transaction}/mark-items-returned', [\App\Http\Controllers\Web\TransactionController::class, 'markItemsReturned'])->name('web.transactions.mark-items-returned');
-    Route::post('transactions/{transaction}/assign', [\App\Http\Controllers\Web\TransactionController::class, 'assignTransaction'])->name('web.transactions.assign');
+    Route::middleware('permission:transactions.status_change')->group(function () {
+        Route::post('transactions/{transaction}/confirm-kit-request', [\App\Http\Controllers\Web\TransactionController::class, 'confirmKitRequest'])->name('web.transactions.confirm-kit-request');
+        Route::post('transactions/{transaction}/reject-kit-request', [\App\Http\Controllers\Web\TransactionController::class, 'rejectKitRequest'])->name('web.transactions.reject-kit-request');
+        Route::post('transactions/{transaction}/hold-kit-request', [\App\Http\Controllers\Web\TransactionController::class, 'holdKitRequest'])->name('web.transactions.hold-kit-request');
+        Route::post('transactions/{transaction}/mark-kit-sent', [\App\Http\Controllers\Web\TransactionController::class, 'markKitSent'])->name('web.transactions.mark-kit-sent');
+        Route::post('transactions/{transaction}/mark-kit-delivered', [\App\Http\Controllers\Web\TransactionController::class, 'markKitDelivered'])->name('web.transactions.mark-kit-delivered');
+        Route::post('transactions/{transaction}/mark-items-received', [\App\Http\Controllers\Web\TransactionController::class, 'markItemsReceived'])->name('web.transactions.mark-items-received');
+        Route::post('transactions/{transaction}/mark-items-reviewed', [\App\Http\Controllers\Web\TransactionController::class, 'markItemsReviewed'])->name('web.transactions.mark-items-reviewed');
+        Route::post('transactions/{transaction}/request-return', [\App\Http\Controllers\Web\TransactionController::class, 'requestReturn'])->name('web.transactions.request-return');
+        Route::post('transactions/{transaction}/mark-return-shipped', [\App\Http\Controllers\Web\TransactionController::class, 'markReturnShipped'])->name('web.transactions.mark-return-shipped');
+        Route::post('transactions/{transaction}/mark-items-returned', [\App\Http\Controllers\Web\TransactionController::class, 'markItemsReturned'])->name('web.transactions.mark-items-returned');
+        Route::post('transactions/{transaction}/assign', [\App\Http\Controllers\Web\TransactionController::class, 'assignTransaction'])->name('web.transactions.assign');
+        Route::post('transactions/{transaction}/reject-kit', [\App\Http\Controllers\Web\TransactionController::class, 'rejectKit'])->name('web.transactions.reject-kit');
+        Route::post('transactions/{transaction}/initiate-return', [\App\Http\Controllers\Web\TransactionController::class, 'initiateReturn'])->name('web.transactions.initiate-return');
+        Route::post('transactions/{transaction}/reset-to-items-reviewed', [\App\Http\Controllers\Web\TransactionController::class, 'resetToItemsReviewed'])->name('web.transactions.reset-to-items-reviewed');
+        Route::post('transactions/{transaction}/reopen-offer', [\App\Http\Controllers\Web\TransactionController::class, 'reopenOffer'])->name('web.transactions.reopen-offer');
+        Route::post('transactions/{transaction}/cancel-return', [\App\Http\Controllers\Web\TransactionController::class, 'cancelReturn'])->name('web.transactions.cancel-return');
+        Route::post('transactions/{transaction}/undo-payment', [\App\Http\Controllers\Web\TransactionController::class, 'undoPayment'])->name('web.transactions.undo-payment');
+    });
 
-    // Shipping Labels
-    Route::post('transactions/{transaction}/create-outbound-label', [\App\Http\Controllers\Web\TransactionController::class, 'createOutboundLabel'])->name('web.transactions.create-outbound-label');
-    Route::get('transactions/{transaction}/print-outbound-label', [\App\Http\Controllers\Web\TransactionController::class, 'printOutboundLabel'])->name('web.transactions.print-outbound-label');
-    Route::get('transactions/{transaction}/outbound-label-zpl', [\App\Http\Controllers\Web\TransactionController::class, 'getOutboundLabelZpl'])->name('web.transactions.outbound-label-zpl');
-    Route::post('transactions/{transaction}/create-return-label', [\App\Http\Controllers\Web\TransactionController::class, 'createReturnLabel'])->name('web.transactions.create-return-label');
-    Route::get('transactions/{transaction}/print-return-label', [\App\Http\Controllers\Web\TransactionController::class, 'printReturnLabel'])->name('web.transactions.print-return-label');
-    Route::get('transactions/{transaction}/return-label-zpl', [\App\Http\Controllers\Web\TransactionController::class, 'getReturnLabelZpl'])->name('web.transactions.return-label-zpl');
-    Route::put('transactions/{transaction}/shipping-address', [\App\Http\Controllers\Web\TransactionController::class, 'updateShippingAddress'])->name('web.transactions.update-shipping-address');
-
-    // Kit rejection and return
-    Route::post('transactions/{transaction}/reject-kit', [\App\Http\Controllers\Web\TransactionController::class, 'rejectKit'])->name('web.transactions.reject-kit');
-    Route::post('transactions/{transaction}/initiate-return', [\App\Http\Controllers\Web\TransactionController::class, 'initiateReturn'])->name('web.transactions.initiate-return');
-
-    // Transaction rollback/reset actions
-    Route::post('transactions/{transaction}/reset-to-items-reviewed', [\App\Http\Controllers\Web\TransactionController::class, 'resetToItemsReviewed'])->name('web.transactions.reset-to-items-reviewed');
-    Route::post('transactions/{transaction}/reopen-offer', [\App\Http\Controllers\Web\TransactionController::class, 'reopenOffer'])->name('web.transactions.reopen-offer');
-    Route::post('transactions/{transaction}/cancel-return', [\App\Http\Controllers\Web\TransactionController::class, 'cancelReturn'])->name('web.transactions.cancel-return');
-    Route::post('transactions/{transaction}/undo-payment', [\App\Http\Controllers\Web\TransactionController::class, 'undoPayment'])->name('web.transactions.undo-payment');
+    // Shipping Labels for transactions
+    Route::middleware('permission:transactions.update')->group(function () {
+        Route::post('transactions/{transaction}/create-outbound-label', [\App\Http\Controllers\Web\TransactionController::class, 'createOutboundLabel'])->name('web.transactions.create-outbound-label');
+        Route::get('transactions/{transaction}/print-outbound-label', [\App\Http\Controllers\Web\TransactionController::class, 'printOutboundLabel'])->name('web.transactions.print-outbound-label');
+        Route::get('transactions/{transaction}/outbound-label-zpl', [\App\Http\Controllers\Web\TransactionController::class, 'getOutboundLabelZpl'])->name('web.transactions.outbound-label-zpl');
+        Route::post('transactions/{transaction}/create-return-label', [\App\Http\Controllers\Web\TransactionController::class, 'createReturnLabel'])->name('web.transactions.create-return-label');
+        Route::get('transactions/{transaction}/print-return-label', [\App\Http\Controllers\Web\TransactionController::class, 'printReturnLabel'])->name('web.transactions.print-return-label');
+        Route::get('transactions/{transaction}/return-label-zpl', [\App\Http\Controllers\Web\TransactionController::class, 'getReturnLabelZpl'])->name('web.transactions.return-label-zpl');
+        Route::put('transactions/{transaction}/shipping-address', [\App\Http\Controllers\Web\TransactionController::class, 'updateShippingAddress'])->name('web.transactions.update-shipping-address');
+    });
 
     // PayPal Payouts
-    Route::post('transactions/{transaction}/send-payout', [\App\Http\Controllers\Web\TransactionController::class, 'sendPayout'])->name('web.transactions.send-payout');
-    Route::post('transactions/{transaction}/refresh-payout-status', [\App\Http\Controllers\Web\TransactionController::class, 'refreshPayoutStatus'])->name('web.transactions.refresh-payout-status');
+    Route::middleware('permission:transactions.process_payment')->group(function () {
+        Route::post('transactions/{transaction}/send-payout', [\App\Http\Controllers\Web\TransactionController::class, 'sendPayout'])->name('web.transactions.send-payout');
+        Route::post('transactions/{transaction}/refresh-payout-status', [\App\Http\Controllers\Web\TransactionController::class, 'refreshPayoutStatus'])->name('web.transactions.refresh-payout-status');
+    });
 
     // SMS Messaging
-    Route::post('transactions/{transaction}/send-sms', [\App\Http\Controllers\Web\TransactionController::class, 'sendSms'])->name('web.transactions.send-sms');
+    Route::post('transactions/{transaction}/send-sms', [\App\Http\Controllers\Web\TransactionController::class, 'sendSms'])->name('web.transactions.send-sms')->middleware('permission:transactions.update');
 
     // SMS Message Center
-    Route::get('messages', [\App\Http\Controllers\Web\SmsController::class, 'index'])->name('web.sms.index');
-    Route::get('messages/{id}', [\App\Http\Controllers\Web\SmsController::class, 'show'])->name('web.sms.show');
-    Route::post('messages/{id}/mark-read', [\App\Http\Controllers\Web\SmsController::class, 'markAsRead'])->name('web.sms.mark-read');
-    Route::post('messages/mark-read', [\App\Http\Controllers\Web\SmsController::class, 'markMultipleAsRead'])->name('web.sms.mark-multiple-read');
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('messages', [\App\Http\Controllers\Web\SmsController::class, 'index'])->name('web.sms.index');
+        Route::get('messages/{id}', [\App\Http\Controllers\Web\SmsController::class, 'show'])->name('web.sms.show');
+        Route::post('messages/{id}/mark-read', [\App\Http\Controllers\Web\SmsController::class, 'markAsRead'])->name('web.sms.mark-read');
+        Route::post('messages/mark-read', [\App\Http\Controllers\Web\SmsController::class, 'markMultipleAsRead'])->name('web.sms.mark-multiple-read');
+    });
 
     // Buys (Completed Transactions with Payments)
-    Route::get('buys', [BuysController::class, 'index'])->name('buys.index');
-    Route::get('buys/items', [BuysController::class, 'items'])->name('buys.items');
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('buys', [BuysController::class, 'index'])->name('buys.index');
+        Route::get('buys/items', [BuysController::class, 'items'])->name('buys.items');
+    });
 
     // Buckets (Junk items without SKUs)
-    Route::get('buckets', [BucketsController::class, 'index'])->name('buckets.index');
-    Route::post('buckets', [BucketsController::class, 'store'])->name('buckets.store');
-    Route::get('buckets/search', [BucketsController::class, 'search'])->name('buckets.search');
-    Route::get('buckets/search-customers', [BucketsController::class, 'searchCustomers'])->name('buckets.search-customers');
-    Route::get('buckets/{bucket}', [BucketsController::class, 'show'])->name('buckets.show');
-    Route::put('buckets/{bucket}', [BucketsController::class, 'update'])->name('buckets.update');
-    Route::delete('buckets/{bucket}', [BucketsController::class, 'destroy'])->name('buckets.destroy');
-    Route::post('buckets/{bucket}/items', [BucketsController::class, 'addItem'])->name('buckets.add-item');
-    Route::post('buckets/{bucket}/create-sale', [BucketsController::class, 'createSale'])->name('buckets.create-sale');
-    Route::delete('bucket-items/{bucketItem}', [BucketsController::class, 'removeItem'])->name('bucket-items.destroy');
+    Route::middleware('permission:buckets.view')->group(function () {
+        Route::get('buckets', [BucketsController::class, 'index'])->name('buckets.index');
+        Route::get('buckets/search', [BucketsController::class, 'search'])->name('buckets.search');
+        Route::get('buckets/search-customers', [BucketsController::class, 'searchCustomers'])->name('buckets.search-customers');
+        Route::get('buckets/{bucket}', [BucketsController::class, 'show'])->name('buckets.show');
+    });
+    Route::middleware('permission:buckets.create')->group(function () {
+        Route::post('buckets', [BucketsController::class, 'store'])->name('buckets.store');
+        Route::post('buckets/{bucket}/items', [BucketsController::class, 'addItem'])->name('buckets.add-item');
+    });
+    Route::middleware('permission:buckets.update')->group(function () {
+        Route::put('buckets/{bucket}', [BucketsController::class, 'update'])->name('buckets.update');
+        Route::post('buckets/{bucket}/create-sale', [BucketsController::class, 'createSale'])->name('buckets.create-sale');
+    });
+    Route::middleware('permission:buckets.delete')->group(function () {
+        Route::delete('buckets/{bucket}', [BucketsController::class, 'destroy'])->name('buckets.destroy');
+        Route::delete('bucket-items/{bucketItem}', [BucketsController::class, 'removeItem'])->name('bucket-items.destroy');
+    });
 
     // Customers
-    Route::get('customers', [\App\Http\Controllers\Web\CustomerController::class, 'index'])->name('web.customers.index');
-    Route::get('customers/{customer}', [\App\Http\Controllers\Web\CustomerController::class, 'show'])->name('web.customers.show');
-    Route::put('customers/{customer}', [\App\Http\Controllers\Web\CustomerController::class, 'update'])->name('web.customers.update');
-    Route::post('customers/{customer}/documents', [\App\Http\Controllers\Web\CustomerController::class, 'uploadDocument'])->name('web.customers.upload-document');
-    Route::delete('customers/{customer}/documents/{document}', [\App\Http\Controllers\Web\CustomerController::class, 'deleteDocument'])->name('web.customers.delete-document');
-    Route::post('customers/{customer}/addresses', [\App\Http\Controllers\Web\CustomerController::class, 'storeAddress'])->name('web.customers.store-address');
-    Route::put('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'updateAddress'])->name('web.customers.update-address');
-    Route::delete('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'deleteAddress'])->name('web.customers.delete-address');
+    Route::middleware('permission:customers.view')->group(function () {
+        Route::get('customers', [\App\Http\Controllers\Web\CustomerController::class, 'index'])->name('web.customers.index');
+        Route::get('customers/{customer}', [\App\Http\Controllers\Web\CustomerController::class, 'show'])->name('web.customers.show');
+    });
+    Route::middleware('permission:customers.update')->group(function () {
+        Route::put('customers/{customer}', [\App\Http\Controllers\Web\CustomerController::class, 'update'])->name('web.customers.update');
+        Route::post('customers/{customer}/documents', [\App\Http\Controllers\Web\CustomerController::class, 'uploadDocument'])->name('web.customers.upload-document');
+        Route::delete('customers/{customer}/documents/{document}', [\App\Http\Controllers\Web\CustomerController::class, 'deleteDocument'])->name('web.customers.delete-document');
+        Route::post('customers/{customer}/addresses', [\App\Http\Controllers\Web\CustomerController::class, 'storeAddress'])->name('web.customers.store-address');
+        Route::put('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'updateAddress'])->name('web.customers.update-address');
+        Route::delete('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'deleteAddress'])->name('web.customers.delete-address');
+    });
 
     // Lead Sources
     Route::redirect('leads', '/settings/lead-sources');
@@ -286,61 +371,79 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::post('lead-sources', [\App\Http\Controllers\Web\LeadSourceController::class, 'store'])->name('web.lead-sources.store');
 
     // Memos (Consignment)
-    Route::get('memos', [MemoController::class, 'index'])->name('web.memos.index');
-    Route::get('memos/create', [MemoController::class, 'createWizard'])->name('web.memos.create-wizard');
-    Route::post('memos', [MemoController::class, 'storeFromWizard'])->name('web.memos.store');
-    Route::get('memos/search-products', [MemoController::class, 'searchProducts'])->name('web.memos.search-products');
-    Route::get('memos/search-vendors', [MemoController::class, 'searchVendors'])->name('web.memos.search-vendors');
-    Route::post('memos/create-product', [MemoController::class, 'storeQuickProduct'])->name('web.memos.create-product');
-    Route::get('memos/{memo}', [MemoController::class, 'show'])->name('web.memos.show');
-    Route::patch('memos/{memo}', [MemoController::class, 'update'])->name('web.memos.update');
-    Route::delete('memos/{memo}', [MemoController::class, 'destroy'])->name('web.memos.destroy');
-    Route::post('memos/{memo}/send-to-vendor', [MemoController::class, 'sendToVendor'])->name('web.memos.send-to-vendor');
-    Route::post('memos/{memo}/mark-received', [MemoController::class, 'markReceived'])->name('web.memos.mark-received');
-    Route::post('memos/{memo}/mark-returned', [MemoController::class, 'markReturned'])->name('web.memos.mark-returned');
-    Route::post('memos/{memo}/receive-payment', [MemoController::class, 'receivePayment'])->name('web.memos.receive-payment');
-    Route::post('memos/{memo}/return-item/{item}', [MemoController::class, 'returnItem'])->name('web.memos.return-item');
-    Route::post('memos/{memo}/add-item', [MemoController::class, 'addItem'])->name('web.memos.add-item');
-    Route::patch('memos/{memo}/items/{item}', [MemoController::class, 'updateItem'])->name('web.memos.update-item');
-    Route::post('memos/{memo}/cancel', [MemoController::class, 'cancel'])->name('web.memos.cancel');
-    Route::post('memos/{memo}/change-status', [MemoController::class, 'changeStatus'])->name('web.memos.change-status');
-    Route::post('memos/bulk-action', [MemoController::class, 'bulkAction'])->name('web.memos.bulk-action');
+    Route::middleware('permission:memos.view')->group(function () {
+        Route::get('memos', [MemoController::class, 'index'])->name('web.memos.index');
+        Route::get('memos/search-products', [MemoController::class, 'searchProducts'])->name('web.memos.search-products');
+        Route::get('memos/search-vendors', [MemoController::class, 'searchVendors'])->name('web.memos.search-vendors');
+        Route::get('memos/{memo}', [MemoController::class, 'show'])->name('web.memos.show');
+    });
+    Route::middleware('permission:memos.create')->group(function () {
+        Route::get('memos/create', [MemoController::class, 'createWizard'])->name('web.memos.create-wizard');
+        Route::post('memos', [MemoController::class, 'storeFromWizard'])->name('web.memos.store');
+        Route::post('memos/create-product', [MemoController::class, 'storeQuickProduct'])->name('web.memos.create-product');
+    });
+    Route::middleware('permission:memos.update')->group(function () {
+        Route::patch('memos/{memo}', [MemoController::class, 'update'])->name('web.memos.update');
+        Route::post('memos/{memo}/send-to-vendor', [MemoController::class, 'sendToVendor'])->name('web.memos.send-to-vendor');
+        Route::post('memos/{memo}/mark-received', [MemoController::class, 'markReceived'])->name('web.memos.mark-received');
+        Route::post('memos/{memo}/mark-returned', [MemoController::class, 'markReturned'])->name('web.memos.mark-returned');
+        Route::post('memos/{memo}/receive-payment', [MemoController::class, 'receivePayment'])->name('web.memos.receive-payment');
+        Route::post('memos/{memo}/return-item/{item}', [MemoController::class, 'returnItem'])->name('web.memos.return-item');
+        Route::post('memos/{memo}/add-item', [MemoController::class, 'addItem'])->name('web.memos.add-item');
+        Route::patch('memos/{memo}/items/{item}', [MemoController::class, 'updateItem'])->name('web.memos.update-item');
+        Route::post('memos/{memo}/change-status', [MemoController::class, 'changeStatus'])->name('web.memos.change-status');
+        Route::post('memos/bulk-action', [MemoController::class, 'bulkAction'])->name('web.memos.bulk-action');
+    });
+    Route::post('memos/{memo}/cancel', [MemoController::class, 'cancel'])->name('web.memos.cancel')->middleware('permission:memos.cancel');
+    Route::delete('memos/{memo}', [MemoController::class, 'destroy'])->name('web.memos.destroy')->middleware('permission:memos.delete');
 
     // Layaways
-    Route::get('layaways', [LayawayController::class, 'index'])->name('web.layaways.index');
-    Route::get('layaways/create', [LayawayController::class, 'createWizard'])->name('web.layaways.create-wizard');
-    Route::post('layaways', [LayawayController::class, 'storeFromWizard'])->name('web.layaways.store');
-    Route::get('layaways/search-products', [LayawayController::class, 'searchProducts'])->name('web.layaways.search-products');
-    Route::get('layaways/search-customers', [LayawayController::class, 'searchCustomers'])->name('web.layaways.search-customers');
-    Route::get('layaways/{layaway}', [LayawayController::class, 'show'])->name('web.layaways.show');
-    Route::patch('layaways/{layaway}', [LayawayController::class, 'update'])->name('web.layaways.update');
-    Route::delete('layaways/{layaway}', [LayawayController::class, 'destroy'])->name('web.layaways.destroy');
-    Route::post('layaways/{layaway}/activate', [LayawayController::class, 'activate'])->name('web.layaways.activate');
-    Route::post('layaways/{layaway}/complete', [LayawayController::class, 'complete'])->name('web.layaways.complete');
-    Route::post('layaways/{layaway}/cancel', [LayawayController::class, 'cancel'])->name('web.layaways.cancel');
-    Route::post('layaways/{layaway}/receive-payment', [LayawayController::class, 'receivePayment'])->name('web.layaways.receive-payment');
-    Route::post('layaways/{layaway}/add-item', [LayawayController::class, 'addItem'])->name('web.layaways.add-item');
-    Route::delete('layaways/{layaway}/items/{item}', [LayawayController::class, 'removeItem'])->name('web.layaways.remove-item');
-    Route::post('layaways/bulk-action', [LayawayController::class, 'bulkAction'])->name('web.layaways.bulk-action');
+    Route::middleware('permission:layaways.view')->group(function () {
+        Route::get('layaways', [LayawayController::class, 'index'])->name('web.layaways.index');
+        Route::get('layaways/search-products', [LayawayController::class, 'searchProducts'])->name('web.layaways.search-products');
+        Route::get('layaways/search-customers', [LayawayController::class, 'searchCustomers'])->name('web.layaways.search-customers');
+        Route::get('layaways/{layaway}', [LayawayController::class, 'show'])->name('web.layaways.show');
+    });
+    Route::middleware('permission:layaways.create')->group(function () {
+        Route::get('layaways/create', [LayawayController::class, 'createWizard'])->name('web.layaways.create-wizard');
+        Route::post('layaways', [LayawayController::class, 'storeFromWizard'])->name('web.layaways.store');
+    });
+    Route::middleware('permission:layaways.update')->group(function () {
+        Route::patch('layaways/{layaway}', [LayawayController::class, 'update'])->name('web.layaways.update');
+        Route::post('layaways/{layaway}/activate', [LayawayController::class, 'activate'])->name('web.layaways.activate');
+        Route::post('layaways/{layaway}/complete', [LayawayController::class, 'complete'])->name('web.layaways.complete');
+        Route::post('layaways/{layaway}/receive-payment', [LayawayController::class, 'receivePayment'])->name('web.layaways.receive-payment');
+        Route::post('layaways/{layaway}/add-item', [LayawayController::class, 'addItem'])->name('web.layaways.add-item');
+        Route::delete('layaways/{layaway}/items/{item}', [LayawayController::class, 'removeItem'])->name('web.layaways.remove-item');
+        Route::post('layaways/bulk-action', [LayawayController::class, 'bulkAction'])->name('web.layaways.bulk-action');
+    });
+    Route::post('layaways/{layaway}/cancel', [LayawayController::class, 'cancel'])->name('web.layaways.cancel')->middleware('permission:layaways.cancel');
+    Route::delete('layaways/{layaway}', [LayawayController::class, 'destroy'])->name('web.layaways.destroy')->middleware('permission:layaways.delete');
 
     // Repair management
-    Route::get('repairs', [RepairController::class, 'index'])->name('web.repairs.index');
-    Route::get('repairs/create', [RepairController::class, 'createWizard'])->name('web.repairs.create-wizard');
-    Route::post('repairs', [RepairController::class, 'storeFromWizard'])->name('web.repairs.store');
-    Route::get('repairs/search-customers', [RepairController::class, 'searchCustomers'])->name('web.repairs.search-customers');
-    Route::get('repairs/search-vendors', [RepairController::class, 'searchVendors'])->name('web.repairs.search-vendors');
-    Route::get('repairs/{repair}', [RepairController::class, 'show'])->name('web.repairs.show');
-    Route::patch('repairs/{repair}', [RepairController::class, 'update'])->name('web.repairs.update');
-    Route::delete('repairs/{repair}', [RepairController::class, 'destroy'])->name('web.repairs.destroy');
-    Route::post('repairs/{repair}/send-to-vendor', [RepairController::class, 'sendToVendor'])->name('web.repairs.send-to-vendor');
-    Route::post('repairs/{repair}/mark-received', [RepairController::class, 'markReceived'])->name('web.repairs.mark-received');
-    Route::post('repairs/{repair}/mark-completed', [RepairController::class, 'markCompleted'])->name('web.repairs.mark-completed');
-    Route::post('repairs/{repair}/receive-payment', [RepairController::class, 'receivePayment'])->name('web.repairs.receive-payment');
-    Route::post('repairs/{repair}/cancel', [RepairController::class, 'cancel'])->name('web.repairs.cancel');
-    Route::post('repairs/{repair}/change-status', [RepairController::class, 'changeStatus'])->name('web.repairs.change-status');
-    Route::patch('repairs/{repair}/items/{item}', [RepairController::class, 'updateItem'])->name('web.repairs.update-item');
-    Route::delete('repairs/{repair}/items/{item}', [RepairController::class, 'removeItem'])->name('web.repairs.remove-item');
-    Route::post('repairs/bulk-action', [RepairController::class, 'bulkAction'])->name('web.repairs.bulk-action');
+    Route::middleware('permission:repairs.view')->group(function () {
+        Route::get('repairs', [RepairController::class, 'index'])->name('web.repairs.index');
+        Route::get('repairs/search-customers', [RepairController::class, 'searchCustomers'])->name('web.repairs.search-customers');
+        Route::get('repairs/search-vendors', [RepairController::class, 'searchVendors'])->name('web.repairs.search-vendors');
+        Route::get('repairs/{repair}', [RepairController::class, 'show'])->name('web.repairs.show');
+    });
+    Route::middleware('permission:repairs.create')->group(function () {
+        Route::get('repairs/create', [RepairController::class, 'createWizard'])->name('web.repairs.create-wizard');
+        Route::post('repairs', [RepairController::class, 'storeFromWizard'])->name('web.repairs.store');
+    });
+    Route::middleware('permission:repairs.update')->group(function () {
+        Route::patch('repairs/{repair}', [RepairController::class, 'update'])->name('web.repairs.update');
+        Route::post('repairs/{repair}/send-to-vendor', [RepairController::class, 'sendToVendor'])->name('web.repairs.send-to-vendor');
+        Route::post('repairs/{repair}/mark-received', [RepairController::class, 'markReceived'])->name('web.repairs.mark-received');
+        Route::post('repairs/{repair}/mark-completed', [RepairController::class, 'markCompleted'])->name('web.repairs.mark-completed');
+        Route::post('repairs/{repair}/receive-payment', [RepairController::class, 'receivePayment'])->name('web.repairs.receive-payment');
+        Route::post('repairs/{repair}/change-status', [RepairController::class, 'changeStatus'])->name('web.repairs.change-status');
+        Route::patch('repairs/{repair}/items/{item}', [RepairController::class, 'updateItem'])->name('web.repairs.update-item');
+        Route::delete('repairs/{repair}/items/{item}', [RepairController::class, 'removeItem'])->name('web.repairs.remove-item');
+        Route::post('repairs/bulk-action', [RepairController::class, 'bulkAction'])->name('web.repairs.bulk-action');
+    });
+    Route::post('repairs/{repair}/cancel', [RepairController::class, 'cancel'])->name('web.repairs.cancel')->middleware('permission:repairs.cancel');
+    Route::delete('repairs/{repair}', [RepairController::class, 'destroy'])->name('web.repairs.destroy')->middleware('permission:repairs.delete');
 
     // Generic Payment Routes - defined explicitly for each model type to avoid route conflicts
     foreach (['memos', 'repairs', 'orders', 'layaways'] as $type) {
@@ -364,18 +467,30 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     }
 
     // Warehouse management
-    Route::resource('warehouses', WarehouseController::class)->except(['show']);
-    Route::post('warehouses/{warehouse}/make-default', [WarehouseController::class, 'makeDefault'])->name('warehouses.make-default');
+    Route::middleware('permission:warehouses.view')->group(function () {
+        Route::get('warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+    });
+    Route::middleware('permission:warehouses.create')->group(function () {
+        Route::get('warehouses/create', [WarehouseController::class, 'create'])->name('warehouses.create');
+        Route::post('warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
+    });
+    Route::middleware('permission:warehouses.update')->group(function () {
+        Route::get('warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])->name('warehouses.edit');
+        Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
+        Route::patch('warehouses/{warehouse}', [WarehouseController::class, 'update']);
+        Route::post('warehouses/{warehouse}/make-default', [WarehouseController::class, 'makeDefault'])->name('warehouses.make-default');
+    });
+    Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy')->middleware('permission:warehouses.delete');
 
     // Vendor management - use 'web.' prefix to avoid conflict with API routes
-    Route::get('vendors/export', [VendorController::class, 'export'])->name('web.vendors.export');
-    Route::resource('vendors', VendorController::class)->except(['create', 'edit'])->names([
-        'index' => 'web.vendors.index',
-        'store' => 'web.vendors.store',
-        'show' => 'web.vendors.show',
-        'update' => 'web.vendors.update',
-        'destroy' => 'web.vendors.destroy',
-    ]);
+    Route::middleware('permission:vendors.view')->group(function () {
+        Route::get('vendors', [VendorController::class, 'index'])->name('web.vendors.index');
+        Route::get('vendors/{vendor}', [VendorController::class, 'show'])->name('web.vendors.show');
+        Route::get('vendors/export', [VendorController::class, 'export'])->name('web.vendors.export');
+    });
+    Route::post('vendors', [VendorController::class, 'store'])->name('web.vendors.store')->middleware('permission:vendors.create');
+    Route::put('vendors/{vendor}', [VendorController::class, 'update'])->name('web.vendors.update')->middleware('permission:vendors.update');
+    Route::delete('vendors/{vendor}', [VendorController::class, 'destroy'])->name('web.vendors.destroy')->middleware('permission:vendors.delete');
 
     // Tag management
     Route::get('tags/search', [TagController::class, 'search'])->name('web.tags.search');
@@ -403,27 +518,36 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::get('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'showReceive'])->name('web.purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('web.purchase-orders.receive.store');
 
-    Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::post('inventory/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust');
+    // Inventory
+    Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index')->middleware('permission:inventory.view');
+    Route::post('inventory/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust')->middleware('permission:inventory.adjust');
 
     // Integrations
-    Route::get('integrations', [IntegrationsController::class, 'index'])->name('integrations.index');
-    Route::post('integrations/fedex', [IntegrationsController::class, 'storeFedex'])->name('integrations.fedex.store');
-    Route::post('integrations/twilio', [IntegrationsController::class, 'storeTwilio'])->name('integrations.twilio.store');
-    Route::post('integrations/gia', [IntegrationsController::class, 'storeGia'])->name('integrations.gia.store');
-    Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
-    Route::post('integrations/anthropic', [IntegrationsController::class, 'storeAnthropic'])->name('integrations.anthropic.store');
-    Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
+    Route::middleware('permission:integrations.view')->group(function () {
+        Route::get('integrations', [IntegrationsController::class, 'index'])->name('integrations.index');
+    });
+    Route::middleware('permission:integrations.manage')->group(function () {
+        Route::post('integrations/fedex', [IntegrationsController::class, 'storeFedex'])->name('integrations.fedex.store');
+        Route::post('integrations/twilio', [IntegrationsController::class, 'storeTwilio'])->name('integrations.twilio.store');
+        Route::post('integrations/gia', [IntegrationsController::class, 'storeGia'])->name('integrations.gia.store');
+        Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
+        Route::post('integrations/anthropic', [IntegrationsController::class, 'storeAnthropic'])->name('integrations.anthropic.store');
+        Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
+    });
 
-    // Invoices
-    Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
-    Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
-    Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
-    Route::get('invoices/{invoice}/pdf/stream', [InvoiceController::class, 'streamPdf'])->name('invoices.pdf.stream');
+    // Invoices - requires view permission for relevant categories
+    Route::middleware('permission:orders.view,repairs.view,memos.view')->group(function () {
+        Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+        Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf'])->name('invoices.pdf');
+        Route::get('invoices/{invoice}/pdf/stream', [InvoiceController::class, 'streamPdf'])->name('invoices.pdf.stream');
+    });
 
-    // Payments
-    Route::get('payments', [PaymentListController::class, 'index'])->name('payments.index');
-    Route::get('payments/{payment}', [PaymentListController::class, 'show'])->name('payments.show');
+    // Payments - requires view permission for relevant categories
+    Route::middleware('permission:orders.view,repairs.view,memos.view,transactions.view')->group(function () {
+        Route::get('payments', [PaymentListController::class, 'index'])->name('payments.index');
+        Route::get('payments/{payment}', [PaymentListController::class, 'show'])->name('payments.show');
+    });
 
     // Notes
     Route::post('notes', [\App\Http\Controllers\NoteController::class, 'store'])->name('notes.store');
@@ -476,7 +600,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Sales Reports
-    Route::prefix('reports/sales')->name('reports.sales.')->group(function () {
+    Route::prefix('reports/sales')->name('reports.sales.')->middleware('permission:reports.view_sales')->group(function () {
         Route::get('daily', [SalesReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [SalesReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('monthly', [SalesReportController::class, 'monthly'])->name('monthly');
@@ -486,7 +610,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Inventory Reports
-    Route::prefix('reports/inventory')->name('reports.inventory.')->group(function () {
+    Route::prefix('reports/inventory')->name('reports.inventory.')->middleware('permission:reports.view_inventory')->group(function () {
         Route::get('/', [InventoryReportController::class, 'index'])->name('index');
         Route::get('export', [InventoryReportController::class, 'export'])->name('export');
         Route::get('weekly', [InventoryReportController::class, 'weekly'])->name('weekly');
@@ -498,7 +622,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Buys Reports
-    Route::prefix('reports/buys')->name('reports.buys.')->group(function () {
+    Route::prefix('reports/buys')->name('reports.buys.')->middleware('permission:reports.view_buys')->group(function () {
         // In-Store
         Route::get('in-store', [BuysReportController::class, 'inStore'])->name('in-store');
         Route::get('in-store/export', [BuysReportController::class, 'exportInStore'])->name('in-store.export');

@@ -15,6 +15,9 @@ import {
     CheckCircleIcon,
     XCircleIcon,
     ArrowDownTrayIcon,
+    ChevronUpIcon,
+    ChevronDownIcon,
+    ChevronUpDownIcon,
 } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
 
@@ -60,6 +63,8 @@ interface Filters {
     search: string;
     is_active: boolean | null;
     per_page: number;
+    sort: string;
+    direction: string;
 }
 
 interface Props {
@@ -79,6 +84,8 @@ const searchQuery = ref(props.filters.search || '');
 const activeFilter = ref<string>(props.filters.is_active !== null ? String(props.filters.is_active) : '');
 const perPage = ref(props.filters.per_page || 15);
 const perPageOptions = [15, 25, 50, 100];
+const sortField = ref(props.filters.sort || 'company_name');
+const sortDirection = ref(props.filters.direction || 'asc');
 
 // Modal state
 const showVendorModal = ref(false);
@@ -135,11 +142,23 @@ const applyFilters = () => {
         search: searchQuery.value || undefined,
         is_active: activeFilter.value !== '' ? activeFilter.value : undefined,
         per_page: perPage.value !== 15 ? perPage.value : undefined,
+        sort: sortField.value !== 'company_name' ? sortField.value : undefined,
+        direction: sortDirection.value !== 'asc' ? sortDirection.value : undefined,
     }, {
         preserveState: true,
         preserveScroll: true,
         only: ['vendors'],
     });
+};
+
+const handleSort = (field: string) => {
+    if (sortField.value === field) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortField.value = field;
+        sortDirection.value = 'asc';
+    }
+    applyFilters();
 };
 
 const exportVendors = () => {
@@ -357,10 +376,32 @@ const formatDate = (date: string | null) => {
                     <thead class="bg-gray-50 dark:bg-gray-700">
                         <tr>
                             <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                                Company Name
+                                <button
+                                    type="button"
+                                    class="group inline-flex items-center gap-1"
+                                    @click="handleSort('company_name')"
+                                >
+                                    Company Name
+                                    <span class="ml-1 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
+                                        <ChevronUpIcon v-if="sortField === 'company_name' && sortDirection === 'asc'" class="size-4" />
+                                        <ChevronDownIcon v-else-if="sortField === 'company_name' && sortDirection === 'desc'" class="size-4" />
+                                        <ChevronUpDownIcon v-else class="size-4" />
+                                    </span>
+                                </button>
                             </th>
                             <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white lg:table-cell">
-                                Contact Name
+                                <button
+                                    type="button"
+                                    class="group inline-flex items-center gap-1"
+                                    @click="handleSort('contact_name')"
+                                >
+                                    Contact Name
+                                    <span class="ml-1 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300">
+                                        <ChevronUpIcon v-if="sortField === 'contact_name' && sortDirection === 'asc'" class="size-4" />
+                                        <ChevronDownIcon v-else-if="sortField === 'contact_name' && sortDirection === 'desc'" class="size-4" />
+                                        <ChevronUpDownIcon v-else class="size-4" />
+                                    </span>
+                                </button>
                             </th>
                             <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white md:table-cell">
                                 Address

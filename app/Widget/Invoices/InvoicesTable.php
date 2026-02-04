@@ -3,6 +3,7 @@
 namespace App\Widget\Invoices;
 
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Widget\Table;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
@@ -114,6 +115,14 @@ class InvoicesTable extends Table
             $query->whereDate('created_at', '<=', $to);
         }
 
+        // Apply payment method filter - filter invoices that have payments with this method
+        if ($paymentMethod = data_get($filter, 'payment_method')) {
+            $query->whereHas('payments', function ($q) use ($paymentMethod) {
+                $q->where('payment_method', $paymentMethod)
+                    ->where('status', Payment::STATUS_COMPLETED);
+            });
+        }
+
         // Apply sorting
         $sortBy = data_get($filter, 'sortBy', 'created_at');
         $sortDesc = data_get($filter, 'sortDesc', true);
@@ -223,6 +232,30 @@ class InvoicesTable extends Table
                     ['value' => Invoice::STATUS_OVERDUE, 'label' => 'Overdue'],
                     ['value' => Invoice::STATUS_VOID, 'label' => 'Void'],
                     ['value' => Invoice::STATUS_REFUNDED, 'label' => 'Refunded'],
+                ],
+            ],
+            'payment_method' => [
+                'type' => 'select',
+                'label' => 'Payment Method',
+                'value' => data_get($filter, 'payment_method'),
+                'options' => [
+                    ['value' => '', 'label' => 'All Methods'],
+                    ['value' => Payment::METHOD_CASH, 'label' => 'Cash'],
+                    ['value' => Payment::METHOD_CARD, 'label' => 'Card'],
+                    ['value' => Payment::METHOD_CHECK, 'label' => 'Check'],
+                    ['value' => Payment::METHOD_BANK_TRANSFER, 'label' => 'Bank Transfer'],
+                    ['value' => Payment::METHOD_STORE_CREDIT, 'label' => 'Store Credit'],
+                    ['value' => Payment::METHOD_EXTERNAL, 'label' => 'External'],
+                ],
+            ],
+            'available' => [
+                'payment_methods' => [
+                    ['value' => Payment::METHOD_CASH, 'label' => 'Cash'],
+                    ['value' => Payment::METHOD_CARD, 'label' => 'Card'],
+                    ['value' => Payment::METHOD_CHECK, 'label' => 'Check'],
+                    ['value' => Payment::METHOD_BANK_TRANSFER, 'label' => 'Bank Transfer'],
+                    ['value' => Payment::METHOD_STORE_CREDIT, 'label' => 'Store Credit'],
+                    ['value' => Payment::METHOD_EXTERNAL, 'label' => 'External'],
                 ],
             ],
         ];

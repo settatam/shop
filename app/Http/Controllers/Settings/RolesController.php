@@ -52,24 +52,17 @@ class RolesController extends Controller
             ->toArray();
 
         // Category display names
-        $categories = [
-            'products' => 'Products',
-            'orders' => 'Orders',
-            'inventory' => 'Inventory',
-            'customers' => 'Customers',
-            'integrations' => 'Integrations',
-            'store' => 'Store Settings',
-            'team' => 'Team',
-            'reports' => 'Reports',
-        ];
+        $categories = Activity::getCategoryDisplayNames();
 
         $presets = Activity::getRolePresets();
+        $permissionGroups = Activity::getPermissionGroups();
 
         return Inertia::render('settings/Roles', [
             'roles' => $roles,
             'permissionsGrouped' => $permissionsGrouped,
             'categories' => $categories,
             'presets' => $presets,
+            'permissionGroups' => $permissionGroups,
         ]);
     }
 }

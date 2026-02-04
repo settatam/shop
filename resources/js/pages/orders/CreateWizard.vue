@@ -981,29 +981,57 @@ const steps = [
                         </template>
                     </div>
 
-                    <!-- Step 3: Trade-In -->
-                    <div v-if="currentStep === 3">
-                        <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Trade-In Items</h2>
-                        <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-                            Does the customer have items to trade in? The trade-in value will be applied as credit toward this purchase.
-                        </p>
+                    <!-- Step 3: Trade-In & Bucket Items -->
+                    <div v-if="currentStep === 3" class="space-y-8">
+                        <!-- Trade-In Section -->
+                        <div class="rounded-lg border-2 border-green-200 bg-green-50/50 p-6 dark:border-green-800 dark:bg-green-900/20">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="flex size-10 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                                    <ScaleIcon class="size-5 text-green-600 dark:text-green-400" />
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-medium text-gray-900 dark:text-white">Trade-In Items</h2>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        Items the customer is trading in for store credit
+                                    </p>
+                                </div>
+                            </div>
 
-                        <!-- Toggle Trade-In -->
-                        <div class="mb-6">
-                            <label class="flex cursor-pointer items-center gap-3">
-                                <input
-                                    v-model="form.has_trade_in"
-                                    type="checkbox"
-                                    class="size-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <span class="font-medium text-gray-900 dark:text-white">Customer has items to trade in</span>
-                            </label>
-                        </div>
+                            <!-- Toggle Trade-In -->
+                            <div class="mb-6">
+                                <p class="mb-2 font-medium text-gray-900 dark:text-white">Customer has items to trade in?</p>
+                                <div class="inline-flex rounded-lg border border-gray-300 dark:border-gray-600">
+                                    <button
+                                        type="button"
+                                        @click="form.has_trade_in = true"
+                                        :class="[
+                                            'px-4 py-2 text-sm font-medium rounded-l-lg transition-colors',
+                                            form.has_trade_in
+                                                ? 'bg-green-600 text-white'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                        ]"
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="form.has_trade_in = false"
+                                        :class="[
+                                            'px-4 py-2 text-sm font-medium rounded-r-lg transition-colors border-l border-gray-300 dark:border-gray-600',
+                                            !form.has_trade_in
+                                                ? 'bg-gray-600 text-white'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                        ]"
+                                    >
+                                        No
+                                    </button>
+                                </div>
+                            </div>
 
-                        <!-- Trade-In Form (shown when trade-in is enabled) -->
-                        <div v-if="form.has_trade_in" class="space-y-6">
-                            <!-- Trade-In Items List -->
-                            <div class="rounded-lg border border-gray-200 dark:border-gray-600">
+                            <!-- Trade-In Form (shown when trade-in is enabled) -->
+                            <div v-if="form.has_trade_in" class="space-y-6">
+                                <!-- Trade-In Items List -->
+                                <div class="rounded-lg border border-green-200 bg-white dark:border-green-700 dark:bg-gray-800">
                                 <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-600">
                                     <div class="flex items-center justify-between">
                                         <h3 class="font-medium text-gray-900 dark:text-white">Trade-In Items ({{ form.trade_in_items.length }})</h3>
@@ -1044,27 +1072,55 @@ const steps = [
                                         <PlusIcon class="size-4" />
                                         Add Item
                                     </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Divider between Trade-In and Bucket Sale -->
-                        <div v-if="form.has_trade_in" class="my-8 border-t border-gray-200 dark:border-gray-600" />
+                        <!-- Bucket Items Section -->
+                        <div class="rounded-lg border-2 border-amber-200 bg-amber-50/50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="flex size-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900">
+                                    <ArchiveBoxIcon class="size-5 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-medium text-gray-900 dark:text-white">Bucket Items</h2>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        Pre-priced items from buckets to include in this sale
+                                    </p>
+                                </div>
+                            </div>
 
-                        <!-- Toggle Sell From Bucket -->
-                        <div class="mb-6">
-                            <label class="flex cursor-pointer items-center gap-3">
-                                <input
-                                    v-model="form.sell_from_bucket"
-                                    type="checkbox"
-                                    class="size-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <span class="font-medium text-gray-900 dark:text-white">Sell items from a bucket</span>
-                            </label>
-                            <p class="mt-1 ml-8 text-sm text-gray-500 dark:text-gray-400">
-                                Select junk items from existing buckets to include in this sale.
-                            </p>
-                        </div>
+                            <!-- Toggle Sell From Bucket -->
+                            <div class="mb-6">
+                                <p class="mb-2 font-medium text-gray-900 dark:text-white">Sell items from a bucket?</p>
+                                <div class="inline-flex rounded-lg border border-gray-300 dark:border-gray-600">
+                                    <button
+                                        type="button"
+                                        @click="form.sell_from_bucket = true"
+                                        :class="[
+                                            'px-4 py-2 text-sm font-medium rounded-l-lg transition-colors',
+                                            form.sell_from_bucket
+                                                ? 'bg-amber-600 text-white'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                        ]"
+                                    >
+                                        Yes
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="form.sell_from_bucket = false"
+                                        :class="[
+                                            'px-4 py-2 text-sm font-medium rounded-r-lg transition-colors border-l border-gray-300 dark:border-gray-600',
+                                            !form.sell_from_bucket
+                                                ? 'bg-gray-600 text-white'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                        ]"
+                                    >
+                                        No
+                                    </button>
+                                </div>
+                            </div>
 
                         <!-- Bucket Items Selection (shown when sell_from_bucket is enabled) -->
                         <div v-if="form.sell_from_bucket" class="space-y-6">
@@ -1160,6 +1216,7 @@ const steps = [
                                     No bucket items selected. Choose items from the list above.
                                 </div>
                             </div>
+                        </div>
                         </div>
                     </div>
 

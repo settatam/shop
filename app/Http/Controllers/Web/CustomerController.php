@@ -55,6 +55,15 @@ class CustomerController extends Controller
             $query->where('lead_source_id', $leadSourceId);
         }
 
+        // Filter by date range (based on created_at)
+        if ($fromDate = $request->get('from_date')) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+
+        if ($toDate = $request->get('to_date')) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
         $customers = $query->orderBy('created_at', 'desc')
             ->paginate(20)
             ->withQueryString();
@@ -91,6 +100,8 @@ class CustomerController extends Controller
             'filters' => [
                 'search' => $request->get('search', ''),
                 'lead_source_id' => $request->get('lead_source_id', ''),
+                'from_date' => $request->get('from_date', ''),
+                'to_date' => $request->get('to_date', ''),
             ],
         ]);
     }

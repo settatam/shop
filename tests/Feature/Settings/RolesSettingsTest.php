@@ -58,6 +58,7 @@ class RolesSettingsTest extends TestCase
             ->has('permissionsGrouped')
             ->has('categories')
             ->has('presets')
+            ->has('permissionGroups')
         );
     }
 
@@ -120,6 +121,28 @@ class RolesSettingsTest extends TestCase
         $response->assertInertia(fn (Assert $page) => $page
             ->component('settings/Roles')
             ->has('presets')
+        );
+    }
+
+    public function test_roles_settings_shows_permission_groups(): void
+    {
+        $this->actingAs($this->owner);
+
+        $response = $this->get('/settings/roles');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('settings/Roles')
+            ->has('permissionGroups')
+            ->has('permissionGroups.sales', fn (Assert $group) => $group
+                ->has('name')
+                ->has('description')
+                ->has('categories')
+            )
+            ->has('permissionGroups.inventory')
+            ->has('permissionGroups.purchasing')
+            ->has('permissionGroups.reports')
+            ->has('permissionGroups.administration')
         );
     }
 
