@@ -314,7 +314,9 @@ class InvoiceTest extends TestCase
         ]);
 
         $this->assertNotEquals($invoice1->invoice_number, $invoice2->invoice_number);
-        $this->assertStringStartsWith('INV-', $invoice1->invoice_number);
+        // Invoice number uses store's order_id_prefix or falls back to 'INV'
+        $expectedPrefix = $this->store->order_id_prefix ?: 'INV';
+        $this->assertStringStartsWith($expectedPrefix.'-', $invoice1->invoice_number);
     }
 
     public function test_invoice_does_not_create_duplicate(): void

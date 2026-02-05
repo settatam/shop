@@ -134,6 +134,7 @@ class TransactionItemResearcher
     /**
      * Generate AI research from raw data (not a TransactionItem).
      *
+     * @param  array<string, mixed>  $attributes
      * @param  array<int, string>  $imageUrls
      * @return array<string, mixed>
      */
@@ -142,9 +143,7 @@ class TransactionItemResearcher
         string $title,
         ?string $description = null,
         ?int $categoryId = null,
-        ?string $preciousMetal = null,
-        ?string $condition = null,
-        ?float $weight = null,
+        array $attributes = [],
         array $imageUrls = [],
     ): array {
         // Check for store-specific Anthropic integration
@@ -165,10 +164,10 @@ class TransactionItemResearcher
         $categoryName = null;
         if ($categoryId) {
             $category = \App\Models\Category::find($categoryId);
-            $categoryName = $category?->name;
+            $categoryName = $category?->full_path ?? $category?->name;
         }
 
-        $prompt = $this->buildPromptFromData($title, $description, $categoryName, $preciousMetal, $condition, $weight);
+        $prompt = $this->buildPromptFromData($title, $description, $categoryName, $attributes);
         $messages = [['role' => 'user', 'content' => $prompt]];
 
         // Include images if available
@@ -234,15 +233,15 @@ class TransactionItemResearcher
     }
 
     /**
-     * Build a prompt from raw data.
+     * Build a prompt from raw data with attributes.
+     *
+     * @param  array<string, mixed>  $attributes
      */
     protected function buildPromptFromData(
         string $title,
         ?string $description,
         ?string $categoryName,
-        ?string $preciousMetal,
-        ?string $condition,
-        ?float $weight,
+        array $attributes = [],
     ): string {
         $details = "Analyze this item and provide a market research report:\n\n";
         $details .= "Title: {$title}\n";
@@ -253,14 +252,18 @@ class TransactionItemResearcher
         if ($categoryName) {
             $details .= "Category: {$categoryName}\n";
         }
-        if ($preciousMetal) {
-            $details .= 'Metal Type: '.str_replace('_', ' ', $preciousMetal)."\n";
-        }
-        if ($weight) {
-            $details .= "Weight (DWT): {$weight}\n";
-        }
-        if ($condition) {
-            $details .= 'Condition: '.str_replace('_', ' ', $condition)."\n";
+
+        // Add all attributes from template fields
+        if (! empty($attributes)) {
+            $details .= "\nItem Attributes:\n";
+            foreach ($attributes as $name => $value) {
+                if (! empty($value)) {
+                    // Format the attribute name nicely
+                    $formattedName = ucwords(str_replace(['_', '-'], ' ', $name));
+                    $formattedValue = is_string($value) ? str_replace('_', ' ', $value) : $value;
+                    $details .= "- {$formattedName}: {$formattedValue}\n";
+                }
+            }
         }
 
         $details .= "\nRespond with a JSON object containing:\n";

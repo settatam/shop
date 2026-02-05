@@ -90,19 +90,39 @@ class Invoice extends Model
     protected static function booted(): void
     {
         static::creating(function (Invoice $invoice) {
+            // Set temporary value to satisfy NOT NULL constraint if needed
             if (empty($invoice->invoice_number)) {
-                $invoice->invoice_number = static::generateInvoiceNumber();
+                $invoice->invoice_number = 'INV-TEMP';
+            }
+        });
+
+        static::created(function (Invoice $invoice) {
+            // Generate invoice_number from store prefix based on invoiceable type
+            if ($invoice->invoice_number === 'INV-TEMP') {
+                $store = $invoice->store;
+                $prefix = static::getPrefixForInvoiceableType($invoice->invoiceable_type, $store);
+                $invoice->invoice_number = "{$prefix}-{$invoice->id}";
+                $invoice->saveQuietly();
             }
         });
     }
 
-    public static function generateInvoiceNumber(): string
+    /**
+     * Get the appropriate prefix based on the invoiceable type and store settings.
+     */
+    protected static function getPrefixForInvoiceableType(?string $invoiceableType, ?Store $store): string
     {
-        $prefix = 'INV';
-        $date = now()->format('Ymd');
-        $random = strtoupper(substr(md5(uniqid()), 0, 6));
+        if (! $store) {
+            return 'INV';
+        }
 
-        return "{$prefix}-{$date}-{$random}";
+        return match ($invoiceableType) {
+            Order::class => $store->order_id_prefix ?: 'INV',
+            Repair::class => $store->repair_id_prefix ?: 'REP',
+            Memo::class => $store->memo_id_prefix ?: 'MEM',
+            Transaction::class => $store->buy_id_prefix ?: 'TXN',
+            default => 'INV',
+        };
     }
 
     public function customer(): BelongsTo

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\QuickEvaluation;
 use App\Models\Transaction;
-use App\Models\TransactionItem;
 use App\Models\Warehouse;
 use App\Services\AI\TransactionItemResearcher;
 use App\Services\Image\ImageService;
@@ -78,8 +77,6 @@ class QuickEvaluationController extends Controller
 
         return Inertia::render('transactions/QuickEvaluation', [
             'categories' => $categories,
-            'preciousMetals' => $this->getPreciousMetals(),
-            'conditions' => $this->getConditions(),
             'paymentMethods' => $this->getPaymentMethods(),
             'storeUsers' => $storeUsers,
             'currentStoreUserId' => $currentStoreUserId,
@@ -100,9 +97,7 @@ class QuickEvaluationController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:2000',
             'category_id' => 'nullable|exists:categories,id',
-            'precious_metal' => 'nullable|string|max:50',
-            'condition' => 'nullable|string|max:50',
-            'estimated_weight' => 'nullable|numeric|min:0',
+            'attributes' => 'nullable|array',
             'estimated_value' => 'nullable|numeric|min:0',
         ]);
 
@@ -112,9 +107,7 @@ class QuickEvaluationController extends Controller
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'category_id' => $validated['category_id'] ?? null,
-            'precious_metal' => $validated['precious_metal'] ?? null,
-            'condition' => $validated['condition'] ?? null,
-            'estimated_weight' => $validated['estimated_weight'] ?? null,
+            'attributes' => $validated['attributes'] ?? null,
             'estimated_value' => $validated['estimated_value'] ?? null,
             'status' => QuickEvaluation::STATUS_DRAFT,
         ]);
@@ -132,9 +125,7 @@ class QuickEvaluationController extends Controller
             'title' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string|max:2000',
             'category_id' => 'nullable|exists:categories,id',
-            'precious_metal' => 'nullable|string|max:50',
-            'condition' => 'nullable|string|max:50',
-            'estimated_weight' => 'nullable|numeric|min:0',
+            'attributes' => 'nullable|array',
             'estimated_value' => 'nullable|numeric|min:0',
         ]);
 
@@ -154,11 +145,15 @@ class QuickEvaluationController extends Controller
         }
 
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title' => 'nullable|string|max:255',
             'category_id' => 'nullable|exists:categories,id',
-            'precious_metal' => 'nullable|string|max:50',
-            'condition' => 'nullable|string|max:50',
+            'attributes' => 'nullable|array',
         ]);
+
+        // Need at least a title or category or some attributes to search
+        if (empty($validated['title']) && empty($validated['category_id']) && empty($validated['attributes'])) {
+            return response()->json(['items' => []]);
+        }
 
         $finder = app(SimilarItemFinder::class);
         $similarItems = $finder->findSimilarTransactionItems($validated, $store->id, 10);
@@ -180,9 +175,7 @@ class QuickEvaluationController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:2000',
             'category_id' => 'nullable|exists:categories,id',
-            'precious_metal' => 'nullable|string|max:50',
-            'condition' => 'nullable|string|max:50',
-            'estimated_weight' => 'nullable|numeric|min:0',
+            'attributes' => 'nullable|array',
             'image_urls' => 'nullable|array',
             'image_urls.*' => 'string|url',
         ]);
@@ -193,9 +186,7 @@ class QuickEvaluationController extends Controller
             title: $validated['title'],
             description: $validated['description'] ?? null,
             categoryId: $validated['category_id'] ?? null,
-            preciousMetal: $validated['precious_metal'] ?? null,
-            condition: $validated['condition'] ?? null,
-            weight: $validated['estimated_weight'] ?? null,
+            attributes: $validated['attributes'] ?? [],
             imageUrls: $validated['image_urls'] ?? [],
         );
 
@@ -274,9 +265,7 @@ class QuickEvaluationController extends Controller
             'title' => $evaluation->title,
             'description' => $evaluation->description,
             'category_id' => $evaluation->category_id,
-            'precious_metal' => $evaluation->precious_metal,
-            'condition' => $evaluation->condition,
-            'dwt' => $evaluation->estimated_weight,
+            'attributes' => $evaluation->attributes,
             'price' => $evaluation->estimated_value,
             'buy_price' => $validated['buy_price'],
             'ai_research' => $evaluation->ai_research,
@@ -361,9 +350,7 @@ class QuickEvaluationController extends Controller
                 'name' => $evaluation->category->name,
                 'full_path' => $evaluation->category->full_path,
             ] : null,
-            'precious_metal' => $evaluation->precious_metal,
-            'condition' => $evaluation->condition,
-            'estimated_weight' => $evaluation->estimated_weight,
+            'attributes' => $evaluation->attributes,
             'estimated_value' => $evaluation->estimated_value,
             'similar_items' => $evaluation->similar_items,
             'ai_research' => $evaluation->ai_research,
@@ -377,36 +364,6 @@ class QuickEvaluationController extends Controller
             ]),
             'created_at' => $evaluation->created_at->toISOString(),
             'updated_at' => $evaluation->updated_at->toISOString(),
-        ];
-    }
-
-    /**
-     * @return array<array<string, string>>
-     */
-    protected function getPreciousMetals(): array
-    {
-        return [
-            ['value' => TransactionItem::METAL_GOLD_10K, 'label' => '10K Gold'],
-            ['value' => TransactionItem::METAL_GOLD_14K, 'label' => '14K Gold'],
-            ['value' => TransactionItem::METAL_GOLD_18K, 'label' => '18K Gold'],
-            ['value' => TransactionItem::METAL_GOLD_22K, 'label' => '22K Gold'],
-            ['value' => TransactionItem::METAL_GOLD_24K, 'label' => '24K Gold'],
-            ['value' => TransactionItem::METAL_SILVER, 'label' => 'Silver'],
-            ['value' => TransactionItem::METAL_PLATINUM, 'label' => 'Platinum'],
-            ['value' => TransactionItem::METAL_PALLADIUM, 'label' => 'Palladium'],
-        ];
-    }
-
-    /**
-     * @return array<array<string, string>>
-     */
-    protected function getConditions(): array
-    {
-        return [
-            ['value' => TransactionItem::CONDITION_NEW, 'label' => 'New'],
-            ['value' => TransactionItem::CONDITION_LIKE_NEW, 'label' => 'Like New'],
-            ['value' => TransactionItem::CONDITION_USED, 'label' => 'Used'],
-            ['value' => TransactionItem::CONDITION_DAMAGED, 'label' => 'Damaged'],
         ];
     }
 

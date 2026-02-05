@@ -99,6 +99,9 @@ class SimilarItemFinder
     public function findSimilarTransactionItems(array $criteria, int $storeId, int $limit = 10): Collection
     {
         $titleWords = $this->extractKeywords($criteria['title'] ?? '');
+        $searchAttributes = $criteria['attributes'] ?? [];
+        $hasTitle = ! empty($titleWords);
+        $hasAttributes = ! empty(array_filter($searchAttributes));
 
         $query = TransactionItem::query()
             ->whereHas('transaction', function ($q) use ($storeId) {
@@ -107,39 +110,83 @@ class SimilarItemFinder
             })
             ->with(['category', 'images', 'transaction']);
 
+        // Pre-filter by category if specified (more efficient)
+        if (! empty($criteria['category_id'])) {
+            $query->where('category_id', $criteria['category_id']);
+        }
+
         // Get items to score
-        $items = $query->limit(200)->get();
+        $items = $query->limit(500)->get();
+
+        // Determine scoring weights based on what search criteria we have
+        $categoryWeight = $hasTitle ? 30 : 40;
+        $titleWeight = 50;
+        $attributeWeight = $hasTitle ? 35 : 60; // Attributes matter more when no title
 
         // Score each item
-        $scored = $items->map(function (TransactionItem $item) use ($titleWords, $criteria) {
+        $scored = $items->map(function (TransactionItem $item) use ($titleWords, $criteria, $searchAttributes, $hasTitle, $hasAttributes, $categoryWeight, $titleWeight, $attributeWeight) {
             $score = 0;
             $reasons = [];
 
-            // Category match
+            // Category match (already filtered, but still score it)
             if (! empty($criteria['category_id']) && $item->category_id == $criteria['category_id']) {
-                $score += 30;
+                $score += $categoryWeight;
                 $reasons[] = 'Same category';
             }
 
-            // Title keyword overlap
-            $itemWords = $this->extractKeywords($item->title);
-            $overlap = array_intersect($titleWords, $itemWords);
-            if (! empty($overlap)) {
-                $overlapScore = (count($overlap) / max(count($titleWords), 1)) * 50;
-                $score += $overlapScore;
-                $reasons[] = 'Title match: '.implode(', ', $overlap);
+            // Title keyword overlap (only if we have title words)
+            if ($hasTitle) {
+                $itemWords = $this->extractKeywords($item->title);
+                $overlap = array_intersect($titleWords, $itemWords);
+                if (! empty($overlap)) {
+                    $overlapScore = (count($overlap) / max(count($titleWords), 1)) * $titleWeight;
+                    $score += $overlapScore;
+                    $reasons[] = 'Title match: '.implode(', ', $overlap);
+                }
             }
 
-            // Metal type match
-            if (! empty($criteria['precious_metal']) && $item->precious_metal === $criteria['precious_metal']) {
-                $score += 25;
-                $reasons[] = 'Metal type match';
-            }
+            // Attribute matching
+            if ($hasAttributes) {
+                $itemAttributes = is_array($item->attributes) ? $item->attributes : [];
+                $matchedAttributes = [];
+                $mismatchedAttributes = [];
+                $totalSearchAttributes = 0;
 
-            // Condition match
-            if (! empty($criteria['condition']) && $item->condition === $criteria['condition']) {
-                $score += 10;
-                $reasons[] = 'Condition match';
+                foreach ($searchAttributes as $key => $value) {
+                    if (empty($value)) {
+                        continue;
+                    }
+                    $totalSearchAttributes++;
+
+                    // Get the item's value for this attribute (from JSON or legacy fields)
+                    $itemValue = $this->getItemAttributeValue($item, $itemAttributes, $key);
+
+                    if ($itemValue !== null) {
+                        // Item has a value for this attribute - check if it matches
+                        if ($this->attributeValuesMatch($itemValue, $value)) {
+                            $matchedAttributes[] = $this->formatAttributeName($key);
+                        } else {
+                            // Item has a DIFFERENT value - this is a mismatch
+                            $mismatchedAttributes[] = $this->formatAttributeName($key);
+                        }
+                    }
+                    // If item has no value for this attribute, it's neither a match nor mismatch
+                }
+
+                if (! empty($matchedAttributes)) {
+                    // Score based on percentage of attributes matched
+                    $attributeScore = (count($matchedAttributes) / max($totalSearchAttributes, 1)) * $attributeWeight;
+                    $score += $attributeScore;
+                    $reasons[] = 'Matches: '.implode(', ', $matchedAttributes);
+                }
+
+                // Penalize mismatches - having a different value is worse than no value
+                if (! empty($mismatchedAttributes)) {
+                    $penaltyPerMismatch = 30; // Significant penalty per mismatched attribute
+                    $penalty = count($mismatchedAttributes) * $penaltyPerMismatch;
+                    $score -= $penalty;
+                    $reasons[] = 'Different: '.implode(', ', $mismatchedAttributes);
+                }
             }
 
             return [
@@ -147,6 +194,7 @@ class SimilarItemFinder
                 'title' => $item->title,
                 'description' => $item->description,
                 'category' => $item->category?->name,
+                'attributes' => $item->attributes,
                 'precious_metal' => $item->precious_metal,
                 'condition' => $item->condition,
                 'dwt' => $item->dwt,
@@ -164,6 +212,101 @@ class SimilarItemFinder
             ->values();
 
         return $scored;
+    }
+
+    /**
+     * Check if two attribute values match (handles string comparison case-insensitively).
+     */
+    protected function attributeValuesMatch(mixed $itemValue, mixed $searchValue): bool
+    {
+        if (is_string($itemValue) && is_string($searchValue)) {
+            return strtolower(trim($itemValue)) === strtolower(trim($searchValue));
+        }
+
+        return $itemValue == $searchValue;
+    }
+
+    /**
+     * Get an item's value for a specific attribute (from JSON attributes or legacy fields).
+     *
+     * @param  array<string, mixed>  $itemAttributes
+     */
+    protected function getItemAttributeValue(TransactionItem $item, array $itemAttributes, string $attrKey): mixed
+    {
+        // First check if the attribute exists in the JSON attributes
+        if (isset($itemAttributes[$attrKey]) && $itemAttributes[$attrKey] !== '') {
+            return $itemAttributes[$attrKey];
+        }
+
+        // Then check legacy fields by common attribute names
+        $key = strtolower($attrKey);
+
+        if (in_array($key, ['precious_metal', 'precious_metals', 'metal_type', 'metal'])) {
+            return $item->precious_metal;
+        }
+
+        if ($key === 'condition') {
+            return $item->condition;
+        }
+
+        if (in_array($key, ['dwt', 'weight', 'weight_dwt'])) {
+            return $item->dwt;
+        }
+
+        // Check for common attribute patterns (brand, material, etc.)
+        // by looking for the key in different formats in the item attributes
+        $keyVariants = [
+            $attrKey,
+            strtolower($attrKey),
+            str_replace(' ', '_', strtolower($attrKey)),
+            str_replace('_', ' ', strtolower($attrKey)),
+        ];
+
+        foreach ($keyVariants as $variant) {
+            foreach ($itemAttributes as $itemKey => $itemValue) {
+                if (strtolower($itemKey) === strtolower($variant) && $itemValue !== '') {
+                    return $itemValue;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check legacy fields (precious_metal, condition, dwt) for attribute matches.
+     */
+    protected function checkLegacyFieldMatch(TransactionItem $item, string $attrKey, mixed $attrValue): bool
+    {
+        $key = strtolower($attrKey);
+
+        // Map common attribute names to legacy fields
+        if (in_array($key, ['precious_metal', 'precious_metals', 'metal_type', 'metal'])) {
+            return $item->precious_metal && $this->attributeValuesMatch($item->precious_metal, $attrValue);
+        }
+
+        if ($key === 'condition') {
+            return $item->condition && $this->attributeValuesMatch($item->condition, $attrValue);
+        }
+
+        if (in_array($key, ['dwt', 'weight', 'weight_dwt'])) {
+            // For weight, check if within 10% tolerance
+            if ($item->dwt && is_numeric($attrValue)) {
+                $tolerance = (float) $attrValue * 0.1;
+
+                return abs((float) $item->dwt - (float) $attrValue) <= $tolerance;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Format attribute name for display.
+     */
+    protected function formatAttributeName(string $key): string
+    {
+        return ucwords(str_replace(['_', '-'], ' ', $key));
     }
 
     /**

@@ -3,8 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
-use App\Models\Product;
-use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\StoreUser;
@@ -12,7 +10,6 @@ use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
 use App\Services\SimilarItemFinder;
-use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,123 +17,137 @@ class SimilarItemFinderTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected User $user;
-
     protected Store $store;
+
+    protected Category $category;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->user = User::factory()->create();
-        $this->store = Store::factory()->create(['user_id' => $this->user->id, 'step' => 2]);
+        $owner = User::factory()->create();
+        $this->store = Store::factory()->create([
+            'user_id' => $owner->id,
+            'step' => 2,
+        ]);
 
-        $role = Role::factory()->owner()->create(['store_id' => $this->store->id]);
+        $ownerRole = Role::factory()->owner()->create(['store_id' => $this->store->id]);
+
         StoreUser::factory()->owner()->create([
-            'user_id' => $this->user->id,
+            'user_id' => $owner->id,
             'store_id' => $this->store->id,
-            'role_id' => $role->id,
+            'role_id' => $ownerRole->id,
         ]);
 
-        $this->user->update(['current_store_id' => $this->store->id]);
-        app(StoreContext::class)->setCurrentStore($this->store);
+        $this->category = Category::factory()->create(['store_id' => $this->store->id, 'name' => 'Watches']);
     }
 
-    public function test_finds_similar_items_by_category(): void
+    public function test_matching_attributes_increase_score(): void
     {
-        $category = Category::factory()->create(['store_id' => $this->store->id]);
-
-        $product = Product::factory()->create([
+        // Create a transaction item with Rolex brand
+        $transaction = Transaction::factory()->create([
             'store_id' => $this->store->id,
-            'title' => 'Diamond Ring',
-            'category_id' => $category->id,
+            'status' => 'payment_processed',
         ]);
-        ProductVariant::factory()->create(['product_id' => $product->id]);
 
-        $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
-        $item = TransactionItem::factory()->create([
+        TransactionItem::factory()->create([
             'transaction_id' => $transaction->id,
-            'title' => 'Gold Ring',
-            'category_id' => $category->id,
+            'category_id' => $this->category->id,
+            'title' => 'Rolex Submariner',
+            'attributes' => ['brand' => 'Rolex', 'model' => 'Submariner'],
+            'buy_price' => 5000,
         ]);
 
-        $finder = new SimilarItemFinder;
-        $results = $finder->findSimilar($item);
+        $finder = app(SimilarItemFinder::class);
 
-        $this->assertNotEmpty($results);
-        $this->assertTrue($results->contains(fn ($r) => $r['id'] === $product->id));
+        // Search for Rolex brand - should get a match
+        $results = $finder->findSimilarTransactionItems([
+            'category_id' => $this->category->id,
+            'attributes' => ['brand' => 'Rolex'],
+        ], $this->store->id);
+
+        $this->assertCount(1, $results);
+        $item = $results->first();
+        $this->assertTrue(
+            collect($item['match_reasons'])->contains(fn ($reason) => str_contains($reason, 'Matches'))
+        );
     }
 
-    public function test_finds_similar_items_by_title_keywords(): void
+    public function test_mismatched_attributes_decrease_score(): void
     {
-        $product = Product::factory()->create([
+        // Create transaction items with different brands
+        $transaction = Transaction::factory()->create([
             'store_id' => $this->store->id,
-            'title' => '14K Gold Chain Necklace',
+            'status' => 'payment_processed',
         ]);
-        ProductVariant::factory()->create(['product_id' => $product->id]);
 
-        $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
-        $item = TransactionItem::factory()->create([
+        // Rolex item
+        TransactionItem::factory()->create([
             'transaction_id' => $transaction->id,
-            'title' => '14K Gold Bracelet',
+            'category_id' => $this->category->id,
+            'title' => 'Rolex Submariner',
+            'attributes' => ['brand' => 'Rolex'],
+            'buy_price' => 5000,
         ]);
 
-        $finder = new SimilarItemFinder;
-        $results = $finder->findSimilar($item);
-
-        $this->assertNotEmpty($results);
-        $this->assertTrue($results->contains(fn ($r) => $r['id'] === $product->id));
-    }
-
-    public function test_returns_empty_when_no_similar_items(): void
-    {
-        $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
-        $item = TransactionItem::factory()->create([
+        // Cartier item
+        TransactionItem::factory()->create([
             'transaction_id' => $transaction->id,
-            'title' => 'Extremely Unique Item XYZ123',
+            'category_id' => $this->category->id,
+            'title' => 'Cartier Santos',
+            'attributes' => ['brand' => 'Cartier'],
+            'buy_price' => 4000,
         ]);
 
-        $finder = new SimilarItemFinder;
-        $results = $finder->findSimilar($item);
+        $finder = app(SimilarItemFinder::class);
 
-        $this->assertEmpty($results);
-    }
+        // Search for Rolex brand - Cartier should have a lower score due to mismatch penalty
+        $results = $finder->findSimilarTransactionItems([
+            'category_id' => $this->category->id,
+            'attributes' => ['brand' => 'Rolex'],
+        ], $this->store->id);
 
-    public function test_respects_limit(): void
-    {
-        $category = Category::factory()->create(['store_id' => $this->store->id]);
-
-        for ($i = 0; $i < 5; $i++) {
-            $product = Product::factory()->create([
-                'store_id' => $this->store->id,
-                'title' => "Gold Ring Style {$i}",
-                'category_id' => $category->id,
-            ]);
-            ProductVariant::factory()->create(['product_id' => $product->id]);
-        }
-
-        $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
-        $item = TransactionItem::factory()->create([
-            'transaction_id' => $transaction->id,
-            'title' => 'Gold Ring',
-            'category_id' => $category->id,
-        ]);
-
-        $finder = new SimilarItemFinder;
-        $results = $finder->findSimilar($item, 2);
-
+        // Should have both items (category matches)
         $this->assertCount(2, $results);
+
+        // Find the items by title
+        $rolexItem = $results->firstWhere('title', 'Rolex Submariner');
+        $cartierItem = $results->firstWhere('title', 'Cartier Santos');
+
+        // Rolex should have higher score than Cartier
+        $this->assertGreaterThan($cartierItem['similarity_score'], $rolexItem['similarity_score']);
+
+        // Cartier should have "Different: Brand" in its reasons
+        $this->assertTrue(
+            collect($cartierItem['match_reasons'])->contains(fn ($reason) => str_contains($reason, 'Different'))
+        );
     }
 
-    public function test_similar_items_endpoint_returns_json(): void
+    public function test_mismatch_penalty_can_make_item_not_show(): void
     {
-        $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
-        $item = TransactionItem::factory()->create(['transaction_id' => $transaction->id]);
+        // Create a transaction item with Cartier brand
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => 'payment_processed',
+        ]);
 
-        $response = $this->actingAs($this->user)
-            ->getJson("/transactions/{$transaction->id}/items/{$item->id}/similar");
+        TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'category_id' => $this->category->id,
+            'title' => 'Cartier Santos',
+            'attributes' => ['brand' => 'Cartier'],
+            'buy_price' => 4000,
+        ]);
 
-        $response->assertStatus(200);
-        $response->assertJsonStructure(['items']);
+        $finder = app(SimilarItemFinder::class);
+
+        // Search for Rolex brand without category filter
+        // The mismatch penalty should make the score <= 0, excluding it from results
+        $results = $finder->findSimilarTransactionItems([
+            'attributes' => ['brand' => 'Rolex'],
+        ], $this->store->id);
+
+        // Item should not appear because mismatch penalty (-30) puts it at or below 0
+        $this->assertCount(0, $results);
     }
 }

@@ -120,9 +120,12 @@ class Repair extends Model implements Payable
         });
 
         static::created(function (Repair $repair) {
-            // Update with actual ID-based number
+            // Generate repair_number from store prefix/suffix
             if ($repair->repair_number === 'REP-TEMP') {
-                $repair->repair_number = "REP-{$repair->id}";
+                $store = $repair->store;
+                $prefix = $store?->repair_id_prefix ?? 'REP';
+                $suffix = $store?->repair_id_suffix ?? '';
+                $repair->repair_number = "{$prefix}-{$repair->id}{$suffix}";
                 $repair->saveQuietly();
             }
         });

@@ -25,9 +25,7 @@ class QuickEvaluation extends Model
         'title',
         'description',
         'category_id',
-        'precious_metal',
-        'condition',
-        'estimated_weight',
+        'attributes',
         'estimated_value',
         'similar_items',
         'ai_research',
@@ -38,7 +36,7 @@ class QuickEvaluation extends Model
     protected function casts(): array
     {
         return [
-            'estimated_weight' => 'decimal:4',
+            'attributes' => 'array',
             'estimated_value' => 'decimal:2',
             'similar_items' => 'array',
             'ai_research' => 'array',

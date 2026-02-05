@@ -25,7 +25,7 @@ class TransactionFactory extends Factory
             'store_id' => Store::factory(),
             'customer_id' => Customer::factory(),
             'user_id' => User::factory(),
-            'transaction_number' => Transaction::generateTransactionNumber(),
+            // transaction_number is auto-generated in model's booted() hook
             'status' => Transaction::STATUS_PENDING,
             'type' => fake()->randomElement([Transaction::TYPE_IN_STORE, Transaction::TYPE_MAIL_IN]),
             'preliminary_offer' => $preliminaryOffer,

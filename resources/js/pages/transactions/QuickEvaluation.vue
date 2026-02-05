@@ -42,6 +42,26 @@ interface SelectOption {
     label: string;
 }
 
+interface FieldOption {
+    label: string;
+    value: string;
+}
+
+interface TemplateField {
+    id: number;
+    name: string;
+    label: string;
+    type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'radio' | 'date' | 'brand';
+    placeholder: string | null;
+    help_text: string | null;
+    default_value: string | null;
+    is_required: boolean;
+    group_name: string | null;
+    group_position: number;
+    width_class: 'full' | 'half' | 'third' | 'quarter';
+    options: FieldOption[];
+}
+
 interface StoreUser {
     id: number;
     name: string;
@@ -90,8 +110,6 @@ interface SimilarItem {
 
 interface Props {
     categories: Category[];
-    preciousMetals: SelectOption[];
-    conditions: SelectOption[];
     paymentMethods: SelectOption[];
     storeUsers: StoreUser[];
     currentStoreUserId: number | null;
@@ -111,11 +129,13 @@ const form = ref({
     title: '',
     description: '',
     category_id: null as number | null,
-    precious_metal: '',
-    condition: '',
-    estimated_weight: null as number | null,
+    attributes: {} as Record<number, string>,
     estimated_value: null as number | null,
 });
+
+// Template fields state
+const templateFields = ref<TemplateField[]>([]);
+const loadingTemplate = ref(false);
 
 // Similar items state
 const similarItems = ref<SimilarItem[]>([]);
@@ -147,6 +167,19 @@ const convertForm = ref({
     customer_notes: '',
     internal_notes: '',
 });
+
+// Spot price calculation
+const spotPrice = ref<number | null>(null);
+const loadingSpotPrice = ref(false);
+let spotPriceTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Find precious metal and DWT fields in template
+const preciousMetalField = computed(() =>
+    templateFields.value.find(f => f.name === 'precious_metal' || f.name === 'metal_type')
+);
+const dwtField = computed(() =>
+    templateFields.value.find(f => f.name === 'dwt' || f.name === 'weight_dwt')
+);
 
 // Category tree logic
 const categoryTree = computed(() => {
@@ -229,6 +262,113 @@ function navigateToLevel(index: number) {
 function clearCategory() {
     form.value.category_id = null;
     selectionPath.value = [];
+    templateFields.value = [];
+    form.value.attributes = {};
+}
+
+// Template fields loading
+async function loadTemplateFields(categoryId: number) {
+    loadingTemplate.value = true;
+    try {
+        const response = await axios.get(`/categories/${categoryId}/template-fields`);
+        const data = response.data;
+
+        templateFields.value = (data.fields || []).map((f: any) => ({
+            ...f,
+            options: f.options || [],
+        }));
+
+        // Initialize attributes with defaults
+        for (const field of templateFields.value) {
+            if (!(field.id in form.value.attributes)) {
+                form.value.attributes[field.id] = field.default_value || '';
+            }
+        }
+    } catch {
+        templateFields.value = [];
+    } finally {
+        loadingTemplate.value = false;
+    }
+}
+
+// Watch category changes to load template
+watch(() => form.value.category_id, (newId) => {
+    if (newId) {
+        loadTemplateFields(newId);
+    } else {
+        templateFields.value = [];
+    }
+});
+
+// Group template fields
+const groupedTemplateFields = computed(() => {
+    const groups: Record<string, TemplateField[]> = {};
+    const standalone: TemplateField[] = [];
+
+    for (const field of templateFields.value) {
+        if (field.group_name) {
+            if (!groups[field.group_name]) {
+                groups[field.group_name] = [];
+            }
+            groups[field.group_name].push(field);
+            groups[field.group_name].sort((a, b) => a.group_position - b.group_position);
+        } else {
+            standalone.push(field);
+        }
+    }
+
+    return { groups, standalone };
+});
+
+// Spot price calculation
+function watchSpotPrice() {
+    const metalFieldId = preciousMetalField.value?.id;
+    const dwtFieldId = dwtField.value?.id;
+
+    if (!metalFieldId || !dwtFieldId) {
+        spotPrice.value = null;
+        return;
+    }
+
+    const metal = form.value.attributes[metalFieldId];
+    const dwt = parseFloat(form.value.attributes[dwtFieldId]);
+
+    if (!metal || !dwt || dwt <= 0) {
+        spotPrice.value = null;
+        return;
+    }
+
+    if (spotPriceTimeout) clearTimeout(spotPriceTimeout);
+    spotPriceTimeout = setTimeout(async () => {
+        loadingSpotPrice.value = true;
+        try {
+            const response = await fetch(`/api/v1/metal-prices/calculate?precious_metal=${encodeURIComponent(metal)}&dwt=${dwt}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (response.ok) {
+                const data = await response.json();
+                spotPrice.value = data.spot_price;
+            } else {
+                spotPrice.value = null;
+            }
+        } catch {
+            spotPrice.value = null;
+        } finally {
+            loadingSpotPrice.value = false;
+        }
+    }, 300);
+}
+
+// Watch attribute changes for spot price
+watch(() => form.value.attributes, () => {
+    watchSpotPrice();
+}, { deep: true });
+
+function fillSpotPrice() {
+    if (spotPrice.value !== null) {
+        form.value.estimated_value = spotPrice.value;
+    }
 }
 
 // Image handling
@@ -270,9 +410,27 @@ function removeImage(index: number) {
     imagePreviews.value.splice(index, 1);
 }
 
+// Build attributes map with field names for API calls
+function getAttributesForApi(): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const field of templateFields.value) {
+        const value = form.value.attributes[field.id];
+        if (value) {
+            result[field.name] = value;
+        }
+    }
+    return result;
+}
+
 // Similar items search
 async function searchSimilarItems() {
-    if (!form.value.title || form.value.title.length < 2) {
+    const attributes = getAttributesForApi();
+    const hasTitle = form.value.title && form.value.title.length >= 2;
+    const hasCategory = form.value.category_id !== null;
+    const hasAttributes = Object.values(attributes).some(v => v && v.length > 0);
+
+    // Need at least one search criterion
+    if (!hasTitle && !hasCategory && !hasAttributes) {
         similarItems.value = [];
         return;
     }
@@ -280,10 +438,9 @@ async function searchSimilarItems() {
     loadingSimilarItems.value = true;
     try {
         const response = await axios.post('/transactions/quick-evaluation/similar-items', {
-            title: form.value.title,
+            title: form.value.title || '',
             category_id: form.value.category_id,
-            precious_metal: form.value.precious_metal,
-            condition: form.value.condition,
+            attributes: attributes,
         });
         similarItems.value = response.data.items;
     } catch {
@@ -293,8 +450,8 @@ async function searchSimilarItems() {
     }
 }
 
-// Debounced search
-watch(() => [form.value.title, form.value.category_id, form.value.precious_metal, form.value.condition], () => {
+// Debounced search - watch title, category, and attributes
+watch(() => [form.value.title, form.value.category_id, form.value.attributes], () => {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         searchSimilarItems();
@@ -307,16 +464,12 @@ async function generateAiResearch() {
     aiResearchError.value = null;
 
     try {
-        // Get image URLs from previews (base64 data URLs won't work for AI)
-        // In production, you'd upload images first and get URLs
         const response = await axios.post('/transactions/quick-evaluation/ai-research', {
             title: form.value.title,
             description: form.value.description,
             category_id: form.value.category_id,
-            precious_metal: form.value.precious_metal,
-            condition: form.value.condition,
-            estimated_weight: form.value.estimated_weight,
-            image_urls: [], // Would need actual URLs
+            attributes: getAttributesForApi(),
+            image_urls: [],
         });
 
         if (response.data.research?.error) {
@@ -332,17 +485,6 @@ async function generateAiResearch() {
 }
 
 // Conversion modal
-const selectedStoreUser = computed(() => {
-    return props.storeUsers.find(u => u.id === convertForm.value.store_user_id);
-});
-
-const customerDisplayName = computed(() => {
-    if (convertForm.value.customer) {
-        return `${convertForm.value.customer.first_name} ${convertForm.value.customer.last_name}`.trim();
-    }
-    return null;
-});
-
 function openConvertModal() {
     // Set initial buy price from estimated value or AI research
     let initialPrice = form.value.estimated_value || 0;
@@ -407,15 +549,13 @@ async function submitConversion() {
 
     isConverting.value = true;
 
-    // First save the evaluation to get an ID
     try {
+        // First save the evaluation to get an ID
         const evalResponse = await axios.post('/transactions/quick-evaluation', {
             title: form.value.title,
             description: form.value.description,
             category_id: form.value.category_id,
-            precious_metal: form.value.precious_metal,
-            condition: form.value.condition,
-            estimated_weight: form.value.estimated_weight,
+            attributes: form.value.attributes,
             estimated_value: form.value.estimated_value,
         });
 
@@ -470,6 +610,26 @@ const formatDaysAgo = (days: number) => {
 const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600';
 
 const isFormValid = computed(() => form.value.title.trim().length > 0);
+
+// Get summary of filled attributes for display
+const attributeSummary = computed(() => {
+    const parts: string[] = [];
+    for (const field of templateFields.value) {
+        const value = form.value.attributes[field.id];
+        if (value) {
+            // For select fields, find the label
+            if (field.type === 'select' && field.options.length > 0) {
+                const option = field.options.find(o => o.value === value);
+                if (option) {
+                    parts.push(option.label);
+                    continue;
+                }
+            }
+            parts.push(value);
+        }
+    }
+    return parts.join(' / ');
+});
 </script>
 
 <template>
@@ -599,50 +759,210 @@ const isFormValid = computed(() => form.value.title.trim().length > 0);
                                     </div>
                                 </div>
 
+                                <!-- Template Fields Loading -->
+                                <div v-if="loadingTemplate" class="flex items-center justify-center gap-2 py-4 text-gray-500 dark:text-gray-400">
+                                    <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    <span>Loading template fields...</span>
+                                </div>
+
+                                <!-- No template assigned -->
+                                <div v-else-if="form.category_id && templateFields.length === 0 && !loadingTemplate" class="rounded-md bg-amber-50 p-4 dark:bg-amber-900/20">
+                                    <p class="text-sm text-amber-700 dark:text-amber-400">
+                                        No template fields configured for this category.
+                                        <a :href="`/categories/${form.category_id}/settings`" class="underline hover:no-underline">
+                                            Assign a template in Category Settings
+                                        </a>
+                                        to add item details like metal type, condition, weight, etc.
+                                    </p>
+                                </div>
+
+                                <!-- Template Fields -->
+                                <div v-else-if="templateFields.length > 0" class="space-y-4">
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-white">Item Details</h4>
+
+                                    <!-- Grouped Fields -->
+                                    <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">
+                                        <div class="flex gap-2">
+                                            <div
+                                                v-for="field in fields"
+                                                :key="field.id"
+                                                :class="[
+                                                    field.width_class === 'full' ? 'flex-1' : '',
+                                                    field.width_class === 'half' ? 'w-1/2' : '',
+                                                    field.width_class === 'third' ? 'w-1/3' : '',
+                                                    field.width_class === 'quarter' ? 'w-1/4' : '',
+                                                    field.group_position > 1 ? 'w-auto shrink-0' : 'flex-1',
+                                                ]"
+                                            >
+                                                <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    {{ field.label }}
+                                                    <span v-if="field.is_required" class="text-red-500">*</span>
+                                                </label>
+
+                                                <input
+                                                    v-if="field.type === 'text'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="text"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    :class="inputClass"
+                                                />
+                                                <input
+                                                    v-else-if="field.type === 'number'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="number"
+                                                    step="any"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    :class="inputClass"
+                                                />
+                                                <select
+                                                    v-else-if="field.type === 'select'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :required="field.is_required"
+                                                    :class="inputClass"
+                                                >
+                                                    <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                    <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                        {{ opt.label }}
+                                                    </option>
+                                                </select>
+                                                <input
+                                                    v-else-if="field.type === 'date'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="date"
+                                                    :required="field.is_required"
+                                                    :class="inputClass"
+                                                />
+
+                                                <p v-if="field.help_text && field.group_position === 1" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    {{ field.help_text }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Standalone Fields -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div
+                                            v-for="field in groupedTemplateFields.standalone"
+                                            :key="field.id"
+                                            :class="[
+                                                field.width_class === 'full' ? 'sm:col-span-2' : '',
+                                            ]"
+                                        >
+                                            <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ field.label }}
+                                                <span v-if="field.is_required" class="text-red-500">*</span>
+                                            </label>
+
+                                            <input
+                                                v-if="field.type === 'text'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="text"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                :class="inputClass"
+                                            />
+                                            <input
+                                                v-else-if="field.type === 'number'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="number"
+                                                step="any"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                :class="inputClass"
+                                            />
+                                            <textarea
+                                                v-else-if="field.type === 'textarea'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                rows="3"
+                                                :class="inputClass"
+                                            />
+                                            <select
+                                                v-else-if="field.type === 'select'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :required="field.is_required"
+                                                :class="inputClass"
+                                            >
+                                                <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                    {{ opt.label }}
+                                                </option>
+                                            </select>
+                                            <div v-else-if="field.type === 'checkbox'" class="mt-2 space-y-2">
+                                                <label
+                                                    v-for="opt in field.options"
+                                                    :key="opt.value"
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        :value="opt.value"
+                                                        :checked="(form.attributes[field.id] || '').split(',').includes(opt.value)"
+                                                        @change="(e: Event) => {
+                                                            const target = e.target as HTMLInputElement;
+                                                            const current = (form.attributes[field.id] || '').split(',').filter(Boolean);
+                                                            if (target.checked) {
+                                                                current.push(opt.value);
+                                                            } else {
+                                                                const idx = current.indexOf(opt.value);
+                                                                if (idx > -1) current.splice(idx, 1);
+                                                            }
+                                                            form.attributes[field.id] = current.join(',');
+                                                        }"
+                                                        class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                    />
+                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
+                                                </label>
+                                            </div>
+                                            <div v-else-if="field.type === 'radio'" class="mt-2 space-y-2">
+                                                <label
+                                                    v-for="opt in field.options"
+                                                    :key="opt.value"
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        :name="`attr_${field.id}`"
+                                                        :value="opt.value"
+                                                        v-model="form.attributes[field.id]"
+                                                        class="size-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                    />
+                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
+                                                </label>
+                                            </div>
+                                            <input
+                                                v-else-if="field.type === 'date'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="date"
+                                                :required="field.is_required"
+                                                :class="inputClass"
+                                            />
+
+                                            <p v-if="field.help_text" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                {{ field.help_text }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Estimated Value -->
                                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    <!-- Metal Type -->
-                                    <div>
-                                        <label for="precious_metal" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Metal Type
-                                        </label>
-                                        <select id="precious_metal" v-model="form.precious_metal" :class="inputClass">
-                                            <option value="">Select metal...</option>
-                                            <option v-for="metal in preciousMetals" :key="metal.value" :value="metal.value">
-                                                {{ metal.label }}
-                                            </option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Condition -->
-                                    <div>
-                                        <label for="condition" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Condition
-                                        </label>
-                                        <select id="condition" v-model="form.condition" :class="inputClass">
-                                            <option value="">Select condition...</option>
-                                            <option v-for="cond in conditions" :key="cond.value" :value="cond.value">
-                                                {{ cond.label }}
-                                            </option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Weight -->
-                                    <div>
-                                        <label for="weight" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Weight (DWT)
-                                        </label>
-                                        <input
-                                            id="weight"
-                                            v-model.number="form.estimated_weight"
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            :class="inputClass"
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-
-                                    <!-- Estimated Value -->
                                     <div>
                                         <label for="estimated_value" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                             Estimated Value
@@ -660,6 +980,19 @@ const isFormValid = computed(() => form.value.title.trim().length > 0);
                                                 class="block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 placeholder="0.00"
                                             />
+                                        </div>
+                                        <!-- Spot price hint -->
+                                        <div v-if="spotPrice !== null" class="mt-1">
+                                            <button
+                                                type="button"
+                                                class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                @click="fillSpotPrice"
+                                            >
+                                                Spot value: ${{ spotPrice.toFixed(2) }} - click to fill
+                                            </button>
+                                        </div>
+                                        <div v-else-if="loadingSpotPrice" class="mt-1 text-xs text-gray-400">
+                                            Calculating spot price...
                                         </div>
                                     </div>
                                 </div>
@@ -762,12 +1095,12 @@ const isFormValid = computed(() => form.value.title.trim().length > 0);
                             </div>
 
                             <!-- Empty state -->
-                            <div v-else-if="similarItems.length === 0 && form.title" class="py-8 text-center">
+                            <div v-else-if="similarItems.length === 0 && (form.title || form.category_id || Object.values(form.attributes).some(v => v))" class="py-8 text-center">
                                 <p class="text-sm text-gray-500 dark:text-gray-400">No similar items found in past purchases.</p>
                             </div>
 
                             <div v-else-if="similarItems.length === 0" class="py-8 text-center">
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Enter an item title to find similar past purchases.</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Select a category and fill in attributes to find similar past purchases.</p>
                             </div>
 
                             <!-- Items list -->
@@ -805,6 +1138,11 @@ const isFormValid = computed(() => form.value.title.trim().length > 0);
                                                 :class="item.similarity_score >= 50 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'"
                                             >
                                                 {{ item.similarity_score }}% match
+                                            </span>
+                                        </div>
+                                        <div v-if="item.match_reasons?.length > 0" class="mt-1">
+                                            <span v-for="(reason, i) in item.match_reasons.slice(0, 3)" :key="i" class="mr-2 text-[10px] text-gray-400">
+                                                {{ reason }}
                                             </span>
                                         </div>
                                     </div>
@@ -1049,8 +1387,7 @@ const isFormValid = computed(() => form.value.title.trim().length > 0);
                                             <p v-if="form.description" class="text-sm text-gray-500 dark:text-gray-400 mb-2">{{ form.description }}</p>
                                             <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
                                                 <span v-if="selectedCategory">{{ selectedCategory.full_path }}</span>
-                                                <span v-if="form.precious_metal">{{ preciousMetals.find(m => m.value === form.precious_metal)?.label }}</span>
-                                                <span v-if="form.condition">{{ conditions.find(c => c.value === form.condition)?.label }}</span>
+                                                <span v-if="attributeSummary">{{ attributeSummary }}</span>
                                             </div>
                                         </div>
 

@@ -57,8 +57,6 @@ class QuickEvaluationTest extends TestCase
         $response->assertInertia(fn (Assert $page) => $page
             ->component('transactions/QuickEvaluation')
             ->has('categories')
-            ->has('preciousMetals')
-            ->has('conditions')
             ->has('paymentMethods')
             ->has('storeUsers')
         );
@@ -74,9 +72,11 @@ class QuickEvaluationTest extends TestCase
             'title' => '14K Gold Ring',
             'description' => 'A beautiful gold ring',
             'category_id' => $category->id,
-            'precious_metal' => '14k_gold',
-            'condition' => 'used',
-            'estimated_weight' => 2.5,
+            'attributes' => [
+                'metal_type' => '14k_gold',
+                'condition' => 'used',
+                'weight' => 2.5,
+            ],
             'estimated_value' => 150.00,
         ]);
 
@@ -87,9 +87,7 @@ class QuickEvaluationTest extends TestCase
                 'title',
                 'description',
                 'category_id',
-                'precious_metal',
-                'condition',
-                'estimated_weight',
+                'attributes',
                 'estimated_value',
                 'status',
             ],
@@ -119,11 +117,35 @@ class QuickEvaluationTest extends TestCase
     {
         $this->actingAs($this->owner);
 
+        // Search with title
         $response = $this->postJson('/transactions/quick-evaluation/similar-items', [
             'title' => '14K Gold Ring',
             'category_id' => null,
-            'precious_metal' => '14k_gold',
-            'condition' => 'used',
+            'attributes' => [
+                'metal_type' => '14k_gold',
+                'condition' => 'used',
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'items',
+        ]);
+    }
+
+    public function test_similar_items_search_works_with_attributes_only(): void
+    {
+        $this->actingAs($this->owner);
+
+        $category = Category::factory()->create(['store_id' => $this->store->id]);
+
+        // Search with only category and attributes (no title)
+        $response = $this->postJson('/transactions/quick-evaluation/similar-items', [
+            'title' => '',
+            'category_id' => $category->id,
+            'attributes' => [
+                'metal_type' => '14k_gold',
+            ],
         ]);
 
         $response->assertStatus(200);

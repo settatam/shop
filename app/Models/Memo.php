@@ -137,9 +137,12 @@ class Memo extends Model implements Payable
         });
 
         static::created(function (Memo $memo) {
-            // Update with actual ID-based number
+            // Generate memo_number from store prefix/suffix
             if ($memo->memo_number === 'MEM-TEMP') {
-                $memo->memo_number = "MEM-{$memo->id}";
+                $store = $memo->store;
+                $prefix = $store?->memo_id_prefix ?? 'MEM';
+                $suffix = $store?->memo_id_suffix ?? '';
+                $memo->memo_number = "{$prefix}-{$memo->id}{$suffix}";
                 $memo->saveQuietly();
             }
         });

@@ -28,7 +28,7 @@ class InvoiceFactory extends Factory
             'store_id' => Store::factory(),
             'customer_id' => Customer::factory(),
             'user_id' => User::factory(),
-            'invoice_number' => Invoice::generateInvoiceNumber(),
+            // invoice_number is auto-generated in model's booted() hook
             'invoiceable_type' => Order::class,
             'invoiceable_id' => Order::factory(),
             'subtotal' => $subtotal,

@@ -165,19 +165,22 @@ class Transaction extends Model
     protected static function booted(): void
     {
         static::creating(function (Transaction $transaction) {
+            // Set temporary value to satisfy NOT NULL constraint if needed
             if (empty($transaction->transaction_number)) {
-                $transaction->transaction_number = static::generateTransactionNumber();
+                $transaction->transaction_number = 'TXN-TEMP';
             }
         });
-    }
 
-    public static function generateTransactionNumber(): string
-    {
-        $prefix = 'TXN';
-        $date = now()->format('Ymd');
-        $random = strtoupper(substr(md5(uniqid()), 0, 6));
-
-        return "{$prefix}-{$date}-{$random}";
+        static::created(function (Transaction $transaction) {
+            // Generate transaction_number from store prefix/suffix
+            if ($transaction->transaction_number === 'TXN-TEMP') {
+                $store = $transaction->store;
+                $prefix = $store?->buy_id_prefix ?? 'TXN';
+                $suffix = $store?->buy_id_suffix ?? '';
+                $transaction->transaction_number = "{$prefix}-{$transaction->id}{$suffix}";
+                $transaction->saveQuietly();
+            }
+        });
     }
 
     public function customer(): BelongsTo

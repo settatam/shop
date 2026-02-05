@@ -24,9 +24,11 @@ class QuickEvaluationFactory extends Factory
             'user_id' => User::factory(),
             'title' => $this->faker->words(3, true),
             'description' => $this->faker->sentence(),
-            'precious_metal' => $this->faker->randomElement(['10k_gold', '14k_gold', '18k_gold', 'silver', 'platinum']),
-            'condition' => $this->faker->randomElement(['new', 'like_new', 'used', 'damaged']),
-            'estimated_weight' => $this->faker->randomFloat(2, 0.5, 50),
+            'attributes' => [
+                'metal_type' => $this->faker->randomElement(['10k_gold', '14k_gold', '18k_gold', 'silver', 'platinum']),
+                'condition' => $this->faker->randomElement(['new', 'like_new', 'used', 'damaged']),
+                'weight' => $this->faker->randomFloat(2, 0.5, 50),
+            ],
             'estimated_value' => $this->faker->randomFloat(2, 50, 5000),
             'status' => QuickEvaluation::STATUS_DRAFT,
         ];
