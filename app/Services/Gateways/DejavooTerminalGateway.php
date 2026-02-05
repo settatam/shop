@@ -16,55 +16,79 @@ use RuntimeException;
 
 class DejavooTerminalGateway implements TerminalGatewayInterface
 {
-    protected ?string $apiUrl;
+    protected string $baseUrl;
 
-    protected ?string $apiKey;
-
-    protected ?string $merchantId;
+    protected string $apiVersion;
 
     public function __construct()
     {
-        $this->apiUrl = config('payment-gateways.dejavoo.api_url');
-        $this->apiKey = config('payment-gateways.dejavoo.api_key');
-        $this->merchantId = config('payment-gateways.dejavoo.merchant_id');
+        $this->baseUrl = config('payment-gateways.dejavoo.base_url') ?: 'https://api.spinpos.net';
+        $this->apiVersion = config('payment-gateways.dejavoo.api_version') ?: 'v2';
+    }
+
+    /**
+     * Get the full API URL for an endpoint.
+     */
+    protected function getApiUrl(string $endpoint = ''): string
+    {
+        return rtrim($this->baseUrl, '/').'/'.$this->apiVersion.($endpoint ? '/'.ltrim($endpoint, '/') : '');
+    }
+
+    /**
+     * Get auth key from terminal settings.
+     */
+    protected function getAuthKey(PaymentTerminal $terminal): ?string
+    {
+        return $terminal->getSetting('auth_key');
+    }
+
+    /**
+     * Get register ID from terminal settings, falling back to device_id (Terminal ID).
+     */
+    protected function getRegisterId(PaymentTerminal $terminal): ?string
+    {
+        return $terminal->getSetting('register_id') ?: $terminal->device_id;
+    }
+
+    /**
+     * Get the Terminal ID (TPN).
+     */
+    protected function getTerminalId(PaymentTerminal $terminal): ?string
+    {
+        return $terminal->device_id;
+    }
+
+    /**
+     * Check if terminal has required credentials configured.
+     * Required: auth_key and device_id (Terminal ID)
+     */
+    protected function isTerminalConfigured(PaymentTerminal $terminal): bool
+    {
+        return $this->baseUrl
+            && $this->getAuthKey($terminal)
+            && $this->getTerminalId($terminal);
     }
 
     public function charge(float $amount, array $paymentMethod, array $options = []): PaymentResult
     {
-        if (! $this->isConfigured()) {
-            return PaymentResult::failure('Dejavoo not configured');
-        }
-
-        // TODO: Implement Dejavoo payment charge via API
+        // Dejavoo terminals require in-person checkout flow, not direct charge
         throw new RuntimeException('Dejavoo charge not implemented. Use terminal checkout for in-person payments.');
     }
 
     public function refund(string $paymentId, float $amount): RefundResult
     {
-        if (! $this->isConfigured()) {
-            return RefundResult::failure('Dejavoo not configured');
-        }
-
         // TODO: Implement Dejavoo refund via API
         throw new RuntimeException('Dejavoo refund not yet implemented.');
     }
 
     public function void(string $paymentId): VoidResult
     {
-        if (! $this->isConfigured()) {
-            return VoidResult::failure('Dejavoo not configured');
-        }
-
         // TODO: Implement Dejavoo void via API
         throw new RuntimeException('Dejavoo void not yet implemented.');
     }
 
     public function getPayment(string $paymentId): ?array
     {
-        if (! $this->isConfigured()) {
-            return null;
-        }
-
         // TODO: Implement Dejavoo get payment via API
         return null;
     }
@@ -79,7 +103,23 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
             return CheckoutResult::failure('Terminal is not active');
         }
 
-        // TODO: Implement Dejavoo Terminal checkout creation via API
+        if (! $this->isTerminalConfigured($terminal)) {
+            return CheckoutResult::failure('Terminal credentials not configured. Please set the Terminal ID and Auth Key in terminal settings.');
+        }
+
+        $authKey = $this->getAuthKey($terminal);
+        $terminalId = $this->getTerminalId($terminal);
+        $registerId = $this->getRegisterId($terminal);
+
+        // TODO: Implement actual Dejavoo SPIn API call
+        // POST to $this->apiUrl with XML payload containing:
+        // - AuthKey: $authKey
+        // - TerminalId (TPN): $terminalId
+        // - RegisterId: $registerId (optional, defaults to terminal ID)
+        // - Amount: $amount
+        // - PaymentType: 'Credit' or 'Debit'
+        // - TransType: 'Sale'
+
         // For now, return a mock successful result for testing
         $checkoutId = 'dj_checkout_'.uniqid();
         $timeout = $options['timeout'] ?? config('payment-gateways.terminal.default_timeout', 300);
@@ -89,8 +129,9 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
             status: 'pending',
             expiresAt: Carbon::now()->addSeconds($timeout),
             gatewayResponse: [
-                'device_id' => $terminal->device_id,
-                'merchant_id' => $this->merchantId,
+                'terminal_id' => $terminalId,
+                'register_id' => $registerId,
+                'auth_key' => substr($authKey, 0, 4).'****', // Masked for security
             ]
         );
     }
@@ -113,34 +154,19 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
 
     public function listDevices(string $locationId): array
     {
-        if (! $this->isConfigured()) {
-            return [];
-        }
-
-        // TODO: Implement Dejavoo device listing via API
+        // Dejavoo doesn't have a device listing API - devices are configured manually
         return [];
     }
 
     public function pairDevice(string $deviceCode, array $options = []): PairResult
     {
-        if (! $this->isConfigured()) {
-            return PairResult::failure('Dejavoo not configured');
-        }
-
-        // TODO: Implement Dejavoo device pairing via API
-        // For now, return a mock successful result for testing
-        $deviceId = 'dj_device_'.uniqid();
-
+        // Dejavoo terminals are configured manually with auth_key and register_id
+        // Return success with the provided device code as the device ID
         return PairResult::success(
-            deviceId: $deviceId,
+            deviceId: $deviceCode,
             deviceName: $options['name'] ?? 'Dejavoo Terminal',
             status: 'paired',
-            capabilities: ['card', 'contactless']
+            capabilities: ['card', 'contactless', 'chip', 'swipe']
         );
-    }
-
-    protected function isConfigured(): bool
-    {
-        return $this->apiUrl && $this->apiKey && $this->merchantId;
     }
 }

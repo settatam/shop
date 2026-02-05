@@ -13,6 +13,7 @@ import {
     XMarkIcon,
     CheckCircleIcon,
     ExclamationTriangleIcon,
+    ComputerDesktopIcon,
 } from '@heroicons/vue/24/outline';
 import axios from 'axios';
 
@@ -84,6 +85,8 @@ const terminals = ref<Terminal[]>([]);
 const selectedTerminalId = ref<number | null>(null);
 const isLoadingTerminals = ref(false);
 const terminalCheckoutStatus = ref<string | null>(null);
+const currentCheckoutId = ref<number | null>(null);
+const isCancelling = ref(false);
 
 // Payment summary from API
 const summary = ref<PaymentSummary>({
@@ -281,6 +284,7 @@ async function processTerminalPayment() {
         });
 
         const checkoutId = response.data.checkout_id;
+        currentCheckoutId.value = checkoutId;
         terminalCheckoutStatus.value = 'waiting';
         successMessage.value = 'Payment initiated. Please complete the transaction on the terminal.';
 
@@ -308,7 +312,7 @@ async function pollCheckoutStatus(checkoutId: number, maxAttempts = 60) {
         attempts++;
 
         try {
-            const response = await axios.get(`/api/v1/checkouts/${checkoutId}`);
+            const response = await axios.get(`/api/v1/terminal-checkouts/${checkoutId}`);
             const status = response.data.status;
 
             if (status === 'completed') {
@@ -337,6 +341,25 @@ async function pollCheckoutStatus(checkoutId: number, maxAttempts = 60) {
     await poll();
 }
 
+async function cancelTerminalCheckout() {
+    if (!currentCheckoutId.value || isCancelling.value) return;
+
+    isCancelling.value = true;
+    error.value = null;
+
+    try {
+        await axios.post(`/api/v1/terminal-checkouts/${currentCheckoutId.value}/cancel`);
+        terminalCheckoutStatus.value = null;
+        currentCheckoutId.value = null;
+        isProcessing.value = false;
+        successMessage.value = null;
+    } catch (err: any) {
+        error.value = err.response?.data?.message || 'Failed to cancel terminal payment.';
+    } finally {
+        isCancelling.value = false;
+    }
+}
+
 function setFullPayment() {
     paymentForm.value.amount = summary.value.balance_due;
 }
@@ -353,6 +376,9 @@ watch(() => props.show, (newVal) => {
         // Reset form
         error.value = null;
         successMessage.value = null;
+        terminalCheckoutStatus.value = null;
+        currentCheckoutId.value = null;
+        isCancelling.value = false;
 
         // Initialize adjustments from memo
         adjustments.value = {
@@ -444,6 +470,29 @@ watch(() => props.show, (newVal) => {
                                     <div class="flex">
                                         <CheckCircleIcon class="size-5 text-green-400" />
                                         <p class="ml-3 text-sm text-green-700 dark:text-green-300">{{ successMessage }}</p>
+                                    </div>
+                                </div>
+
+                                <!-- Terminal checkout status -->
+                                <div v-if="terminalCheckoutStatus === 'waiting'" class="mb-4 rounded-md bg-blue-50 p-4 dark:bg-blue-900/50">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="animate-pulse">
+                                                <ComputerDesktopIcon class="size-6 text-blue-500" />
+                                            </div>
+                                            <div>
+                                                <p class="font-medium text-blue-800 dark:text-blue-300">Waiting for terminal...</p>
+                                                <p class="text-sm text-blue-600 dark:text-blue-400">Please complete the payment on the terminal device.</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            @click="cancelTerminalCheckout"
+                                            :disabled="isCancelling"
+                                            class="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-600"
+                                        >
+                                            {{ isCancelling ? 'Cancelling...' : 'Cancel' }}
+                                        </button>
                                     </div>
                                 </div>
 

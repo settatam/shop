@@ -188,6 +188,8 @@ class PaymentController extends Controller
         $gateway = $this->gatewayFactory->makeTerminal($terminal->gateway);
         $timeout = config('payment-gateways.terminal.default_timeout', 300);
 
+
+
         $result = $gateway->createCheckout($terminal, $amount, [
             'timeout' => $timeout,
             'reference' => $payable->getDisplayIdentifier(),

@@ -8,9 +8,8 @@ return [
         'webhook_signature_key' => env('SQUARE_WEBHOOK_SIGNATURE_KEY'),
     ],
     'dejavoo' => [
-        'api_url' => env('DEJAVOO_API_URL'),
-        'api_key' => env('DEJAVOO_API_KEY'),
-        'merchant_id' => env('DEJAVOO_MERCHANT_ID'),
+        'base_url' => env('DEJAVOO_BASE_URL', 'https://api.spinpos.net'),
+        'api_version' => env('DEJAVOO_API_VERSION', 'v2'),
     ],
     'terminal' => [
         'default_timeout' => env('TERMINAL_CHECKOUT_TIMEOUT', 300),
