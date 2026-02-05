@@ -24,6 +24,9 @@ import {
     PencilIcon,
     XMarkIcon,
     CreditCardIcon,
+    ArrowPathIcon,
+    BuildingStorefrontIcon,
+    GlobeAltIcon,
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
@@ -107,6 +110,36 @@ interface TradeInTransaction {
     items: TradeInItem[];
 }
 
+interface SalesChannel {
+    id: number;
+    name: string;
+    type: string;
+    type_label: string;
+    is_local: boolean;
+    color?: string;
+    marketplace?: {
+        id: number;
+        name: string;
+        shop_domain?: string;
+    };
+}
+
+interface PlatformOrder {
+    id: number;
+    external_order_id: string;
+    external_order_number?: string;
+    status?: string;
+    fulfillment_status?: string;
+    payment_status?: string;
+    last_synced_at?: string;
+    marketplace?: {
+        id: number;
+        platform: string;
+        name: string;
+        shop_domain?: string;
+    };
+}
+
 interface Order {
     id: number;
     order_id?: string;
@@ -157,6 +190,8 @@ interface Order {
     customer?: Customer;
     user?: User;
     warehouse?: Warehouse;
+    sales_channel?: SalesChannel;
+    platform_order?: PlatformOrder;
     items: OrderItem[];
     item_count: number;
     invoice?: Invoice;
@@ -362,6 +397,17 @@ function confirmOrder() {
     router.post(`/orders/${props.order.id}/confirm`, {}, {
         preserveScroll: true,
         onFinish: () => { isProcessing.value = false; },
+    });
+}
+
+const isSyncing = ref(false);
+
+function syncFromMarketplace() {
+    if (isSyncing.value) return;
+    isSyncing.value = true;
+    router.post(`/orders/${props.order.id}/sync-from-marketplace`, {}, {
+        preserveScroll: true,
+        onFinish: () => { isSyncing.value = false; },
     });
 }
 
@@ -1054,7 +1100,15 @@ function saveDate() {
                                         <dd class="text-gray-900 dark:text-white">{{ formatDate(order.created_at) }}</dd>
                                     </div>
                                 </div>
-                                <div v-if="order.source_platform" class="flex items-start gap-3">
+                                <div v-if="order.sales_channel" class="flex items-start gap-3">
+                                    <component :is="order.sales_channel.is_local ? BuildingStorefrontIcon : GlobeAltIcon" class="size-5 shrink-0 text-gray-400" />
+                                    <div>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Sales Channel</dt>
+                                        <dd class="text-gray-900 dark:text-white">{{ order.sales_channel.name }}</dd>
+                                        <dd v-if="order.sales_channel.marketplace?.shop_domain" class="text-xs text-gray-500 dark:text-gray-400">{{ order.sales_channel.marketplace.shop_domain }}</dd>
+                                    </div>
+                                </div>
+                                <div v-else-if="order.source_platform" class="flex items-start gap-3">
                                     <ShoppingBagIcon class="size-5 shrink-0 text-gray-400" />
                                     <div>
                                         <dt class="text-sm text-gray-500 dark:text-gray-400">Source</dt>
@@ -1096,6 +1150,53 @@ function saveDate() {
                         <div v-if="order.warehouse" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Location</h2>
                             <p class="font-medium text-gray-900 dark:text-white">{{ order.warehouse.name }}</p>
+                        </div>
+
+                        <!-- Platform Order (for external marketplace orders) -->
+                        <div v-if="order.platform_order" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ order.platform_order.marketplace?.platform ? order.platform_order.marketplace.platform.charAt(0).toUpperCase() + order.platform_order.marketplace.platform.slice(1) : 'Marketplace' }} Order
+                                </h2>
+                                <button
+                                    type="button"
+                                    @click="syncFromMarketplace"
+                                    :disabled="isSyncing"
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                >
+                                    <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncing }" />
+                                    {{ isSyncing ? 'Syncing...' : 'Sync' }}
+                                </button>
+                            </div>
+                            <dl class="space-y-3 text-sm">
+                                <div v-if="order.platform_order.external_order_number" class="flex justify-between">
+                                    <dt class="text-gray-500 dark:text-gray-400">Order #</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white">{{ order.platform_order.external_order_number }}</dd>
+                                </div>
+                                <div v-if="order.platform_order.status" class="flex justify-between">
+                                    <dt class="text-gray-500 dark:text-gray-400">Status</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white capitalize">{{ order.platform_order.status }}</dd>
+                                </div>
+                                <div v-if="order.platform_order.fulfillment_status" class="flex justify-between">
+                                    <dt class="text-gray-500 dark:text-gray-400">Fulfillment</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white capitalize">{{ order.platform_order.fulfillment_status || 'Unfulfilled' }}</dd>
+                                </div>
+                                <div v-if="order.platform_order.payment_status" class="flex justify-between">
+                                    <dt class="text-gray-500 dark:text-gray-400">Payment</dt>
+                                    <dd class="font-medium text-gray-900 dark:text-white capitalize">{{ order.platform_order.payment_status }}</dd>
+                                </div>
+                                <div v-if="order.platform_order.last_synced_at" class="flex justify-between">
+                                    <dt class="text-gray-500 dark:text-gray-400">Last Synced</dt>
+                                    <dd class="text-gray-600 dark:text-gray-300">{{ formatDate(order.platform_order.last_synced_at) }}</dd>
+                                </div>
+                                <div v-if="order.platform_order.marketplace?.shop_domain" class="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                    <dt class="text-gray-500 dark:text-gray-400 mb-1">Store</dt>
+                                    <dd class="text-gray-900 dark:text-white">
+                                        {{ order.platform_order.marketplace.name }}
+                                        <span class="block text-xs text-gray-500">{{ order.platform_order.marketplace.shop_domain }}</span>
+                                    </dd>
+                                </div>
+                            </dl>
                         </div>
                     </div>
                 </div>

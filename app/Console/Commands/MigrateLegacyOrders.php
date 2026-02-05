@@ -202,13 +202,45 @@ class MigrateLegacyOrders extends Command
         $newCustomers = Customer::where('store_id', $this->newStore->id)->get();
         $newCustomersByEmail = $newCustomers->filter(fn ($c) => $c->email)->keyBy(fn ($c) => strtolower($c->email));
 
+        // Also index by normalized name for fallback matching
+        $newCustomersByName = $newCustomers->keyBy(fn ($c) => $this->normalizeCustomerName($c->first_name, $c->last_name));
+
+        $mappedByEmail = 0;
+        $mappedByName = 0;
+        $notMapped = 0;
+
         foreach ($legacyCustomers as $legacy) {
+            // First try to match by email
             if ($legacy->email && $newCustomersByEmail->has(strtolower($legacy->email))) {
                 $this->customerMap[$legacy->id] = $newCustomersByEmail->get(strtolower($legacy->email))->id;
+                $mappedByEmail++;
+
+                continue;
             }
+
+            // Fall back to matching by name
+            $normalizedName = $this->normalizeCustomerName($legacy->first_name, $legacy->last_name);
+            if ($normalizedName && $newCustomersByName->has($normalizedName)) {
+                $this->customerMap[$legacy->id] = $newCustomersByName->get($normalizedName)->id;
+                $mappedByName++;
+
+                continue;
+            }
+
+            $notMapped++;
         }
 
-        $this->line('  Mapped '.count($this->customerMap).' customers');
+        $this->line("  Mapped ".count($this->customerMap)." customers ({$mappedByEmail} by email, {$mappedByName} by name, {$notMapped} not mapped)");
+    }
+
+    /**
+     * Normalize customer name for comparison.
+     */
+    protected function normalizeCustomerName(?string $firstName, ?string $lastName): ?string
+    {
+        $name = trim(strtolower(($firstName ?? '').' '.($lastName ?? '')));
+
+        return $name !== '' ? $name : null;
     }
 
     protected function buildUserMapping(int $legacyStoreId): void

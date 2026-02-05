@@ -106,6 +106,8 @@ class OrderController extends Controller
             'customer',
             'user',
             'warehouse',
+            'salesChannel.storeMarketplace',
+            'platformOrder.marketplace',
             'items.product.images',
             'items.variant',
             'invoice',
@@ -380,6 +382,36 @@ class OrderController extends Controller
         $order->confirm();
 
         return back()->with('success', 'Order confirmed.');
+    }
+
+    public function syncFromMarketplace(Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($order);
+
+        $order->load('platformOrder.marketplace');
+
+        if (! $order->platformOrder) {
+            return back()->with('error', 'This order is not linked to an external platform.');
+        }
+
+        $marketplace = $order->platformOrder->marketplace;
+
+        if (! $marketplace) {
+            return back()->with('error', 'Marketplace connection not found.');
+        }
+
+        try {
+            $platformService = match ($marketplace->platform->value) {
+                'shopify' => app(\App\Services\Platforms\Shopify\ShopifyService::class),
+                default => throw new \Exception("Platform '{$marketplace->platform->value}' sync not supported."),
+            };
+
+            $platformService->refreshOrder($order->platformOrder);
+
+            return back()->with('success', 'Order synced from '.$marketplace->platform->label().'.');
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Failed to sync order: '.$e->getMessage());
+        }
     }
 
     public function ship(Request $request, Order $order): RedirectResponse|JsonResponse
@@ -1128,6 +1160,34 @@ class OrderController extends Controller
             'warehouse' => $order->warehouse ? [
                 'id' => $order->warehouse->id,
                 'name' => $order->warehouse->name,
+            ] : null,
+            'sales_channel' => $order->salesChannel ? [
+                'id' => $order->salesChannel->id,
+                'name' => $order->salesChannel->name,
+                'type' => $order->salesChannel->type,
+                'type_label' => $order->salesChannel->type_label,
+                'is_local' => $order->salesChannel->isLocal(),
+                'color' => $order->salesChannel->color,
+                'marketplace' => $order->salesChannel->storeMarketplace ? [
+                    'id' => $order->salesChannel->storeMarketplace->id,
+                    'name' => $order->salesChannel->storeMarketplace->name,
+                    'shop_domain' => $order->salesChannel->storeMarketplace->shop_domain,
+                ] : null,
+            ] : null,
+            'platform_order' => $order->platformOrder ? [
+                'id' => $order->platformOrder->id,
+                'external_order_id' => $order->platformOrder->external_order_id,
+                'external_order_number' => $order->platformOrder->external_order_number,
+                'status' => $order->platformOrder->status,
+                'fulfillment_status' => $order->platformOrder->fulfillment_status,
+                'payment_status' => $order->platformOrder->payment_status,
+                'last_synced_at' => $order->platformOrder->last_synced_at?->toISOString(),
+                'marketplace' => $order->platformOrder->marketplace ? [
+                    'id' => $order->platformOrder->marketplace->id,
+                    'platform' => $order->platformOrder->marketplace->platform->value,
+                    'name' => $order->platformOrder->marketplace->name,
+                    'shop_domain' => $order->platformOrder->marketplace->shop_domain,
+                ] : null,
             ] : null,
             'items' => $order->items->map(fn ($item) => [
                 'id' => $item->id,

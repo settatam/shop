@@ -262,6 +262,26 @@ class ShopifyService extends BasePlatformService
         $order->update(['fulfillment_status' => 'fulfilled']);
     }
 
+    /**
+     * Refresh a single order from Shopify by fetching the latest data.
+     */
+    public function refreshOrder(PlatformOrder $platformOrder): PlatformOrder
+    {
+        $connection = $platformOrder->marketplace;
+
+        $response = $this->shopifyRequest(
+            $connection,
+            'GET',
+            "orders/{$platformOrder->external_order_id}.json"
+        );
+
+        if (! isset($response['order'])) {
+            throw new \Exception('Order not found in Shopify');
+        }
+
+        return $this->importOrder($response['order'], $connection);
+    }
+
     public function getCategories(StoreMarketplace $connection): Collection
     {
         $response = $this->shopifyRequest($connection, 'GET', 'custom_collections.json');
