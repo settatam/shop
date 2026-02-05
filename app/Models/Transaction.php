@@ -179,6 +179,7 @@ class Transaction extends Model
                 $suffix = $store?->buy_id_suffix ?? '';
                 $transaction->transaction_number = "{$prefix}-{$transaction->id}{$suffix}";
                 $transaction->saveQuietly();
+                $transaction->searchable(); // Manually sync to Scout after saveQuietly
             }
         });
     }

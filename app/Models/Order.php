@@ -115,6 +115,7 @@ class Order extends Model implements Payable
                 $suffix = $store?->order_id_suffix ?? '';
                 $order->order_id = "{$prefix}{$order->id}{$suffix}";
                 $order->saveQuietly();
+                $order->searchable(); // Manually sync to Scout after saveQuietly
             }
         });
     }

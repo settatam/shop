@@ -144,6 +144,7 @@ class Memo extends Model implements Payable
                 $suffix = $store?->memo_id_suffix ?? '';
                 $memo->memo_number = "{$prefix}-{$memo->id}{$suffix}";
                 $memo->saveQuietly();
+                $memo->searchable(); // Manually sync to Scout after saveQuietly
             }
         });
     }

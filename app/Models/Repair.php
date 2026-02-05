@@ -127,6 +127,7 @@ class Repair extends Model implements Payable
                 $suffix = $store?->repair_id_suffix ?? '';
                 $repair->repair_number = "{$prefix}-{$repair->id}{$suffix}";
                 $repair->saveQuietly();
+                $repair->searchable(); // Manually sync to Scout after saveQuietly
             }
         });
     }
