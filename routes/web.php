@@ -238,6 +238,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::put('transactions/quick-evaluation/{evaluation}', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'update'])->name('web.transactions.quick-evaluation.update');
         Route::post('transactions/quick-evaluation/similar-items', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'searchSimilarItems'])->name('web.transactions.quick-evaluation.similar-items');
         Route::post('transactions/quick-evaluation/ai-research', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'generateAiResearch'])->name('web.transactions.quick-evaluation.ai-research');
+        Route::post('transactions/quick-evaluation/web-search', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'webPriceSearch'])->name('web.transactions.quick-evaluation.web-search');
         Route::post('transactions/quick-evaluation/{evaluation}/images', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'uploadImages'])->name('web.transactions.quick-evaluation.upload-images');
         Route::post('transactions/quick-evaluation/{evaluation}/convert', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'convertToTransaction'])->name('web.transactions.quick-evaluation.convert');
         Route::delete('transactions/quick-evaluation/{evaluation}', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'destroy'])->name('web.transactions.quick-evaluation.destroy');
@@ -284,6 +285,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('/move-to-bucket', [\App\Http\Controllers\Web\TransactionItemController::class, 'moveToBucket'])->name('move-to-bucket');
         Route::post('/review', [\App\Http\Controllers\Web\TransactionItemController::class, 'review'])->name('review');
         Route::post('/ai-research', [\App\Http\Controllers\Web\TransactionItemController::class, 'generateAiResearch'])->name('ai-research');
+        Route::post('/web-search', [\App\Http\Controllers\Web\TransactionItemController::class, 'webPriceSearch'])->name('web-search');
+        Route::post('/share', [\App\Http\Controllers\Web\TransactionItemController::class, 'shareWithTeam'])->name('share');
         Route::post('/chat', [\App\Http\Controllers\Web\TransactionItemController::class, 'chatStream'])->name('chat');
     });
 
@@ -547,6 +550,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('integrations/gia', [IntegrationsController::class, 'storeGia'])->name('integrations.gia.store');
         Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
         Route::post('integrations/anthropic', [IntegrationsController::class, 'storeAnthropic'])->name('integrations.anthropic.store');
+        Route::post('integrations/serpapi', [IntegrationsController::class, 'storeSerpApi'])->name('integrations.serpapi.store');
         Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
 
         // Platform connections (Shopify, eBay, etc.)

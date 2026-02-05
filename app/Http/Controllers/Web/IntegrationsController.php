@@ -213,6 +213,32 @@ class IntegrationsController extends Controller
         return back()->with('success', 'Anthropic integration saved successfully.');
     }
 
+    public function storeSerpApi(Request $request, StoreContext $storeContext): RedirectResponse
+    {
+        $validated = $request->validate([
+            'api_key' => ['required', 'string'],
+        ]);
+
+        $storeId = $storeContext->getCurrentStoreId();
+
+        StoreIntegration::updateOrCreate(
+            [
+                'store_id' => $storeId,
+                'provider' => StoreIntegration::PROVIDER_SERPAPI,
+            ],
+            [
+                'name' => 'SerpAPI',
+                'environment' => StoreIntegration::ENV_PRODUCTION,
+                'credentials' => [
+                    'api_key' => $validated['api_key'],
+                ],
+                'status' => StoreIntegration::STATUS_ACTIVE,
+            ]
+        );
+
+        return back()->with('success', 'SerpAPI integration saved successfully.');
+    }
+
     public function destroy(StoreIntegration $integration, StoreContext $storeContext): RedirectResponse
     {
         $storeId = $storeContext->getCurrentStoreId();

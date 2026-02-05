@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Models\Warehouse;
 use App\Services\AI\TransactionItemResearcher;
 use App\Services\Image\ImageService;
+use App\Services\Search\WebPriceSearchService;
 use App\Services\SimilarItemFinder;
 use App\Services\StoreContext;
 use App\Services\Transactions\TransactionService;
@@ -195,6 +196,27 @@ class QuickEvaluationController extends Controller
         ]);
     }
 
+    public function webPriceSearch(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json(['error' => 'Please select a store first.'], 400);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'category' => 'nullable|string|max:255',
+            'precious_metal' => 'nullable|string|max:50',
+            'attributes' => 'nullable|array',
+        ]);
+
+        $searchService = app(WebPriceSearchService::class);
+        $results = $searchService->searchPrices($store->id, $validated);
+
+        return response()->json($results);
+    }
+
     public function uploadImages(Request $request, QuickEvaluation $evaluation): JsonResponse
     {
         $this->authorizeEvaluation($evaluation);
@@ -355,6 +377,8 @@ class QuickEvaluationController extends Controller
             'similar_items' => $evaluation->similar_items,
             'ai_research' => $evaluation->ai_research,
             'ai_research_generated_at' => $evaluation->ai_research_generated_at?->toISOString(),
+            'web_search_results' => $evaluation->web_search_results,
+            'web_search_generated_at' => $evaluation->web_search_generated_at?->toISOString(),
             'status' => $evaluation->status,
             'images' => $evaluation->images->map(fn ($image) => [
                 'id' => $image->id,

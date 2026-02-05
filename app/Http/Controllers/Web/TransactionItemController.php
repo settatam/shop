@@ -5,21 +5,25 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MoveToBucketRequest;
 use App\Http\Requests\UpdateTransactionItemRequest;
+use App\Mail\ItemSharedWithTeam;
 use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Image;
+use App\Models\StoreUser;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Services\ActivityLogFormatter;
 use App\Services\AI\TransactionItemResearcher;
 use App\Services\Chat\ChatService;
 use App\Services\Image\ImageService;
+use App\Services\Search\WebPriceSearchService;
 use App\Services\SimilarItemFinder;
 use App\Services\StoreContext;
 use App\Services\Transactions\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -78,6 +82,20 @@ class TransactionItemController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Load team members for sharing (exclude current user)
+        $teamMembers = StoreUser::where('store_id', $store->id)
+            ->where('status', 'active')
+            ->where('user_id', '!=', auth()->id())
+            ->with('user')
+            ->get()
+            ->filter(fn ($storeUser) => $storeUser->user && $storeUser->user->email)
+            ->map(fn ($storeUser) => [
+                'id' => $storeUser->id,
+                'name' => $storeUser->user->name ?? $storeUser->full_name,
+                'email' => $storeUser->user->email,
+            ])
+            ->values();
+
         return Inertia::render('transactions/items/Show', [
             'transaction' => $this->formatTransaction($transaction),
             'item' => $this->formatItem($item),
@@ -86,6 +104,7 @@ class TransactionItemController extends Controller
             'templateFields' => $templateFields,
             'notes' => $notes,
             'buckets' => $buckets,
+            'teamMembers' => $teamMembers,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($item)),
         ]);
     }
@@ -268,6 +287,73 @@ class TransactionItemController extends Controller
         return response()->json(['research' => $research]);
     }
 
+    public function webPriceSearch(Transaction $transaction, TransactionItem $item): JsonResponse
+    {
+        $this->authorizeItem($transaction, $item);
+
+        $store = $this->storeContext->getCurrentStore();
+        $searchService = app(WebPriceSearchService::class);
+
+        $criteria = [
+            'title' => $item->title,
+            'category' => $item->category?->name,
+            'precious_metal' => $item->precious_metal,
+            'attributes' => $item->attributes,
+        ];
+
+        $results = $searchService->searchPrices($store->id, $criteria);
+
+        if (! isset($results['error'])) {
+            $item->update([
+                'web_search_results' => $results,
+                'web_search_generated_at' => now(),
+            ]);
+        }
+
+        return response()->json($results);
+    }
+
+    public function shareWithTeam(Request $request, Transaction $transaction, TransactionItem $item): RedirectResponse
+    {
+        $this->authorizeItem($transaction, $item);
+
+        $validated = $request->validate([
+            'team_member_ids' => ['required', 'array', 'min:1'],
+            'team_member_ids.*' => ['integer', 'exists:store_users,id'],
+            'message' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+        $sender = $request->user();
+
+        $storeUsers = StoreUser::whereIn('id', $validated['team_member_ids'])
+            ->where('store_id', $store->id)
+            ->with('user')
+            ->get();
+
+        $itemUrl = route('web.transactions.items.show', [$transaction, $item]);
+        $sentCount = 0;
+
+        foreach ($storeUsers as $storeUser) {
+            if ($storeUser->user && $storeUser->user->email) {
+                Mail::to($storeUser->user->email)->queue(
+                    new ItemSharedWithTeam($item, $sender, $validated['message'] ?? null, $itemUrl)
+                );
+                $sentCount++;
+            }
+        }
+
+        if ($sentCount === 0) {
+            return redirect()->back()->with('error', 'No valid email addresses found for selected team members.');
+        }
+
+        $message = $sentCount === 1
+            ? 'Item shared with 1 team member.'
+            : "Item shared with {$sentCount} team members.";
+
+        return redirect()->back()->with('success', $message);
+    }
+
     public function chatStream(Request $request, Transaction $transaction, TransactionItem $item)
     {
         $this->authorizeItem($transaction, $item);
@@ -407,6 +493,8 @@ class TransactionItemController extends Controller
             'bucket_id' => $item->bucket_id,
             'ai_research' => $item->ai_research,
             'ai_research_generated_at' => $item->ai_research_generated_at?->toISOString(),
+            'web_search_results' => $item->web_search_results,
+            'web_search_generated_at' => $item->web_search_generated_at?->toISOString(),
             'images' => $item->images->map(fn ($image) => [
                 'id' => $image->id,
                 'url' => $image->url,

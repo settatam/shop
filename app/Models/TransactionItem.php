@@ -61,6 +61,8 @@ class TransactionItem extends Model
         'reviewed_by',
         'ai_research',
         'ai_research_generated_at',
+        'web_search_results',
+        'web_search_generated_at',
     ];
 
     protected function casts(): array
@@ -77,6 +79,8 @@ class TransactionItem extends Model
             'reviewed_at' => 'datetime',
             'ai_research' => 'array',
             'ai_research_generated_at' => 'datetime',
+            'web_search_results' => 'array',
+            'web_search_generated_at' => 'datetime',
         ];
     }
 

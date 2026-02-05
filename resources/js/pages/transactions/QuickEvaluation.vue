@@ -14,7 +14,7 @@ import {
     CameraIcon,
     ArrowLeftIcon,
 } from '@heroicons/vue/24/outline';
-import { SparklesIcon } from '@heroicons/vue/20/solid';
+import { SparklesIcon, GlobeAltIcon, MagnifyingGlassIcon, ArrowTopRightOnSquareIcon } from '@heroicons/vue/20/solid';
 import axios from 'axios';
 
 // Components for the conversion modal
@@ -146,6 +146,11 @@ let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 const aiResearch = ref<Record<string, any> | null>(null);
 const loadingAiResearch = ref(false);
 const aiResearchError = ref<string | null>(null);
+
+// Web price search state
+const webSearchResults = ref<Record<string, any> | null>(null);
+const loadingWebSearch = ref(false);
+const webSearchError = ref<string | null>(null);
 
 // Image upload state
 const images = ref<File[]>([]);
@@ -483,6 +488,37 @@ async function generateAiResearch() {
         loadingAiResearch.value = false;
     }
 }
+
+// Web Price Search
+async function searchWebPrices() {
+    loadingWebSearch.value = true;
+    webSearchError.value = null;
+
+    try {
+        const selectedCategory = props.categories.find(c => c.id === form.value.category_id);
+        const response = await axios.post('/transactions/quick-evaluation/web-search', {
+            title: form.value.title,
+            category: selectedCategory?.name,
+            precious_metal: form.value.attributes?.precious_metal || form.value.attributes?.metal_type,
+            attributes: form.value.attributes,
+        });
+
+        if (response.data.error) {
+            webSearchError.value = response.data.error;
+        } else {
+            webSearchResults.value = response.data;
+        }
+    } catch {
+        webSearchError.value = 'Failed to search web prices. Please try again.';
+    } finally {
+        loadingWebSearch.value = false;
+    }
+}
+
+const formatPriceForDisplay = (price: number | null | undefined) => {
+    if (price === null || price === undefined) return '-';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
+};
 
 // Conversion modal
 function openConvertModal() {
@@ -1265,6 +1301,116 @@ const attributeSummary = computed(() => {
                                             <li v-for="(feature, i) in aiResearch.item_analysis.notable_features" :key="i">{{ feature }}</li>
                                         </ul>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Web Price Search -->
+                        <div class="rounded-lg bg-white p-6 shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <GlobeAltIcon class="size-5 text-blue-500" />
+                                    Web Price Search
+                                </h2>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
+                                    :disabled="loadingWebSearch || !form.title"
+                                    @click="searchWebPrices"
+                                >
+                                    <ArrowPathIcon v-if="webSearchResults?.listings?.length" class="size-3.5" :class="{ 'animate-spin': loadingWebSearch }" />
+                                    <MagnifyingGlassIcon v-else class="size-3.5" />
+                                    {{ loadingWebSearch ? 'Searching...' : webSearchResults?.listings?.length ? 'Refresh' : 'Search Prices' }}
+                                </button>
+                            </div>
+
+                            <!-- Loading -->
+                            <div v-if="loadingWebSearch && !webSearchResults?.listings?.length" class="space-y-3 animate-pulse">
+                                <div class="h-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                <div class="h-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                <div class="h-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                            </div>
+
+                            <!-- Error -->
+                            <div v-else-if="webSearchError" class="rounded-md bg-red-50 p-4 dark:bg-red-900/20">
+                                <p class="text-sm text-red-700 dark:text-red-400">{{ webSearchError }}</p>
+                            </div>
+
+                            <!-- No results yet -->
+                            <div v-else-if="!webSearchResults?.listings?.length" class="py-8 text-center">
+                                <GlobeAltIcon class="mx-auto size-10 text-gray-300 dark:text-gray-600" />
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Click "Search Prices" to find comparable listings from Google Shopping and eBay.</p>
+                            </div>
+
+                            <!-- Search Results -->
+                            <div v-else class="space-y-4">
+                                <!-- Price Summary -->
+                                <div v-if="webSearchResults.summary?.count" class="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20">
+                                    <div class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        Found {{ webSearchResults.summary.count }} comparable listings
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-3 text-center">
+                                        <div>
+                                            <p class="text-xs text-blue-600 dark:text-blue-400">Low</p>
+                                            <p class="text-sm font-semibold text-blue-800 dark:text-blue-200">{{ formatPriceForDisplay(webSearchResults.summary.min) }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-blue-600 dark:text-blue-400">Average</p>
+                                            <p class="text-sm font-semibold text-blue-800 dark:text-blue-200">{{ formatPriceForDisplay(webSearchResults.summary.avg) }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-blue-600 dark:text-blue-400">Median</p>
+                                            <p class="text-sm font-semibold text-blue-800 dark:text-blue-200">{{ formatPriceForDisplay(webSearchResults.summary.median) }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-blue-600 dark:text-blue-400">High</p>
+                                            <p class="text-sm font-semibold text-blue-800 dark:text-blue-200">{{ formatPriceForDisplay(webSearchResults.summary.max) }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Listings -->
+                                <div class="space-y-2 max-h-60 overflow-y-auto">
+                                    <a
+                                        v-for="(listing, index) in webSearchResults.listings?.slice(0, 10)"
+                                        :key="index"
+                                        :href="listing.link || '#'"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="flex gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                        :class="{ 'pointer-events-none': !listing.link }"
+                                    >
+                                        <div v-if="listing.image" class="shrink-0">
+                                            <img
+                                                :src="listing.image"
+                                                :alt="listing.title"
+                                                class="size-10 object-cover rounded-md bg-gray-100 dark:bg-gray-700"
+                                                @error="($event.target as HTMLImageElement).style.display = 'none'"
+                                            />
+                                        </div>
+                                        <div v-else class="shrink-0 size-10 rounded-md bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                            <GlobeAltIcon class="size-4 text-gray-400" />
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-start justify-between gap-2">
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white line-clamp-1">
+                                                    {{ listing.title }}
+                                                </p>
+                                                <ArrowTopRightOnSquareIcon v-if="listing.link" class="size-3.5 text-gray-400 shrink-0" />
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <span class="text-sm font-semibold text-green-600 dark:text-green-400">
+                                                    {{ formatPriceForDisplay(listing.price) }}
+                                                </span>
+                                                <span
+                                                    class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                                                    :class="listing.source?.includes('eBay') ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'"
+                                                >
+                                                    {{ listing.source }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </a>
                                 </div>
                             </div>
                         </div>

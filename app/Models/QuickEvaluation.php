@@ -30,6 +30,8 @@ class QuickEvaluation extends Model
         'similar_items',
         'ai_research',
         'ai_research_generated_at',
+        'web_search_results',
+        'web_search_generated_at',
         'status',
     ];
 
@@ -41,6 +43,8 @@ class QuickEvaluation extends Model
             'similar_items' => 'array',
             'ai_research' => 'array',
             'ai_research_generated_at' => 'datetime',
+            'web_search_results' => 'array',
+            'web_search_generated_at' => 'datetime',
         ];
     }
 

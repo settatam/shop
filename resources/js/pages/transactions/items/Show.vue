@@ -5,11 +5,13 @@ import { NotesSection } from '@/components/notes';
 import { ImageLightbox } from '@/components/images';
 import SimilarItemsSection from '@/components/transactions/SimilarItemsSection.vue';
 import AiResearchCard from '@/components/transactions/AiResearchCard.vue';
+import WebPriceSearchCard from '@/components/transactions/WebPriceSearchCard.vue';
+import ShareWithTeamModal from '@/components/transactions/ShareWithTeamModal.vue';
 import ItemChatPanel from '@/components/transactions/ItemChatPanel.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon, RectangleStackIcon, XMarkIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon, RectangleStackIcon, XMarkIcon, ShareIcon } from '@heroicons/vue/20/solid';
 
 interface ItemImage {
     id: number;
@@ -70,6 +72,8 @@ interface TransactionItem {
     bucket_id: number | null;
     ai_research: Record<string, any> | null;
     ai_research_generated_at: string | null;
+    web_search_results: Record<string, any> | null;
+    web_search_generated_at: string | null;
     images: ItemImage[];
     created_at: string;
     updated_at: string;
@@ -112,6 +116,12 @@ interface Bucket {
     name: string;
 }
 
+interface TeamMember {
+    id: number;
+    name: string;
+    email?: string;
+}
+
 interface Props {
     transaction: Transaction;
     item: TransactionItem;
@@ -120,6 +130,7 @@ interface Props {
     templateFields: TemplateField[];
     notes: Note[];
     buckets: Bucket[];
+    teamMembers: TeamMember[];
     activityLogs?: ActivityDay[];
 }
 
@@ -143,6 +154,9 @@ const openLightbox = (index: number) => {
 
 // Move to Bucket modal state
 const showBucketModal = ref(false);
+
+// Share with team modal state
+const showShareModal = ref(false);
 const selectedBucketId = ref<number | null>(null);
 const bucketValue = ref<string>(String(props.item.buy_price ?? props.item.price ?? 0));
 const movingToBucket = ref(false);
@@ -270,6 +284,15 @@ const moveToBucket = () => {
                         <RectangleStackIcon class="-ml-0.5 size-5" />
                         Move to Bucket
                     </button>
+                    <button
+                        v-if="teamMembers.length > 0"
+                        type="button"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500"
+                        @click="showShareModal = true"
+                    >
+                        <ShareIcon class="-ml-0.5 size-5" />
+                        Share
+                    </button>
                     <Link
                         :href="`/transactions/${transaction.id}/items/${item.id}/edit`"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
@@ -371,6 +394,14 @@ const moveToBucket = () => {
                         :item-id="item.id"
                         :existing-research="item.ai_research"
                         :generated-at="item.ai_research_generated_at"
+                    />
+
+                    <!-- Web Price Search -->
+                    <WebPriceSearchCard
+                        :transaction-id="transaction.id"
+                        :item-id="item.id"
+                        :existing-results="item.web_search_results"
+                        :generated-at="item.web_search_generated_at"
                     />
 
                     <!-- Chat -->
@@ -615,6 +646,13 @@ const moveToBucket = () => {
             v-model="lightboxOpen"
             :images="item.images"
             :initial-index="lightboxIndex"
+        />
+
+        <!-- Share with Team Modal -->
+        <ShareWithTeamModal
+            v-model:open="showShareModal"
+            :team-members="teamMembers"
+            :share-url="`/transactions/${transaction.id}/items/${item.id}/share`"
         />
     </AppLayout>
 </template>

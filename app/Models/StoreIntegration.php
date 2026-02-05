@@ -26,6 +26,8 @@ class StoreIntegration extends Model
 
     public const PROVIDER_ANTHROPIC = 'anthropic';
 
+    public const PROVIDER_SERPAPI = 'serpapi';
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_INACTIVE = 'inactive';
@@ -275,5 +277,21 @@ class StoreIntegration extends Model
     public function getAnthropicApiUrl(): string
     {
         return 'https://api.anthropic.com/v1';
+    }
+
+    /**
+     * Get SerpAPI API Key.
+     */
+    public function getSerpApiKey(): ?string
+    {
+        return $this->credentials['api_key'] ?? null;
+    }
+
+    /**
+     * Get SerpAPI base URL.
+     */
+    public function getSerpApiUrl(): string
+    {
+        return 'https://serpapi.com/search';
     }
 }

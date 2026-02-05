@@ -5,7 +5,7 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package, Sparkles } from 'lucide-vue-next';
+import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package, Sparkles, Search } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import { toast } from 'sonner';
 
@@ -245,6 +245,34 @@ function deleteAnthropic() {
     if (!confirm('Are you sure you want to remove the Anthropic integration?')) return;
 
     router.delete(`/integrations/${anthropicIntegration.value.id}`, {
+        preserveScroll: true,
+    });
+}
+
+// SerpAPI form
+const serpapiForm = useForm({
+    api_key: '',
+});
+
+const showSerpapiForm = ref(false);
+
+const serpapiIntegration = computed(() => props.integrations?.serpapi);
+
+function saveSerpapi() {
+    serpapiForm.post('/integrations/serpapi', {
+        preserveScroll: true,
+        onSuccess: () => {
+            showSerpapiForm.value = false;
+            serpapiForm.reset();
+        },
+    });
+}
+
+function deleteSerpapi() {
+    if (!serpapiIntegration.value?.id) return;
+    if (!confirm('Are you sure you want to remove the SerpAPI integration?')) return;
+
+    router.delete(`/integrations/${serpapiIntegration.value.id}`, {
         preserveScroll: true,
     });
 }
@@ -807,6 +835,80 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                         </form>
                     </CardContent>
                 </Card>
+
+                <!-- SerpAPI -->
+                <Card>
+                    <CardHeader>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-100 dark:bg-cyan-900">
+                                    <Search class="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                                </div>
+                                <div>
+                                    <CardTitle class="text-lg">SerpAPI</CardTitle>
+                                    <CardDescription>Web price search & comparison</CardDescription>
+                                </div>
+                            </div>
+                            <Badge
+                                v-if="serpapiIntegration?.has_credentials"
+                                :variant="getStatusBadgeVariant(serpapiIntegration.status)"
+                            >
+                                <Check v-if="serpapiIntegration.status === 'active'" class="mr-1 h-3 w-3" />
+                                <AlertCircle v-else-if="serpapiIntegration.status === 'error'" class="mr-1 h-3 w-3" />
+                                {{ serpapiIntegration.status === 'active' ? 'Connected' : serpapiIntegration.status }}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <!-- Show configured state -->
+                        <div v-if="serpapiIntegration?.has_credentials && !showSerpapiForm" class="space-y-4">
+                            <div class="rounded-lg border p-3 text-sm">
+                                <p class="text-muted-foreground">API credentials configured</p>
+                                <p class="text-xs text-muted-foreground mt-1">Powers web price search from Google Shopping & eBay</p>
+                                <div v-if="serpapiIntegration.last_error" class="mt-2 text-red-600 dark:text-red-400">
+                                    {{ serpapiIntegration.last_error }}
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button variant="outline" size="sm" @click="showSerpapiForm = true">
+                                    Update Credentials
+                                </Button>
+                                <Button variant="ghost" size="sm" class="text-red-600" @click="deleteSerpapi">
+                                    <Trash2 class="mr-1 h-4 w-4" />
+                                    Remove
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- Show form -->
+                        <form v-else @submit.prevent="saveSerpapi" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Key</label>
+                                <input
+                                    v-model="serpapiForm.api_key"
+                                    type="password"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Enter SerpAPI Key"
+                                />
+                                <p v-if="serpapiForm.errors.api_key" class="mt-1 text-sm text-red-600">{{ serpapiForm.errors.api_key }}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">Get your API key from <a href="https://serpapi.com/manage-api-key" target="_blank" class="text-indigo-600 hover:underline">serpapi.com</a></p>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button type="submit" :disabled="serpapiForm.processing">
+                                    {{ serpapiForm.processing ? 'Saving...' : 'Save SerpAPI' }}
+                                </Button>
+                                <Button
+                                    v-if="serpapiIntegration?.has_credentials"
+                                    type="button"
+                                    variant="ghost"
+                                    @click="showSerpapiForm = false"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
             </div>
 
             <!-- E-commerce Platforms -->
@@ -989,6 +1091,19 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                             Active
                         </Badge>
                         <Badge v-else variant="secondary">Requires Anthropic</Badge>
+                    </div>
+                    <div class="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                            <h4 class="font-medium">Web Price Search</h4>
+                            <p class="text-sm text-muted-foreground">
+                                Search Google Shopping & eBay for comparable prices
+                            </p>
+                        </div>
+                        <Badge v-if="serpapiIntegration?.has_credentials" variant="default">
+                            <Check class="mr-1 h-3 w-3" />
+                            Active
+                        </Badge>
+                        <Badge v-else variant="secondary">Requires SerpAPI</Badge>
                     </div>
                 </CardContent>
             </Card>
