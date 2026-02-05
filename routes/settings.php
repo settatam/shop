@@ -11,6 +11,7 @@ use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Web\LeadSourceController;
 use App\Http\Controllers\Web\NotificationSettingsController;
 use App\Http\Controllers\Web\PrinterSettingsController;
+use App\Http\Controllers\Web\SalesChannelController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -100,5 +101,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/channels/save', [NotificationSettingsController::class, 'saveChannel'])->name('channels.save');
         Route::post('/channels/toggle', [NotificationSettingsController::class, 'toggleChannel'])->name('channels.toggle');
         Route::get('/logs', [NotificationSettingsController::class, 'logs'])->name('logs');
+    });
+
+    // Sales Channels
+    Route::middleware(['store', 'onboarding'])->prefix('settings/channels')->name('settings.channels.')->group(function () {
+        Route::get('/', [SalesChannelController::class, 'index'])->name('index');
+        Route::post('/', [SalesChannelController::class, 'store'])->name('store');
+        Route::put('/{salesChannel}', [SalesChannelController::class, 'update'])->name('update');
+        Route::delete('/{salesChannel}', [SalesChannelController::class, 'destroy'])->name('destroy');
+        Route::post('/reorder', [SalesChannelController::class, 'reorder'])->name('reorder');
     });
 });

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -50,6 +51,7 @@ class Order extends Model implements Payable
 
     protected $fillable = [
         'store_id',
+        'sales_channel_id',
         'memo_id',
         'trade_in_transaction_id',
         'customer_id',
@@ -133,6 +135,16 @@ class Order extends Model implements Payable
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function salesChannel(): BelongsTo
+    {
+        return $this->belongsTo(SalesChannel::class);
+    }
+
+    public function platformOrder(): HasOne
+    {
+        return $this->hasOne(PlatformOrder::class);
     }
 
     public function items(): HasMany

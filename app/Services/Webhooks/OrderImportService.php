@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PlatformOrder;
 use App\Models\ProductVariant;
+use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
 use Illuminate\Support\Facades\DB;
@@ -614,8 +615,12 @@ class OrderImportService
     {
         $customer = $this->findOrCreateCustomer($platformOrder->customer_data, $store);
 
+        // Find or create a sales channel for this marketplace
+        $salesChannelId = $this->findOrCreateSalesChannel($platformOrder, $store, $platform);
+
         return Order::create([
             'store_id' => $store->id,
+            'sales_channel_id' => $salesChannelId,
             'customer_id' => $customer?->id,
             'status' => $platformOrder->status,
             'sub_total' => $platformOrder->subtotal,
@@ -629,6 +634,65 @@ class OrderImportService
             'external_marketplace_id' => $platformOrder->external_order_id,
             'date_of_purchase' => $platformOrder->ordered_at,
         ]);
+    }
+
+    /**
+     * Find or create a sales channel for the given platform/marketplace.
+     */
+    protected function findOrCreateSalesChannel(PlatformOrder $platformOrder, Store $store, Platform $platform): ?int
+    {
+        $marketplaceId = $platformOrder->store_marketplace_id;
+
+        // First, try to find a sales channel linked to this specific marketplace
+        if ($marketplaceId) {
+            $channel = SalesChannel::where('store_id', $store->id)
+                ->where('store_marketplace_id', $marketplaceId)
+                ->first();
+
+            if ($channel) {
+                return $channel->id;
+            }
+        }
+
+        // Try to find a sales channel by platform type
+        $channel = SalesChannel::where('store_id', $store->id)
+            ->where('type', $platform->value)
+            ->first();
+
+        if ($channel) {
+            // If we found a channel by type but it's not linked to a marketplace, link it now
+            if ($marketplaceId && ! $channel->store_marketplace_id) {
+                $channel->update(['store_marketplace_id' => $marketplaceId]);
+            }
+
+            return $channel->id;
+        }
+
+        // Auto-create a sales channel for this platform
+        $marketplace = $platformOrder->marketplace;
+        $channelName = $marketplace?->name ?? ucfirst($platform->value);
+        $channelCode = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $channelName));
+
+        // Ensure code is unique for this store
+        $baseCode = $channelCode;
+        $counter = 1;
+        while (SalesChannel::where('store_id', $store->id)->where('code', $channelCode)->exists()) {
+            $channelCode = $baseCode.'_'.$counter;
+            $counter++;
+        }
+
+        $channel = SalesChannel::create([
+            'store_id' => $store->id,
+            'name' => $channelName,
+            'code' => $channelCode,
+            'type' => $platform->value,
+            'is_local' => false,
+            'store_marketplace_id' => $marketplaceId,
+            'is_active' => true,
+            'is_default' => false,
+        ]);
+
+        return $channel->id;
     }
 
     protected function findOrCreateCustomer(?array $customerData, Store $store): ?Customer

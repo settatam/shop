@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\Warehouse;
@@ -84,12 +85,16 @@ class OrderCreationService
                 $tradeInCredit = $this->tradeInService->calculateTradeInCredit($data['trade_in_items']);
             }
 
+            // Get default local sales channel
+            $defaultLocalChannel = SalesChannel::getDefaultLocalChannel($store->id);
+
             // Create the order
             $this->order = Order::create([
                 'store_id' => $store->id,
                 'customer_id' => $customerId,
                 'user_id' => $userId,
                 'warehouse_id' => $warehouse?->id,
+                'sales_channel_id' => $defaultLocalChannel->id,
                 'status' => Order::STATUS_PENDING,
                 'invoice_number' => $invoiceNumber,
                 'date_of_purchase' => $data['date_of_purchase'] ?? now(),
@@ -257,9 +262,13 @@ class OrderCreationService
 
     protected function createOrder(): void
     {
+        // Get default local sales channel for locally created orders
+        $defaultLocalChannel = SalesChannel::getDefaultLocalChannel($this->store->id);
+
         $this->order = Order::create([
             'store_id' => $this->store->id,
             'user_id' => $this->data['user_id'] ?? auth()->id(),
+            'sales_channel_id' => $this->data['sales_channel_id'] ?? $defaultLocalChannel->id,
             'status' => Order::STATUS_PENDING,
             'date_of_purchase' => $this->data['date_of_purchase'] ?? now(),
             'source_platform' => $this->data['source_platform'] ?? null,

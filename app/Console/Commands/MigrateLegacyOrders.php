@@ -38,6 +38,8 @@ class MigrateLegacyOrders extends Command
 
     protected array $categoryMap = [];
 
+    protected array $salesChannelMap = [];
+
     protected ?Store $newStore = null;
 
     protected ?Warehouse $warehouse = null;
@@ -159,6 +161,15 @@ class MigrateLegacyOrders extends Command
         if (file_exists($productMapFile)) {
             $this->productMap = json_decode(file_get_contents($productMapFile), true) ?? [];
             $this->line('  Loaded '.count($this->productMap).' product mappings');
+        }
+
+        // Load sales channel map (legacy marketplace ID -> sales_channel ID)
+        $salesChannelMapFile = "{$basePath}/sales_channel_map_{$legacyStoreId}.json";
+        if (file_exists($salesChannelMapFile)) {
+            $this->salesChannelMap = json_decode(file_get_contents($salesChannelMapFile), true) ?? [];
+            $this->line('  Loaded '.count($this->salesChannelMap).' sales channel mappings');
+        } else {
+            $this->warn('  No sales channel map found. Run migrate:legacy-marketplaces first for channel data.');
         }
     }
 
@@ -286,12 +297,19 @@ class MigrateLegacyOrders extends Command
             // Map status
             $status = $this->mapOrderStatus($legacyOrder->status);
 
+            // Map sales channel from legacy store_marketplace_id
+            $salesChannelId = null;
+            if ($legacyOrder->store_marketplace_id && isset($this->salesChannelMap[$legacyOrder->store_marketplace_id])) {
+                $salesChannelId = $this->salesChannelMap[$legacyOrder->store_marketplace_id];
+            }
+
             // Use DB::table to preserve timestamps
             $newOrderId = DB::table('orders')->insertGetId([
                 'store_id' => $this->newStore->id,
                 'customer_id' => $customerId,
                 'user_id' => $userId,
                 'warehouse_id' => $this->warehouse?->id,
+                'sales_channel_id' => $salesChannelId,
                 'total' => $this->toDecimal($legacyOrder->total),
                 'sub_total' => $this->toDecimal($legacyOrder->sub_total),
                 'status' => $status,

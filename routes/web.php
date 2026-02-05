@@ -548,6 +548,11 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
         Route::post('integrations/anthropic', [IntegrationsController::class, 'storeAnthropic'])->name('integrations.anthropic.store');
         Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
+
+        // Platform connections (Shopify, eBay, etc.)
+        Route::post('integrations/platforms/shopify', [IntegrationsController::class, 'storeShopify'])->name('integrations.shopify.store');
+        Route::post('integrations/platforms/{platform}/test', [IntegrationsController::class, 'testPlatform'])->name('integrations.platforms.test');
+        Route::delete('integrations/platforms/{platform}', [IntegrationsController::class, 'destroyPlatform'])->name('integrations.platforms.destroy');
     });
 
     // Invoices - requires view permission for relevant categories

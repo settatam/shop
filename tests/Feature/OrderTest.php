@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
+use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
@@ -833,5 +834,91 @@ class OrderTest extends TestCase
 
         $this->assertNotEmpty($products);
         $this->assertEquals('Searchable Quick Product', $products[0]['title']);
+    }
+
+    public function test_order_created_locally_gets_default_local_sales_channel(): void
+    {
+        $service = app(OrderCreationService::class);
+
+        $order = $service->create([
+            'items' => [
+                ['title' => 'Test Item', 'quantity' => 1, 'price' => 100.00],
+            ],
+        ], $this->store);
+
+        // Verify the order has a sales channel assigned
+        $this->assertNotNull($order->sales_channel_id);
+
+        // Verify the sales channel is local
+        $salesChannel = SalesChannel::find($order->sales_channel_id);
+        $this->assertNotNull($salesChannel);
+        $this->assertTrue($salesChannel->is_local);
+        $this->assertEquals($this->store->id, $salesChannel->store_id);
+    }
+
+    public function test_order_from_wizard_gets_default_local_sales_channel(): void
+    {
+        $storeUser = StoreUser::where('store_id', $this->store->id)
+            ->where('user_id', $this->user->id)
+            ->first();
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create(['product_id' => $product->id]);
+
+        $service = app(OrderCreationService::class);
+
+        $order = $service->createFromWizard([
+            'store_user_id' => $storeUser->id,
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'variant_id' => $variant->id,
+                    'quantity' => 1,
+                    'price' => 50.00,
+                ],
+            ],
+        ], $this->store);
+
+        // Verify the order has a sales channel assigned
+        $this->assertNotNull($order->sales_channel_id);
+
+        // Verify the sales channel is local
+        $salesChannel = SalesChannel::find($order->sales_channel_id);
+        $this->assertNotNull($salesChannel);
+        $this->assertTrue($salesChannel->is_local);
+    }
+
+    public function test_sales_channel_get_default_local_channel_creates_if_none_exists(): void
+    {
+        // Ensure no sales channels exist for this store
+        SalesChannel::where('store_id', $this->store->id)->forceDelete();
+
+        // Get default local channel - should create one
+        $channel = SalesChannel::getDefaultLocalChannel($this->store->id);
+
+        $this->assertNotNull($channel);
+        $this->assertEquals($this->store->id, $channel->store_id);
+        $this->assertTrue($channel->is_local);
+        $this->assertTrue($channel->is_default);
+        $this->assertEquals('in_store', $channel->code);
+    }
+
+    public function test_sales_channel_get_default_local_channel_returns_existing(): void
+    {
+        // Create a local sales channel
+        $existingChannel = SalesChannel::create([
+            'store_id' => $this->store->id,
+            'name' => 'POS Terminal',
+            'code' => 'pos_terminal',
+            'type' => SalesChannel::TYPE_LOCAL,
+            'is_local' => true,
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        // Get default local channel - should return the existing one
+        $channel = SalesChannel::getDefaultLocalChannel($this->store->id);
+
+        $this->assertEquals($existingChannel->id, $channel->id);
     }
 }

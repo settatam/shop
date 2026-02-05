@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\SalesChannel;
 use App\Services\StoreContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -34,6 +36,8 @@ class SalesReportController extends Controller
                 'customer.leadSource',
                 'items.product.category',
                 'items.variant',
+                'salesChannel',
+                'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
             ])
             ->orderBy('created_at', 'desc')
@@ -47,23 +51,22 @@ class SalesReportController extends Controller
                     ->values()
                     ->implode(', ');
 
-                // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
-                $cost = $order->items->sum(function ($item) {
-                    // Use item's cost if set
-                    if ($item->cost !== null && $item->cost > 0) {
-                        return $item->cost * $item->quantity;
-                    }
-                    // Fallback to variant's wholesale_price or cost
-                    $variant = $item->variant ?? $item->product?->variants?->first();
-                    $effectiveCost = $variant?->wholesale_price ?? $variant?->cost ?? 0;
-
-                    return $effectiveCost * $item->quantity;
-                });
-
+                // Wholesale value = sum of wholesale prices
                 $wholesaleValue = $order->items->sum(function ($item) {
                     $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
 
                     return $wholesalePrice * $item->quantity;
+                });
+
+                // Cost for profit: use wholesale_price if exists, else cost_of_item
+                $cost = $order->items->sum(function ($item) {
+                    $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? $item->product?->variants?->first()?->cost ?? 0;
+
+                    // Use wholesale_price if it exists, otherwise use cost_of_item
+                    $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+
+                    return $effectiveCost * $item->quantity;
                 });
 
                 // Get payment methods
@@ -72,9 +75,12 @@ class SalesReportController extends Controller
                     ->unique()
                     ->implode(', ');
 
-                // Calculate profit: subtotal + service_fee - effective_cost
+                // Calculate profit: subtotal + service_fee - (wholesale_price if exists, else cost_of_item)
                 $serviceFee = (float) ($order->service_fee_value ?? 0);
                 $profit = ($order->sub_total ?? 0) + $serviceFee - $cost;
+
+                // Get channel name - prefer salesChannel relationship, fall back to source_platform
+                $channelName = $order->salesChannel?->name ?? $order->source_platform ?? 'In Store';
 
                 return [
                     'id' => $order->id,
@@ -83,7 +89,7 @@ class SalesReportController extends Controller
                     'customer' => $order->customer?->full_name ?? 'Walk-in',
                     'lead' => $order->customer?->leadSource?->name ?? '-',
                     'status' => $order->status,
-                    'marketplace' => $order->source_platform ?? 'In Store',
+                    'marketplace' => $channelName,
                     'num_items' => $order->items->sum('quantity'),
                     'categories' => $categories ?: '-',
                     'cost' => $cost,
@@ -130,7 +136,10 @@ class SalesReportController extends Controller
         $startDate = now()->subMonths(12)->startOfMonth();
         $endDate = now()->endOfMonth();
 
-        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate);
+        // Get sales channels for the store
+        $channels = $this->getSalesChannels($store->id);
+
+        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate, $channels);
 
         // Calculate totals
         $totals = [
@@ -139,8 +148,6 @@ class SalesReportController extends Controller
             'total_cost' => $monthlyData->sum('total_cost'),
             'total_wholesale_value' => $monthlyData->sum('total_wholesale_value'),
             'total_sales_price' => $monthlyData->sum('total_sales_price'),
-            'total_shopify' => $monthlyData->sum('total_shopify'),
-            'total_reb' => $monthlyData->sum('total_reb'),
             'total_paid' => $monthlyData->sum('total_paid'),
             'gross_profit' => $monthlyData->sum('gross_profit'),
             'profit_percent' => $monthlyData->sum('total_sales_price') > 0
@@ -148,9 +155,16 @@ class SalesReportController extends Controller
                 : 0,
         ];
 
+        // Add channel totals dynamically
+        foreach ($channels as $channel) {
+            $key = 'total_'.$channel['code'];
+            $totals[$key] = $monthlyData->sum($key);
+        }
+
         return Inertia::render('reports/sales/Monthly', [
             'monthlyData' => $monthlyData,
             'totals' => $totals,
+            'channels' => $channels,
         ]);
     }
 
@@ -164,8 +178,11 @@ class SalesReportController extends Controller
         $startDate = now()->startOfMonth();
         $endDate = now();
 
+        // Get sales channels for the store
+        $channels = $this->getSalesChannels($store->id);
+
         // For MTD, we show daily breakdown
-        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate);
+        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels);
 
         // Calculate totals
         $totals = [
@@ -174,8 +191,6 @@ class SalesReportController extends Controller
             'total_cost' => $dailyData->sum('total_cost'),
             'total_wholesale_value' => $dailyData->sum('total_wholesale_value'),
             'total_sales_price' => $dailyData->sum('total_sales_price'),
-            'total_shopify' => $dailyData->sum('total_shopify'),
-            'total_reb' => $dailyData->sum('total_reb'),
             'total_paid' => $dailyData->sum('total_paid'),
             'gross_profit' => $dailyData->sum('gross_profit'),
             'profit_percent' => $dailyData->sum('total_sales_price') > 0
@@ -183,10 +198,17 @@ class SalesReportController extends Controller
                 : 0,
         ];
 
+        // Add channel totals dynamically
+        foreach ($channels as $channel) {
+            $key = 'total_'.$channel['code'];
+            $totals[$key] = $dailyData->sum($key);
+        }
+
         return Inertia::render('reports/sales/MonthToDate', [
             'dailyData' => $dailyData,
             'totals' => $totals,
             'month' => now()->format('F Y'),
+            'channels' => $channels,
         ]);
     }
 
@@ -206,6 +228,8 @@ class SalesReportController extends Controller
                 'customer.leadSource',
                 'items.product.category',
                 'items.variant',
+                'salesChannel',
+                'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
             ])
             ->orderBy('created_at', 'desc')
@@ -223,7 +247,7 @@ class SalesReportController extends Controller
                 'Customer',
                 'Lead',
                 'Status',
-                'Marketplace',
+                'Channel',
                 'Number of Items',
                 'Categories',
                 'Cost',
@@ -254,21 +278,22 @@ class SalesReportController extends Controller
                     ->values()
                     ->implode(', ');
 
-                // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
-                $cost = $order->items->sum(function ($item) {
-                    if ($item->cost !== null && $item->cost > 0) {
-                        return $item->cost * $item->quantity;
-                    }
-                    $variant = $item->variant ?? $item->product?->variants?->first();
-                    $effectiveCost = $variant?->wholesale_price ?? $variant?->cost ?? 0;
-
-                    return $effectiveCost * $item->quantity;
-                });
-
+                // Wholesale value = sum of wholesale prices
                 $wholesaleValue = $order->items->sum(function ($item) {
                     $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
 
                     return $wholesalePrice * $item->quantity;
+                });
+
+                // Cost for profit: use wholesale_price if exists, else cost_of_item
+                $cost = $order->items->sum(function ($item) {
+                    $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? $item->product?->variants?->first()?->cost ?? 0;
+
+                    // Use wholesale_price if it exists, otherwise use cost_of_item
+                    $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+
+                    return $effectiveCost * $item->quantity;
                 });
 
                 $paymentMethods = $order->payments
@@ -276,10 +301,13 @@ class SalesReportController extends Controller
                     ->unique()
                     ->implode(', ');
 
-                // Calculate profit: subtotal + service_fee - effective_cost
+                // Calculate profit: subtotal + service_fee - (wholesale_price if exists, else cost_of_item)
                 $serviceFee = (float) ($order->service_fee_value ?? 0);
                 $profit = ($order->sub_total ?? 0) + $serviceFee - $cost;
                 $numItems = $order->items->sum('quantity');
+
+                // Get channel name
+                $channelName = $order->salesChannel?->name ?? $order->source_platform ?? 'In Store';
 
                 fputcsv($handle, [
                     $order->created_at->format('Y-m-d H:i'),
@@ -287,7 +315,7 @@ class SalesReportController extends Controller
                     $order->customer?->full_name ?? 'Walk-in',
                     $order->customer?->leadSource?->name ?? '-',
                     $order->status,
-                    $order->source_platform ?? 'In Store',
+                    $channelName,
                     $numItems,
                     $categories ?: '-',
                     number_format($cost, 2),
@@ -347,41 +375,56 @@ class SalesReportController extends Controller
         $startDate = now()->subMonths(12)->startOfMonth();
         $endDate = now()->endOfMonth();
 
-        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate);
+        $channels = $this->getSalesChannels($store->id);
+        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate, $channels);
 
         $filename = 'sales-report-monthly-'.now()->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($monthlyData) {
+        return response()->streamDownload(function () use ($monthlyData, $channels) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            // Build header row with dynamic channel columns
+            $headers = [
                 'Date',
                 'Sales #',
                 'Items Sold',
                 'Total Cost',
                 'Total Wholesale Value',
                 'Total Sales Price',
-                'Total Shopify',
-                'Total Reb',
-                'Total Paid',
-                'Gross Profit',
-                'Profit %',
-            ]);
+            ];
+
+            // Add channel columns
+            foreach ($channels as $channel) {
+                $headers[] = $channel['name'];
+            }
+
+            $headers[] = 'Total Paid';
+            $headers[] = 'Gross Profit';
+            $headers[] = 'Profit %';
+
+            fputcsv($handle, $headers);
 
             foreach ($monthlyData as $row) {
-                fputcsv($handle, [
+                $rowData = [
                     $row['date'],
                     $row['sales_count'],
                     $row['items_sold'],
                     number_format($row['total_cost'], 2),
                     number_format($row['total_wholesale_value'], 2),
                     number_format($row['total_sales_price'], 2),
-                    number_format($row['total_shopify'], 2),
-                    number_format($row['total_reb'], 2),
-                    number_format($row['total_paid'], 2),
-                    number_format($row['gross_profit'], 2),
-                    number_format($row['profit_percent'], 2).'%',
-                ]);
+                ];
+
+                // Add channel values
+                foreach ($channels as $channel) {
+                    $key = 'total_'.$channel['code'];
+                    $rowData[] = number_format($row[$key] ?? 0, 2);
+                }
+
+                $rowData[] = number_format($row['total_paid'], 2);
+                $rowData[] = number_format($row['gross_profit'], 2);
+                $rowData[] = number_format($row['profit_percent'], 2).'%';
+
+                fputcsv($handle, $rowData);
             }
 
             // Totals row
@@ -391,8 +434,6 @@ class SalesReportController extends Controller
                 'total_cost' => $monthlyData->sum('total_cost'),
                 'total_wholesale_value' => $monthlyData->sum('total_wholesale_value'),
                 'total_sales_price' => $monthlyData->sum('total_sales_price'),
-                'total_shopify' => $monthlyData->sum('total_shopify'),
-                'total_reb' => $monthlyData->sum('total_reb'),
                 'total_paid' => $monthlyData->sum('total_paid'),
                 'gross_profit' => $monthlyData->sum('gross_profit'),
             ];
@@ -401,19 +442,26 @@ class SalesReportController extends Controller
                 ? ($totals['gross_profit'] / $totals['total_sales_price']) * 100
                 : 0;
 
-            fputcsv($handle, [
+            $totalsRow = [
                 'TOTALS',
                 $totals['sales_count'],
                 $totals['items_sold'],
                 number_format($totals['total_cost'], 2),
                 number_format($totals['total_wholesale_value'], 2),
                 number_format($totals['total_sales_price'], 2),
-                number_format($totals['total_shopify'], 2),
-                number_format($totals['total_reb'], 2),
-                number_format($totals['total_paid'], 2),
-                number_format($totals['gross_profit'], 2),
-                number_format($profitPercent, 2).'%',
-            ]);
+            ];
+
+            // Add channel totals
+            foreach ($channels as $channel) {
+                $key = 'total_'.$channel['code'];
+                $totalsRow[] = number_format($monthlyData->sum($key), 2);
+            }
+
+            $totalsRow[] = number_format($totals['total_paid'], 2);
+            $totalsRow[] = number_format($totals['gross_profit'], 2);
+            $totalsRow[] = number_format($profitPercent, 2).'%';
+
+            fputcsv($handle, $totalsRow);
 
             fclose($handle);
         }, $filename, [
@@ -430,41 +478,56 @@ class SalesReportController extends Controller
         $startDate = now()->startOfMonth();
         $endDate = now();
 
-        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate);
+        $channels = $this->getSalesChannels($store->id);
+        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels);
 
         $filename = 'sales-report-mtd-'.now()->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($dailyData) {
+        return response()->streamDownload(function () use ($dailyData, $channels) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            // Build header row with dynamic channel columns
+            $headers = [
                 'Date',
                 'Sales #',
                 'Items Sold',
                 'Total Cost',
                 'Total Wholesale Value',
                 'Total Sales Price',
-                'Total Shopify',
-                'Total Reb',
-                'Total Paid',
-                'Gross Profit',
-                'Profit %',
-            ]);
+            ];
+
+            // Add channel columns
+            foreach ($channels as $channel) {
+                $headers[] = $channel['name'];
+            }
+
+            $headers[] = 'Total Paid';
+            $headers[] = 'Gross Profit';
+            $headers[] = 'Profit %';
+
+            fputcsv($handle, $headers);
 
             foreach ($dailyData as $row) {
-                fputcsv($handle, [
+                $rowData = [
                     $row['date'],
                     $row['sales_count'],
                     $row['items_sold'],
                     number_format($row['total_cost'], 2),
                     number_format($row['total_wholesale_value'], 2),
                     number_format($row['total_sales_price'], 2),
-                    number_format($row['total_shopify'], 2),
-                    number_format($row['total_reb'], 2),
-                    number_format($row['total_paid'], 2),
-                    number_format($row['gross_profit'], 2),
-                    number_format($row['profit_percent'], 2).'%',
-                ]);
+                ];
+
+                // Add channel values
+                foreach ($channels as $channel) {
+                    $key = 'total_'.$channel['code'];
+                    $rowData[] = number_format($row[$key] ?? 0, 2);
+                }
+
+                $rowData[] = number_format($row['total_paid'], 2);
+                $rowData[] = number_format($row['gross_profit'], 2);
+                $rowData[] = number_format($row['profit_percent'], 2).'%';
+
+                fputcsv($handle, $rowData);
             }
 
             // Totals row
@@ -474,8 +537,6 @@ class SalesReportController extends Controller
                 'total_cost' => $dailyData->sum('total_cost'),
                 'total_wholesale_value' => $dailyData->sum('total_wholesale_value'),
                 'total_sales_price' => $dailyData->sum('total_sales_price'),
-                'total_shopify' => $dailyData->sum('total_shopify'),
-                'total_reb' => $dailyData->sum('total_reb'),
                 'total_paid' => $dailyData->sum('total_paid'),
                 'gross_profit' => $dailyData->sum('gross_profit'),
             ];
@@ -484,19 +545,26 @@ class SalesReportController extends Controller
                 ? ($totals['gross_profit'] / $totals['total_sales_price']) * 100
                 : 0;
 
-            fputcsv($handle, [
+            $totalsRow = [
                 'TOTALS',
                 $totals['sales_count'],
                 $totals['items_sold'],
                 number_format($totals['total_cost'], 2),
                 number_format($totals['total_wholesale_value'], 2),
                 number_format($totals['total_sales_price'], 2),
-                number_format($totals['total_shopify'], 2),
-                number_format($totals['total_reb'], 2),
-                number_format($totals['total_paid'], 2),
-                number_format($totals['gross_profit'], 2),
-                number_format($profitPercent, 2).'%',
-            ]);
+            ];
+
+            // Add channel totals
+            foreach ($channels as $channel) {
+                $key = 'total_'.$channel['code'];
+                $totalsRow[] = number_format($dailyData->sum($key), 2);
+            }
+
+            $totalsRow[] = number_format($totals['total_paid'], 2);
+            $totalsRow[] = number_format($totals['gross_profit'], 2);
+            $totalsRow[] = number_format($profitPercent, 2).'%';
+
+            fputcsv($handle, $totalsRow);
 
             fclose($handle);
         }, $filename, [
@@ -505,9 +573,122 @@ class SalesReportController extends Controller
     }
 
     /**
+     * Get sales channels for the store with fallback for legacy source_platform values.
+     */
+    protected function getSalesChannels(int $storeId): Collection
+    {
+        // Get configured sales channels
+        $channels = SalesChannel::where('store_id', $storeId)
+            ->active()
+            ->ordered()
+            ->get()
+            ->map(fn (SalesChannel $channel) => [
+                'id' => $channel->id,
+                'name' => $channel->name,
+                'code' => $channel->code,
+                'type' => $channel->type,
+                'is_local' => $channel->is_local,
+                'color' => $channel->color,
+            ]);
+
+        // If no channels configured, provide defaults based on legacy source_platform values
+        if ($channels->isEmpty()) {
+            // Check what source_platforms exist in orders for this store
+            $existingPlatforms = Order::where('store_id', $storeId)
+                ->whereNotNull('source_platform')
+                ->distinct()
+                ->pluck('source_platform')
+                ->filter();
+
+            $defaultChannels = collect();
+
+            // Always add a local channel
+            $defaultChannels->push([
+                'id' => null,
+                'name' => 'In Store',
+                'code' => 'in_store',
+                'type' => 'local',
+                'is_local' => true,
+                'color' => null,
+            ]);
+
+            // Add channels for existing platforms
+            foreach ($existingPlatforms as $platform) {
+                if (in_array($platform, ['in_store', 'memo', 'repair', 'layaway'])) {
+                    continue; // Skip local-type platforms
+                }
+
+                $defaultChannels->push([
+                    'id' => null,
+                    'name' => ucfirst($platform),
+                    'code' => $platform,
+                    'type' => $platform,
+                    'is_local' => false,
+                    'color' => null,
+                ]);
+            }
+
+            return $defaultChannels;
+        }
+
+        return $channels;
+    }
+
+    /**
+     * Get the channel code for an order.
+     * Priority:
+     * 1. Direct sales_channel_id relationship
+     * 2. PlatformOrder → StoreMarketplace → SalesChannel (via store_marketplace_id)
+     * 3. source_platform string (legacy)
+     */
+    protected function getOrderChannelCode(Order $order, Collection $channels): string
+    {
+        // Priority 1: If order has a direct sales channel relationship, use it
+        if ($order->sales_channel_id && $order->salesChannel) {
+            return $order->salesChannel->code;
+        }
+
+        // Priority 2: Check platform_order → store_marketplace → sales_channel
+        if ($order->relationLoaded('platformOrder') && $order->platformOrder) {
+            $marketplaceId = $order->platformOrder->store_marketplace_id;
+            if ($marketplaceId) {
+                // Find a sales channel linked to this marketplace
+                $channelForMarketplace = SalesChannel::where('store_id', $order->store_id)
+                    ->where('store_marketplace_id', $marketplaceId)
+                    ->first();
+
+                if ($channelForMarketplace) {
+                    return $channelForMarketplace->code;
+                }
+            }
+        }
+
+        // Priority 3: Fall back to source_platform
+        $platform = strtolower($order->source_platform ?? '');
+
+        // Map legacy values to standard codes
+        $localPlatforms = ['in_store', 'reb', 'memo', 'repair', 'layaway', ''];
+        if (in_array($platform, $localPlatforms)) {
+            // Find the local channel
+            $localChannel = $channels->firstWhere('is_local', true);
+
+            return $localChannel['code'] ?? 'in_store';
+        }
+
+        // Return the platform as-is if it exists in channels
+        $matchingChannel = $channels->firstWhere('code', $platform);
+        if ($matchingChannel) {
+            return $matchingChannel['code'];
+        }
+
+        // Default to in_store if no match
+        return 'in_store';
+    }
+
+    /**
      * Get monthly aggregated data.
      */
-    protected function getMonthlyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate)
+    protected function getMonthlyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate, Collection $channels)
     {
         $orders = Order::query()
             ->where('store_id', $storeId)
@@ -515,6 +696,8 @@ class SalesReportController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'items.variant',
+                'salesChannel',
+                'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
             ])
             ->get();
@@ -532,56 +715,63 @@ class SalesReportController extends Controller
             $totalCost = 0;
             $totalWholesaleValue = 0;
             $itemsSold = 0;
-            $totalShopify = 0;
-            $totalReb = 0;
             $totalServiceFee = 0;
+
+            // Initialize channel totals
+            $channelTotals = [];
+            foreach ($channels as $channel) {
+                $channelTotals[$channel['code']] = 0;
+            }
 
             foreach ($monthOrders as $order) {
                 foreach ($order->items as $item) {
-                    // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
-                    if ($item->cost !== null && $item->cost > 0) {
-                        $cost = $item->cost * $item->quantity;
-                    } else {
-                        $effectiveCost = $item->variant?->wholesale_price ?? $item->variant?->cost ?? 0;
-                        $cost = $effectiveCost * $item->quantity;
-                    }
                     $wholesalePrice = $item->variant?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
 
-                    $totalCost += $cost;
+                    // Wholesale value = sum of wholesale prices
                     $totalWholesaleValue += $wholesalePrice * $item->quantity;
+
+                    // Cost for profit calculation: use wholesale_price if exists, else cost_of_item
+                    $effectiveCostForProfit = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+                    $totalCost += $effectiveCostForProfit * $item->quantity;
+
                     $itemsSold += $item->quantity;
                 }
 
                 // Add service fee
                 $totalServiceFee += (float) ($order->service_fee_value ?? 0);
 
-                // Count by platform
-                if ($order->source_platform === 'shopify') {
-                    $totalShopify += $order->total ?? 0;
-                } elseif ($order->source_platform === 'reb') {
-                    $totalReb += $order->total ?? 0;
+                // Add to appropriate channel total
+                $channelCode = $this->getOrderChannelCode($order, $channels);
+                if (isset($channelTotals[$channelCode])) {
+                    $channelTotals[$channelCode] += $order->total ?? 0;
                 }
             }
 
             $totalSalesPrice = $monthOrders->sum('sub_total');
             $totalPaid = $monthOrders->sum(fn ($o) => $o->payments->sum('amount'));
-            // Profit = subtotal + service_fee - effective_cost
+            // Profit = subtotal + service_fee - (wholesale_price if exists, else cost_of_item)
             $grossProfit = $totalSalesPrice + $totalServiceFee - $totalCost;
             $profitPercent = $totalSalesPrice > 0 ? ($grossProfit / $totalSalesPrice) * 100 : 0;
 
-            $months->push([
+            $monthData = [
                 'date' => $current->format('M Y'),
                 'sales_count' => $monthOrders->count(),
                 'items_sold' => $itemsSold,
                 'total_cost' => $totalCost,
                 'total_wholesale_value' => $totalWholesaleValue,
                 'total_sales_price' => $totalSalesPrice,
-                'total_shopify' => $totalShopify,
-                'total_reb' => $totalReb,
                 'total_paid' => $totalPaid,
                 'gross_profit' => $grossProfit,
                 'profit_percent' => $profitPercent,
-            ]);
+            ];
+
+            // Add channel totals with prefixed keys
+            foreach ($channelTotals as $code => $total) {
+                $monthData['total_'.$code] = $total;
+            }
+
+            $months->push($monthData);
 
             $current->addMonth();
         }
@@ -592,7 +782,7 @@ class SalesReportController extends Controller
     /**
      * Get daily aggregated data.
      */
-    protected function getDailyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate)
+    protected function getDailyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate, Collection $channels)
     {
         $orders = Order::query()
             ->where('store_id', $storeId)
@@ -600,6 +790,8 @@ class SalesReportController extends Controller
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'items.variant',
+                'salesChannel',
+                'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
             ])
             ->get();
@@ -617,56 +809,63 @@ class SalesReportController extends Controller
             $totalCost = 0;
             $totalWholesaleValue = 0;
             $itemsSold = 0;
-            $totalShopify = 0;
-            $totalReb = 0;
             $totalServiceFee = 0;
+
+            // Initialize channel totals
+            $channelTotals = [];
+            foreach ($channels as $channel) {
+                $channelTotals[$channel['code']] = 0;
+            }
 
             foreach ($dayOrders as $order) {
                 foreach ($order->items as $item) {
-                    // Calculate cost using effective cost priority: item cost > wholesale_price > variant cost
-                    if ($item->cost !== null && $item->cost > 0) {
-                        $cost = $item->cost * $item->quantity;
-                    } else {
-                        $effectiveCost = $item->variant?->wholesale_price ?? $item->variant?->cost ?? 0;
-                        $cost = $effectiveCost * $item->quantity;
-                    }
                     $wholesalePrice = $item->variant?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
 
-                    $totalCost += $cost;
+                    // Wholesale value = sum of wholesale prices
                     $totalWholesaleValue += $wholesalePrice * $item->quantity;
+
+                    // Cost for profit calculation: use wholesale_price if exists, else cost_of_item
+                    $effectiveCostForProfit = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+                    $totalCost += $effectiveCostForProfit * $item->quantity;
+
                     $itemsSold += $item->quantity;
                 }
 
                 // Add service fee
                 $totalServiceFee += (float) ($order->service_fee_value ?? 0);
 
-                // Count by platform
-                if ($order->source_platform === 'shopify') {
-                    $totalShopify += $order->total ?? 0;
-                } elseif ($order->source_platform === 'reb') {
-                    $totalReb += $order->total ?? 0;
+                // Add to appropriate channel total
+                $channelCode = $this->getOrderChannelCode($order, $channels);
+                if (isset($channelTotals[$channelCode])) {
+                    $channelTotals[$channelCode] += $order->total ?? 0;
                 }
             }
 
             $totalSalesPrice = $dayOrders->sum('sub_total');
             $totalPaid = $dayOrders->sum(fn ($o) => $o->payments->sum('amount'));
-            // Profit = subtotal + service_fee - effective_cost
+            // Profit = subtotal + service_fee - (wholesale_price if exists, else cost_of_item)
             $grossProfit = $totalSalesPrice + $totalServiceFee - $totalCost;
             $profitPercent = $totalSalesPrice > 0 ? ($grossProfit / $totalSalesPrice) * 100 : 0;
 
-            $days->push([
+            $dayData = [
                 'date' => $current->format('M d, Y'),
                 'sales_count' => $dayOrders->count(),
                 'items_sold' => $itemsSold,
                 'total_cost' => $totalCost,
                 'total_wholesale_value' => $totalWholesaleValue,
                 'total_sales_price' => $totalSalesPrice,
-                'total_shopify' => $totalShopify,
-                'total_reb' => $totalReb,
                 'total_paid' => $totalPaid,
                 'gross_profit' => $grossProfit,
                 'profit_percent' => $profitPercent,
-            ]);
+            ];
+
+            // Add channel totals with prefixed keys
+            foreach ($channelTotals as $code => $total) {
+                $dayData['total_'.$code] = $total;
+            }
+
+            $days->push($dayData);
 
             $current->addDay();
         }

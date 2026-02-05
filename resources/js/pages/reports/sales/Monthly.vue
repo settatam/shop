@@ -8,6 +8,15 @@ import StatCard from '@/components/charts/StatCard.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
 
+interface Channel {
+    id: number | null;
+    name: string;
+    code: string;
+    type: string;
+    is_local: boolean;
+    color: string | null;
+}
+
 interface MonthRow {
     date: string;
     sales_count: number;
@@ -15,11 +24,10 @@ interface MonthRow {
     total_cost: number;
     total_wholesale_value: number;
     total_sales_price: number;
-    total_shopify: number;
-    total_reb: number;
     total_paid: number;
     gross_profit: number;
     profit_percent: number;
+    [key: string]: string | number; // Allow dynamic channel keys like total_shopify, total_in_store
 }
 
 interface Totals {
@@ -28,16 +36,16 @@ interface Totals {
     total_cost: number;
     total_wholesale_value: number;
     total_sales_price: number;
-    total_shopify: number;
-    total_reb: number;
     total_paid: number;
     gross_profit: number;
     profit_percent: number;
+    [key: string]: number; // Allow dynamic channel keys
 }
 
 const props = defineProps<{
     monthlyData: MonthRow[];
     totals: Totals;
+    channels: Channel[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -68,6 +76,20 @@ function formatPercent(value: number): string {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
     }).format(value / 100);
+}
+
+function getChannelKey(channel: Channel): string {
+    return `total_${channel.code}`;
+}
+
+function getChannelTotal(row: MonthRow, channel: Channel): number {
+    const key = getChannelKey(channel);
+    return (row[key] as number) ?? 0;
+}
+
+function getTotalsChannelValue(channel: Channel): number {
+    const key = getChannelKey(channel);
+    return props.totals[key] ?? 0;
 }
 
 // Chart data
@@ -221,8 +243,14 @@ const avgProfitMargin = computed(() => {
                                 <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Total Cost</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Wholesale Value</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Sales Price</th>
-                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Shopify</th>
-                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">REB</th>
+                                <!-- Dynamic channel columns -->
+                                <th
+                                    v-for="channel in channels"
+                                    :key="channel.code"
+                                    class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300"
+                                >
+                                    {{ channel.name }}
+                                </th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Total Paid</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Gross Profit</th>
                                 <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Profit %</th>
@@ -236,8 +264,14 @@ const avgProfitMargin = computed(() => {
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.total_cost) }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.total_wholesale_value) }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.total_sales_price) }}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500 dark:text-gray-400">{{ formatCurrency(row.total_shopify) }}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500 dark:text-gray-400">{{ formatCurrency(row.total_reb) }}</td>
+                                <!-- Dynamic channel values -->
+                                <td
+                                    v-for="channel in channels"
+                                    :key="channel.code"
+                                    class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500 dark:text-gray-400"
+                                >
+                                    {{ formatCurrency(getChannelTotal(row, channel)) }}
+                                </td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.total_paid) }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right" :class="row.gross_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ formatCurrency(row.gross_profit) }}
@@ -249,7 +283,7 @@ const avgProfitMargin = computed(() => {
 
                             <!-- Empty state -->
                             <tr v-if="monthlyData.length === 0">
-                                <td colspan="11" class="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td :colspan="9 + channels.length" class="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                     No sales data found.
                                 </td>
                             </tr>
@@ -263,8 +297,14 @@ const avgProfitMargin = computed(() => {
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(totals.total_cost) }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(totals.total_wholesale_value) }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(totals.total_sales_price) }}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500 dark:text-gray-400">{{ formatCurrency(totals.total_shopify) }}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500 dark:text-gray-400">{{ formatCurrency(totals.total_reb) }}</td>
+                                <!-- Dynamic channel totals -->
+                                <td
+                                    v-for="channel in channels"
+                                    :key="channel.code"
+                                    class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500 dark:text-gray-400"
+                                >
+                                    {{ formatCurrency(getTotalsChannelValue(channel)) }}
+                                </td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(totals.total_paid) }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right" :class="totals.gross_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ formatCurrency(totals.gross_profit) }}

@@ -618,10 +618,88 @@ function deleteProduct() {
                     </div>
                 </div>
 
+                <!-- Category and Product Information Section (Top) -->
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
+                    <!-- Category -->
+                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Category</h3>
+                            <CategorySelector
+                                v-model="form.category_id"
+                                :categories="categories"
+                            />
+                            <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Product Information (compact version at top) -->
+                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Product Information</h3>
+                            <div class="space-y-4">
+                                <!-- Title -->
+                                <div>
+                                    <label for="title_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Title <span class="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        id="title_top"
+                                        v-model="form.title"
+                                        type="text"
+                                        :required="!form.generate_title"
+                                        :disabled="form.generate_title"
+                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                    />
+                                    <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <input
+                                            id="generate_title_top"
+                                            v-model="form.generate_title"
+                                            type="checkbox"
+                                            class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                        />
+                                        <label for="generate_title_top" class="text-sm text-gray-600 dark:text-gray-400">
+                                            Generate title (from category format or AI)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- SKU and Barcode -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="sku_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            SKU
+                                        </label>
+                                        <input
+                                            id="sku_top"
+                                            v-model="form.variants[0].sku"
+                                            type="text"
+                                            :disabled="hasVariants"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label for="barcode_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Barcode
+                                        </label>
+                                        <input
+                                            id="barcode_top"
+                                            v-model="form.variants[0].barcode"
+                                            type="text"
+                                            :disabled="hasVariants"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <!-- Main content -->
                     <div class="lg:col-span-2 space-y-6">
-                        <!-- Template Attributes Section -->
+                        <!-- Product Template Section -->
                         <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
                                 type="button"
@@ -629,8 +707,8 @@ function deleteProduct() {
                                 @click="toggleSection('attributes')"
                             >
                                 <div>
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ template.name }}</h3>
-                                    <p v-if="template.description" class="text-sm text-gray-500 dark:text-gray-400">{{ template.description }}</p>
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Template</h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ template.name }}</p>
                                 </div>
                                 <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />
@@ -1084,58 +1162,25 @@ function deleteProduct() {
                             </div>
                         </div>
 
-                        <!-- Product Information Section -->
+                        <!-- Description Section -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
                                 type="button"
                                 class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
                                 @click="toggleSection('productInfo')"
                             >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Information</h3>
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Description</h3>
                                 <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />
                             </button>
 
                             <div v-show="sections.productInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <div class="space-y-4">
-                                    <!-- Title -->
-                                    <div>
-                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Title <span class="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            id="title"
-                                            v-model="form.title"
-                                            type="text"
-                                            :required="!form.generate_title"
-                                            :disabled="form.generate_title"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                        />
-                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
-
-                                        <!-- Generate Title Checkbox -->
-                                        <div class="mt-2 flex items-center gap-2">
-                                            <input
-                                                id="generate_title"
-                                                v-model="form.generate_title"
-                                                type="checkbox"
-                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            <label for="generate_title" class="text-sm text-gray-600 dark:text-gray-400">
-                                                Generate title (from category format or AI)
-                                            </label>
-                                        </div>
-                                    </div>
-
                                     <!-- Description -->
                                     <div>
-                                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Description
-                                        </label>
                                         <RichTextEditor
                                             v-model="form.description"
                                             placeholder="Enter product description..."
-                                            class="mt-1"
                                             :disabled="form.generate_description"
                                         />
                                         <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
@@ -1151,38 +1196,6 @@ function deleteProduct() {
                                             <label for="generate_description" class="text-sm text-gray-600 dark:text-gray-400">
                                                 Generate with AI
                                             </label>
-                                        </div>
-                                    </div>
-
-                                    <!-- SKU and Barcode -->
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div>
-                                            <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                SKU
-                                            </label>
-                                            <input
-                                                id="sku"
-                                                v-model="form.variants[0].sku"
-                                                type="text"
-                                                :disabled="hasVariants"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                            />
-                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                SKU is managed per variant
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <label for="barcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Barcode
-                                            </label>
-                                            <input
-                                                id="barcode"
-                                                v-model="form.variants[0].barcode"
-                                                type="text"
-                                                :disabled="hasVariants"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -1671,34 +1684,14 @@ function deleteProduct() {
                             </div>
                         </div>
 
-                        <!-- Organization -->
+                        <!-- Tags -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <div class="px-4 py-5 sm:p-6">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Organization</h3>
-
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Category
-                                        </label>
-                                        <CategorySelector
-                                            v-model="form.category_id"
-                                            :categories="categories"
-                                        />
-                                        <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
-                                    </div>
-
-                                    <!-- Tags -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Tags
-                                        </label>
-                                        <TagInput
-                                            v-model="selectedTags"
-                                            placeholder="Search or create tags..."
-                                        />
-                                    </div>
-                                </div>
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Tags</h3>
+                                <TagInput
+                                    v-model="selectedTags"
+                                    placeholder="Search or create tags..."
+                                />
                             </div>
                         </div>
 
