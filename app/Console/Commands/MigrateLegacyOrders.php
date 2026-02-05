@@ -320,7 +320,7 @@ class MigrateLegacyOrders extends Command
                 'service_fee_value' => $this->toDecimal($legacyOrder->service_fee_value),
                 'service_fee_unit' => $this->mapServiceFeeUnit($legacyOrder->service_fee_unit ?? null),
                 'service_fee_reason' => $legacyOrder->service_fee_reason ?? '',
-                'invoice_number' => $legacyOrder->invoice_number,
+                'invoice_number' => $this->getInvoiceNumber($legacyOrder),
                 'order_id' => $legacyOrder->order_id, // Maintain original order_id
                 'external_marketplace_id' => $legacyOrder->external_marketplace_id,
                 'square_order_id' => $legacyOrder->square_order_id,
@@ -526,7 +526,7 @@ class MigrateLegacyOrders extends Command
             'store_id' => $this->newStore->id,
             'customer_id' => $customerId,
             'user_id' => $userId,
-            'invoice_number' => $legacyOrder->invoice_number ?: ('INV-'.strtoupper(substr(md5((string) $newOrderId), 0, 8))),
+            'invoice_number' => $this->getInvoiceNumber($legacyOrder, $newOrderId),
             'invoiceable_type' => Order::class,
             'invoiceable_id' => $newOrderId,
             'subtotal' => $this->toDecimal($legacyOrder->sub_total),
@@ -625,6 +625,28 @@ class MigrateLegacyOrders extends Command
             'partially_refunded', 'partial_refund' => Payment::STATUS_PARTIALLY_REFUNDED,
             default => Payment::STATUS_COMPLETED,
         };
+    }
+
+    /**
+     * Get invoice number from legacy order.
+     * Uses order_id as invoice number if available, otherwise generates one.
+     */
+    protected function getInvoiceNumber(object $legacyOrder, ?int $newOrderId = null): string
+    {
+        // Use order_id if it's set and not "0"
+        if (! empty($legacyOrder->order_id) && $legacyOrder->order_id !== '0') {
+            return $legacyOrder->order_id;
+        }
+
+        // Fall back to invoice_number if set
+        if (! empty($legacyOrder->invoice_number)) {
+            return $legacyOrder->invoice_number;
+        }
+
+        // Generate a unique invoice number as last resort
+        $id = $newOrderId ?? $legacyOrder->id;
+
+        return 'INV-'.strtoupper(substr(md5((string) $id), 0, 8));
     }
 
     protected function mapPaymentGateway(?int $legacyGatewayId): ?string
