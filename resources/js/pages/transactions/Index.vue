@@ -6,7 +6,7 @@ import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import { DatePicker } from '@/components/ui/date-picker';
 import { computed, onMounted, ref, watch } from 'vue';
-import { PlusIcon, XMarkIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, XMarkIcon, SparklesIcon } from '@heroicons/vue/20/solid';
 
 interface FilterOption {
     value: string;
@@ -127,13 +127,22 @@ const hasActiveFilters = computed(() => {
                         Manage buy transactions from customers
                     </p>
                 </div>
-                <Link
-                    href="/transactions/buy"
-                    class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                >
-                    <PlusIcon class="-ml-0.5 size-5" aria-hidden="true" />
-                    New In-Store Buy
-                </Link>
+                <div class="flex items-center gap-3">
+                    <Link
+                        href="/transactions/quick-evaluation"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-600"
+                    >
+                        <SparklesIcon class="-ml-0.5 size-5" aria-hidden="true" />
+                        Quick Evaluation
+                    </Link>
+                    <Link
+                        href="/transactions/buy"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    >
+                        <PlusIcon class="-ml-0.5 size-5" aria-hidden="true" />
+                        New In-Store Buy
+                    </Link>
+                </div>
             </div>
 
             <!-- Filters -->

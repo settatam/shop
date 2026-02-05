@@ -83,8 +83,11 @@ class TransactionItemResearcher
         ]);
 
         if ($response->failed()) {
+            $errorBody = $response->json();
+            $errorMessage = $errorBody['error']['message'] ?? 'Failed to generate research. Please try again.';
+
             return [
-                'error' => 'Failed to generate research. Please try again.',
+                'error' => $errorMessage,
             ];
         }
 
@@ -126,6 +129,148 @@ class TransactionItemResearcher
         ]);
 
         return $research;
+    }
+
+    /**
+     * Generate AI research from raw data (not a TransactionItem).
+     *
+     * @param  array<int, string>  $imageUrls
+     * @return array<string, mixed>
+     */
+    public function generateResearchFromData(
+        int $storeId,
+        string $title,
+        ?string $description = null,
+        ?int $categoryId = null,
+        ?string $preciousMetal = null,
+        ?string $condition = null,
+        ?float $weight = null,
+        array $imageUrls = [],
+    ): array {
+        // Check for store-specific Anthropic integration
+        $integration = StoreIntegration::findActiveForStore($storeId, StoreIntegration::PROVIDER_ANTHROPIC);
+
+        if ($integration) {
+            $this->apiKey = $integration->getAnthropicApiKey();
+            $this->model = $integration->getAnthropicModel();
+        }
+
+        if (empty($this->apiKey)) {
+            return [
+                'error' => 'Anthropic API key not configured. Please add your API key in Settings → Integrations.',
+            ];
+        }
+
+        // Get category name if provided
+        $categoryName = null;
+        if ($categoryId) {
+            $category = \App\Models\Category::find($categoryId);
+            $categoryName = $category?->name;
+        }
+
+        $prompt = $this->buildPromptFromData($title, $description, $categoryName, $preciousMetal, $condition, $weight);
+        $messages = [['role' => 'user', 'content' => $prompt]];
+
+        // Include images if available
+        if (! empty($imageUrls)) {
+            $content = [];
+            foreach (array_slice($imageUrls, 0, 4) as $imageUrl) {
+                $content[] = [
+                    'type' => 'image',
+                    'source' => [
+                        'type' => 'url',
+                        'url' => $imageUrl,
+                    ],
+                ];
+            }
+            $content[] = [
+                'type' => 'text',
+                'text' => $prompt,
+            ];
+            $messages = [['role' => 'user', 'content' => $content]];
+        }
+
+        $response = Http::withHeaders([
+            'x-api-key' => $this->apiKey,
+            'anthropic-version' => '2023-06-01',
+            'Content-Type' => 'application/json',
+        ])->timeout(120)->post("{$this->baseUrl}/messages", [
+            'model' => $this->model,
+            'messages' => $messages,
+            'max_tokens' => 2048,
+            'system' => 'You are an expert appraiser and market researcher for jewelry, precious metals, and luxury goods. Provide detailed, accurate assessments. Always respond with valid JSON.',
+        ]);
+
+        if ($response->failed()) {
+            $errorBody = $response->json();
+            $errorMessage = $errorBody['error']['message'] ?? 'Failed to generate research. Please try again.';
+
+            return [
+                'error' => $errorMessage,
+            ];
+        }
+
+        $responseData = $response->json();
+        $text = $responseData['data']['content'][0]['text'] ?? $responseData['content'][0]['text'] ?? '';
+
+        // Parse the JSON response
+        $research = $this->parseResearch($text);
+
+        // Log usage
+        $inputTokens = $responseData['usage']['input_tokens'] ?? 0;
+        $outputTokens = $responseData['usage']['output_tokens'] ?? 0;
+
+        AiUsageLog::logUsage(
+            storeId: $storeId,
+            provider: 'anthropic',
+            model: $this->model,
+            feature: 'quick_evaluation_research',
+            inputTokens: $inputTokens,
+            outputTokens: $outputTokens,
+            userId: auth()->id(),
+        );
+
+        return $research;
+    }
+
+    /**
+     * Build a prompt from raw data.
+     */
+    protected function buildPromptFromData(
+        string $title,
+        ?string $description,
+        ?string $categoryName,
+        ?string $preciousMetal,
+        ?string $condition,
+        ?float $weight,
+    ): string {
+        $details = "Analyze this item and provide a market research report:\n\n";
+        $details .= "Title: {$title}\n";
+
+        if ($description) {
+            $details .= "Description: {$description}\n";
+        }
+        if ($categoryName) {
+            $details .= "Category: {$categoryName}\n";
+        }
+        if ($preciousMetal) {
+            $details .= 'Metal Type: '.str_replace('_', ' ', $preciousMetal)."\n";
+        }
+        if ($weight) {
+            $details .= "Weight (DWT): {$weight}\n";
+        }
+        if ($condition) {
+            $details .= 'Condition: '.str_replace('_', ' ', $condition)."\n";
+        }
+
+        $details .= "\nRespond with a JSON object containing:\n";
+        $details .= "{\n";
+        $details .= '  "market_value": { "min": number, "max": number, "avg": number, "confidence": "low"|"medium"|"high", "reasoning": "string" },'."\n";
+        $details .= '  "pricing_recommendation": { "suggested_retail": number, "suggested_wholesale": number, "suggested_buy": number, "notes": "string" },'."\n";
+        $details .= '  "item_analysis": { "description": "string", "notable_features": ["string"], "condition_notes": "string" }'."\n";
+        $details .= "}\n";
+
+        return $details;
     }
 
     protected function buildPrompt(TransactionItem $item): string

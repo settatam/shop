@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Laravel\Scout\Searchable;
 
 class TransactionItem extends Model
 {
-    use HasFactory, HasImages;
+    use HasFactory, HasImages, Searchable;
 
     // Precious metal constants
     public const METAL_GOLD_10K = 'gold_10k';
@@ -182,5 +183,28 @@ class TransactionItem extends Model
         ]);
 
         return $this;
+    }
+
+    /**
+     * Get the indexable data array for the model.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        $this->loadMissing('transaction', 'category');
+
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'sku' => $this->sku,
+            'category' => $this->category?->name,
+            'precious_metal' => $this->precious_metal,
+            'condition' => $this->condition,
+            'store_id' => $this->transaction?->store_id,
+            'transaction_id' => $this->transaction_id,
+            'created_at' => $this->created_at?->timestamp,
+        ];
     }
 }

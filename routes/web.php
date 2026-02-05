@@ -231,6 +231,16 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('transactions/buy', [\App\Http\Controllers\Web\TransactionController::class, 'storeFromWizard'])->name('web.transactions.store-wizard');
         Route::get('transactions/create', [\App\Http\Controllers\Web\TransactionController::class, 'create'])->name('web.transactions.create');
         Route::post('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'store'])->name('web.transactions.store');
+
+        // Quick Evaluation routes
+        Route::get('transactions/quick-evaluation', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'index'])->name('web.transactions.quick-evaluation');
+        Route::post('transactions/quick-evaluation', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'store'])->name('web.transactions.quick-evaluation.store');
+        Route::put('transactions/quick-evaluation/{evaluation}', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'update'])->name('web.transactions.quick-evaluation.update');
+        Route::post('transactions/quick-evaluation/similar-items', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'searchSimilarItems'])->name('web.transactions.quick-evaluation.similar-items');
+        Route::post('transactions/quick-evaluation/ai-research', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'generateAiResearch'])->name('web.transactions.quick-evaluation.ai-research');
+        Route::post('transactions/quick-evaluation/{evaluation}/images', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'uploadImages'])->name('web.transactions.quick-evaluation.upload-images');
+        Route::post('transactions/quick-evaluation/{evaluation}/convert', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'convertToTransaction'])->name('web.transactions.quick-evaluation.convert');
+        Route::delete('transactions/quick-evaluation/{evaluation}', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'destroy'])->name('web.transactions.quick-evaluation.destroy');
     });
     Route::middleware('permission:transactions.view')->group(function () {
         Route::get('transactions', [\App\Http\Controllers\Web\TransactionController::class, 'index'])->name('web.transactions.index');

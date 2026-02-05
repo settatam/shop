@@ -91,6 +91,82 @@ class SimilarItemFinder
     }
 
     /**
+     * Find similar transaction items (past buys) based on search criteria.
+     *
+     * @param  array<string, mixed>  $criteria
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function findSimilarTransactionItems(array $criteria, int $storeId, int $limit = 10): Collection
+    {
+        $titleWords = $this->extractKeywords($criteria['title'] ?? '');
+
+        $query = TransactionItem::query()
+            ->whereHas('transaction', function ($q) use ($storeId) {
+                $q->where('store_id', $storeId)
+                    ->where('status', 'payment_processed');
+            })
+            ->with(['category', 'images', 'transaction']);
+
+        // Get items to score
+        $items = $query->limit(200)->get();
+
+        // Score each item
+        $scored = $items->map(function (TransactionItem $item) use ($titleWords, $criteria) {
+            $score = 0;
+            $reasons = [];
+
+            // Category match
+            if (! empty($criteria['category_id']) && $item->category_id == $criteria['category_id']) {
+                $score += 30;
+                $reasons[] = 'Same category';
+            }
+
+            // Title keyword overlap
+            $itemWords = $this->extractKeywords($item->title);
+            $overlap = array_intersect($titleWords, $itemWords);
+            if (! empty($overlap)) {
+                $overlapScore = (count($overlap) / max(count($titleWords), 1)) * 50;
+                $score += $overlapScore;
+                $reasons[] = 'Title match: '.implode(', ', $overlap);
+            }
+
+            // Metal type match
+            if (! empty($criteria['precious_metal']) && $item->precious_metal === $criteria['precious_metal']) {
+                $score += 25;
+                $reasons[] = 'Metal type match';
+            }
+
+            // Condition match
+            if (! empty($criteria['condition']) && $item->condition === $criteria['condition']) {
+                $score += 10;
+                $reasons[] = 'Condition match';
+            }
+
+            return [
+                'id' => $item->id,
+                'title' => $item->title,
+                'description' => $item->description,
+                'category' => $item->category?->name,
+                'precious_metal' => $item->precious_metal,
+                'condition' => $item->condition,
+                'dwt' => $item->dwt,
+                'buy_price' => $item->buy_price,
+                'image_url' => $item->images->first()?->thumbnail_url ?? $item->images->first()?->url,
+                'created_at' => $item->created_at->toISOString(),
+                'days_ago' => $item->created_at->diffInDays(now()),
+                'similarity_score' => round($score),
+                'match_reasons' => $reasons,
+            ];
+        })
+            ->filter(fn ($item) => $item['similarity_score'] > 0)
+            ->sortByDesc('similarity_score')
+            ->take($limit)
+            ->values();
+
+        return $scored;
+    }
+
+    /**
      * Extract meaningful keywords from a title.
      *
      * @return array<int, string>

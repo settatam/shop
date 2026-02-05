@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductTemplate;
 use App\Models\Repair;
 use App\Models\Transaction;
+use App\Models\TransactionItem;
 use Illuminate\Support\Collection;
 
 class GlobalSearchService
@@ -21,6 +22,7 @@ class GlobalSearchService
         'repairs' => Repair::class,
         'memos' => Memo::class,
         'transactions' => Transaction::class,
+        'transaction_items' => TransactionItem::class,
         'categories' => Category::class,
         'templates' => ProductTemplate::class,
     ];
@@ -96,6 +98,12 @@ class GlobalSearchService
                 'title' => $model->transaction_number,
                 'subtitle' => $model->customer?->full_name ?? 'No customer',
                 'url' => route('web.transactions.show', $model),
+            ],
+            'transaction_items' => [
+                'id' => $model->id,
+                'title' => $model->title,
+                'subtitle' => $model->transaction?->transaction_number ?? 'No transaction',
+                'url' => route('web.transactions.items.show', [$model->transaction_id, $model->id]),
             ],
             'categories' => [
                 'id' => $model->id,

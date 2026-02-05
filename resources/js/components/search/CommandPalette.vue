@@ -21,6 +21,7 @@ import {
     CurrencyDollarIcon,
     FolderIcon,
     RectangleStackIcon,
+    TagIcon,
 } from '@heroicons/vue/24/outline';
 import { useSearch, type SearchResult, type SearchResults } from '@/composables/useSearch';
 
@@ -43,6 +44,7 @@ const iconMap: Record<keyof SearchResults, any> = {
     repairs: WrenchScrewdriverIcon,
     memos: DocumentTextIcon,
     transactions: CurrencyDollarIcon,
+    transaction_items: TagIcon,
     categories: FolderIcon,
     templates: RectangleStackIcon,
 };

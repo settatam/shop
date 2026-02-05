@@ -16,6 +16,7 @@ export interface SearchResults {
     repairs: SearchResult[];
     memos: SearchResult[];
     transactions: SearchResult[];
+    transaction_items: SearchResult[];
     categories: SearchResult[];
     templates: SearchResult[];
 }
@@ -32,6 +33,7 @@ const typeLabels: Record<keyof SearchResults, string> = {
     repairs: 'Repairs',
     memos: 'Memos',
     transactions: 'Transactions',
+    transaction_items: 'Transaction Items',
     categories: 'Categories',
     templates: 'Templates',
 };
@@ -43,6 +45,7 @@ const typeIcons: Record<keyof SearchResults, string> = {
     repairs: 'wrench',
     memos: 'document-text',
     transactions: 'currency-dollar',
+    transaction_items: 'tag',
     categories: 'folder',
     templates: 'template',
 };
