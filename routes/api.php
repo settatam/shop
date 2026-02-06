@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\TerminalCheckoutController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\VendorController;
 use App\Http\Controllers\Api\V1\WarehouseController;
+use App\Http\Controllers\Api\VoiceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -226,6 +227,10 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     Route::get('chat/sessions', [ChatController::class, 'sessions']);
     Route::get('chat/sessions/{session}', [ChatController::class, 'show']);
     Route::delete('chat/sessions/{session}', [ChatController::class, 'destroy']);
+
+    // Voice Assistant
+    Route::post('voice/query', [VoiceController::class, 'query']);
+    Route::post('voice/text-query', [VoiceController::class, 'textQuery']);
 
     // Metal Prices
     Route::get('metal-prices/calculate', [MetalPriceController::class, 'calculate']);

@@ -102,7 +102,7 @@ class PaymentListController extends Controller
     {
         $payment->load(['customer', 'user', 'payable.items', 'invoice', 'terminalCheckout', 'notes.user']);
 
-        $noteEntries = $payment->notes->map(fn ($note) => [
+        $noteEntries = ($payment->notes ?? collect())->map(fn ($note) => [
             'id' => $note->id,
             'content' => $note->content,
             'user' => $note->user ? [

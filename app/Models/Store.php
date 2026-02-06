@@ -202,4 +202,29 @@ class Store extends Model
     {
         return $this->hasMany(Bucket::class);
     }
+
+    public function storeAgents(): HasMany
+    {
+        return $this->hasMany(StoreAgent::class);
+    }
+
+    public function agentRuns(): HasMany
+    {
+        return $this->hasMany(AgentRun::class);
+    }
+
+    public function agentActions(): HasMany
+    {
+        return $this->hasMany(AgentAction::class);
+    }
+
+    public function agentGoals(): HasMany
+    {
+        return $this->hasMany(AgentGoal::class);
+    }
+
+    public function agentLearnings(): HasMany
+    {
+        return $this->hasMany(AgentLearning::class);
+    }
 }

@@ -1,7 +1,9 @@
 <?php
 
 use App\Jobs\CheckTerminalCheckoutTimeout;
+use App\Jobs\GenerateAgentDigest;
 use App\Jobs\ProcessLayawayReminders;
+use App\Jobs\RunScheduledAgents;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -15,3 +17,9 @@ Schedule::job(new CheckTerminalCheckoutTimeout)->everyMinute();
 
 // Process layaway payment reminders and overdue notices daily at 9am
 Schedule::job(new ProcessLayawayReminders)->dailyAt('09:00');
+
+// Run scheduled agents every 5 minutes
+Schedule::job(new RunScheduledAgents)->everyFiveMinutes();
+
+// Generate agent digests daily at 8am
+Schedule::job(new GenerateAgentDigest)->dailyAt('08:00');

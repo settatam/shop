@@ -17,8 +17,9 @@ import AppSidebar from '@/components/layout/AppSidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import { ChatPanel } from '@/components/chat';
 import { CommandPalette } from '@/components/search';
+import VoiceAssistant from '@/components/voice/VoiceAssistant.vue';
 import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
-import { Toaster, toast } from 'sonner';
+import { Toaster, toast } from 'vue-sonner';
 import type { BreadcrumbItemType } from '@/types';
 
 interface Props {
@@ -245,6 +246,9 @@ onUnmounted(() => {
 
         <!-- AI Chat Panel -->
         <ChatPanel v-model:open="chatOpen" />
+
+        <!-- Voice Assistant -->
+        <VoiceAssistant />
 
         <!-- Global Search Command Palette -->
         <CommandPalette ref="commandPaletteRef" />

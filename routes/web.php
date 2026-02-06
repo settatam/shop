@@ -678,6 +678,20 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('yearly', [TransactionsReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [TransactionsReportController::class, 'exportYearly'])->name('yearly.export');
     });
+
+    // Agent Management
+    Route::prefix('agents')->name('agents.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\AgentController::class, 'index'])->name('index');
+        Route::get('/runs', [\App\Http\Controllers\Web\AgentController::class, 'runs'])->name('runs');
+        Route::get('/actions', [\App\Http\Controllers\Web\AgentActionController::class, 'index'])->name('actions');
+        Route::post('/actions/bulk-approve', [\App\Http\Controllers\Web\AgentActionController::class, 'bulkApprove'])->name('actions.bulk-approve');
+        Route::post('/actions/bulk-reject', [\App\Http\Controllers\Web\AgentActionController::class, 'bulkReject'])->name('actions.bulk-reject');
+        Route::post('/actions/{action}/approve', [\App\Http\Controllers\Web\AgentActionController::class, 'approve'])->name('actions.approve');
+        Route::post('/actions/{action}/reject', [\App\Http\Controllers\Web\AgentActionController::class, 'reject'])->name('actions.reject');
+        Route::get('/{slug}', [\App\Http\Controllers\Web\AgentController::class, 'show'])->name('show');
+        Route::put('/{slug}', [\App\Http\Controllers\Web\AgentController::class, 'update'])->name('update');
+        Route::post('/{slug}/run', [\App\Http\Controllers\Web\AgentController::class, 'run'])->name('run');
+    });
 });
 
 require __DIR__.'/settings.php';

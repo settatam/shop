@@ -63,12 +63,14 @@ class TransactionItem extends Model
         'ai_research_generated_at',
         'web_search_results',
         'web_search_generated_at',
+        'market_price_data',
     ];
 
     protected function casts(): array
     {
         return [
             'price' => 'decimal:2',
+            'market_price_data' => 'array',
             'buy_price' => 'decimal:2',
             'dwt' => 'decimal:4',
             'attributes' => 'array',

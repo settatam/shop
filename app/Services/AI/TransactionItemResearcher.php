@@ -19,8 +19,8 @@ class TransactionItemResearcher
     public function __construct()
     {
         // Default from config, can be overridden by store integration
-        $this->apiKey = config('services.anthropic.api_key', '');
-        $this->model = config('services.anthropic.model', 'claude-sonnet-4-20250514');
+        $this->apiKey = config('services.anthropic.api_key') ?? '';
+        $this->model = config('services.anthropic.model') ?? 'claude-sonnet-4-20250514';
     }
 
     /**

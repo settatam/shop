@@ -99,4 +99,17 @@ return [
         'from' => env('TWILIO_PHONE_NUMBER'),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'whisper_model' => env('OPENAI_WHISPER_MODEL', 'whisper-1'),
+        'tts_model' => env('OPENAI_TTS_MODEL', 'tts-1'),
+        'tts_voice' => env('OPENAI_TTS_VOICE', 'alloy'),
+    ],
+
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+    ],
+
 ];

@@ -78,12 +78,14 @@ class Product extends Model
         'custom_product_type_id',
         'product_type_id',
         'status',
+        'last_price_check_at',
     ];
 
     protected function casts(): array
     {
         return [
             'has_variants' => 'boolean',
+            'last_price_check_at' => 'datetime',
             'is_published' => 'boolean',
             'track_quantity' => 'boolean',
             'sell_out_of_stock' => 'boolean',

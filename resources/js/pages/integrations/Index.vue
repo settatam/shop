@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package, Sparkles, Search } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
-import { toast } from 'sonner';
+import { toast } from 'vue-sonner';
 
 interface Integration {
     id: number;
