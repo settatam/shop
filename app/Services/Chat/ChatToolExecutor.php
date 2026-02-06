@@ -6,6 +6,7 @@ use App\Services\Chat\Tools\ChatToolInterface;
 use App\Services\Chat\Tools\CustomerInsightsTool;
 use App\Services\Chat\Tools\CustomerIntelligenceTool;
 use App\Services\Chat\Tools\DeadStockTool;
+use App\Services\Chat\Tools\DynamicQueryTool;
 use App\Services\Chat\Tools\EndOfDayTool;
 use App\Services\Chat\Tools\InventoryAlertsTool;
 use App\Services\Chat\Tools\MarketPriceCheckTool;
@@ -57,6 +58,9 @@ class ChatToolExecutor
         // Operations Tools
         $this->register(new OrderStatusTool);
         $this->register(new PendingActionsTool);
+
+        // Dynamic Query Tool (requires service container resolution)
+        $this->register(app(DynamicQueryTool::class));
     }
 
     public function register(ChatToolInterface $tool): void
@@ -138,6 +142,8 @@ class ChatToolExecutor
             // Operations
             'get_order_status' => 'Looking up orders...',
             'get_pending_actions' => 'Checking pending actions...',
+            // Dynamic Query
+            'run_dynamic_query' => 'Running custom query...',
             default => 'Processing...',
         };
     }
