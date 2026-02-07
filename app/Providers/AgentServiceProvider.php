@@ -3,15 +3,24 @@
 namespace App\Providers;
 
 use App\Services\Agents\ActionExecutor;
+use App\Services\Agents\Actions\ChannelRepriceAction;
+use App\Services\Agents\Actions\CreateListingAction;
 use App\Services\Agents\Actions\MarkdownScheduleAction;
 use App\Services\Agents\Actions\PriceUpdateAction;
 use App\Services\Agents\Actions\SendNotificationAction;
+use App\Services\Agents\Actions\SyncInventoryAction;
+use App\Services\Agents\Actions\SyncOrderAction;
+use App\Services\Agents\Actions\UpdateListingAction;
 use App\Services\Agents\AgentOrchestrator;
 use App\Services\Agents\AgentRegistry;
 use App\Services\Agents\AgentRunner;
 use App\Services\Agents\Agents\AutoPricingAgent;
+use App\Services\Agents\Agents\ChannelRepricingAgent;
+use App\Services\Agents\Agents\ChannelSyncAgent;
 use App\Services\Agents\Agents\DeadStockAgent;
 use App\Services\Agents\Agents\NewItemResearcherAgent;
+use App\Services\Agents\Agents\ProductListingAgent;
+use App\Services\Agents\Agents\SalesIntelligenceAgent;
 use App\Services\Agents\DigestGenerator;
 use Illuminate\Support\ServiceProvider;
 
@@ -73,6 +82,10 @@ class AgentServiceProvider extends ServiceProvider
             DeadStockAgent::class,
             AutoPricingAgent::class,
             NewItemResearcherAgent::class,
+            ProductListingAgent::class,
+            ChannelSyncAgent::class,
+            SalesIntelligenceAgent::class,
+            ChannelRepricingAgent::class,
         ];
 
         foreach ($agents as $agentClass) {
@@ -88,6 +101,11 @@ class AgentServiceProvider extends ServiceProvider
             PriceUpdateAction::class,
             MarkdownScheduleAction::class,
             SendNotificationAction::class,
+            CreateListingAction::class,
+            UpdateListingAction::class,
+            SyncInventoryAction::class,
+            SyncOrderAction::class,
+            ChannelRepriceAction::class,
         ];
 
         foreach ($actions as $actionClass) {

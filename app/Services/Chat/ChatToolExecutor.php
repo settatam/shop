@@ -2,6 +2,7 @@
 
 namespace App\Services\Chat;
 
+use App\Services\Chat\Tools\ChannelPerformanceTool;
 use App\Services\Chat\Tools\ChatToolInterface;
 use App\Services\Chat\Tools\CustomerInsightsTool;
 use App\Services\Chat\Tools\CustomerIntelligenceTool;
@@ -9,6 +10,8 @@ use App\Services\Chat\Tools\DeadStockTool;
 use App\Services\Chat\Tools\DynamicQueryTool;
 use App\Services\Chat\Tools\EndOfDayTool;
 use App\Services\Chat\Tools\InventoryAlertsTool;
+use App\Services\Chat\Tools\ListingManagementTool;
+use App\Services\Chat\Tools\MarketplaceSyncTool;
 use App\Services\Chat\Tools\MarketPriceCheckTool;
 use App\Services\Chat\Tools\MetalCalculatorTool;
 use App\Services\Chat\Tools\MorningBriefingTool;
@@ -58,6 +61,11 @@ class ChatToolExecutor
         // Operations Tools
         $this->register(new OrderStatusTool);
         $this->register(new PendingActionsTool);
+
+        // Marketplace & Multi-Channel Tools
+        $this->register(app(MarketplaceSyncTool::class));
+        $this->register(new ChannelPerformanceTool);
+        $this->register(app(ListingManagementTool::class));
 
         // Dynamic Query Tool (requires service container resolution)
         $this->register(app(DynamicQueryTool::class));
@@ -144,6 +152,10 @@ class ChatToolExecutor
             'get_pending_actions' => 'Checking pending actions...',
             // Dynamic Query
             'run_dynamic_query' => 'Running custom query...',
+            // Marketplace & Multi-Channel
+            'marketplace_sync' => 'Checking marketplace sync...',
+            'channel_performance' => 'Analyzing channel performance...',
+            'listing_management' => 'Managing listings...',
             default => 'Processing...',
         };
     }

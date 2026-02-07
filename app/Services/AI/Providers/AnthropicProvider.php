@@ -16,8 +16,8 @@ class AnthropicProvider implements AIProviderInterface
 
     public function __construct()
     {
-        $this->apiKey = config('services.anthropic.api_key', '');
-        $this->defaultModel = config('services.anthropic.model', 'claude-3-5-sonnet-20241022');
+        $this->apiKey = (string) config('services.anthropic.api_key', '');
+        $this->defaultModel = (string) config('services.anthropic.model', 'claude-3-5-sonnet-20241022');
     }
 
     public function getName(): string
