@@ -243,6 +243,8 @@ const hasActiveFilters = computed(() => {
                 :data="data"
                 :loading="loading"
                 bulk-action-url="/transactions/bulk-action"
+                :show-totals="true"
+                :total-columns="[{ key: 'total_value', format: 'currency', currency: 'USD' }]"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"

@@ -702,26 +702,15 @@ class MigrateLegacyTransactions extends Command
             return null;
         }
 
-        // Get payment type
-        $paymentType = DB::connection('legacy')
-            ->table('transaction_payment_types')
-            ->where('id', $paymentAddress->payment_type_id)
-            ->first();
-
-        if (! $paymentType) {
-            return null;
-        }
-
-        $typeName = strtolower($paymentType->name ?? '');
-
-        return match (true) {
-            str_contains($typeName, 'cash') => Transaction::PAYMENT_CASH,
-            str_contains($typeName, 'check') => Transaction::PAYMENT_CHECK,
-            str_contains($typeName, 'store credit') => Transaction::PAYMENT_STORE_CREDIT,
-            str_contains($typeName, 'ach'), str_contains($typeName, 'direct deposit') => Transaction::PAYMENT_ACH,
-            str_contains($typeName, 'paypal') => Transaction::PAYMENT_PAYPAL,
-            str_contains($typeName, 'venmo') => Transaction::PAYMENT_VENMO,
-            str_contains($typeName, 'wire') => Transaction::PAYMENT_WIRE_TRANSFER,
+        // Use the legacy code's hardcoded mapping (from PaymentType::getIdFromName)
+        // NOT the transaction_payment_types table which has different values
+        return match ((int) $paymentAddress->payment_type_id) {
+            1 => Transaction::PAYMENT_CHECK,
+            2 => Transaction::PAYMENT_PAYPAL,
+            3 => Transaction::PAYMENT_ACH,
+            4 => Transaction::PAYMENT_VENMO,
+            5 => Transaction::PAYMENT_STORE_CREDIT,
+            6 => Transaction::PAYMENT_CASH,
             default => null,
         };
     }
