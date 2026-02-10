@@ -52,6 +52,9 @@ Route::post('invitation/{token}', [InvitationController::class, 'accept'])->name
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('stores', [StoreController::class, 'store'])->name('stores.store');
     Route::post('stores/{store}/switch', [StoreController::class, 'switch'])->name('stores.switch');
+
+    // Account dashboard (for users who are owner/admin of multiple stores)
+    Route::get('account/dashboard', [\App\Http\Controllers\Web\AccountDashboardController::class, 'index'])->name('account.dashboard');
 });
 
 // Onboarding routes (auth only, no store/onboarding middleware)

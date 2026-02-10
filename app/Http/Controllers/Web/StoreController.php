@@ -41,6 +41,13 @@ class StoreController extends Controller
         // Update session
         $request->session()->put('current_store_id', $store->id);
 
+        // Check for redirect parameter (used from account dashboard)
+        $redirect = $request->query('redirect');
+        if ($redirect && str_starts_with($redirect, '/')) {
+            return redirect($redirect)
+                ->with('status', 'Switched to '.$store->name);
+        }
+
         return redirect()->route('dashboard')
             ->with('status', 'Switched to '.$store->name);
     }

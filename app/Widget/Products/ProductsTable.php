@@ -78,6 +78,13 @@ class ProductsTable extends Table
     }
 
     /**
+     * Product IDs from Scout search (if applicable).
+     *
+     * @var array<int>|null
+     */
+    protected ?array $scoutProductIds = null;
+
+    /**
      * Build the query for fetching products.
      *
      * @param  array<string, mixed>|null  $filter
@@ -86,19 +93,25 @@ class ProductsTable extends Table
     {
         $storeId = data_get($filter, 'store_id') ?? app(StoreContext::class)->getCurrentStoreId();
 
-        $query = Product::query()
-            ->with(['category', 'brand', 'images', 'variants', 'tags'])
-            ->where('store_id', $storeId);
-
-        // Apply search filter
+        // Use Scout search if a search term is provided
         if ($term = data_get($filter, 'term')) {
-            $query->where(function ($q) use ($term) {
-                $q->where('title', 'like', "%{$term}%")
-                    ->orWhere('handle', 'like', "%{$term}%")
-                    ->orWhere('description', 'like', "%{$term}%")
-                    ->orWhere('upc', 'like', "%{$term}%")
-                    ->orWhereHas('variants', fn ($vq) => $vq->where('sku', 'like', "%{$term}%"));
-            });
+            $this->scoutProductIds = $this->searchWithScout($term, $storeId);
+
+            // If Scout search returns no results, return empty query
+            if (empty($this->scoutProductIds)) {
+                return Product::query()
+                    ->with(['category', 'brand', 'images', 'variants', 'tags'])
+                    ->whereRaw('1 = 0'); // Return empty result set
+            }
+
+            $query = Product::query()
+                ->with(['category', 'brand', 'images', 'variants', 'tags'])
+                ->whereIn('id', $this->scoutProductIds)
+                ->where('store_id', $storeId);
+        } else {
+            $query = Product::query()
+                ->with(['category', 'brand', 'images', 'variants', 'tags'])
+                ->where('store_id', $storeId);
         }
 
         // Apply date range filter
@@ -242,8 +255,16 @@ class ProductsTable extends Table
         $sortBy = data_get($filter, 'sortBy', 'id');
         $sortDirection = data_get($filter, 'sortDirection', 'desc');
 
-        // Handle special sort columns
-        if ($sortBy === 'category') {
+        // If we have Scout search results and no explicit sort requested, preserve relevance order
+        $hasSearchTerm = ! empty(data_get($filter, 'term'));
+        $hasExplicitSort = $filter && array_key_exists('sortBy', $filter);
+
+        if ($hasSearchTerm && ! $hasExplicitSort && ! empty($this->scoutProductIds)) {
+            // Preserve Scout relevance order using FIELD()
+            $ids = implode(',', $this->scoutProductIds);
+            $query->orderByRaw("FIELD(id, {$ids})");
+        } elseif ($sortBy === 'category') {
+            // Handle special sort columns
             $query->leftJoin('categories', 'products.category_id', '=', 'categories.id')
                 ->orderBy('categories.name', $sortDirection)
                 ->select('products.*');
@@ -551,5 +572,41 @@ class ProductsTable extends Table
                 ],
             ],
         ];
+    }
+
+    /**
+     * Search products using Scout (Meilisearch).
+     *
+     * @return array<int>
+     */
+    protected function searchWithScout(string $term, int $storeId): array
+    {
+        try {
+            // Use Scout search with store_id filter
+            $results = Product::search($term)
+                ->where('store_id', $storeId)
+                ->take(1000) // Reasonable limit for search results
+                ->get();
+
+            return $results->pluck('id')->toArray();
+        } catch (\Exception $e) {
+            // Fallback to SQL search if Scout fails
+            \Illuminate\Support\Facades\Log::warning('Scout search failed, falling back to SQL', [
+                'error' => $e->getMessage(),
+                'term' => $term,
+            ]);
+
+            return Product::query()
+                ->where('store_id', $storeId)
+                ->where(function ($q) use ($term) {
+                    $q->where('title', 'like', "%{$term}%")
+                        ->orWhere('handle', 'like', "%{$term}%")
+                        ->orWhere('description', 'like', "%{$term}%")
+                        ->orWhere('upc', 'like', "%{$term}%")
+                        ->orWhereHas('variants', fn ($vq) => $vq->where('sku', 'like', "%{$term}%"));
+                })
+                ->pluck('id')
+                ->toArray();
+        }
     }
 }
