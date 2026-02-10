@@ -48,7 +48,7 @@ function formatCurrency(value: number): string {
         <div class="grid grid-cols-2 gap-px bg-gray-200 dark:bg-gray-700 sm:grid-cols-4">
             <!-- Sales -->
             <Link
-                :href="`/orders?date=${summary.date}`"
+                :href="`/orders?from_date=${summary.date}&to_date=${summary.date}`"
                 class="group bg-white px-4 py-6 hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700/50"
             >
                 <div class="flex items-center gap-x-2">
@@ -69,7 +69,7 @@ function formatCurrency(value: number): string {
 
             <!-- Buys -->
             <Link
-                :href="`/transactions?date=${summary.date}`"
+                :href="`/transactions?date_from=${summary.date}&date_to=${summary.date}`"
                 class="group bg-white px-4 py-6 hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700/50"
             >
                 <div class="flex items-center gap-x-2">
@@ -90,7 +90,7 @@ function formatCurrency(value: number): string {
 
             <!-- Repairs -->
             <Link
-                :href="`/repairs?date=${summary.date}`"
+                :href="`/repairs?date_from=${summary.date}&date_to=${summary.date}`"
                 class="group bg-white px-4 py-6 hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700/50"
             >
                 <div class="flex items-center gap-x-2">
@@ -111,7 +111,7 @@ function formatCurrency(value: number): string {
 
             <!-- Memos -->
             <Link
-                :href="`/memos?date=${summary.date}`"
+                :href="`/memos?date_from=${summary.date}&date_to=${summary.date}`"
                 class="group bg-white px-4 py-6 hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700/50"
             >
                 <div class="flex items-center gap-x-2">

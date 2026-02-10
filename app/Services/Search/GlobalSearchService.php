@@ -46,25 +46,27 @@ class GlobalSearchService
     /**
      * Search a specific model type.
      *
-     * @return array{items: Collection, total: int}
+     * @return array{items: Collection, total: int, hasMore: bool}
      */
     protected function searchModel(string $modelClass, string $query, int $storeId, int $limit): array
     {
-        $searchQuery = $modelClass::search($query)
-            ->where('store_id', $storeId);
+        // Fetch limit + 1 to check if there are more results
+        $results = $modelClass::search($query)
+            ->where('store_id', $storeId)
+            ->take($limit + 1)
+            ->get();
 
-        // Get total count before limiting
-        $total = $searchQuery->count();
+        $hasMore = $results->count() > $limit;
 
-        // Get limited results
-        $items = $searchQuery
+        // Only take the requested limit for display
+        $items = $results
             ->take($limit)
-            ->get()
             ->map(fn ($model) => $this->formatResult($model));
 
         return [
             'items' => $items,
-            'total' => $total,
+            'total' => $results->count(), // Actual count of results fetched (up to limit + 1)
+            'hasMore' => $hasMore,
         ];
     }
 
@@ -154,7 +156,7 @@ class GlobalSearchService
      */
     public function getTotalCount(array $results): int
     {
-        return collect($results)->sum(fn ($result) => $result['total']);
+        return collect($results)->sum(fn ($result) => $result['items']->count());
     }
 
     /**

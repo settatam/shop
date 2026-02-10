@@ -33,8 +33,9 @@ class SearchController extends Controller
         foreach ($searchResults as $type => $data) {
             $results[$type] = [
                 'items' => $data['items'],
-                'total' => $data['total'],
-                'view_all_url' => $data['total'] > $limit
+                'total' => $data['items']->count(),
+                'hasMore' => $data['hasMore'],
+                'view_all_url' => $data['hasMore']
                     ? $this->searchService->getViewAllUrl($type, $query)
                     : null,
             ];

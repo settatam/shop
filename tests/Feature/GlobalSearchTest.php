@@ -37,7 +37,7 @@ class GlobalSearchTest extends TestCase
         app(StoreContext::class)->setCurrentStore($this->store);
     }
 
-    public function test_search_returns_correct_structure_with_totals(): void
+    public function test_search_returns_correct_structure_with_has_more(): void
     {
         $this->actingAs($this->user);
 
@@ -57,16 +57,17 @@ class GlobalSearchTest extends TestCase
                 'products' => [
                     'items',
                     'total',
+                    'hasMore',
                     'view_all_url',
                 ],
             ],
             'total',
         ]);
 
-        // Check that we get 5 items but total shows 7
+        // Check that we get 5 items and hasMore is true
         $data = $response->json();
         $this->assertCount(5, $data['results']['products']['items']);
-        $this->assertEquals(7, $data['results']['products']['total']);
+        $this->assertTrue($data['results']['products']['hasMore']);
         $this->assertNotNull($data['results']['products']['view_all_url']);
         $this->assertStringContainsString('search=rolex', $data['results']['products']['view_all_url']);
     }
@@ -89,13 +90,13 @@ class GlobalSearchTest extends TestCase
 
         $data = $response->json();
         $this->assertCount(3, $data['results']['products']['items']);
-        $this->assertEquals(3, $data['results']['products']['total']);
+        $this->assertFalse($data['results']['products']['hasMore']);
         $this->assertNull($data['results']['products']['view_all_url']);
     }
 
     public function test_search_service_returns_view_all_url_for_each_type(): void
     {
-        $service = new GlobalSearchService();
+        $service = new GlobalSearchService;
 
         $this->assertEquals(
             route('products.index', ['search' => 'test']),

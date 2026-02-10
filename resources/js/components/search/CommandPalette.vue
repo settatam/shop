@@ -173,8 +173,8 @@ defineExpose({ open });
                                 >
                                     <h2 class="mb-2 mt-1 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
                                         <span>{{ group.label }}</span>
-                                        <span v-if="group.total > group.items.length" class="text-gray-400 font-normal normal-case">
-                                            {{ group.items.length }} of {{ group.total }}
+                                        <span v-if="group.hasMore" class="text-gray-400 font-normal normal-case">
+                                            {{ group.items.length }}+ results
                                         </span>
                                     </h2>
                                     <ul class="text-sm text-gray-700 dark:text-gray-300">
@@ -224,7 +224,7 @@ defineExpose({ open });
                                                 aria-hidden="true"
                                             />
                                             <span class="ml-3 font-medium">
-                                                View all {{ group.total }} {{ group.label.toLowerCase() }}
+                                                View all {{ group.label.toLowerCase() }}
                                             </span>
                                         </li>
                                     </ul>

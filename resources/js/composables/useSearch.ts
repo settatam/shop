@@ -12,6 +12,7 @@ export interface SearchResult {
 export interface SearchTypeResult {
     items: SearchResult[];
     total: number;
+    hasMore: boolean;
     view_all_url: string | null;
 }
 
@@ -79,6 +80,7 @@ export function useSearch() {
                 icon: typeIcons[type as keyof SearchResults],
                 items: result.items,
                 total: result.total,
+                hasMore: result.hasMore,
                 viewAllUrl: result.view_all_url,
             }));
     });
