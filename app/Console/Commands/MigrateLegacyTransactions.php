@@ -657,16 +657,22 @@ class MigrateLegacyTransactions extends Command
 
             // Check if user exists in new database, set to null if not
             $userId = $legacyActivity->user_id;
-            if ($userId && ! DB::table('users')->where('id', $userId)->exists()) {
-                $userId = null;
+            if ($userId) {
+                $userExists = DB::connection('mysql')->table('users')->where('id', $userId)->exists();
+                if (! $userExists) {
+                    $userId = null;
+                }
             }
 
             // Handle causer - check if it exists when it's a User
             $causerType = $legacyActivity->creatable_type ? $this->mapCauserType($legacyActivity->creatable_type) : null;
             $causerId = $legacyActivity->creatable_id;
-            if ($causerType === 'App\\Models\\User' && $causerId && ! DB::table('users')->where('id', $causerId)->exists()) {
-                $causerType = null;
-                $causerId = null;
+            if ($causerType === 'App\\Models\\User' && $causerId) {
+                $causerExists = DB::connection('mysql')->table('users')->where('id', $causerId)->exists();
+                if (! $causerExists) {
+                    $causerType = null;
+                    $causerId = null;
+                }
             }
 
             // Use DB insert to preserve exact timestamps
