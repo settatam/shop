@@ -655,15 +655,29 @@ class MigrateLegacyTransactions extends Command
             // Map legacy activity to new activity slug
             $activitySlug = $this->mapActivitySlug($legacyActivity->activity);
 
+            // Check if user exists in new database, set to null if not
+            $userId = $legacyActivity->user_id;
+            if ($userId && ! DB::table('users')->where('id', $userId)->exists()) {
+                $userId = null;
+            }
+
+            // Handle causer - check if it exists when it's a User
+            $causerType = $legacyActivity->creatable_type ? $this->mapCauserType($legacyActivity->creatable_type) : null;
+            $causerId = $legacyActivity->creatable_id;
+            if ($causerType === 'App\\Models\\User' && $causerId && ! DB::table('users')->where('id', $causerId)->exists()) {
+                $causerType = null;
+                $causerId = null;
+            }
+
             // Use DB insert to preserve exact timestamps
             DB::table('activity_logs')->insert([
                 'store_id' => $this->newStoreId,
-                'user_id' => $legacyActivity->user_id,
+                'user_id' => $userId,
                 'activity_slug' => $activitySlug,
                 'subject_type' => Transaction::class,
                 'subject_id' => $transaction->id,
-                'causer_type' => $legacyActivity->creatable_type ? $this->mapCauserType($legacyActivity->creatable_type) : null,
-                'causer_id' => $legacyActivity->creatable_id,
+                'causer_type' => $causerType,
+                'causer_id' => $causerId,
                 'properties' => json_encode([
                     'legacy_activity' => $legacyActivity->activity,
                     'legacy_description' => $legacyActivity->description,
