@@ -247,9 +247,8 @@ class TransactionsTable extends Table
                 'class' => $transaction->final_offer ? 'font-semibold' : 'text-gray-400',
             ],
             'payment_method' => [
-                'type' => 'badge',
-                'data' => $paymentMethodLabels[$transaction->payment_method] ?? ($transaction->payment_method ? ucfirst($transaction->payment_method) : '-'),
-                'variant' => 'secondary',
+                'data' => $this->formatPaymentMethods($transaction->payment_method, $paymentMethodLabels),
+                'class' => 'text-sm',
             ],
             'status' => [
                 'type' => 'status-badge',
@@ -262,6 +261,24 @@ class TransactionsTable extends Table
                 'currency' => 'USD',
             ],
         ];
+    }
+
+    /**
+     * Format payment methods for display (handles comma-separated values).
+     *
+     * @param  array<string, string>  $labels
+     */
+    protected function formatPaymentMethods(?string $paymentMethod, array $labels): string
+    {
+        if (! $paymentMethod) {
+            return '-';
+        }
+
+        $methods = explode(',', $paymentMethod);
+
+        return collect($methods)
+            ->map(fn ($method) => $labels[trim($method)] ?? ucfirst(trim($method)))
+            ->implode(', ');
     }
 
     /**

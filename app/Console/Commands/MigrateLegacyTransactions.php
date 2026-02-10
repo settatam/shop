@@ -238,13 +238,13 @@ class MigrateLegacyTransactions extends Command
             ->where('is_return', true)
             ->first();
 
-        // Get legacy payment address for payment method
-        $legacyPaymentAddress = DB::connection('legacy')
+        // Get ALL legacy payment addresses for payment methods (a transaction can have multiple)
+        $legacyPaymentAddresses = DB::connection('legacy')
             ->table('transaction_payment_addresses')
             ->where('transaction_id', $legacyTransaction->id)
-            ->first();
+            ->get();
 
-        $paymentMethod = $this->mapPaymentMethod($legacyPaymentAddress);
+        $paymentMethods = $this->mapPaymentMethods($legacyPaymentAddresses);
 
         if ($this->dryRun) {
             return true;
@@ -267,12 +267,12 @@ class MigrateLegacyTransactions extends Command
             'preliminary_offer' => $legacyTransaction->preliminary_offer ?? 0,
             'final_offer' => $legacyTransaction->final_offer ?? 0,
             'estimated_value' => $legacyTransaction->est_value ?? 0,
-            'payment_method' => $paymentMethod,
+            'payment_method' => $paymentMethods,
             'payment_details' => json_encode([
                 'legacy_id' => $legacyTransaction->id,
                 'legacy_status_id' => $legacyTransaction->status_id,
                 'legacy_status_name' => $legacyStatus?->name,
-                'legacy_payment_address' => $legacyPaymentAddress ? (array) $legacyPaymentAddress : null,
+                'legacy_payment_addresses' => $legacyPaymentAddresses->map(fn ($pa) => (array) $pa)->toArray(),
             ]),
             'status_id' => null, // Don't use legacy status_id - it references a different statuses table
             'bin_location' => $legacyTransaction->bin_location,
@@ -696,15 +696,34 @@ class MigrateLegacyTransactions extends Command
         }
     }
 
-    protected function mapPaymentMethod(?object $paymentAddress): ?string
+    /**
+     * Map multiple legacy payment addresses to a comma-separated payment method string.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $paymentAddresses
+     */
+    protected function mapPaymentMethods($paymentAddresses): ?string
     {
-        if (! $paymentAddress) {
+        if ($paymentAddresses->isEmpty()) {
             return null;
         }
 
-        // Use the legacy code's hardcoded mapping (from PaymentType::getIdFromName)
-        // NOT the transaction_payment_types table which has different values
-        return match ((int) $paymentAddress->payment_type_id) {
+        $methods = $paymentAddresses
+            ->map(fn ($pa) => $this->mapPaymentMethodById((int) $pa->payment_type_id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
+        return count($methods) > 0 ? implode(',', $methods) : null;
+    }
+
+    /**
+     * Map a legacy payment type ID to the new payment method constant.
+     * Uses the legacy code's hardcoded mapping (from PaymentType::getIdFromName).
+     */
+    protected function mapPaymentMethodById(int $paymentTypeId): ?string
+    {
+        return match ($paymentTypeId) {
             1 => Transaction::PAYMENT_CHECK,
             2 => Transaction::PAYMENT_PAYPAL,
             3 => Transaction::PAYMENT_ACH,
