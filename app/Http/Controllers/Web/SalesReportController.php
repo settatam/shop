@@ -777,6 +777,8 @@ class SalesReportController extends Controller
 
             $monthData = [
                 'date' => $current->format('M Y'),
+                'start_date' => $current->copy()->startOfMonth()->format('Y-m-d'),
+                'end_date' => $current->copy()->endOfMonth()->format('Y-m-d'),
                 'sales_count' => $monthOrders->count(),
                 'items_sold' => $itemsSold,
                 'total_cost' => $totalCost,
@@ -872,6 +874,7 @@ class SalesReportController extends Controller
 
             $dayData = [
                 'date' => $current->format('M d, Y'),
+                'date_key' => $current->format('Y-m-d'),
                 'sales_count' => $dayOrders->count(),
                 'items_sold' => $itemsSold,
                 'total_cost' => $totalCost,

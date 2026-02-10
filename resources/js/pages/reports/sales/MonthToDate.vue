@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
@@ -18,6 +18,7 @@ interface Channel {
 
 interface DayRow {
     date: string;
+    date_key: string;
     sales_count: number;
     items_sold: number;
     total_cost: number;
@@ -128,6 +129,10 @@ const avgProfitMargin = computed(() => {
     if (props.totals.total_paid === 0) return 0;
     return (props.totals.gross_profit / props.totals.total_paid) * 100;
 });
+
+function viewSales(row: DayRow): void {
+    router.visit(`/reports/sales/daily?date=${row.date_key}`);
+}
 </script>
 
 <template>
@@ -226,7 +231,7 @@ const avgProfitMargin = computed(() => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in dailyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <tr v-for="row in dailyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" @click="viewSales(row)">
                                 <td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.date }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ row.sales_count }}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-900 dark:text-white">{{ row.items_sold }}</td>

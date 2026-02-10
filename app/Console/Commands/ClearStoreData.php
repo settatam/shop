@@ -13,10 +13,11 @@ class ClearStoreData extends Command
                             {--orders : Clear orders and related data}
                             {--repairs : Clear repairs and related data}
                             {--memos : Clear memos and related data}
+                            {--buckets : Clear buckets and related data}
                             {--all : Clear all data types}
                             {--force : Skip confirmation prompt}';
 
-    protected $description = 'Clear transactions, orders, repairs, and/or memos for a specific store. Use before re-running legacy migration commands.';
+    protected $description = 'Clear transactions, orders, repairs, memos, and/or buckets for a specific store. Use before re-running legacy migration commands.';
 
     public function handle(): int
     {
@@ -35,9 +36,10 @@ class ClearStoreData extends Command
         $clearOrders = $clearAll || $this->option('orders');
         $clearRepairs = $clearAll || $this->option('repairs');
         $clearMemos = $clearAll || $this->option('memos');
+        $clearBuckets = $clearAll || $this->option('buckets');
 
-        if (! $clearTransactions && ! $clearOrders && ! $clearRepairs && ! $clearMemos) {
-            $this->error('Please specify what to clear: --transactions, --orders, --repairs, --memos, or --all');
+        if (! $clearTransactions && ! $clearOrders && ! $clearRepairs && ! $clearMemos && ! $clearBuckets) {
+            $this->error('Please specify what to clear: --transactions, --orders, --repairs, --memos, --buckets, or --all');
 
             return self::FAILURE;
         }
@@ -67,6 +69,11 @@ class ClearStoreData extends Command
             $this->line("  - Memos: {$count}");
         }
 
+        if ($clearBuckets) {
+            $count = DB::table('buckets')->where('store_id', $storeId)->count();
+            $this->line("  - Buckets: {$count}");
+        }
+
         $this->newLine();
 
         if (! $this->option('force') && ! $this->confirm('Are you sure you want to proceed? This cannot be undone.')) {
@@ -93,6 +100,10 @@ class ClearStoreData extends Command
 
             if ($clearOrders) {
                 $this->clearOrders($storeId);
+            }
+
+            if ($clearBuckets) {
+                $this->clearBuckets($storeId);
             }
 
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
@@ -323,5 +334,28 @@ class ClearStoreData extends Command
         // Delete memos
         $count = DB::table('memos')->where('store_id', $storeId)->delete();
         $this->line("  Deleted {$count} memos");
+    }
+
+    protected function clearBuckets(int $storeId): void
+    {
+        $this->info('Clearing buckets...');
+
+        $bucketIds = DB::table('buckets')
+            ->where('store_id', $storeId)
+            ->pluck('id');
+
+        if ($bucketIds->isEmpty()) {
+            $this->line('  No buckets to clear.');
+
+            return;
+        }
+
+        // Delete bucket items
+        $count = DB::table('bucket_items')->whereIn('bucket_id', $bucketIds)->delete();
+        $this->line("  Deleted {$count} bucket items");
+
+        // Delete buckets
+        $count = DB::table('buckets')->where('store_id', $storeId)->delete();
+        $this->line("  Deleted {$count} buckets");
     }
 }
