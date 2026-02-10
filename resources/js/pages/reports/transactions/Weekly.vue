@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 
 interface DataRow {
     period: string;
+    start_date: string;
+    end_date: string;
     kits_requested: number;
     kits_declined: number;
     kits_declined_percent: number;
@@ -83,6 +85,10 @@ function formatCurrency(value: number): string {
 
 function formatNumber(value: number): string {
     return new Intl.NumberFormat('en-US').format(value);
+}
+
+function viewTransactions(row: DataRow): void {
+    router.visit(`/transactions?date_from=${row.start_date}&date_to=${row.end_date}`);
 }
 </script>
 
@@ -168,7 +174,7 @@ function formatNumber(value: number): string {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in weeklyData" :key="row.period" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <tr v-for="row in weeklyData" :key="row.period" class="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" @click="viewTransactions(row)">
                                 <td class="whitespace-nowrap px-3 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ row.period }}</td>
                                 <td class="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500 dark:text-gray-400">{{ formatNumber(row.kits_requested) }}</td>
                                 <td class="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500 dark:text-gray-400">{{ formatNumber(row.kits_declined) }}</td>

@@ -51,19 +51,19 @@ class SalesReportController extends Controller
                     ->values()
                     ->implode(', ');
 
-                // Wholesale value = sum of wholesale prices
+                // Wholesale value = sum of wholesale values (stored at time of sale, fallback to variant for historical data)
                 $wholesaleValue = $order->items->sum(function ($item) {
-                    $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
 
                     return $wholesalePrice * $item->quantity;
                 });
 
-                // Cost for profit: use wholesale_price if exists, else cost_of_item
+                // Cost for profit: use wholesale_value if exists, else cost
                 $cost = $order->items->sum(function ($item) {
-                    $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
-                    $costOfItem = $item->cost ?? $item->variant?->cost ?? $item->product?->variants?->first()?->cost ?? 0;
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
 
-                    // Use wholesale_price if it exists, otherwise use cost_of_item
+                    // Use wholesale_value if it exists, otherwise use cost
                     $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
 
                     return $effectiveCost * $item->quantity;
@@ -278,19 +278,19 @@ class SalesReportController extends Controller
                     ->values()
                     ->implode(', ');
 
-                // Wholesale value = sum of wholesale prices
+                // Wholesale value = sum of wholesale values (stored at time of sale, fallback to variant for historical data)
                 $wholesaleValue = $order->items->sum(function ($item) {
-                    $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
 
                     return $wholesalePrice * $item->quantity;
                 });
 
-                // Cost for profit: use wholesale_price if exists, else cost_of_item
+                // Cost for profit: use wholesale_value if exists, else cost
                 $cost = $order->items->sum(function ($item) {
-                    $wholesalePrice = $item->variant?->wholesale_price ?? $item->product?->variants?->first()?->wholesale_price ?? 0;
-                    $costOfItem = $item->cost ?? $item->variant?->cost ?? $item->product?->variants?->first()?->cost ?? 0;
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
 
-                    // Use wholesale_price if it exists, otherwise use cost_of_item
+                    // Use wholesale_value if it exists, otherwise use cost
                     $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
 
                     return $effectiveCost * $item->quantity;
@@ -574,14 +574,34 @@ class SalesReportController extends Controller
 
     /**
      * Get sales channels for the store with fallback for legacy source_platform values.
+     * Only includes active channels that are either local or linked to connected selling platforms.
      */
     protected function getSalesChannels(int $storeId): Collection
     {
-        // Get configured sales channels
+        // Get configured sales channels, filtering out apps and non-connected platforms
         $channels = SalesChannel::where('store_id', $storeId)
             ->active()
+            ->with('storeMarketplace')
             ->ordered()
             ->get()
+            ->filter(function (SalesChannel $channel) {
+                // Local channels are always included
+                if ($channel->is_local) {
+                    return true;
+                }
+
+                // Non-local channels must be linked to a marketplace
+                if (! $channel->store_marketplace_id || ! $channel->storeMarketplace) {
+                    return false;
+                }
+
+                // For marketplace-linked channels, only include if:
+                // - It's not an app (is_app = false)
+                // - It's connected successfully
+                $marketplace = $channel->storeMarketplace;
+
+                return ! $marketplace->is_app && $marketplace->connected_successfully;
+            })
             ->map(fn (SalesChannel $channel) => [
                 'id' => $channel->id,
                 'name' => $channel->name,
@@ -725,13 +745,14 @@ class SalesReportController extends Controller
 
             foreach ($monthOrders as $order) {
                 foreach ($order->items as $item) {
-                    $wholesalePrice = $item->variant?->wholesale_price ?? 0;
+                    // Use stored wholesale_value, fallback to variant for historical data
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
                     $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
 
-                    // Wholesale value = sum of wholesale prices
+                    // Wholesale value = sum of wholesale values
                     $totalWholesaleValue += $wholesalePrice * $item->quantity;
 
-                    // Cost for profit calculation: use wholesale_price if exists, else cost_of_item
+                    // Cost for profit calculation: use wholesale_value if exists, else cost
                     $effectiveCostForProfit = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
                     $totalCost += $effectiveCostForProfit * $item->quantity;
 
@@ -819,13 +840,14 @@ class SalesReportController extends Controller
 
             foreach ($dayOrders as $order) {
                 foreach ($order->items as $item) {
-                    $wholesalePrice = $item->variant?->wholesale_price ?? 0;
+                    // Use stored wholesale_value, fallback to variant for historical data
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
                     $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
 
-                    // Wholesale value = sum of wholesale prices
+                    // Wholesale value = sum of wholesale values
                     $totalWholesaleValue += $wholesalePrice * $item->quantity;
 
-                    // Cost for profit calculation: use wholesale_price if exists, else cost_of_item
+                    // Cost for profit calculation: use wholesale_value if exists, else cost
                     $effectiveCostForProfit = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
                     $totalCost += $effectiveCostForProfit * $item->quantity;
 

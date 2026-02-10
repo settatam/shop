@@ -33,6 +33,7 @@ export interface NavItem {
 export interface NavChild {
     name: string;
     href: string;
+    feature?: string; // Optional feature flag - item only shows if store has this feature
 }
 
 export interface NavGroup {
@@ -40,6 +41,7 @@ export interface NavGroup {
     href?: string;
     icon: HeroIcon;
     current?: boolean;
+    feature?: string; // Optional feature flag - group only shows if store has this feature
     children?: NavChild[];
 }
 
@@ -70,6 +72,7 @@ export type AppPageProps<
     sidebarOpen: boolean;
     stores?: Store[];
     currentStore?: Store;
+    storeFeatures?: string[];
 };
 
 export interface User {

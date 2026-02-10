@@ -65,6 +65,7 @@ class Store extends Model
         'has_custom_product_module',
         'default_tax_rate',
         'tax_id_number',
+        'edition',
     ];
 
     protected function casts(): array
@@ -226,5 +227,53 @@ class Store extends Model
     public function agentLearnings(): HasMany
     {
         return $this->hasMany(AgentLearning::class);
+    }
+
+    /**
+     * Get the features available for this store based on its edition.
+     *
+     * @return array<string>
+     */
+    public function getFeatures(): array
+    {
+        return app(\App\Services\FeatureManager::class)->getFeaturesForStore($this);
+    }
+
+    /**
+     * Check if this store has a specific feature.
+     */
+    public function hasFeature(string $feature): bool
+    {
+        return app(\App\Services\FeatureManager::class)->storeHasFeature($this, $feature);
+    }
+
+    /**
+     * Check if this store has all of the specified features.
+     *
+     * @param  array<string>  $features
+     */
+    public function hasAllFeatures(array $features): bool
+    {
+        return app(\App\Services\FeatureManager::class)->storeHasAllFeatures($this, $features);
+    }
+
+    /**
+     * Check if this store has any of the specified features.
+     *
+     * @param  array<string>  $features
+     */
+    public function hasAnyFeature(array $features): bool
+    {
+        return app(\App\Services\FeatureManager::class)->storeHasAnyFeature($this, $features);
+    }
+
+    /**
+     * Get the edition info for this store.
+     *
+     * @return array{name: string, description: string, features: array<string>}|null
+     */
+    public function getEditionInfo(): ?array
+    {
+        return app(\App\Services\FeatureManager::class)->getEditionInfo($this);
     }
 }

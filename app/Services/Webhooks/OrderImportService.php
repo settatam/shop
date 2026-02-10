@@ -727,6 +727,7 @@ class OrderImportService
                 'quantity' => $item['quantity'],
                 'price' => $item['price'],
                 'cost' => $variant?->cost,
+                'wholesale_value' => $variant?->wholesale_price,
                 'discount' => $item['discount'] ?? 0,
                 'tax' => $item['tax'] ?? 0,
             ]);

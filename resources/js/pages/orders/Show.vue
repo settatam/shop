@@ -186,6 +186,7 @@ interface Order {
     can_be_cancelled: boolean;
     can_receive_payment: boolean;
     can_be_deleted: boolean;
+    can_sync_from_platform: boolean;
 
     customer?: Customer;
     user?: User;
@@ -390,6 +391,47 @@ function formatCarrier(carrier?: string): string {
     return carriers[carrier ?? ''] || carrier || 'Unknown';
 }
 
+function formatPlatformName(platform?: string): string {
+    const platforms: Record<string, string> = {
+        shopify: 'Shopify',
+        ebay: 'eBay',
+        amazon: 'Amazon',
+        etsy: 'Etsy',
+        woocommerce: 'WooCommerce',
+        pos: 'In Store',
+        in_store: 'In Store',
+        website: 'Website',
+        online: 'Online',
+    };
+    return platforms[platform ?? ''] || (platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Unknown');
+}
+
+const platformBadgeColors: Record<string, string> = {
+    shopify: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+    ebay: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+    amazon: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+    etsy: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+    default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+};
+
+function getPlatformBadgeColor(platform?: string): string {
+    return platformBadgeColors[platform ?? ''] || platformBadgeColors.default;
+}
+
+// Compute the source platform for display
+const orderPlatform = computed(() => {
+    // First try to get from platform_order
+    if (props.order.platform_order?.marketplace?.platform) {
+        return props.order.platform_order.marketplace.platform;
+    }
+    // Fall back to sales channel type if it's not local
+    if (props.order.sales_channel && !props.order.sales_channel.is_local) {
+        return props.order.sales_channel.type;
+    }
+    // Fall back to source_platform
+    return props.order.source_platform;
+});
+
 // Actions
 function confirmOrder() {
     if (isProcessing.value) return;
@@ -564,6 +606,14 @@ function saveDate() {
                                 </h1>
                                 <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', statusColors[order.status]]">
                                     {{ statusLabels[order.status] }}
+                                </span>
+                                <!-- Platform badge for external orders -->
+                                <span
+                                    v-if="orderPlatform && orderPlatform !== 'pos' && orderPlatform !== 'in_store'"
+                                    :class="['inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium', getPlatformBadgeColor(orderPlatform)]"
+                                >
+                                    <GlobeAltIcon class="size-3" />
+                                    {{ formatPlatformName(orderPlatform) }}
                                 </span>
                             </div>
                             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -1153,10 +1203,10 @@ function saveDate() {
                         </div>
 
                         <!-- Platform Order (for external marketplace orders) -->
-                        <div v-if="order.platform_order" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                        <div v-if="order.platform_order || order.can_sync_from_platform" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <div class="flex items-center justify-between mb-4">
                                 <h2 class="text-lg font-medium text-gray-900 dark:text-white">
-                                    {{ order.platform_order.marketplace?.platform ? order.platform_order.marketplace.platform.charAt(0).toUpperCase() + order.platform_order.marketplace.platform.slice(1) : 'Marketplace' }} Order
+                                    {{ formatPlatformName(orderPlatform) }} Order
                                 </h2>
                                 <button
                                     type="button"
@@ -1165,10 +1215,12 @@ function saveDate() {
                                     class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                                 >
                                     <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncing }" />
-                                    {{ isSyncing ? 'Syncing...' : 'Sync' }}
+                                    {{ isSyncing ? 'Syncing...' : (order.platform_order ? 'Sync' : 'Fetch Details') }}
                                 </button>
                             </div>
-                            <dl class="space-y-3 text-sm">
+
+                            <!-- Show platform order details if available -->
+                            <dl v-if="order.platform_order" class="space-y-3 text-sm">
                                 <div v-if="order.platform_order.external_order_number" class="flex justify-between">
                                     <dt class="text-gray-500 dark:text-gray-400">Order #</dt>
                                     <dd class="font-medium text-gray-900 dark:text-white">{{ order.platform_order.external_order_number }}</dd>
@@ -1197,6 +1249,26 @@ function saveDate() {
                                     </dd>
                                 </div>
                             </dl>
+
+                            <!-- Show minimal info when no platform order yet -->
+                            <div v-else class="text-sm">
+                                <p class="text-gray-500 dark:text-gray-400 mb-3">
+                                    This order was imported from {{ formatPlatformName(orderPlatform) }} but detailed platform data has not been synced yet.
+                                </p>
+                                <dl class="space-y-2">
+                                    <div v-if="order.external_marketplace_id" class="flex justify-between">
+                                        <dt class="text-gray-500 dark:text-gray-400">External ID</dt>
+                                        <dd class="font-mono text-xs text-gray-700 dark:text-gray-300">{{ order.external_marketplace_id }}</dd>
+                                    </div>
+                                    <div v-if="order.sales_channel?.marketplace?.shop_domain" class="flex justify-between">
+                                        <dt class="text-gray-500 dark:text-gray-400">Store</dt>
+                                        <dd class="text-gray-700 dark:text-gray-300">{{ order.sales_channel.marketplace.shop_domain }}</dd>
+                                    </div>
+                                </dl>
+                                <p class="mt-3 text-xs text-gray-400 dark:text-gray-500">
+                                    Click "Fetch Details" to download the latest order data from {{ formatPlatformName(orderPlatform) }}.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>

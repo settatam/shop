@@ -230,7 +230,7 @@ class MigrateLegacyOrders extends Command
             $notMapped++;
         }
 
-        $this->line("  Mapped ".count($this->customerMap)." customers ({$mappedByEmail} by email, {$mappedByName} by name, {$notMapped} not mapped)");
+        $this->line('  Mapped '.count($this->customerMap)." customers ({$mappedByEmail} by email, {$mappedByName} by name, {$notMapped} not mapped)");
     }
 
     /**
@@ -446,6 +446,13 @@ class MigrateLegacyOrders extends Command
                 $categoryId = $this->findCategoryByName($legacyItem->category);
             }
 
+            // Get wholesale value from variant if available
+            $wholesaleValue = null;
+            if ($variantId) {
+                $variant = ProductVariant::find($variantId);
+                $wholesaleValue = $variant?->wholesale_price;
+            }
+
             // Use DB::table to preserve timestamps
             DB::table('order_items')->insert([
                 'order_id' => $newOrderId,
@@ -456,6 +463,7 @@ class MigrateLegacyOrders extends Command
                 'quantity' => (int) ($legacyItem->quantity ?: 1),
                 'price' => $this->toDecimal($legacyItem->price),
                 'cost' => $this->toDecimal($legacyItem->cost_per_item),
+                'wholesale_value' => $wholesaleValue,
                 'discount' => $this->toDecimal($legacyItem->discount),
                 'tax' => $this->toDecimal($legacyItem->sales_tax),
                 'notes' => null,
@@ -661,24 +669,26 @@ class MigrateLegacyOrders extends Command
 
     /**
      * Get invoice number from legacy order.
-     * Uses order_id as invoice number if available, otherwise generates one.
+     * Prefixes with store ID to ensure global uniqueness.
      */
     protected function getInvoiceNumber(object $legacyOrder, ?int $newOrderId = null): string
     {
+        $storePrefix = 'S'.$this->newStore->id.'-';
+
         // Use order_id if it's set and not "0"
         if (! empty($legacyOrder->order_id) && $legacyOrder->order_id !== '0') {
-            return $legacyOrder->order_id;
+            return $storePrefix.$legacyOrder->order_id;
         }
 
         // Fall back to invoice_number if set
         if (! empty($legacyOrder->invoice_number)) {
-            return $legacyOrder->invoice_number;
+            return $storePrefix.$legacyOrder->invoice_number;
         }
 
         // Generate a unique invoice number as last resort
         $id = $newOrderId ?? $legacyOrder->id;
 
-        return 'INV-'.strtoupper(substr(md5((string) $id), 0, 8));
+        return $storePrefix.'INV-'.strtoupper(substr(md5((string) $id), 0, 8));
     }
 
     protected function mapPaymentGateway(?int $legacyGatewayId): ?string

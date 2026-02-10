@@ -25,6 +25,8 @@ class StoreMarketplace extends Model
         'credentials',
         'settings',
         'status',
+        'is_app',
+        'connected_successfully',
         'last_error',
         'last_sync_at',
     ];
@@ -43,7 +45,43 @@ class StoreMarketplace extends Model
             'settings' => 'array',
             'token_expires_at' => 'datetime',
             'last_sync_at' => 'datetime',
+            'is_app' => 'boolean',
+            'connected_successfully' => 'boolean',
         ];
+    }
+
+    /**
+     * Scope to only selling platforms (not apps).
+     */
+    public function scopeSellingPlatforms($query)
+    {
+        return $query->where('is_app', false);
+    }
+
+    /**
+     * Scope to only apps (not selling platforms).
+     */
+    public function scopeApps($query)
+    {
+        return $query->where('is_app', true);
+    }
+
+    /**
+     * Scope to only successfully connected marketplaces.
+     */
+    public function scopeConnected($query)
+    {
+        return $query->where('connected_successfully', true);
+    }
+
+    /**
+     * Scope for active selling platforms that are connected.
+     */
+    public function scopeActiveSalesChannels($query)
+    {
+        return $query->sellingPlatforms()
+            ->connected()
+            ->where('status', 'active');
     }
 
     public function listings(): HasMany

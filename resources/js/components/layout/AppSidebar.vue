@@ -22,63 +22,71 @@ import {
     BuildingStorefrontIcon,
 } from '@heroicons/vue/24/outline';
 import { ChevronRightIcon } from '@heroicons/vue/20/solid';
-import type { NavGroup } from '@/types';
+import type { NavGroup, NavChild } from '@/types';
 import AppLogo from '@/components/AppLogo.vue';
 import StoreSwitcher from '@/components/layout/StoreSwitcher.vue';
+import ProminentStoreSwitcher from '@/components/layout/ProminentStoreSwitcher.vue';
+import { useFeatures } from '@/composables/useFeatures';
 
 const page = usePage();
+const { hasFeature } = useFeatures();
 
-const navigation: NavGroup[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
+// Full navigation with feature flags
+const allNavigation: NavGroup[] = [
+    { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, feature: 'dashboard' },
     {
         name: 'Customers',
         icon: UsersIcon,
+        feature: 'customers',
         children: [
             { name: 'All Customers', href: '/customers' },
-            { name: 'Leads', href: '/leads' },
+            { name: 'Leads', href: '/leads', feature: 'leads' },
         ],
     },
     {
         name: 'Products',
         icon: CubeIcon,
+        feature: 'products',
         children: [
             { name: 'All Products', href: '/products' },
-            { name: 'GIA Entry', href: '/gia' },
-            { name: 'Categories', href: '/categories' },
-            { name: 'Product Types', href: '/product-types' },
-            { name: 'Templates', href: '/templates' },
+            { name: 'GIA Entry', href: '/gia', feature: 'gia' },
+            { name: 'Categories', href: '/categories', feature: 'categories' },
+            { name: 'Product Types', href: '/product-types', feature: 'product_types' },
+            { name: 'Templates', href: '/templates', feature: 'templates' },
         ],
     },
     {
         name: 'Sales',
         icon: ShoppingCartIcon,
+        feature: 'orders',
         children: [
             { name: 'All Orders', href: '/orders' },
-            { name: 'Layaways', href: '/layaways' },
-            { name: 'Shipments', href: '/shipments' },
-            { name: 'Returns', href: '/returns' },
+            { name: 'Layaways', href: '/layaways', feature: 'layaways' },
+            { name: 'Shipments', href: '/shipments', feature: 'shipments' },
+            { name: 'Returns', href: '/returns', feature: 'returns' },
         ],
     },
     {
         name: 'Transactions',
         icon: ShoppingBagIcon,
+        feature: 'transactions',
         children: [
             { name: 'All Transactions', href: '/transactions' },
-            { name: 'Buys', href: '/buys' },
-            { name: 'Buys by Item', href: '/buys/items' },
+            { name: 'Buys', href: '/buys', feature: 'buys' },
+            { name: 'Buys by Item', href: '/buys/items', feature: 'buys' },
         ],
     },
-    { name: 'Vendors', href: '/vendors', icon: BuildingStorefrontIcon },
-    // { name: 'Inventory', href: '/inventory', icon: ArchiveBoxIcon },
-    { name: 'Repairs', href: '/repairs', icon: WrenchScrewdriverIcon },
-    { name: 'Memos', href: '/memos', icon: DocumentTextIcon },
-    { name: 'Invoices', href: '/invoices', icon: CurrencyDollarIcon },
-    { name: 'Payments', href: '/payments', icon: CreditCardIcon },
-    { name: 'Labels', href: '/labels', icon: PrinterIcon },
-    { name: 'Buckets', href: '/buckets', icon: BeakerIcon },
+    { name: 'Vendors', href: '/vendors', icon: BuildingStorefrontIcon, feature: 'vendors' },
+    { name: 'Repairs', href: '/repairs', icon: WrenchScrewdriverIcon, feature: 'repairs' },
+    { name: 'Memos', href: '/memos', icon: DocumentTextIcon, feature: 'memos' },
+    { name: 'Invoices', href: '/invoices', icon: CurrencyDollarIcon, feature: 'invoices' },
+    { name: 'Payments', href: '/payments', icon: CreditCardIcon, feature: 'payments' },
+    { name: 'Labels', href: '/labels', icon: PrinterIcon, feature: 'labels' },
+    { name: 'Buckets', href: '/buckets', icon: BeakerIcon, feature: 'buckets' },
     {
         name: 'Reports',
         icon: ChartBarIcon,
+        feature: 'reports',
         children: [
             { name: 'Sales (Daily)', href: '/reports/sales/daily' },
             { name: 'Sales (Month over Month)', href: '/reports/sales/monthly' },
@@ -93,9 +101,29 @@ const navigation: NavGroup[] = [
             { name: 'Inventory Report', href: '/reports/inventory' },
         ],
     },
-    { name: 'Tags', href: '/tags', icon: TagIcon },
-    { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon },
+    { name: 'Tags', href: '/tags', icon: TagIcon, feature: 'tags' },
+    { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon, feature: 'integrations' },
 ];
+
+// Filter navigation based on store features
+const navigation = computed<NavGroup[]>(() => {
+    return allNavigation
+        .filter(item => !item.feature || hasFeature(item.feature))
+        .map(item => {
+            if (!item.children) return item;
+
+            // Filter children based on features
+            const filteredChildren = item.children.filter(
+                (child: NavChild) => !child.feature || hasFeature(child.feature)
+            );
+
+            // If all children are filtered out, don't show the parent
+            if (filteredChildren.length === 0) return null;
+
+            return { ...item, children: filteredChildren };
+        })
+        .filter((item): item is NavGroup => item !== null);
+});
 
 const currentPath = computed(() => page.url);
 
@@ -121,6 +149,10 @@ function isChildActive(href: string): boolean {
                 <AppLogo class="h-8 w-auto" />
             </Link>
         </div>
+
+        <!-- Prominent store switcher for multi-store clients -->
+        <ProminentStoreSwitcher v-if="hasFeature('prominent_store_switcher')" />
+
         <nav class="flex flex-1 flex-col">
             <ul role="list" class="flex flex-1 flex-col gap-y-7">
                 <li>
@@ -199,8 +231,8 @@ function isChildActive(href: string): boolean {
                     </ul>
                 </li>
 
-                <!-- Store switcher -->
-                <li>
+                <!-- Store switcher (hidden when prominent switcher is shown) -->
+                <li v-if="!hasFeature('prominent_store_switcher')">
                     <StoreSwitcher />
                 </li>
 

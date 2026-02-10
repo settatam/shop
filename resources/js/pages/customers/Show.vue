@@ -94,7 +94,7 @@ interface Transaction {
 
 interface Order {
     id: number;
-    order_number: string;
+    invoice_number: string | null;
     status: string;
     total: number | null;
     created_at: string;
@@ -777,9 +777,12 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                                             <tr v-for="order in customer.orders" :key="order.id">
                                                 <td class="whitespace-nowrap px-3 py-4 text-sm">
-                                                    <span class="font-medium text-gray-900 dark:text-white">
-                                                        {{ order.order_number }}
-                                                    </span>
+                                                    <Link
+                                                        :href="`/orders/${order.id}`"
+                                                        class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                                    >
+                                                        {{ order.invoice_number || `#${order.id}` }}
+                                                    </Link>
                                                 </td>
                                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
                                                     {{ formatDate(order.created_at) }}

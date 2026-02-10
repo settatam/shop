@@ -572,10 +572,12 @@ class MigrateLegacyProducts extends Command
                     $cost = $legacyVariant->cost_per_item ?? $legacyProduct->cost_per_item;
 
                     // Use DB::table to preserve timestamps
+                    // wholesale_price is on the product level in legacy, copy to variant
                     $newVariantId = DB::table('product_variants')->insertGetId([
                         'product_id' => $newProduct->id,
                         'sku' => $legacyVariant->sku ?? "SKU-{$newProduct->id}-{$legacyVariant->id}",
                         'price' => $legacyVariant->price ?? 0,
+                        'wholesale_price' => $legacyProduct->wholesale_price,
                         'cost' => $cost,
                         'quantity' => $quantity,
                         'barcode' => $legacyVariant->barcode,

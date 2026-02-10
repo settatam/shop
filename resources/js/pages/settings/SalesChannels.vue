@@ -7,6 +7,7 @@ import {
     TrashIcon,
     BuildingStorefrontIcon,
     GlobeAltIcon,
+    LinkIcon,
 } from '@heroicons/vue/24/outline';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -29,6 +30,8 @@ interface Marketplace {
     name: string;
     platform: string;
     platform_label: string;
+    connected_successfully: boolean;
+    status: string;
 }
 
 interface SalesChannel {
@@ -47,6 +50,7 @@ interface SalesChannel {
         id: number;
         platform: string;
         status: string;
+        connected_successfully: boolean;
     } | null;
 }
 
@@ -212,12 +216,18 @@ function getChannelIcon(channel: SalesChannel) {
 
 function getChannelDescription(channel: SalesChannel): string {
     if (channel.is_local && channel.warehouse) {
-        return `Warehouse: ${channel.warehouse.name}`;
+        return `Location: ${channel.warehouse.name}`;
     }
     if (channel.store_marketplace) {
-        return `Platform: ${channel.type_label}`;
+        return channel.type_label;
     }
     return channel.type_label;
+}
+
+function reconnectChannel(channel: SalesChannel) {
+    if (channel.store_marketplace) {
+        router.visit(`/integrations/${channel.store_marketplace.platform}/connect`);
+    }
 }
 </script>
 
@@ -274,6 +284,20 @@ function getChannelDescription(channel: SalesChannel): string {
                                         >
                                             Inactive
                                         </Badge>
+                                        <Badge
+                                            v-if="channel.store_marketplace && channel.store_marketplace.connected_successfully"
+                                            variant="outline"
+                                            class="text-xs border-green-500 text-green-600 dark:text-green-400"
+                                        >
+                                            Connected
+                                        </Badge>
+                                        <Badge
+                                            v-if="channel.store_marketplace && !channel.store_marketplace.connected_successfully"
+                                            variant="destructive"
+                                            class="text-xs"
+                                        >
+                                            Not Connected
+                                        </Badge>
                                     </div>
                                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                         {{ getChannelDescription(channel) }}
@@ -284,6 +308,16 @@ function getChannelDescription(channel: SalesChannel): string {
                                 </div>
                             </div>
                             <div class="flex items-center gap-2">
+                                <Button
+                                    v-if="channel.store_marketplace && !channel.store_marketplace.connected_successfully"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="reconnectChannel(channel)"
+                                    title="Connect to marketplace"
+                                >
+                                    <LinkIcon class="mr-1 h-4 w-4" />
+                                    Connect
+                                </Button>
                                 <Button
                                     variant="ghost"
                                     size="sm"

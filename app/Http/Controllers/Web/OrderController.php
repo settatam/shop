@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateOrderFromWizardRequest;
+use App\Models\Address;
 use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\PlatformOrder;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingLabel;
+use App\Models\State;
+use App\Models\StoreMarketplace;
 use App\Models\TransactionItem;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
@@ -388,16 +392,55 @@ class OrderController extends Controller
     {
         $this->authorizeOrder($order);
 
-        $order->load('platformOrder.marketplace');
+        $order->load(['platformOrder.marketplace', 'salesChannel.storeMarketplace']);
 
-        if (! $order->platformOrder) {
+        // If there's already a platform order, use it
+        if ($order->platformOrder) {
+            $marketplace = $order->platformOrder->marketplace;
+
+            if (! $marketplace) {
+                return back()->with('error', 'Marketplace connection not found.');
+            }
+
+            try {
+                $platformService = match ($marketplace->platform->value) {
+                    'shopify' => app(\App\Services\Platforms\Shopify\ShopifyService::class),
+                    default => throw new \Exception("Platform '{$marketplace->platform->value}' sync not supported."),
+                };
+
+                $platformService->refreshOrder($order->platformOrder);
+
+                // Reload the platform order to get updated platform_data
+                $order->platformOrder->refresh();
+
+                // Update order and customer from the synced platform data
+                if ($order->platformOrder->platform_data) {
+                    $this->updateOrderFromPlatformData($order, $order->platformOrder->platform_data);
+                }
+
+                return back()->with('success', 'Order synced from '.$marketplace->platform->label().'.');
+            } catch (\Throwable $e) {
+                return back()->with('error', 'Failed to sync order: '.$e->getMessage());
+            }
+        }
+
+        // Try to fetch and create platform order from external_marketplace_id
+        if (! $order->external_marketplace_id) {
             return back()->with('error', 'This order is not linked to an external platform.');
         }
 
-        $marketplace = $order->platformOrder->marketplace;
+        // Get marketplace from sales channel or find by platform
+        $marketplace = $order->salesChannel?->storeMarketplace;
+
+        if (! $marketplace && $order->source_platform) {
+            $marketplace = StoreMarketplace::where('store_id', $order->store_id)
+                ->where('platform', $order->source_platform)
+                ->where('status', 'active')
+                ->first();
+        }
 
         if (! $marketplace) {
-            return back()->with('error', 'Marketplace connection not found.');
+            return back()->with('error', 'No marketplace connection found for this order.');
         }
 
         try {
@@ -406,12 +449,374 @@ class OrderController extends Controller
                 default => throw new \Exception("Platform '{$marketplace->platform->value}' sync not supported."),
             };
 
-            $platformService->refreshOrder($order->platformOrder);
+            // Fetch the order from Shopify and create platform order
+            $platformOrder = $this->fetchAndCreatePlatformOrder(
+                $order,
+                $marketplace,
+                $platformService
+            );
 
             return back()->with('success', 'Order synced from '.$marketplace->platform->label().'.');
         } catch (\Throwable $e) {
             return back()->with('error', 'Failed to sync order: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Fetch order from platform and create/update platform order record.
+     */
+    protected function fetchAndCreatePlatformOrder(
+        Order $order,
+        StoreMarketplace $marketplace,
+        \App\Services\Platforms\Shopify\ShopifyService $platformService
+    ): PlatformOrder {
+        // Use the external_marketplace_id to fetch from Shopify
+        $shopifyOrder = $this->fetchShopifyOrderById($marketplace, $order->external_marketplace_id);
+
+        if (! $shopifyOrder) {
+            throw new \Exception('Order not found on the platform.');
+        }
+
+        // Create or update platform order
+        $platformOrder = PlatformOrder::updateOrCreate(
+            [
+                'store_marketplace_id' => $marketplace->id,
+                'external_order_id' => $shopifyOrder['id'],
+            ],
+            [
+                'order_id' => $order->id,
+                'external_order_number' => $shopifyOrder['order_number'] ?? $shopifyOrder['name'] ?? null,
+                'status' => $shopifyOrder['financial_status'] ?? null,
+                'fulfillment_status' => $shopifyOrder['fulfillment_status'] ?? null,
+                'payment_status' => $shopifyOrder['financial_status'] ?? null,
+                'total' => $shopifyOrder['total_price'] ?? 0,
+                'subtotal' => $shopifyOrder['subtotal_price'] ?? 0,
+                'shipping_cost' => collect($shopifyOrder['shipping_lines'] ?? [])->sum('price'),
+                'tax' => $shopifyOrder['total_tax'] ?? 0,
+                'discount' => collect($shopifyOrder['discount_codes'] ?? [])->sum('amount'),
+                'currency' => $shopifyOrder['currency'] ?? 'USD',
+                'customer_data' => $shopifyOrder['customer'] ?? null,
+                'shipping_address' => $shopifyOrder['shipping_address'] ?? null,
+                'billing_address' => $shopifyOrder['billing_address'] ?? null,
+                'line_items' => $shopifyOrder['line_items'] ?? [],
+                'platform_data' => $shopifyOrder,
+                'ordered_at' => isset($shopifyOrder['created_at']) ? \Carbon\Carbon::parse($shopifyOrder['created_at']) : null,
+                'last_synced_at' => now(),
+            ]
+        );
+
+        // Update order fields from platform data
+        $this->updateOrderFromPlatformData($order, $shopifyOrder);
+
+        return $platformOrder;
+    }
+
+    /**
+     * Fetch a Shopify order by ID.
+     */
+    protected function fetchShopifyOrderById(StoreMarketplace $marketplace, string $orderId): ?array
+    {
+        $apiVersion = '2024-01';
+        $url = "https://{$marketplace->shop_domain}/admin/api/{$apiVersion}/orders/{$orderId}.json";
+
+        $response = \Illuminate\Support\Facades\Http::withHeaders([
+            'X-Shopify-Access-Token' => $marketplace->access_token,
+            'Content-Type' => 'application/json',
+        ])->get($url);
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        return $response->json()['order'] ?? null;
+    }
+
+    /**
+     * Update local order fields from platform data.
+     */
+    protected function updateOrderFromPlatformData(Order $order, array $platformData): void
+    {
+        $updates = [];
+
+        // Update shipping address if we have it from platform
+        if (! empty($platformData['shipping_address'])) {
+            $shippingAddr = $platformData['shipping_address'];
+            $updates['shipping_address'] = [
+                'name' => trim(($shippingAddr['first_name'] ?? '').' '.($shippingAddr['last_name'] ?? '')),
+                'company' => $shippingAddr['company'] ?? null,
+                'address_line_1' => $shippingAddr['address1'] ?? null,
+                'address_line_2' => $shippingAddr['address2'] ?? null,
+                'city' => $shippingAddr['city'] ?? null,
+                'state' => $shippingAddr['province_code'] ?? $shippingAddr['province'] ?? null,
+                'postal_code' => $shippingAddr['zip'] ?? null,
+                'country' => $shippingAddr['country_code'] ?? $shippingAddr['country'] ?? null,
+                'phone' => $shippingAddr['phone'] ?? null,
+            ];
+        }
+
+        // Update billing address if we have it
+        if (! empty($platformData['billing_address'])) {
+            $billingAddr = $platformData['billing_address'];
+            $updates['billing_address'] = [
+                'name' => trim(($billingAddr['first_name'] ?? '').' '.($billingAddr['last_name'] ?? '')),
+                'company' => $billingAddr['company'] ?? null,
+                'address_line_1' => $billingAddr['address1'] ?? null,
+                'address_line_2' => $billingAddr['address2'] ?? null,
+                'city' => $billingAddr['city'] ?? null,
+                'state' => $billingAddr['province_code'] ?? $billingAddr['province'] ?? null,
+                'postal_code' => $billingAddr['zip'] ?? null,
+                'country' => $billingAddr['country_code'] ?? $billingAddr['country'] ?? null,
+                'phone' => $billingAddr['phone'] ?? null,
+            ];
+        }
+
+        // Update fulfillment/shipping info from fulfillments
+        if (! empty($platformData['fulfillments'])) {
+            $latestFulfillment = collect($platformData['fulfillments'])->last();
+            if ($latestFulfillment) {
+                // Update tracking number
+                if (! empty($latestFulfillment['tracking_number'])) {
+                    $updates['tracking_number'] = $latestFulfillment['tracking_number'];
+                }
+                // Update shipping carrier
+                if (! empty($latestFulfillment['tracking_company'])) {
+                    $carrier = strtolower($latestFulfillment['tracking_company']);
+                    $updates['shipping_carrier'] = match (true) {
+                        str_contains($carrier, 'fedex') => 'fedex',
+                        str_contains($carrier, 'ups') => 'ups',
+                        str_contains($carrier, 'usps') => 'usps',
+                        str_contains($carrier, 'dhl') => 'dhl',
+                        default => 'other',
+                    };
+                }
+                // Update shipped_at timestamp
+                if ($latestFulfillment['status'] === 'success' && ! $order->shipped_at) {
+                    $updates['shipped_at'] = isset($latestFulfillment['created_at'])
+                        ? \Carbon\Carbon::parse($latestFulfillment['created_at'])
+                        : now();
+                }
+            }
+        }
+
+        // Sync order status from Shopify
+        $newStatus = $this->mapShopifyStatusToLocal($platformData, $order);
+        if ($newStatus && $newStatus !== $order->status) {
+            $updates['status'] = $newStatus;
+        }
+
+        if (! empty($updates)) {
+            $order->update($updates);
+        }
+
+        // Update customer with address information from platform
+        $this->updateCustomerFromPlatformData($order, $platformData);
+    }
+
+    /**
+     * Update customer record with data from platform.
+     */
+    protected function updateCustomerFromPlatformData(Order $order, array $platformData): void
+    {
+        if (! $order->customer_id) {
+            return;
+        }
+
+        $customer = $order->customer;
+        if (! $customer) {
+            return;
+        }
+
+        $customerUpdates = [];
+
+        // Get customer data from platform
+        $platformCustomer = $platformData['customer'] ?? null;
+
+        // Use shipping address as the primary source for customer address
+        $addressSource = $platformData['shipping_address'] ?? $platformCustomer['default_address'] ?? null;
+
+        // Create address record in addresses table if we have address data
+        if ($addressSource && ! empty($addressSource['address1'])) {
+            $this->createOrUpdateCustomerAddress($customer, $addressSource, $order->store_id);
+        }
+
+        // Update basic customer info (phone, email) if missing
+        if (empty($customer->phone_number)) {
+            $phone = $addressSource['phone'] ?? $platformCustomer['phone'] ?? $platformData['phone'] ?? null;
+            if ($phone) {
+                $customerUpdates['phone_number'] = $phone;
+            }
+        }
+
+        if (empty($customer->company_name) && ! empty($addressSource['company'])) {
+            $customerUpdates['company_name'] = $addressSource['company'];
+        }
+
+        // Update email if missing
+        if (empty($customer->email)) {
+            $email = $platformCustomer['email'] ?? $platformData['email'] ?? $platformData['contact_email'] ?? null;
+            if ($email) {
+                $customerUpdates['email'] = $email;
+            }
+        }
+
+        if (! empty($customerUpdates)) {
+            $customer->update($customerUpdates);
+        }
+    }
+
+    /**
+     * Create or update customer address from platform data.
+     */
+    protected function createOrUpdateCustomerAddress(Customer $customer, array $addressSource, int $storeId): void
+    {
+        $address1 = $addressSource['address1'] ?? null;
+        $city = $addressSource['city'] ?? null;
+        $zip = $addressSource['zip'] ?? null;
+
+        if (! $address1 || ! $city) {
+            return;
+        }
+
+        // Check if this address already exists for the customer
+        $existingAddress = $customer->addresses()
+            ->where('address', $address1)
+            ->where('city', $city)
+            ->where('zip', $zip)
+            ->first();
+
+        if ($existingAddress) {
+            // Address already exists, no need to create
+            return;
+        }
+
+        $firstName = $addressSource['first_name'] ?? null;
+        $lastName = $addressSource['last_name'] ?? null;
+
+        // Look up state ID from abbreviation or name
+        $stateCode = $addressSource['province_code'] ?? null;
+        $stateName = $addressSource['province'] ?? null;
+        $countryCode = $addressSource['country_code'] ?? 'US';
+        $stateId = null;
+
+        if ($stateCode) {
+            $stateId = State::where('abbreviation', $stateCode)
+                ->where('country_code', $countryCode)
+                ->value('id');
+        }
+
+        if (! $stateId && $stateName) {
+            $stateId = State::where('name', $stateName)
+                ->where('country_code', $countryCode)
+                ->value('id');
+        }
+
+        // Determine if this should be the default address
+        $isDefault = $customer->addresses()->count() === 0;
+
+        $customer->addresses()->create([
+            'store_id' => $storeId,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'company' => $addressSource['company'] ?? null,
+            'address' => $address1,
+            'address2' => $addressSource['address2'] ?? null,
+            'city' => $city,
+            'state_id' => $stateId,
+            'zip' => $zip,
+            'phone' => $addressSource['phone'] ?? null,
+            'type' => 'shipping',
+            'is_default' => $isDefault,
+            'is_shipping' => true,
+            'is_billing' => false,
+        ]);
+    }
+
+    /**
+     * Map Shopify order status to local order status.
+     */
+    protected function mapShopifyStatusToLocal(array $platformData, Order $order): ?string
+    {
+        $financialStatus = $platformData['financial_status'] ?? null;
+        $fulfillmentStatus = $platformData['fulfillment_status'] ?? null;
+        $cancelledAt = $platformData['cancelled_at'] ?? null;
+        $closedAt = $platformData['closed_at'] ?? null;
+
+        // Check if shipment has been delivered
+        $isDelivered = $this->isShipmentDelivered($platformData);
+
+        // Handle cancelled orders
+        if ($cancelledAt) {
+            return Order::STATUS_CANCELLED;
+        }
+
+        // Handle refunded orders
+        if ($financialStatus === 'refunded') {
+            return Order::STATUS_REFUNDED;
+        }
+
+        // Handle delivered orders - mark as completed
+        if ($isDelivered) {
+            return Order::STATUS_COMPLETED;
+        }
+
+        // Handle closed/completed orders (fulfilled and closed in Shopify)
+        if ($closedAt && $fulfillmentStatus === 'fulfilled') {
+            return Order::STATUS_COMPLETED;
+        }
+
+        // Handle fulfilled orders (shipped but not yet delivered)
+        if ($fulfillmentStatus === 'fulfilled') {
+            // If already completed, don't downgrade
+            if ($order->status === Order::STATUS_COMPLETED) {
+                return null;
+            }
+
+            return Order::STATUS_SHIPPED;
+        }
+
+        // Handle partially fulfilled orders
+        if ($fulfillmentStatus === 'partial') {
+            // Mark as processing if not already further along
+            if (in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_CONFIRMED])) {
+                return Order::STATUS_PROCESSING;
+            }
+
+            return null;
+        }
+
+        // Handle payment status
+        if ($financialStatus === 'paid') {
+            // If order is pending or draft, mark as confirmed
+            if (in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_DRAFT])) {
+                return Order::STATUS_CONFIRMED;
+            }
+        }
+
+        if ($financialStatus === 'partially_paid') {
+            if (in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_DRAFT])) {
+                return Order::STATUS_PARTIAL_PAYMENT;
+            }
+        }
+
+        // No status change needed
+        return null;
+    }
+
+    /**
+     * Check if shipment has been delivered based on fulfillment data.
+     */
+    protected function isShipmentDelivered(array $platformData): bool
+    {
+        $fulfillments = $platformData['fulfillments'] ?? [];
+
+        foreach ($fulfillments as $fulfillment) {
+            $shipmentStatus = $fulfillment['shipment_status'] ?? null;
+            if ($shipmentStatus === 'delivered') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function ship(Request $request, Order $order): RedirectResponse|JsonResponse
@@ -1143,6 +1548,11 @@ class OrderController extends Controller
             'can_receive_payment' => ! $order->isFullyPaid(),
             'can_be_deleted' => $order->isPending() || $order->status === Order::STATUS_DRAFT,
             'has_trade_in' => $order->hasTradeIn(),
+            'can_sync_from_platform' => $order->platformOrder !== null
+                || (! empty($order->external_marketplace_id) && (
+                    $order->salesChannel?->storeMarketplace !== null
+                    || ! empty($order->source_platform)
+                )),
 
             // Relationships
             'customer' => $order->customer ? [

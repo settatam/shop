@@ -211,6 +211,8 @@ class TransactionsReportController extends Controller
      */
     protected function getPeriodData(int $storeId, Carbon $start, Carbon $end, string $periodLabel): array
     {
+        $startDate = $start->format('Y-m-d');
+        $endDate = $end->format('Y-m-d');
         // Kit Requests (mail-in transactions created in period)
         $kitsRequested = Transaction::where('store_id', $storeId)
             ->where('type', Transaction::TYPE_MAIL_IN)
@@ -266,23 +268,28 @@ class TransactionsReportController extends Controller
             ->whereBetween('offer_given_at', [$start, $end])
             ->count();
 
-        // Offers Accepted (offer_accepted_at set within period)
+        // Offers Accepted (payment_processed_at set within period - paid = accepted)
         $offersAccepted = Transaction::where('store_id', $storeId)
-            ->whereNotNull('offer_accepted_at')
-            ->whereBetween('offer_accepted_at', [$start, $end])
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$start, $end])
             ->count();
 
         // Financial data for accepted/processed transactions
+        // Get final_offer from transactions and estimated_value from transaction_items.price
         $financialData = Transaction::where('store_id', $storeId)
             ->whereNotNull('payment_processed_at')
             ->whereBetween('payment_processed_at', [$start, $end])
-            ->selectRaw('
-                COALESCE(SUM(estimated_value), 0) as estimated_value,
-                COALESCE(SUM(final_offer), 0) as final_offer
-            ')
+            ->selectRaw('COALESCE(SUM(final_offer), 0) as final_offer')
             ->first();
 
-        $estimatedValue = (float) ($financialData->estimated_value ?? 0);
+        // Get estimated value from transaction items (sum of price field)
+        $estimatedValueData = \App\Models\TransactionItem::whereHas('transaction', function ($query) use ($storeId, $start, $end) {
+            $query->where('store_id', $storeId)
+                ->whereNotNull('payment_processed_at')
+                ->whereBetween('payment_processed_at', [$start, $end]);
+        })->selectRaw('COALESCE(SUM(price * quantity), 0) as estimated_value')->first();
+
+        $estimatedValue = (float) ($estimatedValueData->estimated_value ?? 0);
         $finalOffer = (float) ($financialData->final_offer ?? 0);
         $profit = $estimatedValue - $finalOffer;
         $profitPercent = $finalOffer > 0 ? ($profit / $finalOffer) * 100 : 0;
@@ -293,6 +300,8 @@ class TransactionsReportController extends Controller
 
         return [
             'period' => $periodLabel,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'kits_requested' => $kitsRequested,
             'kits_declined' => $kitsDeclined,
             'kits_declined_percent' => round($kitDeclinedPercent, 1),

@@ -125,6 +125,7 @@ class OrderCreationService
                     'quantity' => $itemData['quantity'] ?? 1,
                     'price' => $itemData['price'],
                     'cost' => $itemData['cost'] ?? $variant?->cost,
+                    'wholesale_value' => $variant?->wholesale_price,
                     'discount' => $itemData['discount'] ?? 0,
                     'notes' => $itemData['notes'] ?? null,
                 ]);
@@ -350,6 +351,7 @@ class OrderCreationService
             'quantity' => $quantity,
             'price' => $price,
             'cost' => $cost,
+            'wholesale_value' => $variant?->wholesale_price,
             'discount' => $itemData['discount'] ?? 0,
             'tax' => $itemData['tax'] ?? null,
             'notes' => $itemData['notes'] ?? null,

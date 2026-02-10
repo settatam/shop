@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
+use App\Services\FeatureManager;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -64,6 +65,7 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'stores' => fn () => $request->user() ? $this->getUserStores($request->user()) : [],
             'currentStore' => fn () => app(StoreContext::class)->getCurrentStore(),
+            'storeFeatures' => fn () => $this->getStoreFeatures(),
         ];
     }
 
@@ -108,6 +110,27 @@ class HandleInertiaRequests extends Middleware
                 'logo_url' => $store->logo ? Storage::disk('public')->url($store->logo) : null,
             ] : null,
         ];
+    }
+
+    /**
+     * Get all stores the user has access to.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    /**
+     * Get the current store's features.
+     *
+     * @return array<string>
+     */
+    protected function getStoreFeatures(): array
+    {
+        $store = app(StoreContext::class)->getCurrentStore();
+
+        if (! $store) {
+            return [];
+        }
+
+        return app(FeatureManager::class)->getFeaturesForStore($store);
     }
 
     /**

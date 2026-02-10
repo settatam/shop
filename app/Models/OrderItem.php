@@ -21,6 +21,7 @@ class OrderItem extends Model
         'quantity',
         'price',
         'cost',
+        'wholesale_value',
         'discount',
         'tax',
         'shipstation_id',
@@ -32,6 +33,7 @@ class OrderItem extends Model
         return [
             'price' => 'decimal:2',
             'cost' => 'decimal:2',
+            'wholesale_value' => 'decimal:2',
             'discount' => 'decimal:2',
             'tax' => 'decimal:2',
         ];

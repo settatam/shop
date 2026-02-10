@@ -45,6 +45,7 @@ class SalesChannelController extends Controller
                     'id' => $channel->storeMarketplace->id,
                     'platform' => $channel->storeMarketplace->platform?->value,
                     'status' => $channel->storeMarketplace->status,
+                    'connected_successfully' => $channel->storeMarketplace->connected_successfully,
                 ] : null,
             ]);
 
@@ -53,13 +54,15 @@ class SalesChannelController extends Controller
             ->get(['id', 'name']);
 
         $marketplaces = StoreMarketplace::where('store_id', $storeId)
-            ->where('status', 'active')
+            ->where('is_app', false)
             ->get()
             ->map(fn (StoreMarketplace $mp) => [
                 'id' => $mp->id,
                 'name' => $mp->name,
                 'platform' => $mp->platform?->value,
                 'platform_label' => $mp->platform?->label(),
+                'connected_successfully' => $mp->connected_successfully,
+                'status' => $mp->status,
             ]);
 
         return Inertia::render('settings/SalesChannels', [
