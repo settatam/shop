@@ -30,7 +30,7 @@ class GlobalSearchService
     /**
      * Search across all models for the given query.
      *
-     * @return array<string, Collection>
+     * @return array<string, array{items: Collection, total: int}>
      */
     public function search(string $query, int $storeId, int $limitPerType = 5): array
     {
@@ -45,14 +45,27 @@ class GlobalSearchService
 
     /**
      * Search a specific model type.
+     *
+     * @return array{items: Collection, total: int}
      */
-    protected function searchModel(string $modelClass, string $query, int $storeId, int $limit): Collection
+    protected function searchModel(string $modelClass, string $query, int $storeId, int $limit): array
     {
-        return $modelClass::search($query)
-            ->where('store_id', $storeId)
+        $searchQuery = $modelClass::search($query)
+            ->where('store_id', $storeId);
+
+        // Get total count before limiting
+        $total = $searchQuery->count();
+
+        // Get limited results
+        $items = $searchQuery
             ->take($limit)
             ->get()
             ->map(fn ($model) => $this->formatResult($model));
+
+        return [
+            'items' => $items,
+            'total' => $total,
+        ];
     }
 
     /**
@@ -141,6 +154,25 @@ class GlobalSearchService
      */
     public function getTotalCount(array $results): int
     {
-        return collect($results)->sum(fn ($items) => $items->count());
+        return collect($results)->sum(fn ($result) => $result['total']);
+    }
+
+    /**
+     * Get the URL for viewing all results of a specific type.
+     */
+    public function getViewAllUrl(string $type, string $query): ?string
+    {
+        return match ($type) {
+            'products' => route('products.index', ['search' => $query]),
+            'orders' => route('web.orders.index', ['search' => $query]),
+            'customers' => route('web.customers.index', ['search' => $query]),
+            'repairs' => route('web.repairs.index', ['search' => $query]),
+            'memos' => route('web.memos.index', ['search' => $query]),
+            'transactions' => route('web.transactions.index', ['search' => $query]),
+            'transaction_items' => route('web.transactions.index', ['search' => $query]),
+            'categories' => route('categories.index', ['search' => $query]),
+            'templates' => route('templates.index', ['search' => $query]),
+            default => null,
+        };
     }
 }

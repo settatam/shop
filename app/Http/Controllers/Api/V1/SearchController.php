@@ -26,11 +26,23 @@ class SearchController extends Controller
         $limit = $request->input('limit', 5);
         $storeId = $this->storeContext->getCurrentStoreId();
 
-        $results = $this->searchService->search($query, $storeId, $limit);
+        $searchResults = $this->searchService->search($query, $storeId, $limit);
+
+        // Format results for the frontend
+        $results = [];
+        foreach ($searchResults as $type => $data) {
+            $results[$type] = [
+                'items' => $data['items'],
+                'total' => $data['total'],
+                'view_all_url' => $data['total'] > $limit
+                    ? $this->searchService->getViewAllUrl($type, $query)
+                    : null,
+            ];
+        }
 
         return response()->json([
             'results' => $results,
-            'total' => $this->searchService->getTotalCount($results),
+            'total' => $this->searchService->getTotalCount($searchResults),
         ]);
     }
 }

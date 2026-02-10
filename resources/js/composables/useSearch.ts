@@ -9,16 +9,22 @@ export interface SearchResult {
     url: string;
 }
 
+export interface SearchTypeResult {
+    items: SearchResult[];
+    total: number;
+    view_all_url: string | null;
+}
+
 export interface SearchResults {
-    products: SearchResult[];
-    orders: SearchResult[];
-    customers: SearchResult[];
-    repairs: SearchResult[];
-    memos: SearchResult[];
-    transactions: SearchResult[];
-    transaction_items: SearchResult[];
-    categories: SearchResult[];
-    templates: SearchResult[];
+    products: SearchTypeResult;
+    orders: SearchTypeResult;
+    customers: SearchTypeResult;
+    repairs: SearchTypeResult;
+    memos: SearchTypeResult;
+    transactions: SearchTypeResult;
+    transaction_items: SearchTypeResult;
+    categories: SearchTypeResult;
+    templates: SearchTypeResult;
 }
 
 export interface SearchResponse {
@@ -59,19 +65,21 @@ export function useSearch() {
 
     const hasResults = computed(() => {
         if (!results.value) return false;
-        return Object.values(results.value).some(items => items.length > 0);
+        return Object.values(results.value).some(result => result.items.length > 0);
     });
 
     const groupedResults = computed(() => {
         if (!results.value) return [];
 
         return Object.entries(results.value)
-            .filter(([, items]) => items.length > 0)
-            .map(([type, items]) => ({
+            .filter(([, result]) => result.items.length > 0)
+            .map(([type, result]) => ({
                 type: type as keyof SearchResults,
                 label: typeLabels[type as keyof SearchResults],
                 icon: typeIcons[type as keyof SearchResults],
-                items,
+                items: result.items,
+                total: result.total,
+                viewAllUrl: result.view_all_url,
             }));
     });
 

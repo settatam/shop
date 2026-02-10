@@ -73,6 +73,11 @@ const navigateTo = (item: SearchResult) => {
     router.visit(item.url);
 };
 
+const navigateToViewAll = (url: string) => {
+    close();
+    router.visit(url);
+};
+
 watch(selectedItem, (item) => {
     if (item) {
         navigateTo(item);
@@ -166,8 +171,11 @@ defineExpose({ open });
                                     :key="group.type"
                                     class="p-2"
                                 >
-                                    <h2 class="mb-2 mt-1 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                        {{ group.label }}
+                                    <h2 class="mb-2 mt-1 px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                                        <span>{{ group.label }}</span>
+                                        <span v-if="group.total > group.items.length" class="text-gray-400 font-normal normal-case">
+                                            {{ group.items.length }} of {{ group.total }}
+                                        </span>
                                     </h2>
                                     <ul class="text-sm text-gray-700 dark:text-gray-300">
                                         <ComboboxOption
@@ -205,6 +213,20 @@ defineExpose({ open });
                                                 </div>
                                             </li>
                                         </ComboboxOption>
+                                        <li
+                                            v-if="group.viewAllUrl"
+                                            class="flex cursor-pointer select-none items-center rounded-md px-3 py-2 text-primary hover:bg-gray-100 dark:hover:bg-gray-700"
+                                            @click="navigateToViewAll(group.viewAllUrl)"
+                                        >
+                                            <component
+                                                :is="iconMap[group.type]"
+                                                class="size-5 flex-none text-primary"
+                                                aria-hidden="true"
+                                            />
+                                            <span class="ml-3 font-medium">
+                                                View all {{ group.total }} {{ group.label.toLowerCase() }}
+                                            </span>
+                                        </li>
                                     </ul>
                                 </li>
                             </ComboboxOptions>
