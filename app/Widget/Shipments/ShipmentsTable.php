@@ -133,7 +133,7 @@ class ShipmentsTable extends Table
         $query = $this->query($filter);
 
         // Sorting
-        $sortBy = data_get($filter, 'sortBy', 'created_at');
+        $sortBy = data_get($filter, 'sortBy', 'id');
         $sortDirection = data_get($filter, 'sortDirection', 'desc');
 
         $query->orderBy($sortBy, $sortDirection);

@@ -124,7 +124,7 @@ class InvoicesTable extends Table
         }
 
         // Apply sorting
-        $sortBy = data_get($filter, 'sortBy', 'created_at');
+        $sortBy = data_get($filter, 'sortBy', 'id');
         $sortDesc = data_get($filter, 'sortDesc', true);
         $query->orderBy($sortBy, $sortDesc ? 'desc' : 'asc');
 

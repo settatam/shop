@@ -149,7 +149,7 @@ class BuysTable extends Table
         $query = $this->query($filter);
 
         // Sorting
-        $sortBy = data_get($filter, 'sortBy', 'payment_processed_at');
+        $sortBy = data_get($filter, 'sortBy', 'id');
         $sortDirection = data_get($filter, 'sortDirection', 'desc');
 
         // Handle special sort columns

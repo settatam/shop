@@ -32,27 +32,22 @@ class TransactionsTable extends Table
         return [
             [
                 'key' => 'transaction_number',
-                'label' => 'Transaction #',
+                'label' => 'ID',
                 'sortable' => true,
+            ],
+            [
+                'key' => 'created_at',
+                'label' => 'Date',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'image',
+                'label' => 'Pictures',
+                'sortable' => false,
             ],
             [
                 'key' => 'customer',
                 'label' => 'Customer',
-                'sortable' => false,
-            ],
-            [
-                'key' => 'type',
-                'label' => 'Type',
-                'sortable' => true,
-            ],
-            [
-                'key' => 'items_count',
-                'label' => 'Items',
-                'sortable' => false,
-            ],
-            [
-                'key' => 'total_value',
-                'label' => 'Est. Value',
                 'sortable' => false,
             ],
             [
@@ -61,19 +56,19 @@ class TransactionsTable extends Table
                 'sortable' => true,
             ],
             [
+                'key' => 'payment_method',
+                'label' => 'Payment Mode',
+                'sortable' => true,
+            ],
+            [
                 'key' => 'status',
                 'label' => 'Status',
                 'sortable' => true,
             ],
             [
-                'key' => 'tags',
-                'label' => 'Tags',
+                'key' => 'total_value',
+                'label' => 'Estimated Value',
                 'sortable' => false,
-            ],
-            [
-                'key' => 'created_at',
-                'label' => 'Created',
-                'sortable' => true,
             ],
         ];
     }
@@ -88,7 +83,7 @@ class TransactionsTable extends Table
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
         $query = Transaction::query()
-            ->with(['customer', 'items', 'statusModel', 'tags'])
+            ->with(['customer', 'items.images', 'images', 'statusModel', 'tags'])
             ->withCount('items')
             ->where('store_id', $storeId);
 
@@ -190,14 +185,34 @@ class TransactionsTable extends Table
      */
     protected function formatTransaction(Transaction $transaction): array
     {
-        $typeLabels = [
-            Transaction::TYPE_IN_STORE => 'In-House',
-            Transaction::TYPE_MAIL_IN => 'Mail-In',
+        $paymentMethodLabels = [
+            Transaction::PAYMENT_CASH => 'Cash',
+            Transaction::PAYMENT_CHECK => 'Check',
+            Transaction::PAYMENT_STORE_CREDIT => 'Store Credit',
+            Transaction::PAYMENT_ACH => 'ACH',
+            Transaction::PAYMENT_PAYPAL => 'PayPal',
+            Transaction::PAYMENT_VENMO => 'Venmo',
+            Transaction::PAYMENT_WIRE_TRANSFER => 'Wire Transfer',
         ];
 
         // Get status from statusModel or fall back to legacy status
         $statusName = $transaction->statusModel?->name ?? ucfirst(str_replace('_', ' ', $transaction->status ?? 'Unknown'));
         $statusColor = $transaction->statusModel?->color ?? '#6b7280';
+
+        // Get first image - check transaction images first (online), then item images (in-house)
+        $firstImage = null;
+        if ($transaction->images->isNotEmpty()) {
+            // Online transactions store images on the transaction
+            $firstImage = $transaction->images->first();
+        } else {
+            // In-house transactions store images on items
+            foreach ($transaction->items as $item) {
+                if ($item->images->isNotEmpty()) {
+                    $firstImage = $item->images->first();
+                    break;
+                }
+            }
+        }
 
         return [
             'id' => [
@@ -209,25 +224,21 @@ class TransactionsTable extends Table
                 'data' => $transaction->transaction_number,
                 'class' => 'font-mono text-sm font-medium',
             ],
+            'created_at' => [
+                'data' => Carbon::parse($transaction->created_at)->format('M d, Y'),
+                'class' => 'text-sm text-gray-500',
+            ],
+            'image' => [
+                'type' => 'image',
+                'data' => $firstImage?->url ?? $firstImage?->path,
+                'alt' => 'Transaction image',
+                'class' => 'size-10 rounded object-cover',
+            ],
             'customer' => [
                 'type' => 'link',
                 'href' => $transaction->customer ? "/customers/{$transaction->customer->id}" : null,
                 'data' => $transaction->customer?->full_name ?? 'No Customer',
                 'class' => $transaction->customer ? '' : 'text-gray-400 italic',
-            ],
-            'type' => [
-                'type' => 'badge',
-                'data' => $typeLabels[$transaction->type] ?? $transaction->type,
-                'variant' => $transaction->type === Transaction::TYPE_IN_STORE ? 'info' : 'secondary',
-            ],
-            'items_count' => [
-                'data' => $transaction->items_count ?? $transaction->items->count(),
-                'class' => 'text-center',
-            ],
-            'total_value' => [
-                'type' => 'currency',
-                'data' => $transaction->total_value,
-                'currency' => 'USD',
             ],
             'final_offer' => [
                 'type' => 'currency',
@@ -235,22 +246,20 @@ class TransactionsTable extends Table
                 'currency' => 'USD',
                 'class' => $transaction->final_offer ? 'font-semibold' : 'text-gray-400',
             ],
+            'payment_method' => [
+                'type' => 'badge',
+                'data' => $paymentMethodLabels[$transaction->payment_method] ?? ($transaction->payment_method ? ucfirst($transaction->payment_method) : '-'),
+                'variant' => 'secondary',
+            ],
             'status' => [
                 'type' => 'status-badge',
                 'data' => $statusName,
                 'color' => $statusColor,
             ],
-            'tags' => [
-                'type' => 'tags',
-                'data' => $transaction->tags->map(fn ($tag) => [
-                    'id' => $tag->id,
-                    'name' => $tag->name,
-                    'color' => $tag->color,
-                ])->toArray(),
-            ],
-            'created_at' => [
-                'data' => Carbon::parse($transaction->created_at)->format('M d, Y'),
-                'class' => 'text-sm text-gray-500',
+            'total_value' => [
+                'type' => 'currency',
+                'data' => $transaction->total_value,
+                'currency' => 'USD',
             ],
         ];
     }
