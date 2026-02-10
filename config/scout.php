@@ -176,6 +176,10 @@ return [
                 'filterableAttributes' => ['store_id', 'transaction_id'],
                 'sortableAttributes' => ['created_at'],
             ],
+            'order_items' => [
+                'filterableAttributes' => ['store_id', 'order_id', 'product_id'],
+                'sortableAttributes' => ['created_at'],
+            ],
         ],
     ],
 

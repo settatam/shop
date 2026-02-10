@@ -6,8 +6,9 @@ import { useWidget } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import MassEditSheet from '@/components/products/MassEditSheet.vue';
 import GiaScannerModal from '@/components/products/GiaScannerModal.vue';
+import AdvancedSearchModal from '@/components/products/AdvancedSearchModal.vue';
 import { onMounted, ref, watch, computed } from 'vue';
-import { PlusIcon, CameraIcon, FunnelIcon, XMarkIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, CameraIcon, FunnelIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/vue/20/solid';
 import axios from 'axios';
 
 interface Category {
@@ -154,6 +155,9 @@ const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
 
 // GIA Scanner state
 const showGiaScanner = ref(false);
+
+// Advanced Search state
+const showAdvancedSearch = ref(false);
 
 // Load widget on mount
 onMounted(() => {
@@ -316,6 +320,14 @@ function handleGiaScanSuccess(productId: number) {
                     </p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                        @click="showAdvancedSearch = true"
+                    >
+                        <MagnifyingGlassIcon class="-ml-0.5 size-5" aria-hidden="true" />
+                        Advanced Search
+                    </button>
                     <button
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
@@ -647,5 +659,8 @@ function handleGiaScanSuccess(productId: number) {
             :warehouses="warehouses"
             @success="handleGiaScanSuccess"
         />
+
+        <!-- Advanced Search Modal -->
+        <AdvancedSearchModal v-model:open="showAdvancedSearch" />
     </AppLayout>
 </template>

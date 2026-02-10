@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Laravel\Scout\Searchable;
 
 class OrderItem extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, Searchable, SoftDeletes;
 
     protected $fillable = [
         'order_id',
@@ -73,5 +74,35 @@ class OrderItem extends Model
         }
 
         return ($this->price - $this->discount - $this->cost) * $this->quantity;
+    }
+
+    /**
+     * Get the indexable data array for the model.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        $this->loadMissing('order', 'product.brand', 'product.category');
+
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'sku' => $this->sku,
+            'brand' => $this->product?->brand?->name,
+            'category' => $this->product?->category?->name,
+            'store_id' => $this->order?->store_id,
+            'order_id' => $this->order_id,
+            'product_id' => $this->product_id,
+            'created_at' => $this->created_at?->timestamp,
+        ];
+    }
+
+    /**
+     * Determine if the model should be searchable.
+     */
+    public function shouldBeSearchable(): bool
+    {
+        return ! $this->trashed();
     }
 }

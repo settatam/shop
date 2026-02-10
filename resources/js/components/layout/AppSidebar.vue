@@ -67,7 +67,7 @@ const allNavigation: NavGroup[] = [
         ],
     },
     {
-        name: 'Transactions',
+        name: 'Purchases',
         icon: ShoppingBagIcon,
         feature: 'transactions',
         children: [
