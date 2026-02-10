@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\ActivityLog;
+use App\Models\ProductVariant;
 use App\Models\Store;
 use App\Services\Notifications\NotificationManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -104,17 +105,27 @@ class TriggerActivityNotifications implements ShouldQueue
         $mappings = [
             'Order' => 'order',
             'Product' => 'product',
+            'ProductVariant' => 'variant',
             'Customer' => 'customer',
             'Inventory' => 'inventory',
             'Category' => 'category',
             'StoreUser' => 'team_member',
             'Role' => 'role',
+            'Transaction' => 'transaction',
         ];
 
         if (isset($mappings[$className])) {
             $standardName = $mappings[$className];
             if (! isset($data[$standardName])) {
                 $data[$standardName] = $subject->toArray();
+            }
+        }
+
+        // For ProductVariant, also include the parent product data
+        if ($subject instanceof ProductVariant) {
+            $product = $subject->product;
+            if ($product && ! isset($data['product'])) {
+                $data['product'] = $product->toArray();
             }
         }
 

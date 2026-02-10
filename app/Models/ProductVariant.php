@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ProductVariant extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, LogsActivity, SoftDeletes;
+
+    /**
+     * Price fields that trigger price change notifications.
+     */
+    protected array $priceFields = ['price', 'wholesale_price', 'cost'];
 
     protected $fillable = [
         'product_id',
@@ -110,5 +116,104 @@ class ProductVariant extends Model
         }
 
         return $this->cost !== null ? (float) $this->cost : null;
+    }
+
+    /**
+     * Get the activity prefix for this model.
+     */
+    protected function getActivityPrefix(): string
+    {
+        return 'products';
+    }
+
+    /**
+     * Get the activity slug for this model and action.
+     * Override to use price_change activity when price fields are modified.
+     */
+    protected function getActivitySlug(string $action): ?string
+    {
+        // Check if this is an update with price field changes
+        if ($action === 'update' && $this->hasPriceFieldChanges()) {
+            return Activity::PRODUCTS_PRICE_CHANGE;
+        }
+
+        // For variants, we still use products prefix for consistency
+        $map = $this->getActivityMap();
+
+        return $map[$action] ?? null;
+    }
+
+    /**
+     * Check if any price fields were changed in this update.
+     */
+    protected function hasPriceFieldChanges(): bool
+    {
+        $changedFields = array_keys($this->getChanges());
+
+        return ! empty(array_intersect($changedFields, $this->priceFields));
+    }
+
+    /**
+     * Get attributes that should be logged.
+     */
+    protected function getLoggableAttributes(): array
+    {
+        return ['id', 'product_id', 'sku', 'price', 'wholesale_price', 'cost', 'quantity'];
+    }
+
+    /**
+     * Get a human-readable description for the activity.
+     */
+    protected function getActivityDescription(string $action): string
+    {
+        $product = $this->product;
+        $identifier = $product?->title ?? "Product #{$this->product_id}";
+        $variantInfo = $this->sku ? " (SKU: {$this->sku})" : " (Variant #{$this->id})";
+
+        if ($action === 'update' && $this->hasPriceFieldChanges()) {
+            $changes = $this->getPriceChangeDescription();
+
+            return "Price changed for {$identifier}{$variantInfo}: {$changes}";
+        }
+
+        return match ($action) {
+            'create' => "Variant{$variantInfo} was added to {$identifier}",
+            'update' => "Variant{$variantInfo} was updated for {$identifier}",
+            'delete' => "Variant{$variantInfo} was removed from {$identifier}",
+            default => "{$action} performed on variant{$variantInfo} for {$identifier}",
+        };
+    }
+
+    /**
+     * Get a human-readable description of price changes.
+     */
+    protected function getPriceChangeDescription(): string
+    {
+        $changes = [];
+        $original = $this->getOriginal();
+
+        foreach ($this->priceFields as $field) {
+            if ($this->wasChanged($field)) {
+                $oldValue = $original[$field] ?? 0;
+                $newValue = $this->getAttribute($field) ?? 0;
+                $fieldLabel = match ($field) {
+                    'price' => 'Price',
+                    'wholesale_price' => 'Wholesale Price',
+                    'cost' => 'Cost',
+                    default => ucfirst(str_replace('_', ' ', $field)),
+                };
+                $changes[] = "{$fieldLabel}: \${$oldValue} → \${$newValue}";
+            }
+        }
+
+        return implode(', ', $changes);
+    }
+
+    /**
+     * Get the identifier for this model in activity descriptions.
+     */
+    protected function getActivityIdentifier(): string
+    {
+        return $this->sku ?? "#{$this->id}";
     }
 }

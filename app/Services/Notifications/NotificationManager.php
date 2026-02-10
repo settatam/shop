@@ -243,11 +243,13 @@ class NotificationManager
      */
     protected function determineRecipientType(string $email, array $data): string
     {
-        if (isset($data['customer']) && $data['customer']->email === $email) {
+        $customerEmail = data_get($data, 'customer.email');
+        if ($customerEmail && $customerEmail === $email) {
             return NotificationSubscription::RECIPIENT_CUSTOMER;
         }
 
-        if (isset($data['store']['owner']) && $data['store']['owner']->email === $email) {
+        $ownerEmail = data_get($data, 'store.owner.email');
+        if ($ownerEmail && $ownerEmail === $email) {
             return NotificationSubscription::RECIPIENT_OWNER;
         }
 
