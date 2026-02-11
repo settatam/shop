@@ -30,6 +30,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
+import CustomerSearch from '@/components/customers/CustomerSearch.vue';
 
 interface Customer {
     id: number;
@@ -272,6 +273,10 @@ const editingItems = ref<Record<number, { quantity: number; price: number; disco
 // Date editing
 const isEditingDate = ref(false);
 const editingDate = ref('');
+
+// Customer editing
+const isAddingCustomer = ref(false);
+const selectedCustomer = ref<Customer | null>(null);
 
 const canEditOrder = computed(() => {
     return props.order.is_pending || props.order.is_draft;
@@ -584,6 +589,26 @@ function saveDate() {
         },
         onFinish: () => { isProcessing.value = false; },
     });
+}
+
+function saveCustomer() {
+    if (isProcessing.value || !selectedCustomer.value) return;
+    isProcessing.value = true;
+    router.patch(`/orders/${props.order.id}/customer`, {
+        customer_id: selectedCustomer.value.id,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isAddingCustomer.value = false;
+            selectedCustomer.value = null;
+        },
+        onFinish: () => { isProcessing.value = false; },
+    });
+}
+
+function cancelAddingCustomer() {
+    isAddingCustomer.value = false;
+    selectedCustomer.value = null;
 }
 </script>
 
@@ -1169,9 +1194,11 @@ function saveDate() {
                         </div>
 
                         <!-- Customer -->
-                        <div v-if="order.customer" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
-                            <div class="flex items-center gap-3">
+
+                            <!-- Existing customer -->
+                            <div v-if="order.customer" class="flex items-center gap-3">
                                 <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
                                     <UserIcon class="size-6 text-indigo-600 dark:text-indigo-400" />
                                 </div>
@@ -1181,6 +1208,47 @@ function saveDate() {
                                     </Link>
                                     <p v-if="order.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ order.customer.email }}</p>
                                     <p v-if="order.customer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ order.customer.phone }}</p>
+                                </div>
+                            </div>
+
+                            <!-- No customer - Add customer form -->
+                            <div v-else>
+                                <div v-if="isAddingCustomer" class="space-y-3">
+                                    <CustomerSearch
+                                        v-model="selectedCustomer"
+                                        placeholder="Search for customer..."
+                                    />
+                                    <div class="flex gap-2">
+                                        <button
+                                            type="button"
+                                            @click="saveCustomer"
+                                            :disabled="isProcessing || !selectedCustomer"
+                                            class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="cancelAddingCustomer"
+                                            class="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                                <div v-else class="text-center">
+                                    <div class="flex size-12 mx-auto items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+                                        <UserIcon class="size-6 text-gray-400" />
+                                    </div>
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No customer assigned</p>
+                                    <button
+                                        type="button"
+                                        @click="isAddingCustomer = true"
+                                        class="mt-3 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+                                    >
+                                        <UserIcon class="size-4" />
+                                        Add Customer
+                                    </button>
                                 </div>
                             </div>
                         </div>

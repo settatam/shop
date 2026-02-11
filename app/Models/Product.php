@@ -21,13 +21,17 @@ class Product extends Model
 
     public const STATUS_ACTIVE = 'active';
 
-    public const STATUS_ARCHIVE = 'archive';
+    public const STATUS_AWAITING_CONFIRMATION = 'awaiting_confirmation';
 
     public const STATUS_SOLD = 'sold';
 
+    public const STATUS_IN_REPAIR = 'in_repair';
+
     public const STATUS_IN_MEMO = 'in_memo';
 
-    public const STATUS_IN_REPAIR = 'in_repair';
+    public const STATUS_ARCHIVE = 'archive';
+
+    public const STATUS_IN_BUCKET = 'in_bucket';
 
     protected $fillable = [
         'title',
@@ -276,6 +280,16 @@ class Product extends Model
         return $query->where('status', self::STATUS_SOLD);
     }
 
+    public function scopeAwaitingConfirmation($query)
+    {
+        return $query->where('status', self::STATUS_AWAITING_CONFIRMATION);
+    }
+
+    public function scopeInBucket($query)
+    {
+        return $query->where('status', self::STATUS_IN_BUCKET);
+    }
+
     public function scopeByStatus($query, string $status)
     {
         return $query->where('status', $status);
@@ -291,11 +305,50 @@ class Product extends Model
         return [
             self::STATUS_DRAFT => 'Draft',
             self::STATUS_ACTIVE => 'Active',
-            self::STATUS_ARCHIVE => 'Archive',
+            self::STATUS_AWAITING_CONFIRMATION => 'Awaiting Confirmation',
             self::STATUS_SOLD => 'Sold',
-            self::STATUS_IN_MEMO => 'In Memo',
             self::STATUS_IN_REPAIR => 'In Repair',
+            self::STATUS_IN_MEMO => 'In Memo',
+            self::STATUS_ARCHIVE => 'Archive',
+            self::STATUS_IN_BUCKET => 'In Bucket',
         ];
+    }
+
+    /**
+     * Get available statuses for a store based on its edition features.
+     *
+     * @return array<string, string>
+     */
+    public static function getStatusesForStore(Store $store): array
+    {
+        $featureManager = app(\App\Services\FeatureManager::class);
+
+        // Base statuses available to all editions
+        $statuses = [
+            self::STATUS_DRAFT => 'Draft',
+            self::STATUS_ACTIVE => 'Active',
+            self::STATUS_SOLD => 'Sold',
+            self::STATUS_ARCHIVE => 'Archive',
+        ];
+
+        // Add feature-gated statuses
+        if ($featureManager->storeHasFeature($store, 'product_status_awaiting_confirmation')) {
+            $statuses[self::STATUS_AWAITING_CONFIRMATION] = 'Awaiting Confirmation';
+        }
+
+        if ($featureManager->storeHasFeature($store, 'product_status_in_repair')) {
+            $statuses[self::STATUS_IN_REPAIR] = 'In Repair';
+        }
+
+        if ($featureManager->storeHasFeature($store, 'product_status_in_memo')) {
+            $statuses[self::STATUS_IN_MEMO] = 'In Memo';
+        }
+
+        if ($featureManager->storeHasFeature($store, 'product_status_in_bucket')) {
+            $statuses[self::STATUS_IN_BUCKET] = 'In Bucket';
+        }
+
+        return $statuses;
     }
 
     /**

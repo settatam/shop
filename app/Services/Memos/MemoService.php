@@ -172,6 +172,14 @@ class MemoService
             'charge_taxes' => $data['charge_taxes'] ?? true,
         ]);
 
+        // Mark product as on memo if linked to a product
+        if (! empty($data['product_id'])) {
+            $product = Product::find($data['product_id']);
+            if ($product) {
+                MemoItem::markProductOnMemo($product);
+            }
+        }
+
         $memo->calculateTotals();
 
         return $item;
@@ -181,6 +189,12 @@ class MemoService
     {
         return DB::transaction(function () use ($item) {
             $memo = $item->memo;
+
+            // Restore product status if linked to a product
+            if ($item->product && ! $item->isReturned()) {
+                $item->returnToStock();
+            }
+
             $result = $item->delete();
             $memo->calculateTotals();
 

@@ -82,6 +82,14 @@ class RepairItem extends Model
         return null;
     }
 
+    /**
+     * Mark a product as in repair when added to a repair.
+     */
+    public static function markProductInRepair(Product $product): void
+    {
+        $product->update(['status' => Product::STATUS_IN_REPAIR]);
+    }
+
     public function getQuantityAttribute(): int
     {
         return 1;

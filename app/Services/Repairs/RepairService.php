@@ -4,6 +4,7 @@ namespace App\Services\Repairs;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Repair;
 use App\Models\RepairItem;
 use App\Models\StoreUser;
@@ -154,6 +155,14 @@ class RepairService
             'precious_metal' => $data['precious_metal'] ?? null,
         ]);
 
+        // Mark product as in repair if linked to a product
+        if (! empty($data['product_id'])) {
+            $product = Product::find($data['product_id']);
+            if ($product) {
+                RepairItem::markProductInRepair($product);
+            }
+        }
+
         $repair->calculateTotals();
 
         return $item;
@@ -181,6 +190,10 @@ class RepairService
     public function removeItem(RepairItem $item): bool
     {
         $repair = $item->repair;
+
+        // Restore product status if linked to a product
+        $item->returnToStock();
+
         $result = $item->delete();
         $repair->calculateTotals();
 

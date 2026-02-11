@@ -66,8 +66,11 @@ class MemoItem extends Model
     public function returnToStock(): self
     {
         if ($this->product) {
-            // Restore product quantity to mark it as back in stock
-            $this->product->update(['quantity' => 1]);
+            // Restore product quantity and status to mark it as back in stock
+            $this->product->update([
+                'quantity' => 1,
+                'status' => Product::STATUS_ACTIVE,
+            ]);
         }
 
         $this->update(['is_returned' => true]);
@@ -76,11 +79,15 @@ class MemoItem extends Model
     }
 
     /**
-     * Mark a product as out of stock when added to memo.
+     * Mark a product as on memo when added to a memo.
+     * Sets quantity to 0 and status to in_memo.
      */
     public static function markProductOnMemo(Product $product): void
     {
-        $product->update(['quantity' => 0]);
+        $product->update([
+            'quantity' => 0,
+            'status' => Product::STATUS_IN_MEMO,
+        ]);
     }
 
     public function returnItem(): self

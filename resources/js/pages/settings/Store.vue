@@ -18,6 +18,12 @@ interface SelectOption {
     label: string;
 }
 
+interface EditionOption {
+    value: string;
+    label: string;
+    description: string;
+}
+
 interface Store {
     id: number;
     name: string;
@@ -47,12 +53,14 @@ interface Store {
     meta_description: string | null;
     default_tax_rate: number | null;
     tax_id_number: string | null;
+    edition: string;
 }
 
 interface Props {
     store: Store;
     currencies: SelectOption[];
     timezones: SelectOption[];
+    availableEditions: EditionOption[];
 }
 
 const props = defineProps<Props>();
@@ -171,6 +179,58 @@ function removeLogo() {
                             <p v-if="logoError" class="text-sm text-destructive">{{ logoError }}</p>
                         </div>
                     </div>
+                </div>
+
+                <!-- Store Edition -->
+                <div>
+                    <HeadingSmall
+                        title="Store Edition"
+                        description="Choose the edition that best fits your business type"
+                    />
+
+                    <Form
+                        v-bind="StoreSettingsController.update.form()"
+                        class="mt-6"
+                        v-slot="{ errors, processing, recentlySuccessful }"
+                    >
+                        <div class="grid gap-2">
+                            <Label for="edition">Edition</Label>
+                            <select
+                                id="edition"
+                                name="edition"
+                                :value="store.edition"
+                                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option v-for="edition in availableEditions" :key="edition.value" :value="edition.value">
+                                    {{ edition.label }}
+                                </option>
+                            </select>
+                            <InputError :message="errors.edition" />
+                            <p class="text-sm text-muted-foreground">
+                                {{
+                                    availableEditions.find((e) => e.value === store.edition)?.description ||
+                                    'Select an edition to see available features'
+                                }}
+                            </p>
+                        </div>
+
+                        <div class="mt-4 flex items-center gap-4">
+                            <Button :disabled="processing">
+                                {{ processing ? 'Saving...' : 'Update Edition' }}
+                            </Button>
+
+                            <Transition
+                                enter-active-class="transition ease-in-out"
+                                enter-from-class="opacity-0"
+                                leave-active-class="transition ease-in-out"
+                                leave-to-class="opacity-0"
+                            >
+                                <p v-show="recentlySuccessful" class="text-sm text-green-600">
+                                    Saved successfully.
+                                </p>
+                            </Transition>
+                        </div>
+                    </Form>
                 </div>
 
                 <!-- General Information -->

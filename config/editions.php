@@ -16,15 +16,13 @@ return [
     'editions' => [
         'standard' => [
             'name' => 'Standard',
-            'description' => 'Default edition with all standard features',
+            'description' => 'Standard retail edition',
             'features' => [
                 // UI Features
-                // 'prominent_store_switcher', // Not needed for single-store users
                 'dashboard',
                 'customers',
                 'leads',
                 'products',
-                'gia',
                 'categories',
                 'product_types',
                 'templates',
@@ -35,12 +33,9 @@ return [
                 'transactions',
                 'buys',
                 'vendors',
-                'repairs',
-                'memos',
                 'invoices',
                 'payments',
                 'labels',
-                'buckets',
                 'reports',
                 'tags',
                 'integrations',
@@ -49,6 +44,50 @@ return [
                 'xoom',
                 'agents',
                 'marketplaces',
+            ],
+        ],
+
+        'pawn_shop' => [
+            'name' => 'Pawn Shop / Estate Buyers',
+            'description' => 'For pawn shops, estate buyers, and consignment stores dealing with unique items',
+            'features' => [
+                // UI Features
+                'dashboard',
+                'customers',
+                'leads',
+                'products',
+                'gia', // GIA diamond lookup
+                'categories',
+                'product_types',
+                'templates',
+                'orders',
+                'layaways',
+                'shipments',
+                'returns',
+                'transactions',
+                'buys',
+                'vendors',
+                'repairs', // Item repairs
+                'memos', // Memo tracking
+                'invoices',
+                'payments',
+                'labels',
+                'buckets', // Bucket grouping
+                'reports',
+                'tags',
+                'integrations',
+                'settings',
+                'quickbooks',
+                'xoom',
+                'agents',
+                'marketplaces',
+
+                // Pawn shop specific features
+                'product_status_in_memo', // Track items out on memo
+                'product_status_in_repair', // Track items in repair
+                'product_status_in_bucket', // Track items in buckets
+                'product_status_awaiting_confirmation', // Pending buys
+                'single_item_inventory', // One-of-a-kind items
             ],
         ],
 
@@ -95,6 +134,48 @@ return [
                 // Client-specific features
                 'custom_workflow',
                 'bulk_operations',
+            ],
+
+            // Field requirements for this edition
+            // These override the default field rules
+            'field_requirements' => [
+                'products' => [
+                    'vendor_id' => [
+                        'required' => true,
+                        'label' => 'Vendor',
+                        'message' => 'Please select a vendor before saving.',
+                    ],
+                ],
+            ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Field Requirements
+    |--------------------------------------------------------------------------
+    |
+    | Default field requirements that apply to all editions unless overridden.
+    |
+    */
+
+    'default_field_requirements' => [
+        'products' => [
+            'title' => [
+                'required' => true,
+                'label' => 'Title',
+            ],
+            'category_id' => [
+                'required' => false,
+                'label' => 'Category',
+            ],
+            'vendor_id' => [
+                'required' => false,
+                'label' => 'Vendor',
+            ],
+            'brand_id' => [
+                'required' => false,
+                'label' => 'Brand',
             ],
         ],
     ],

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Repair;
 use App\Models\RepairItem;
 use App\Models\Role;
@@ -416,5 +417,48 @@ class RepairTest extends TestCase
         $this->assertNotNull($order);
         $this->assertStringStartsWith('REP-', $order->invoice_number);
         $this->assertEquals("REP-{$order->id}", $order->invoice_number);
+    }
+
+    public function test_product_status_changes_to_in_repair_when_added(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_ACTIVE,
+        ]);
+
+        $repair = Repair::factory()->create(['store_id' => $this->store->id]);
+
+        $service = app(RepairService::class);
+        $service->addItem($repair, [
+            'product_id' => $product->id,
+            'title' => $product->title,
+            'customer_cost' => 100.00,
+            'vendor_cost' => 50.00,
+        ]);
+
+        $product->refresh();
+
+        $this->assertEquals(Product::STATUS_IN_REPAIR, $product->status);
+    }
+
+    public function test_product_status_changes_to_active_when_removed_from_repair(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_IN_REPAIR,
+        ]);
+
+        $repair = Repair::factory()->pending()->create(['store_id' => $this->store->id]);
+        $item = RepairItem::factory()->create([
+            'repair_id' => $repair->id,
+            'product_id' => $product->id,
+        ]);
+
+        $service = app(RepairService::class);
+        $service->removeItem($item);
+
+        $product->refresh();
+
+        $this->assertEquals(Product::STATUS_ACTIVE, $product->status);
     }
 }

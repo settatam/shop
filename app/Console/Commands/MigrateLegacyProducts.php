@@ -39,6 +39,8 @@ class MigrateLegacyProducts extends Command
 
     protected array $vendorMap = [];
 
+    protected array $unmappedVendors = [];
+
     /**
      * Maps legacy html_form_field.id => new product_template_field.id
      */
@@ -413,6 +415,15 @@ class MigrateLegacyProducts extends Command
         }
 
         $this->line('  Mapped '.count($this->vendorMap).' vendors');
+
+        // Save vendor map for future runs
+        $basePath = storage_path('app/migrations');
+        if (! is_dir($basePath)) {
+            mkdir($basePath, 0755, true);
+        }
+        $vendorMapFile = "{$basePath}/vendor_map_{$legacyStoreId}.json";
+        file_put_contents($vendorMapFile, json_encode($this->vendorMap, JSON_PRETTY_PRINT));
+        $this->line("  Saved vendor map to {$vendorMapFile}");
     }
 
     protected function migrateProducts(int $legacyStoreId, Store $newStore, bool $isDryRun, int $limit, bool $skipDeleted): void
@@ -519,8 +530,12 @@ class MigrateLegacyProducts extends Command
 
             // Map vendor
             $vendorId = null;
-            if ($legacyProduct->vendor_id && isset($this->vendorMap[$legacyProduct->vendor_id])) {
-                $vendorId = $this->vendorMap[$legacyProduct->vendor_id];
+            if ($legacyProduct->vendor_id) {
+                if (isset($this->vendorMap[$legacyProduct->vendor_id])) {
+                    $vendorId = $this->vendorMap[$legacyProduct->vendor_id];
+                } else {
+                    $this->unmappedVendors[$legacyProduct->vendor_id] = ($this->unmappedVendors[$legacyProduct->vendor_id] ?? 0) + 1;
+                }
             }
 
             // Generate unique handle - always include legacy ID to ensure uniqueness
@@ -1156,5 +1171,19 @@ class MigrateLegacyProducts extends Command
         $inventoryCount = Inventory::where('store_id', $newStore->id)->count();
         $totalQuantity = Inventory::where('store_id', $newStore->id)->sum('quantity');
         $this->line("Total inventory records: {$inventoryCount} ({$totalQuantity} items)");
+
+        // Report unmapped vendors
+        if (! empty($this->unmappedVendors)) {
+            $this->newLine();
+            $this->warn('=== Unmapped Vendors ===');
+            $this->warn('The following legacy vendor IDs were not mapped (products will have no vendor):');
+            $totalUnmappedProducts = 0;
+            foreach ($this->unmappedVendors as $vendorId => $count) {
+                $this->line("  Legacy vendor ID {$vendorId}: {$count} products");
+                $totalUnmappedProducts += $count;
+            }
+            $this->warn("Total products without vendor: {$totalUnmappedProducts}");
+            $this->line('To fix: Create vendors in the new system and update the vendor_map JSON file');
+        }
     }
 }

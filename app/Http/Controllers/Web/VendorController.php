@@ -237,7 +237,7 @@ class VendorController extends Controller
                 'title' => $item->title,
                 'order_id' => $item->order_id,
                 'invoice_number' => $item->invoice_number,
-                'date' => $item->date_of_purchase?->format('M d, Y') ?? $item->order_date?->format('M d, Y'),
+                'date' => $this->formatDate($item->date_of_purchase ?? $item->order_date),
                 'cost' => $totalCost,
                 'amount_sold' => $totalSold,
                 'profit' => $profit,
@@ -471,5 +471,29 @@ class VendorController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv',
         ]);
+    }
+
+    /**
+     * Format a date value that may be a string or Carbon instance.
+     */
+    protected function formatDate(mixed $date): ?string
+    {
+        if (! $date) {
+            return null;
+        }
+
+        if ($date instanceof \Carbon\Carbon || $date instanceof \DateTimeInterface) {
+            return $date->format('M d, Y');
+        }
+
+        if (is_string($date)) {
+            try {
+                return \Carbon\Carbon::parse($date)->format('M d, Y');
+            } catch (\Exception) {
+                return $date;
+            }
+        }
+
+        return null;
     }
 }

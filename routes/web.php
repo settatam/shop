@@ -186,6 +186,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:orders.update')->group(function () {
         Route::patch('orders/{order}', [OrderController::class, 'update'])->name('web.orders.update');
+        Route::patch('orders/{order}/customer', [OrderController::class, 'updateCustomer'])->name('web.orders.update-customer');
         Route::patch('orders/{order}/items/{item}', [OrderController::class, 'updateItem'])->name('web.orders.update-item');
         Route::delete('orders/{order}/items/{item}', [OrderController::class, 'removeItem'])->name('web.orders.remove-item');
         Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('web.orders.confirm');

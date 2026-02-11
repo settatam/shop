@@ -47,6 +47,7 @@ class StoreSettingsTest extends TestCase
             ->has('store')
             ->has('currencies')
             ->has('timezones')
+            ->has('availableEditions')
         );
     }
 
@@ -202,5 +203,29 @@ class StoreSettingsTest extends TestCase
         $this->assertNotEquals($oldPath, $this->store->logo);
         Storage::disk('public')->assertMissing($oldPath);
         Storage::disk('public')->assertExists($this->store->logo);
+    }
+
+    public function test_store_edition_can_be_updated(): void
+    {
+        $response = $this->actingAs($this->user)->patch('/settings/store', [
+            'name' => $this->store->name,
+            'edition' => 'pawn_shop',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->store->refresh();
+        $this->assertEquals('pawn_shop', $this->store->edition);
+    }
+
+    public function test_invalid_edition_is_rejected(): void
+    {
+        $response = $this->actingAs($this->user)->patch('/settings/store', [
+            'name' => $this->store->name,
+            'edition' => 'invalid_edition',
+        ]);
+
+        $response->assertSessionHasErrors('edition');
     }
 }

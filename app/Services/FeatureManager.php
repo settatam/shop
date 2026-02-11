@@ -142,4 +142,53 @@ class FeatureManager
             }, $navigation)
         ));
     }
+
+    /**
+     * Get field requirements for a store based on its edition.
+     *
+     * @param  string  $context  The context (e.g., 'products', 'orders')
+     * @return array<string, array{required?: bool, label?: string, message?: string}>
+     */
+    public function getFieldRequirements(Store $store, string $context): array
+    {
+        $edition = $store->edition ?? config('editions.default', 'standard');
+        $editionConfig = config("editions.editions.{$edition}", []);
+
+        // Start with default requirements
+        $defaults = config("editions.default_field_requirements.{$context}", []);
+
+        // Merge with edition-specific requirements (edition overrides defaults)
+        $editionRequirements = $editionConfig['field_requirements'][$context] ?? [];
+
+        return array_merge($defaults, $editionRequirements);
+    }
+
+    /**
+     * Check if a field is required for a store based on its edition.
+     */
+    public function isFieldRequired(Store $store, string $context, string $field): bool
+    {
+        $requirements = $this->getFieldRequirements($store, $context);
+
+        return $requirements[$field]['required'] ?? false;
+    }
+
+    /**
+     * Get the validation rules for a context based on store edition.
+     *
+     * @return array<string, string>
+     */
+    public function getValidationRules(Store $store, string $context): array
+    {
+        $requirements = $this->getFieldRequirements($store, $context);
+        $rules = [];
+
+        foreach ($requirements as $field => $config) {
+            if ($config['required'] ?? false) {
+                $rules[$field] = 'required';
+            }
+        }
+
+        return $rules;
+    }
 }

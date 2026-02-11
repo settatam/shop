@@ -409,4 +409,75 @@ class MemoTest extends TestCase
         // Only the $300 item is taxed: 300 * 0.08 = 24
         $this->assertEquals(24.00, $totals['tax']);
     }
+
+    public function test_product_status_changes_to_in_memo_when_added(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_ACTIVE,
+            'quantity' => 1,
+        ]);
+
+        $memo = Memo::factory()->create(['store_id' => $this->store->id]);
+
+        $service = app(MemoService::class);
+        $service->addItem($memo, [
+            'product_id' => $product->id,
+            'title' => $product->title,
+            'price' => 100.00,
+        ]);
+
+        $product->refresh();
+
+        $this->assertEquals(Product::STATUS_IN_MEMO, $product->status);
+        $this->assertEquals(0, $product->quantity);
+    }
+
+    public function test_product_status_changes_to_active_when_returned_from_memo(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_IN_MEMO,
+            'quantity' => 0,
+        ]);
+
+        $memo = Memo::factory()->vendorReceived()->create(['store_id' => $this->store->id]);
+        $item = MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'product_id' => $product->id,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoService::class);
+        $service->returnItem($item);
+
+        $product->refresh();
+
+        $this->assertEquals(Product::STATUS_ACTIVE, $product->status);
+        $this->assertEquals(1, $product->quantity);
+    }
+
+    public function test_product_status_changes_to_active_when_removed_from_memo(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_IN_MEMO,
+            'quantity' => 0,
+        ]);
+
+        $memo = Memo::factory()->pending()->create(['store_id' => $this->store->id]);
+        $item = MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'product_id' => $product->id,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoService::class);
+        $service->removeItem($item);
+
+        $product->refresh();
+
+        $this->assertEquals(Product::STATUS_ACTIVE, $product->status);
+        $this->assertEquals(1, $product->quantity);
+    }
 }

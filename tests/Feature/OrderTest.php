@@ -921,4 +921,55 @@ class OrderTest extends TestCase
 
         $this->assertEquals($existingChannel->id, $channel->id);
     }
+
+    public function test_can_update_order_customer(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+        $this->actingAs($this->user);
+
+        // Create order without customer
+        $order = Order::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => null,
+        ]);
+
+        // Create a customer
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        $response = $this->patch("/orders/{$order->id}/customer", [
+            'customer_id' => $customer->id,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertEquals($customer->id, $order->customer_id);
+    }
+
+    public function test_cannot_update_order_with_customer_from_different_store(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+        $this->actingAs($this->user);
+
+        // Create order without customer
+        $order = Order::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => null,
+        ]);
+
+        // Create a customer for a different store
+        $otherStore = Store::factory()->create();
+        $customer = Customer::factory()->create(['store_id' => $otherStore->id]);
+
+        $response = $this->patch("/orders/{$order->id}/customer", [
+            'customer_id' => $customer->id,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+
+        $order->refresh();
+        $this->assertNull($order->customer_id);
+    }
 }

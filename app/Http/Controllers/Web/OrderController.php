@@ -352,6 +352,28 @@ class OrderController extends Controller
         return back()->with('success', 'Order updated successfully.');
     }
 
+    public function updateCustomer(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($order);
+
+        $validated = $request->validate([
+            'customer_id' => 'required|exists:customers,id',
+        ]);
+
+        // Verify customer belongs to the same store
+        $customer = Customer::where('id', $validated['customer_id'])
+            ->where('store_id', $order->store_id)
+            ->first();
+
+        if (! $customer) {
+            return back()->with('error', 'Customer not found.');
+        }
+
+        $order->update(['customer_id' => $customer->id]);
+
+        return back()->with('success', 'Customer updated successfully.');
+    }
+
     public function destroy(Order $order): RedirectResponse
     {
         $this->authorizeOrder($order);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Services\FeatureManager;
 use App\Services\StoreContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ class StoreSettingsController extends Controller
 {
     public function __construct(
         protected StoreContext $storeContext,
+        protected FeatureManager $featureManager,
     ) {}
 
     public function edit(): Response|RedirectResponse
@@ -55,9 +57,11 @@ class StoreSettingsController extends Controller
                 'meta_description' => $store->meta_description,
                 'default_tax_rate' => $store->default_tax_rate ? (float) $store->default_tax_rate * 100 : null,
                 'tax_id_number' => $store->tax_id_number,
+                'edition' => $store->edition ?? config('editions.default', 'standard'),
             ],
             'currencies' => $this->getCurrencies(),
             'timezones' => $this->getTimezones(),
+            'availableEditions' => $this->getAvailableEditionsForSelect(),
         ]);
     }
 
@@ -96,6 +100,7 @@ class StoreSettingsController extends Controller
             'meta_description' => ['nullable', 'string', 'max:500'],
             'default_tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'tax_id_number' => ['nullable', 'string', 'max:50'],
+            'edition' => ['nullable', 'string', 'in:'.implode(',', array_keys($this->featureManager->getAvailableEditions()))],
         ]);
 
         // Map currency and timezone back to IDs (or store directly if no lookup tables exist)
@@ -123,6 +128,7 @@ class StoreSettingsController extends Controller
             'meta_description' => $validated['meta_description'] ?? null,
             'default_tax_rate' => isset($validated['default_tax_rate']) ? $validated['default_tax_rate'] / 100 : 0,
             'tax_id_number' => $validated['tax_id_number'] ?? null,
+            'edition' => $validated['edition'] ?? $store->edition,
         ];
 
         $store->update($updateData);
@@ -241,5 +247,25 @@ class StoreSettingsController extends Controller
     {
         // For now, return default timezone since there's no timezones table
         return 'America/New_York';
+    }
+
+    /**
+     * Get available editions for select dropdown.
+     *
+     * @return array<array{value: string, label: string, description: string}>
+     */
+    protected function getAvailableEditionsForSelect(): array
+    {
+        $editions = $this->featureManager->getAvailableEditions();
+
+        return array_map(
+            fn (string $key, array $edition) => [
+                'value' => $key,
+                'label' => $edition['name'],
+                'description' => $edition['description'],
+            ],
+            array_keys($editions),
+            array_values($editions)
+        );
     }
 }

@@ -116,6 +116,7 @@ interface Product {
     handle: string;
     sku: string | null;
     upc: string | null;
+    status: string;
     is_published: boolean;
     is_draft: boolean;
     has_variants: boolean;
@@ -175,6 +176,12 @@ interface Activity {
     repairs: RepairActivity[];
 }
 
+interface FieldRequirement {
+    required?: boolean;
+    label?: string;
+    message?: string;
+}
+
 interface Props {
     product: Product;
     categories: Category[];
@@ -187,10 +194,22 @@ interface Props {
     templateBrands: TemplateBrand[];
     attributeValues: Record<number, string>;
     availableTags: Tag[];
+    availableStatuses: Record<string, string>;
+    fieldRequirements: Record<string, FieldRequirement>;
     activity: Activity;
 }
 
 const props = defineProps<Props>();
+
+// Helper to check if a field is required based on edition
+function isFieldRequired(field: string): boolean {
+    return props.fieldRequirements?.[field]?.required ?? false;
+}
+
+// Helper to get field requirement message
+function getFieldRequirementMessage(field: string): string | undefined {
+    return props.fieldRequirements?.[field]?.message;
+}
 
 // Track whether product has variants (multiple options like size, color)
 const hasVariants = ref(props.product.has_variants);
@@ -306,6 +325,7 @@ const form = useForm({
     category_id: props.product.category_id || '',
     vendor_id: props.product.vendor_id || '',
     template_id: props.product.template_id || '',
+    status: props.product.status || 'draft',
     is_published: props.product.is_published,
     has_variants: props.product.has_variants,
     track_quantity: props.product.track_quantity,
@@ -618,25 +638,24 @@ function deleteProduct() {
                     </div>
                 </div>
 
-                <!-- Category and Product Information Section (Top) -->
-                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
-                    <!-- Category -->
-                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Category</h3>
-                            <CategorySelector
-                                v-model="form.category_id"
-                                :categories="categories"
-                            />
-                            <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Product Information (compact version at top) -->
+                <!-- Product Information Section (Top) -->
+                <div class="mb-6">
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Product Information</h3>
                             <div class="space-y-4">
+                                <!-- Category -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Category <span v-if="isFieldRequired('category_id')" class="text-red-500">*</span>
+                                    </label>
+                                    <CategorySelector
+                                        v-model="form.category_id"
+                                        :categories="categories"
+                                    />
+                                    <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
+                                </div>
+
                                 <!-- Title -->
                                 <div>
                                     <label for="title_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1633,27 +1652,34 @@ function deleteProduct() {
                             <div class="px-4 py-5 sm:p-6">
                                 <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Status</h3>
 
-                                <div class="space-y-3">
-                                    <label class="flex items-center gap-3">
-                                        <input
-                                            v-model="form.is_published"
-                                            type="checkbox"
-                                            class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        <span class="text-sm text-gray-700 dark:text-gray-300">Published</span>
-                                    </label>
-                                </div>
+                                <select
+                                    v-model="form.status"
+                                    class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                >
+                                    <option
+                                        v-for="(label, value) in props.availableStatuses"
+                                        :key="value"
+                                        :value="value"
+                                    >
+                                        {{ label }}
+                                    </option>
+                                </select>
 
                                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <span
                                         :class="[
                                             'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                                            form.is_published
-                                                ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20'
-                                                : 'bg-yellow-50 text-yellow-800 ring-1 ring-inset ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20',
+                                            form.status === 'active' ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20' :
+                                            form.status === 'draft' ? 'bg-yellow-50 text-yellow-800 ring-1 ring-inset ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20' :
+                                            form.status === 'sold' ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20' :
+                                            form.status === 'in_memo' ? 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20 dark:bg-purple-500/10 dark:text-purple-400 dark:ring-purple-500/20' :
+                                            form.status === 'in_repair' ? 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20' :
+                                            form.status === 'in_bucket' ? 'bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-600/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:ring-cyan-500/20' :
+                                            form.status === 'archive' ? 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20' :
+                                            'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20',
                                         ]"
                                     >
-                                        {{ form.is_published ? 'Published' : 'Draft' }}
+                                        {{ props.availableStatuses[form.status] || form.status }}
                                     </span>
                                 </div>
                             </div>
@@ -1666,12 +1692,12 @@ function deleteProduct() {
 
                                 <div>
                                     <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Vendor <span class="text-red-500">*</span>
+                                        Vendor <span v-if="isFieldRequired('vendor_id')" class="text-red-500">*</span>
                                     </label>
                                     <select
                                         id="vendor_id"
                                         v-model="form.vendor_id"
-                                        required
+                                        :required="isFieldRequired('vendor_id')"
                                         class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >
                                         <option value="">Select a vendor...</option>
@@ -1680,6 +1706,9 @@ function deleteProduct() {
                                         </option>
                                     </select>
                                     <p v-if="form.errors.vendor_id" class="mt-1 text-sm text-red-600">{{ form.errors.vendor_id }}</p>
+                                    <p v-if="getFieldRequirementMessage('vendor_id')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        {{ getFieldRequirementMessage('vendor_id') }}
+                                    </p>
                                 </div>
                             </div>
                         </div>

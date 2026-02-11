@@ -17,6 +17,7 @@ use App\Models\Tag;
 use App\Models\Vendor;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
+use App\Services\FeatureManager;
 use App\Services\Image\ImageService;
 use App\Services\Sku\SkuGeneratorService;
 use App\Services\StoreContext;
@@ -33,7 +34,8 @@ class ProductController extends Controller
     public function __construct(
         protected StoreContext $storeContext,
         protected ImageService $imageService,
-        protected VideoService $videoService
+        protected VideoService $videoService,
+        protected FeatureManager $featureManager,
     ) {}
 
     public function index(Request $request): Response|RedirectResponse
@@ -682,6 +684,7 @@ class ProductController extends Controller
                 'handle' => $product->handle,
                 'sku' => $product->sku,
                 'upc' => $product->upc,
+                'status' => $product->status,
                 'is_published' => $product->is_published,
                 'is_draft' => $product->is_draft,
                 'has_variants' => $product->has_variants,
@@ -746,6 +749,8 @@ class ProductController extends Controller
             'templateFields' => $templateFields,
             'templateBrands' => $templateBrands,
             'attributeValues' => $attributeValues,
+            'availableStatuses' => Product::getStatusesForStore($store),
+            'fieldRequirements' => $this->featureManager->getFieldRequirements($store, 'products'),
             'activity' => [
                 'orders' => $product->orderItems->map(fn ($item) => [
                     'id' => $item->order->id,
@@ -781,17 +786,22 @@ class ProductController extends Controller
             abort(404);
         }
 
+        // Get edition-based field requirements
+        $fieldRequirements = $this->featureManager->getFieldRequirements($store, 'products');
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'handle' => 'nullable|string|max:255',
             'sku' => 'nullable|string|max:255',
             'upc' => 'nullable|string|max:255',
-            'category_id' => 'nullable|exists:categories,id',
-            'vendor_id' => 'required|exists:vendors,id',
+            'category_id' => ($fieldRequirements['category_id']['required'] ?? false ? 'required' : 'nullable').'|exists:categories,id',
+            'vendor_id' => ($fieldRequirements['vendor_id']['required'] ?? false ? 'required' : 'nullable').'|exists:vendors,id',
+            'brand_id' => ($fieldRequirements['brand_id']['required'] ?? false ? 'required' : 'nullable').'|exists:brands,id',
             'tag_ids' => 'nullable|array',
             'tag_ids.*' => 'exists:tags,id',
             'template_id' => 'nullable|exists:product_templates,id',
+            'status' => 'nullable|string|in:draft,active,awaiting_confirmation,sold,in_repair,in_memo,archive,in_bucket',
             'is_published' => 'boolean',
             'has_variants' => 'boolean',
             'track_quantity' => 'boolean',
@@ -834,6 +844,11 @@ class ProductController extends Controller
         // Determine has_variants based on user input (not just count)
         $hasVariants = $validated['has_variants'] ?? (count($validated['variants']) > 1);
 
+        // Determine status and publishing state
+        $status = $validated['status'] ?? $product->status ?? Product::STATUS_DRAFT;
+        $isPublished = $status === Product::STATUS_ACTIVE;
+        $isDraft = $status === Product::STATUS_DRAFT;
+
         $product->update([
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -842,8 +857,9 @@ class ProductController extends Controller
             'category_id' => $validated['category_id'] ?? null,
             'vendor_id' => $validated['vendor_id'] ?? null,
             'template_id' => $validated['template_id'] ?? null,
-            'is_published' => $validated['is_published'] ?? false,
-            'is_draft' => ! ($validated['is_published'] ?? false),
+            'status' => $status,
+            'is_published' => $isPublished,
+            'is_draft' => $isDraft,
             'has_variants' => $hasVariants,
             'track_quantity' => $validated['track_quantity'] ?? true,
             'sell_out_of_stock' => $validated['sell_out_of_stock'] ?? false,
