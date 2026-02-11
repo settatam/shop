@@ -481,8 +481,8 @@ class ClearStoreData extends Command
             ->delete();
         $this->line("  Deleted {$noteCount} product notes");
 
-        // Delete activity log for products
-        $count = DB::table('activity_log')
+        // Delete activity logs for products
+        $count = DB::table('activity_logs')
             ->where('subject_type', 'App\\Models\\Product')
             ->whereIn('subject_id', $productIds)
             ->delete();
