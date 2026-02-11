@@ -402,14 +402,14 @@ class ClearStoreData extends Command
         // Clear product variant references from order items
         $count = DB::table('order_items')
             ->whereIn('product_variant_id', $variantIds)
-            ->update(['product_variant_id' => null]);
-        $this->line("  Nullified {$count} order item variant references");
+            ->update(['product_variant_id' => null, 'product_id' => null]);
+        $this->line("  Nullified {$count} order item product references");
 
-        // Clear product variant references from memo items
+        // Clear product references from memo items
         $count = DB::table('memo_items')
-            ->whereIn('product_variant_id', $variantIds)
-            ->update(['product_variant_id' => null]);
-        $this->line("  Nullified {$count} memo item variant references");
+            ->whereIn('product_id', $productIds)
+            ->update(['product_id' => null]);
+        $this->line("  Nullified {$count} memo item product references");
 
         // Clear product references from transaction items
         $count = DB::table('transaction_items')
