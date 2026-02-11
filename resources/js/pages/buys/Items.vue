@@ -36,7 +36,7 @@ function getUrlParams(): WidgetFilter {
 const initialParams = getUrlParams();
 
 // Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget('Buys\\BuyItemsTable', initialParams);
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuyItemsTable', initialParams);
 
 // Filters - initialize from URL params
 const selectedPaymentMethod = ref<string>(initialParams.payment_method as string || '');
@@ -84,6 +84,10 @@ function handleSortChange(field: string, desc: boolean) {
 
 function handleSearch(term: string) {
     setSearch(term);
+}
+
+function handlePerPageChange(perPage: number) {
+    setPerPage(perPage);
 }
 
 function clearFilters() {
@@ -253,6 +257,7 @@ const hasActiveFilters = computed(() => {
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
+                @per-page-change="handlePerPageChange"
                 @review-item="handleReviewItem"
             />
 

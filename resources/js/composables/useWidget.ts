@@ -101,6 +101,11 @@ export function useWidget(type: string, initialFilter: WidgetFilter = {}) {
         filter.value.page = 1; // Reset to first page on search
     }
 
+    function setPerPage(perPage: number) {
+        filter.value.per_page = perPage;
+        filter.value.page = 1; // Reset to first page when changing page size
+    }
+
     // Watch filter changes and reload
     watch(
         filter,
@@ -120,5 +125,6 @@ export function useWidget(type: string, initialFilter: WidgetFilter = {}) {
         setPage,
         setSort,
         setSearch,
+        setPerPage,
     };
 }

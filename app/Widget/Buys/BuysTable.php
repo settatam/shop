@@ -182,7 +182,7 @@ class BuysTable extends Table
 
         // Pagination
         $page = (int) data_get($filter, 'page', 1);
-        $perPage = (int) data_get($filter, 'per_page', 15);
+        $perPage = (int) data_get($filter, 'per_page', 100);
 
         $this->paginatedData = $query->paginate($perPage, ['*'], 'page', $page);
 

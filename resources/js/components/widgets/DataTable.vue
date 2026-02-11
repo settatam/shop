@@ -100,7 +100,7 @@ const props = withDefaults(defineProps<Props>(), {
     exportFilename: 'export',
     showTotals: false,
     totalColumns: () => [],
-    perPageOptions: () => [15, 25, 50, 100],
+    perPageOptions: () => [100, 50, 25, 15],
     showPerPageSelector: true,
     initialSearchTerm: '',
 });

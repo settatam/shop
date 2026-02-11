@@ -234,7 +234,7 @@ class Table extends Widget
      */
     public function perPage(?array $filter, array $filteredData): int
     {
-        return (int) data_get($filter, 'per_page', 15);
+        return (int) data_get($filter, 'per_page', 100);
     }
 
     public function totalRows(): int
@@ -307,7 +307,7 @@ class Table extends Widget
         if (! $this->paginatedData) {
             return [
                 'total' => 0,
-                'per_page' => 15,
+                'per_page' => 100,
                 'current_page' => 1,
                 'from' => 0,
                 'to' => 0,

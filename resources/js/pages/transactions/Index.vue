@@ -34,7 +34,7 @@ function getUrlParams(): WidgetFilter {
 const initialParams = getUrlParams();
 
 // Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget('Transactions\\TransactionsTable', initialParams);
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Transactions\\TransactionsTable', initialParams);
 
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status || '');
@@ -84,6 +84,10 @@ function handleSortChange(field: string, desc: boolean) {
 
 function handleSearch(term: string) {
     setSearch(term);
+}
+
+function handlePerPageChange(perPage: number) {
+    setPerPage(perPage);
 }
 
 // Handle bulk action success
@@ -248,6 +252,7 @@ const hasActiveFilters = computed(() => {
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
+                @per-page-change="handlePerPageChange"
                 @bulk-action-success="handleBulkActionSuccess"
             />
 
