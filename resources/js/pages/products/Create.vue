@@ -517,6 +517,138 @@ function submit() {
                 <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <!-- Main content -->
                     <div class="lg:col-span-2 space-y-6">
+                        <!-- Product Information Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('productInfo')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Information</h3>
+                                <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.productInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-4">
+                                    <!-- Category -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Category <span class="text-red-500">*</span>
+                                        </label>
+                                        <CategorySelector
+                                            v-model="form.category_id"
+                                            :categories="categories"
+                                        />
+                                        <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
+                                    </div>
+
+                                    <!-- Title -->
+                                    <div>
+                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Title <span class="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            id="title"
+                                            v-model="form.title"
+                                            type="text"
+                                            :required="!form.generate_title"
+                                            :disabled="form.generate_title"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                        />
+                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
+
+                                        <!-- Generate Title Checkbox -->
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input
+                                                id="generate_title"
+                                                v-model="form.generate_title"
+                                                type="checkbox"
+                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <label for="generate_title" class="text-sm text-gray-600 dark:text-gray-400">
+                                                Generate title (from category format or AI)
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Description -->
+                                    <div>
+                                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Description
+                                        </label>
+                                        <RichTextEditor
+                                            v-model="form.description"
+                                            placeholder="Enter product description..."
+                                            class="mt-1"
+                                            :disabled="form.generate_description"
+                                        />
+                                        <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
+
+                                        <!-- Generate Description Checkbox -->
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input
+                                                id="generate_description"
+                                                v-model="form.generate_description"
+                                                type="checkbox"
+                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                            />
+                                            <label for="generate_description" class="text-sm text-gray-600 dark:text-gray-400">
+                                                Generate with AI
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- SKU and Barcode -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                SKU
+                                            </label>
+                                            <div class="mt-1 flex gap-2">
+                                                <input
+                                                    id="sku"
+                                                    v-model="form.variants[0].sku"
+                                                    type="text"
+                                                    :disabled="hasVariants"
+                                                    class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                                />
+                                                <button
+                                                    v-if="categoryHasSkuFormat && !hasVariants"
+                                                    type="button"
+                                                    :disabled="generatingSku"
+                                                    class="shrink-0 rounded-md bg-indigo-50 px-2 py-1.5 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
+                                                    title="Generate SKU"
+                                                    @click="generateSku(0)"
+                                                >
+                                                    <SparklesIcon class="size-5" :class="{ 'animate-pulse': generatingSku }" />
+                                                </button>
+                                            </div>
+                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                SKU is managed per variant
+                                            </p>
+                                            <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                Leave blank to auto-generate
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label for="barcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Barcode
+                                            </label>
+                                            <input
+                                                id="barcode"
+                                                v-model="form.variants[0].barcode"
+                                                type="text"
+                                                :disabled="hasVariants"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Pricing Section -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
@@ -633,126 +765,6 @@ function submit() {
                                     <p v-if="hasVariants" class="text-xs text-gray-500 dark:text-gray-400">
                                         Pricing is managed per variant when variants are enabled
                                     </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Product Information Section -->
-                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('productInfo')"
-                            >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Information</h3>
-                                <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
-                            </button>
-
-                            <div v-show="sections.productInfo" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <div class="space-y-4">
-                                    <!-- Title -->
-                                    <div>
-                                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Title <span class="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            id="title"
-                                            v-model="form.title"
-                                            type="text"
-                                            :required="!form.generate_title"
-                                            :disabled="form.generate_title"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                        />
-                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
-
-                                        <!-- Generate Title Checkbox -->
-                                        <div class="mt-2 flex items-center gap-2">
-                                            <input
-                                                id="generate_title"
-                                                v-model="form.generate_title"
-                                                type="checkbox"
-                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            <label for="generate_title" class="text-sm text-gray-600 dark:text-gray-400">
-                                                Generate title (from category format or AI)
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <!-- Description -->
-                                    <div>
-                                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Description
-                                        </label>
-                                        <RichTextEditor
-                                            v-model="form.description"
-                                            placeholder="Enter product description..."
-                                            class="mt-1"
-                                            :disabled="form.generate_description"
-                                        />
-                                        <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
-
-                                        <!-- Generate Description Checkbox -->
-                                        <div class="mt-2 flex items-center gap-2">
-                                            <input
-                                                id="generate_description"
-                                                v-model="form.generate_description"
-                                                type="checkbox"
-                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            <label for="generate_description" class="text-sm text-gray-600 dark:text-gray-400">
-                                                Generate with AI
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <!-- SKU and Barcode -->
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div>
-                                            <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                SKU
-                                            </label>
-                                            <div class="mt-1 flex gap-2">
-                                                <input
-                                                    id="sku"
-                                                    v-model="form.variants[0].sku"
-                                                    type="text"
-                                                    :disabled="hasVariants"
-                                                    class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                                />
-                                                <button
-                                                    v-if="categoryHasSkuFormat && !hasVariants"
-                                                    type="button"
-                                                    :disabled="generatingSku"
-                                                    class="shrink-0 rounded-md bg-indigo-50 px-2 py-1.5 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
-                                                    title="Generate SKU"
-                                                    @click="generateSku(0)"
-                                                >
-                                                    <SparklesIcon class="size-5" :class="{ 'animate-pulse': generatingSku }" />
-                                                </button>
-                                            </div>
-                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                SKU is managed per variant
-                                            </p>
-                                            <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                Leave blank to auto-generate
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <label for="barcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Barcode
-                                            </label>
-                                            <input
-                                                id="barcode"
-                                                v-model="form.variants[0].barcode"
-                                                type="text"
-                                                :disabled="hasVariants"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                            />
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -991,8 +1003,8 @@ function submit() {
                             <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <div class="space-y-6">
                                     <!-- Grouped Fields -->
-                                    <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">
-                                        <div class="flex gap-2">
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="flex gap-2">
                                             <div
                                                 v-for="field in fields"
                                                 :key="field.id"
