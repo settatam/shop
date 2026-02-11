@@ -40,7 +40,12 @@ class BuyItemsTable extends Table
             ],
             [
                 'key' => 'buy_price',
-                'label' => 'Buy Price',
+                'label' => 'We Paid',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'est_value',
+                'label' => 'Est. Value',
                 'sortable' => true,
             ],
             [
@@ -223,6 +228,12 @@ class BuyItemsTable extends Table
                 'data' => $item->buy_price ?? 0,
                 'currency' => 'USD',
                 'class' => 'font-semibold',
+            ],
+            'est_value' => [
+                'type' => 'currency',
+                'data' => $item->price ?? 0,
+                'currency' => 'USD',
+                'class' => 'text-sm',
             ],
             'transaction_number' => [
                 'type' => 'link',

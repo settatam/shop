@@ -194,6 +194,12 @@ const hasActiveFilters = computed(() => {
                 ref="dataTableRef"
                 :data="data"
                 :loading="loading"
+                :show-totals="true"
+                :total-columns="[
+                    { key: 'purchase_price', format: 'currency' },
+                    { key: 'est_value', format: 'currency' },
+                    { key: 'est_profit', format: 'currency' },
+                ]"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
