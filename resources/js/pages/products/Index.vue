@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { useWidget } from '@/composables/useWidget';
+import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import MassEditSheet from '@/components/products/MassEditSheet.vue';
 import GiaScannerModal from '@/components/products/GiaScannerModal.vue';
@@ -85,8 +85,25 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Products', href: '/products' },
 ];
 
-// Widget setup
-const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget('Products\\ProductsTable');
+// Get URL query params
+function getUrlParams(): WidgetFilter {
+    const params = new URLSearchParams(window.location.search);
+    const filter: WidgetFilter = {};
+    if (params.get('search')) filter.term = params.get('search') || undefined;
+    if (params.get('category_level2_id')) filter.category_level2_id = params.get('category_level2_id') || undefined;
+    if (params.get('category_level3_id')) filter.category_level3_id = params.get('category_level3_id') || undefined;
+    if (params.get('brand_id')) filter.brand_id = params.get('brand_id') || undefined;
+    if (params.get('status')) filter.status = params.get('status') || undefined;
+    if (params.get('stock')) filter.stock = params.get('stock') || undefined;
+    if (params.get('type')) filter.type = params.get('type') || undefined;
+    if (params.get('marketplace_id')) filter.marketplace_id = params.get('marketplace_id') || undefined;
+    return filter;
+}
+
+const initialParams = getUrlParams();
+
+// Widget setup with initial filter from URL
+const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget('Products\\ProductsTable', initialParams);
 
 // Show/hide advanced filters
 const showAdvancedFilters = ref(false);
@@ -612,6 +629,7 @@ function handleGiaScanSuccess(productId: number) {
                 ref="dataTableRef"
                 :data="data"
                 :loading="loading"
+                :initial-search-term="initialParams.term as string || ''"
                 bulk-action-url="/products/bulk-action"
                 enable-quick-view
                 quick-view-field="title"

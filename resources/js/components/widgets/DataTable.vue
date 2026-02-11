@@ -88,6 +88,7 @@ interface Props {
     totalColumns?: (string | ColumnTotal)[];
     perPageOptions?: number[];
     showPerPageSelector?: boolean;
+    initialSearchTerm?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -101,6 +102,7 @@ const props = withDefaults(defineProps<Props>(), {
     totalColumns: () => [],
     perPageOptions: () => [15, 25, 50, 100],
     showPerPageSelector: true,
+    initialSearchTerm: '',
 });
 
 const emit = defineEmits<{
@@ -128,7 +130,7 @@ function clearReviewingState() {
     reviewingItemId.value = null;
 }
 
-const searchTerm = ref('');
+const searchTerm = ref(props.initialSearchTerm);
 const selectedItems = ref<Set<number | string>>(new Set());
 const sortField = ref<string | null>(null);
 const sortDesc = ref(false);
