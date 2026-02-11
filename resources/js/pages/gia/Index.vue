@@ -147,8 +147,8 @@ function goToProduct() {
 }
 
 function formatGrade(report: any): string {
-    const color = report.results?.data?.color_grades?.color_grade_code || report.results?.color_grade || '-';
-    const clarity = report.results?.data?.clarity || report.results?.clarity_grade || '-';
+    const color = report.results?.data?.color_grades?.color_grade_code || report.results?.color_grade || '';
+    const clarity = report.results?.data?.clarity || report.results?.clarity_grade || '';
     const cut = report.results?.cut_grade || '';
     return `${color} / ${clarity} / ${cut}`;
 }
@@ -351,7 +351,7 @@ function formatGrade(report: any): string {
                         <div v-if="isStud && giaPreview1 && giaPreview2" class="mt-4 rounded-md bg-indigo-50 p-3 dark:bg-indigo-900/20">
                             <p class="text-sm font-medium text-indigo-900 dark:text-indigo-200">
                                 Total Carat Weight:
-                                {{ (parseFloat(giaPreview1.results?.carat_weight || 0) + parseFloat(giaPreview2.results?.carat_weight || 0)).toFixed(2) }}ct
+                                {{ (parseFloat(giaPreview1.results?.carat_weight || 0) + parseFloat(giaPreview2.results?.carat_weight || 0)).toFixed(2) }}
                             </p>
                         </div>
                     </div>
