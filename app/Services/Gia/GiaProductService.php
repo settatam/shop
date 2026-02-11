@@ -167,11 +167,11 @@ class GiaProductService
         // Generate title
         $title = $this->generateTitle($results, $secondReport ? ($secondReport['results'] ?? []) : null, $isEarrings);
 
-        // Generate unique handle
+        // Generate unique handle (include soft-deleted products to avoid constraint violation)
         $baseHandle = Str::slug($title ?: 'gia-diamond-'.$reportNumber);
         $handle = $baseHandle;
         $counter = 1;
-        while (Product::where('store_id', $store->id)->where('handle', $handle)->exists()) {
+        while (Product::withTrashed()->where('store_id', $store->id)->where('handle', $handle)->exists()) {
             $handle = $baseHandle.'-'.$counter;
             $counter++;
         }
@@ -307,35 +307,39 @@ class GiaProductService
     }
 
     /**
-     * Create certification record.
+     * Create or update certification record.
      */
     protected function createCertification(Store $store, array $report): Certification
     {
         $results = $report['results'] ?? [];
         $measurements = GiaApiService::parseMeasurements($results['measurements'] ?? null);
 
-        return Certification::create([
-            'store_id' => $store->id,
-            'lab' => 'GIA',
-            'certificate_number' => $report['report_number'],
-            'issue_date' => $report['report_date'] ?? null,
-            'report_type' => $report['report_type'] ?? null,
-            'shape' => $results['shape_and_cutting_style'] ?? null,
-            'carat_weight' => data_get($results, 'data.weight.weight'),
-            'color_grade' => data_get($results, 'data.color_grades.color_grade_code') ?? $results['color_grade'] ?? null,
-            'clarity_grade' => data_get($results, 'data.clarity') ?? $results['clarity_grade'] ?? null,
-            'cut_grade' => $results['cut_grade'] ?? null,
-            'polish' => $results['polish'] ?? null,
-            'symmetry' => $results['symmetry'] ?? null,
-            'fluorescence' => $results['fluorescence'] ?? null,
-            'measurements' => [
-                'length' => $measurements['min_diameter'],
-                'width' => $measurements['max_diameter'],
-                'depth' => $measurements['depth'],
+        return Certification::updateOrCreate(
+            [
+                'certificate_number' => $report['report_number'],
             ],
-            'verification_url' => "https://www.gia.edu/report-check?reportno={$report['report_number']}",
-            'raw_data' => $report,
-        ]);
+            [
+                'store_id' => $store->id,
+                'lab' => 'GIA',
+                'issue_date' => $report['report_date'] ?? null,
+                'report_type' => $report['report_type'] ?? null,
+                'shape' => $results['shape_and_cutting_style'] ?? null,
+                'carat_weight' => data_get($results, 'data.weight.weight'),
+                'color_grade' => data_get($results, 'data.color_grades.color_grade_code') ?? $results['color_grade'] ?? null,
+                'clarity_grade' => data_get($results, 'data.clarity') ?? $results['clarity_grade'] ?? null,
+                'cut_grade' => $results['cut_grade'] ?? null,
+                'polish' => $results['polish'] ?? null,
+                'symmetry' => $results['symmetry'] ?? null,
+                'fluorescence' => $results['fluorescence'] ?? null,
+                'measurements' => [
+                    'length' => $measurements['min_diameter'],
+                    'width' => $measurements['max_diameter'],
+                    'depth' => $measurements['depth'],
+                ],
+                'verification_url' => "https://www.gia.edu/report-check?reportno={$report['report_number']}",
+                'raw_data' => $report,
+            ]
+        );
     }
 
     /**
@@ -527,19 +531,49 @@ class GiaProductService
     ): void {
         $fields = $template->fields;
 
-        // Second GIA report number
-        // Use lowercase/kebab-case values to match select field options
+        // Extract values from GIA response
+        $colorRaw = data_get($results, 'data.color_grades.color_grade_code') ?? $results['color_grade'] ?? null;
+        $clarityRaw = data_get($results, 'data.clarity') ?? $results['clarity_grade'] ?? null;
+        $weight = data_get($results, 'data.weight.weight');
+        $caratWeight = $results['carat_weight'] ?? ($weight ? $weight.' carat' : null);
+        $shape = $results['shape_and_cutting_style'] ?? null;
+        $cutGradeRaw = $results['cut_grade'] ?? null;
+        $polishRaw = $results['polish'] ?? null;
+        $symmetryRaw = $results['symmetry'] ?? null;
+
+        // Convert values to lowercase/kebab-case to match select field options
+        $color = $colorRaw ? strtolower($colorRaw) : null;
+        $clarity = $clarityRaw ? strtolower($clarityRaw) : null;
+        $cutGrade = $cutGradeRaw ? Str::slug($cutGradeRaw) : null;
+        $polish = $polishRaw ? Str::slug($polishRaw) : null;
+        $symmetry = $symmetryRaw ? Str::slug($symmetryRaw) : null;
+
+        // Second GIA report number and hardcoded fields
         $this->setAttributeByName($product, $fields, 'second_gia_report_number', $reportNumber);
         $this->setAttributeByName($product, $fields, 'second_stone_cert_type', 'gia');
         $this->setAttributeByName($product, $fields, 'second_stone_type', 'natural-diamond');
 
-        // Map second stone fields
-        $mappedValues = GiaApiService::extractMappedValues($results, GiaApiService::getEarringsSecondStoneMapping());
-
-        foreach ($mappedValues as $fieldName => $value) {
-            if ($value !== null) {
-                $this->setAttributeByName($product, $fields, $fieldName, (string) $value);
-            }
+        // Second stone fields with proper value transformation
+        if ($shape) {
+            $this->setAttributeByName($product, $fields, 'second_stone_shape', $shape);
+        }
+        if ($caratWeight) {
+            $this->setAttributeByName($product, $fields, 'second_stone_weight', $caratWeight);
+        }
+        if ($color) {
+            $this->setAttributeByName($product, $fields, 'second_stone_color', $color);
+        }
+        if ($clarity) {
+            $this->setAttributeByName($product, $fields, 'second_stone_clarity', $clarity);
+        }
+        if ($cutGrade) {
+            $this->setAttributeByName($product, $fields, 'second_stone_cut', $cutGrade);
+        }
+        if ($polish) {
+            $this->setAttributeByName($product, $fields, 'second_stone_polish', $polish);
+        }
+        if ($symmetry) {
+            $this->setAttributeByName($product, $fields, 'second_stone_symmetry', $symmetry);
         }
 
         // Handle second stone measurements
@@ -567,9 +601,14 @@ class GiaProductService
 
         if ($totalWeight > 0) {
             $fields = $template->fields;
-            $this->setAttributeByName($product, $fields, 'total_carat_weight', (string) $totalWeight);
 
-            // Get weight range for total
+            // Set actual total weight (text fields)
+            $totalWeightFormatted = number_format($totalWeight, 2);
+            $this->setAttributeByName($product, $fields, 'total_carat_weight', $totalWeightFormatted);
+            $this->setAttributeByName($product, $fields, 'total_stone_wt', $totalWeightFormatted.' carat');
+            $this->setAttributeByName($product, $fields, 'diamond_weight_total', $totalWeightFormatted);
+
+            // Get weight range for total (select field)
             $weightRange = GiaApiService::getWeightRangeLabel($totalWeight);
             if ($weightRange) {
                 $this->setAttributeByName($product, $fields, 'total_stone_weight', $weightRange);

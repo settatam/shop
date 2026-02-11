@@ -54,6 +54,16 @@ class SyncLegacyProductMetas extends Command
      */
     protected array $tagMap = [];
 
+    /**
+     * Maps template_id => [field_name => field_type]
+     */
+    protected array $templateFieldTypeMap = [];
+
+    /**
+     * Maps template_id => [field_name => select_options]
+     */
+    protected array $templateFieldOptionsMap = [];
+
     public function handle(): int
     {
         $legacyStoreId = (int) $this->option('store-id');
@@ -224,6 +234,8 @@ class SyncLegacyProductMetas extends Command
             $newFieldsByName = $newFields->keyBy(fn ($f) => strtolower($f->name));
 
             $this->templateFieldNameMap[$newTemplateId] = [];
+            $this->templateFieldTypeMap[$newTemplateId] = [];
+            $this->templateFieldOptionsMap[$newTemplateId] = [];
 
             foreach ($legacyFields as $legacyField) {
                 $legacyName = strtolower($legacyField->name);
@@ -235,6 +247,16 @@ class SyncLegacyProductMetas extends Command
 
                 if ($newField) {
                     $this->templateFieldNameMap[$newTemplateId][$legacyName] = $newField->id;
+                    $this->templateFieldTypeMap[$newTemplateId][$legacyName] = $newField->type;
+
+                    // Store select options for value transformation
+                    if ($newField->type === 'select' && $newField->options) {
+                        $options = is_string($newField->options)
+                            ? json_decode($newField->options, true)
+                            : $newField->options;
+                        $this->templateFieldOptionsMap[$newTemplateId][$legacyName] = $options ?? [];
+                    }
+
                     $fieldCount++;
                 }
             }
@@ -302,6 +324,10 @@ class SyncLegacyProductMetas extends Command
             return;
         }
 
+        // Get field type and options maps for this template
+        $fieldTypeMap = $this->templateFieldTypeMap[$product->template_id] ?? [];
+        $fieldOptionsMap = $this->templateFieldOptionsMap[$product->template_id] ?? [];
+
         foreach ($legacyMetas as $meta) {
             // Skip empty values
             if ($meta->value === null || $meta->value === '') {
@@ -309,14 +335,25 @@ class SyncLegacyProductMetas extends Command
             }
 
             $fieldName = strtolower($meta->field);
-            $newFieldId = $fieldMap[$fieldName]
-                ?? $fieldMap[str_replace('-', '_', $fieldName)]
-                ?? $fieldMap[Str::snake($fieldName)]
-                ?? null;
+            $matchedFieldName = $fieldName;
 
-            if (! $newFieldId) {
+            // Try different name formats
+            if (isset($fieldMap[$fieldName])) {
+                $matchedFieldName = $fieldName;
+            } elseif (isset($fieldMap[str_replace('-', '_', $fieldName)])) {
+                $matchedFieldName = str_replace('-', '_', $fieldName);
+            } elseif (isset($fieldMap[Str::snake($fieldName)])) {
+                $matchedFieldName = Str::snake($fieldName);
+            } else {
                 continue;
             }
+
+            $newFieldId = $fieldMap[$matchedFieldName];
+            $fieldType = $fieldTypeMap[$matchedFieldName] ?? 'text';
+            $fieldOptions = $fieldOptionsMap[$matchedFieldName] ?? [];
+
+            // Transform value for select fields
+            $value = $this->transformMetaValue($meta->value, $fieldType, $fieldOptions, $matchedFieldName);
 
             // Check if this attribute value already exists
             $existingValue = ProductAttributeValue::where('product_id', $product->id)
@@ -324,9 +361,9 @@ class SyncLegacyProductMetas extends Command
                 ->first();
 
             if ($existingValue) {
-                if ($force && $existingValue->value !== $meta->value) {
+                if ($force && $existingValue->value !== $value) {
                     if (! $isDryRun) {
-                        $existingValue->update(['value' => $meta->value]);
+                        $existingValue->update(['value' => $value]);
                     }
                     $this->updatedCount++;
                 } else {
@@ -340,7 +377,7 @@ class SyncLegacyProductMetas extends Command
                 ProductAttributeValue::create([
                     'product_id' => $product->id,
                     'product_template_field_id' => $newFieldId,
-                    'value' => $meta->value,
+                    'value' => $value,
                 ]);
             }
 
@@ -497,6 +534,254 @@ class SyncLegacyProductMetas extends Command
             if ($legacyProduct) {
                 return $legacyProduct->id;
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Transform a legacy meta value to match the new field format.
+     * Handles select fields by matching against available options.
+     */
+    protected function transformMetaValue(string $value, string $fieldType, array $fieldOptions, string $fieldName): string
+    {
+        // Only transform select field values
+        if ($fieldType !== 'select' || empty($fieldOptions)) {
+            return $value;
+        }
+
+        // Build a map of option values (existing values in the select)
+        $optionValues = collect($fieldOptions)->pluck('value')->filter()->toArray();
+
+        // If value already matches an option exactly, use it
+        if (in_array($value, $optionValues, true)) {
+            return $value;
+        }
+
+        // Try lowercase match
+        $lowerValue = strtolower($value);
+        foreach ($optionValues as $optionValue) {
+            if (strtolower($optionValue) === $lowerValue) {
+                return $optionValue;
+            }
+        }
+
+        // Try slugified match (handles "Natural Diamond" -> "natural-diamond")
+        $slugValue = Str::slug($value);
+        foreach ($optionValues as $optionValue) {
+            if ($optionValue === $slugValue) {
+                return $optionValue;
+            }
+        }
+
+        // Try matching by label
+        foreach ($fieldOptions as $option) {
+            $label = $option['label'] ?? '';
+            if (strtolower($label) === $lowerValue || Str::slug($label) === $slugValue) {
+                return $option['value'] ?? $value;
+            }
+        }
+
+        // Special handling for known field patterns
+        $transformed = $this->applyKnownTransformations($value, $fieldName, $optionValues);
+        if ($transformed !== null) {
+            return $transformed;
+        }
+
+        // Return original value if no match found
+        return $value;
+    }
+
+    /**
+     * Apply known transformations for specific field types.
+     */
+    protected function applyKnownTransformations(string $value, string $fieldName, array $optionValues): ?string
+    {
+        // Cert type fields (GIA, IGI, etc.)
+        if (Str::contains($fieldName, 'cert_type')) {
+            $lowerValue = strtolower($value);
+            if (in_array($lowerValue, $optionValues, true)) {
+                return $lowerValue;
+            }
+        }
+
+        // Stone type fields (Natural Diamond, Lab Grown, etc.)
+        if (Str::contains($fieldName, 'stone_type')) {
+            $slugValue = Str::slug($value);
+            if (in_array($slugValue, $optionValues, true)) {
+                return $slugValue;
+            }
+        }
+
+        // Diamond color fields (D, E, F, etc.)
+        if (Str::contains($fieldName, ['diamond_color', 'color']) && ! Str::contains($fieldName, 'range')) {
+            $lowerValue = strtolower($value);
+            if (in_array($lowerValue, $optionValues, true)) {
+                return $lowerValue;
+            }
+        }
+
+        // Diamond clarity fields (VVS1, VS2, SI1, etc.)
+        if (Str::contains($fieldName, ['diamond_clarity', 'clarity']) && ! Str::contains($fieldName, 'range')) {
+            $lowerValue = strtolower($value);
+            if (in_array($lowerValue, $optionValues, true)) {
+                return $lowerValue;
+            }
+        }
+
+        // Color range fields (D-E-F, G-H-I-J, etc.)
+        if (Str::contains($fieldName, 'color_range')) {
+            $transformed = $this->transformColorRange($value, $optionValues);
+            if ($transformed !== null) {
+                return $transformed;
+            }
+        }
+
+        // Clarity range fields (FL-IF, VVS1-VVS2, etc.)
+        if (Str::contains($fieldName, 'clarity_range')) {
+            $transformed = $this->transformClarityRange($value, $optionValues);
+            if ($transformed !== null) {
+                return $transformed;
+            }
+        }
+
+        // Weight range fields (51-75, 76-99, etc.)
+        if (Str::contains($fieldName, ['weight', 'stone_weight']) && Str::contains($fieldName, 'range') || $fieldName === 'main_stone_weight') {
+            $transformed = $this->transformWeightRange($value, $optionValues);
+            if ($transformed !== null) {
+                return $transformed;
+            }
+        }
+
+        // Cut, polish, symmetry fields (Excellent, Very Good, etc.)
+        if (Str::contains($fieldName, ['cut', 'polish', 'symmetry'])) {
+            $slugValue = Str::slug($value);
+            if (in_array($slugValue, $optionValues, true)) {
+                return $slugValue;
+            }
+        }
+
+        // Includes field (Certificate, Box, etc.)
+        if ($fieldName === 'includes') {
+            $slugValue = Str::slug($value);
+            if (in_array($slugValue, $optionValues, true)) {
+                return $slugValue;
+            }
+            $lowerValue = strtolower($value);
+            if (in_array($lowerValue, $optionValues, true)) {
+                return $lowerValue;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Transform color value to color range option.
+     */
+    protected function transformColorRange(string $value, array $optionValues): ?string
+    {
+        // Map individual colors to their range
+        $colorRanges = [
+            'd-e-f' => ['D', 'E', 'F', 'd', 'e', 'f', 'D-E', 'E-F', 'D-E-F'],
+            'g-h-i-j' => ['G', 'H', 'I', 'J', 'g', 'h', 'i', 'j', 'G-H', 'H-I', 'I-J', 'G-H-I-J'],
+            'k-l-m' => ['K', 'L', 'M', 'k', 'l', 'm', 'K-L', 'L-M', 'K-L-M'],
+            'n-to-z' => ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'ST',
+                'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'N-Z', 'N to Z'],
+            'fancy' => ['Fancy', 'fancy', 'FANCY'],
+        ];
+
+        foreach ($colorRanges as $range => $colors) {
+            if (in_array($value, $colors, true) && in_array($range, $optionValues, true)) {
+                return $range;
+            }
+        }
+
+        // Try lowercase/slug matching
+        $slugValue = Str::slug($value);
+        if (in_array($slugValue, $optionValues, true)) {
+            return $slugValue;
+        }
+
+        return null;
+    }
+
+    /**
+     * Transform clarity value to clarity range option.
+     */
+    protected function transformClarityRange(string $value, array $optionValues): ?string
+    {
+        // Map individual clarities to their range
+        $clarityRanges = [
+            'fl-if' => ['FL', 'IF', 'fl', 'if', 'FL-IF', 'Flawless', 'Internally Flawless'],
+            'vvs1-vvs2' => ['VVS1', 'VVS2', 'vvs1', 'vvs2', 'VVS1-VVS2', 'VVS'],
+            'vs1-vs2' => ['VS1', 'VS2', 'vs1', 'vs2', 'VS1-VS2', 'VS'],
+            'si1-si2' => ['SI1', 'SI2', 'si1', 'si2', 'SI1-SI2', 'SI'],
+            'i1-i3' => ['I1', 'I2', 'I3', 'i1', 'i2', 'i3', 'I1-I3', 'I'],
+        ];
+
+        foreach ($clarityRanges as $range => $clarities) {
+            if (in_array($value, $clarities, true) && in_array($range, $optionValues, true)) {
+                return $range;
+            }
+        }
+
+        // Try lowercase/slug matching
+        $slugValue = Str::slug($value);
+        if (in_array($slugValue, $optionValues, true)) {
+            return $slugValue;
+        }
+
+        return null;
+    }
+
+    /**
+     * Transform weight value to weight range option.
+     */
+    protected function transformWeightRange(string $value, array $optionValues): ?string
+    {
+        // Extract numeric weight from value like "0.63 carat" or "0.5 - 0.69"
+        if (preg_match('/^([\d.]+)/', $value, $matches)) {
+            $weight = (float) $matches[1];
+
+            // Weight range mappings matching the select options
+            $weightRanges = [
+                '01-17' => [0.01, 0.17],
+                '18-22' => [0.18, 0.22],
+                '23-29' => [0.23, 0.29],
+                '30-39' => [0.30, 0.39],
+                '40-49' => [0.40, 0.49],
+                '50-69' => [0.50, 0.69],
+                '51-75' => [0.51, 0.75],
+                '70-89' => [0.70, 0.89],
+                '76-99' => [0.76, 0.99],
+                '90-99' => [0.90, 0.99],
+                '100-149' => [1.00, 1.49],
+                '150-199' => [1.50, 1.99],
+                '200-299' => [2.00, 2.99],
+                '300-399' => [3.00, 3.99],
+                '400-499' => [4.00, 4.99],
+                '500-599' => [5.00, 5.99],
+                '600-999' => [6.00, 9.99],
+                '1000+' => [10.00, 999.99],
+            ];
+
+            foreach ($weightRanges as $range => [$min, $max]) {
+                if ($weight >= $min && $weight <= $max && in_array($range, $optionValues, true)) {
+                    return $range;
+                }
+            }
+        }
+
+        // Direct match check
+        if (in_array($value, $optionValues, true)) {
+            return $value;
+        }
+
+        // Try slug matching for values like "0.5 - 0.69" -> "05-069"
+        $slugValue = Str::slug($value);
+        if (in_array($slugValue, $optionValues, true)) {
+            return $slugValue;
         }
 
         return null;

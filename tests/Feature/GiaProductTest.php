@@ -154,10 +154,10 @@ class GiaProductTest extends TestCase
 
     public function test_gia_api_service_weight_ranges(): void
     {
-        // Test weight range labels
-        $this->assertEquals('0.3 - 0.39', GiaApiService::getWeightRangeLabel(0.35));
-        $this->assertEquals('1 - 1.49', GiaApiService::getWeightRangeLabel(1.25));
-        $this->assertEquals('10.0 +', GiaApiService::getWeightRangeLabel(15.0));
+        // Test weight range labels - values match select field option values
+        $this->assertEquals('26-50', GiaApiService::getWeightRangeLabel(0.35));
+        $this->assertEquals('100-125', GiaApiService::getWeightRangeLabel(1.25));
+        $this->assertEquals('500-plus', GiaApiService::getWeightRangeLabel(15.0));
     }
 
     public function test_gia_data_endpoint_requires_authentication(): void
