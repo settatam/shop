@@ -78,7 +78,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:products.view')->group(function () {
         Route::get('products/lookup-barcode', [ProductController::class, 'lookupBarcode'])->name('products.lookup-barcode');
-        Route::get('products/advanced-search', [\App\Http\Controllers\Web\AdvancedProductSearchController::class, 'search'])->name('products.advanced-search');
+        Route::get('products/advanced-search', [\App\Http\Controllers\Web\AdvancedProductSearchController::class, 'index'])->name('products.advanced-search.index');
+        Route::get('products/advanced-search/results', [\App\Http\Controllers\Web\AdvancedProductSearchController::class, 'searchPaginated'])->name('products.advanced-search.results');
+        Route::get('products/advanced-search/modal', [\App\Http\Controllers\Web\AdvancedProductSearchController::class, 'search'])->name('products.advanced-search');
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
         Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
         Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');

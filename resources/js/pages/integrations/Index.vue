@@ -163,7 +163,7 @@ function deleteTwilio() {
 // GIA form
 const giaForm = useForm({
     api_key: '',
-    api_url: 'https://api.gia.edu/graphql',
+    api_url: 'https://api.reportresults.gia.edu',
 });
 
 const showGiaForm = ref(false);
@@ -626,9 +626,9 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                     v-model="giaForm.api_url"
                                     type="text"
                                     class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                    placeholder="https://api.gia.edu/graphql"
+                                    placeholder="https://api.reportresults.gia.edu"
                                 />
-                                <p class="mt-1 text-xs text-muted-foreground">Default: https://api.gia.edu/graphql</p>
+                                <p class="mt-1 text-xs text-muted-foreground">Default: https://api.reportresults.gia.edu</p>
                             </div>
                             <div class="flex gap-2">
                                 <Button type="submit" :disabled="giaForm.processing">

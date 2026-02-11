@@ -142,7 +142,7 @@ class IntegrationsController extends Controller
                 'environment' => StoreIntegration::ENV_PRODUCTION,
                 'credentials' => [
                     'api_key' => $validated['api_key'],
-                    'api_url' => $validated['api_url'] ?? 'https://api.gia.edu/graphql',
+                    'api_url' => $validated['api_url'] ?? 'https://api.reportresults.gia.edu',
                 ],
                 'status' => StoreIntegration::STATUS_ACTIVE,
             ]

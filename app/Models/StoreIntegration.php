@@ -208,7 +208,7 @@ class StoreIntegration extends Model
      */
     public function getGiaApiUrl(): string
     {
-        $default = 'https://api.gia.edu/graphql';
+        $default = 'https://api.reportresults.gia.edu';
 
         return $this->credentials['api_url'] ?? $default;
     }

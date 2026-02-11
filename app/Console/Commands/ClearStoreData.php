@@ -14,10 +14,12 @@ class ClearStoreData extends Command
                             {--repairs : Clear repairs and related data}
                             {--memos : Clear memos and related data}
                             {--buckets : Clear buckets and related data}
+                            {--products : Clear products and related data}
+                            {--categories : Clear categories}
                             {--all : Clear all data types}
                             {--force : Skip confirmation prompt}';
 
-    protected $description = 'Clear transactions, orders, repairs, memos, and/or buckets for a specific store. Use before re-running legacy migration commands.';
+    protected $description = 'Clear transactions, orders, repairs, memos, buckets, products, and/or categories for a specific store. Use before re-running legacy migration commands.';
 
     public function handle(): int
     {
@@ -37,9 +39,11 @@ class ClearStoreData extends Command
         $clearRepairs = $clearAll || $this->option('repairs');
         $clearMemos = $clearAll || $this->option('memos');
         $clearBuckets = $clearAll || $this->option('buckets');
+        $clearProducts = $clearAll || $this->option('products');
+        $clearCategories = $clearAll || $this->option('categories');
 
-        if (! $clearTransactions && ! $clearOrders && ! $clearRepairs && ! $clearMemos && ! $clearBuckets) {
-            $this->error('Please specify what to clear: --transactions, --orders, --repairs, --memos, --buckets, or --all');
+        if (! $clearTransactions && ! $clearOrders && ! $clearRepairs && ! $clearMemos && ! $clearBuckets && ! $clearProducts && ! $clearCategories) {
+            $this->error('Please specify what to clear: --transactions, --orders, --repairs, --memos, --buckets, --products, --categories, or --all');
 
             return self::FAILURE;
         }
@@ -74,6 +78,16 @@ class ClearStoreData extends Command
             $this->line("  - Buckets: {$count}");
         }
 
+        if ($clearProducts) {
+            $count = DB::table('products')->where('store_id', $storeId)->count();
+            $this->line("  - Products: {$count}");
+        }
+
+        if ($clearCategories) {
+            $count = DB::table('categories')->where('store_id', $storeId)->count();
+            $this->line("  - Categories: {$count}");
+        }
+
         $this->newLine();
 
         if (! $this->option('force') && ! $this->confirm('Are you sure you want to proceed? This cannot be undone.')) {
@@ -104,6 +118,14 @@ class ClearStoreData extends Command
 
             if ($clearBuckets) {
                 $this->clearBuckets($storeId);
+            }
+
+            if ($clearProducts) {
+                $this->clearProducts($storeId);
+            }
+
+            if ($clearCategories) {
+                $this->clearCategories($storeId);
             }
 
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
@@ -357,5 +379,182 @@ class ClearStoreData extends Command
         // Delete buckets
         $count = DB::table('buckets')->where('store_id', $storeId)->delete();
         $this->line("  Deleted {$count} buckets");
+    }
+
+    protected function clearProducts(int $storeId): void
+    {
+        $this->info('Clearing products...');
+
+        $productIds = DB::table('products')
+            ->where('store_id', $storeId)
+            ->pluck('id');
+
+        if ($productIds->isEmpty()) {
+            $this->line('  No products to clear.');
+
+            return;
+        }
+
+        $variantIds = DB::table('product_variants')
+            ->whereIn('product_id', $productIds)
+            ->pluck('id');
+
+        // Clear product variant references from order items
+        $count = DB::table('order_items')
+            ->whereIn('product_variant_id', $variantIds)
+            ->update(['product_variant_id' => null]);
+        $this->line("  Nullified {$count} order item variant references");
+
+        // Clear product variant references from memo items
+        $count = DB::table('memo_items')
+            ->whereIn('product_variant_id', $variantIds)
+            ->update(['product_variant_id' => null]);
+        $this->line("  Nullified {$count} memo item variant references");
+
+        // Clear product references from transaction items
+        $count = DB::table('transaction_items')
+            ->whereIn('product_id', $productIds)
+            ->update(['product_id' => null]);
+        $this->line("  Nullified {$count} transaction item product references");
+
+        // Delete platform listings
+        $count = DB::table('platform_listings')
+            ->whereIn('product_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$count} platform listings");
+
+        // Delete inventory adjustments (must be before inventory)
+        $inventoryIds = DB::table('inventory')
+            ->whereIn('product_variant_id', $variantIds)
+            ->pluck('id');
+        $count = DB::table('inventory_adjustments')
+            ->whereIn('inventory_id', $inventoryIds)
+            ->delete();
+        $this->line("  Deleted {$count} inventory adjustments");
+
+        // Delete inventory
+        $count = DB::table('inventory')
+            ->whereIn('product_variant_id', $variantIds)
+            ->delete();
+        $this->line("  Deleted {$count} inventory records");
+
+        // Delete inventory transfer items
+        $count = DB::table('inventory_transfer_items')
+            ->whereIn('product_variant_id', $variantIds)
+            ->delete();
+        $this->line("  Deleted {$count} inventory transfer items");
+
+        // Delete product vendor relationships
+        $count = DB::table('product_vendor')
+            ->whereIn('product_variant_id', $variantIds)
+            ->delete();
+        $this->line("  Deleted {$count} product vendor relationships");
+
+        // Delete product images
+        $count = DB::table('product_images')
+            ->whereIn('product_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$count} product images");
+
+        // Delete product videos
+        $count = DB::table('product_videos')
+            ->whereIn('product_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$count} product videos");
+
+        // Delete product attribute values
+        $count = DB::table('product_attribute_values')
+            ->whereIn('product_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$count} product attribute values");
+
+        // Delete product variants
+        $count = DB::table('product_variants')
+            ->whereIn('product_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$count} product variants");
+
+        // Delete notes for products
+        $noteCount = DB::table('notes')
+            ->where('notable_type', 'App\\Models\\Product')
+            ->whereIn('notable_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$noteCount} product notes");
+
+        // Delete activity log for products
+        $count = DB::table('activity_log')
+            ->where('subject_type', 'App\\Models\\Product')
+            ->whereIn('subject_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$count} product activity logs");
+
+        // Delete products
+        $count = DB::table('products')->where('store_id', $storeId)->delete();
+        $this->line("  Deleted {$count} products");
+
+        // Delete certifications
+        $count = DB::table('certifications')->where('store_id', $storeId)->delete();
+        $this->line("  Deleted {$count} certifications");
+
+        // Delete product templates
+        $templateIds = DB::table('product_templates')
+            ->where('store_id', $storeId)
+            ->pluck('id');
+
+        if ($templateIds->isNotEmpty()) {
+            // Delete template field options
+            $fieldIds = DB::table('product_template_fields')
+                ->whereIn('product_template_id', $templateIds)
+                ->pluck('id');
+            $count = DB::table('product_template_field_options')
+                ->whereIn('product_template_field_id', $fieldIds)
+                ->delete();
+            $this->line("  Deleted {$count} template field options");
+
+            // Delete template fields
+            $count = DB::table('product_template_fields')
+                ->whereIn('product_template_id', $templateIds)
+                ->delete();
+            $this->line("  Deleted {$count} template fields");
+
+            // Delete templates
+            $count = DB::table('product_templates')->where('store_id', $storeId)->delete();
+            $this->line("  Deleted {$count} product templates");
+        }
+    }
+
+    protected function clearCategories(int $storeId): void
+    {
+        $this->info('Clearing categories...');
+
+        $categoryIds = DB::table('categories')
+            ->where('store_id', $storeId)
+            ->pluck('id');
+
+        if ($categoryIds->isEmpty()) {
+            $this->line('  No categories to clear.');
+
+            return;
+        }
+
+        // Clear category references from products
+        $count = DB::table('products')
+            ->whereIn('category_id', $categoryIds)
+            ->update(['category_id' => null]);
+        $this->line("  Nullified {$count} product category references");
+
+        // Clear parent_id references (self-referential)
+        DB::table('categories')
+            ->where('store_id', $storeId)
+            ->update(['parent_id' => null]);
+
+        // Clear default_bucket_id references
+        DB::table('categories')
+            ->where('store_id', $storeId)
+            ->update(['default_bucket_id' => null]);
+
+        // Delete categories
+        $count = DB::table('categories')->where('store_id', $storeId)->delete();
+        $this->line("  Deleted {$count} categories");
     }
 }

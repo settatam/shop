@@ -88,7 +88,7 @@ watch(() => props.open, (isOpen) => {
 async function performSearch(query: string) {
     loading.value = true;
     try {
-        const response = await axios.get('/products/advanced-search', {
+        const response = await axios.get('/products/advanced-search/modal', {
             params: { query, limit: 15 },
         });
         results.value = response.data;
@@ -346,6 +346,20 @@ function closeModal() {
                         <p class="text-sm">No {{ activeTab }} items found</p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Link to Full Page -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <Link
+                    href="/products/advanced-search"
+                    class="flex items-center justify-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                    @click="closeModal"
+                >
+                    Open full advanced search page
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                </Link>
             </div>
         </DialogContent>
     </Dialog>
