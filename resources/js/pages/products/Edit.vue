@@ -736,8 +736,8 @@ function deleteProduct() {
                             <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
                                 <div class="space-y-6">
                                     <!-- Grouped Fields (Field Sets) -->
-                                    <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">
-                                        <div class="flex gap-2">
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="flex gap-2">
                                             <div
                                                 v-for="field in fields"
                                                 :key="field.id"
