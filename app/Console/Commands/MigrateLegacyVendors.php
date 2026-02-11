@@ -185,9 +185,10 @@ class MigrateLegacyVendors extends Command
             // Generate a code from the name
             $code = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 6));
 
-            // Use DB::table()->insertGetId() to preserve original timestamps
+            // Use DB::table()->insert() to preserve original timestamps and ID
             // (Model::create() would override timestamps via Eloquent events)
-            $newVendorId = DB::table('vendors')->insertGetId([
+            DB::table('vendors')->insert([
+                'id' => $legacyCustomer->id, // Preserve original ID
                 'store_id' => $newStore->id,
                 'name' => $name,
                 'code' => $code ?: null,
@@ -206,7 +207,7 @@ class MigrateLegacyVendors extends Command
                 'updated_at' => $legacyCustomer->updated_at ?? now(),
             ]);
 
-            $this->vendorMap[$legacyCustomer->id] = $newVendorId;
+            $this->vendorMap[$legacyCustomer->id] = $legacyCustomer->id;
             $count++;
         }
 

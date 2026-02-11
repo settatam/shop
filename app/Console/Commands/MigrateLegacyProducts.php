@@ -542,8 +542,9 @@ class MigrateLegacyProducts extends Command
             $titleSlug = Str::slug($legacyProduct->title ?? $legacyProduct->product_name ?? 'product');
             $handle = $titleSlug ? "{$titleSlug}-{$legacyProduct->id}" : "product-{$legacyProduct->id}";
 
-            // Use DB::table to preserve timestamps from legacy data
-            $newProductId = DB::table('products')->insertGetId([
+            // Use DB::table to preserve timestamps and original ID from legacy data
+            DB::table('products')->insert([
+                'id' => $legacyProduct->id,
                 'store_id' => $newStore->id,
                 'title' => $legacyProduct->title ?? $legacyProduct->product_name ?? "Product #{$legacyProduct->id}",
                 'description' => $legacyProduct->description,
@@ -578,9 +579,9 @@ class MigrateLegacyProducts extends Command
                 'deleted_at' => ($legacyProduct->deleted_at && ! $skipDeleted) ? $legacyProduct->deleted_at : null,
             ]);
 
-            $newProduct = Product::withTrashed()->find($newProductId);
+            $newProduct = Product::withTrashed()->find($legacyProduct->id);
 
-            $this->productMap[$legacyProduct->id] = $newProduct->id;
+            $this->productMap[$legacyProduct->id] = $legacyProduct->id;
             $productCount++;
 
             // Migrate variants for this product
@@ -621,9 +622,10 @@ class MigrateLegacyProducts extends Command
                     // Use variant cost, fall back to product cost
                     $cost = $legacyVariant->cost_per_item ?? $legacyProduct->cost_per_item;
 
-                    // Use DB::table to preserve timestamps
+                    // Use DB::table to preserve timestamps and original ID
                     // wholesale_price is on the product level in legacy, copy to variant
-                    $newVariantId = DB::table('product_variants')->insertGetId([
+                    DB::table('product_variants')->insert([
+                        'id' => $legacyVariant->id,
                         'product_id' => $newProduct->id,
                         'sku' => $legacyVariant->sku ?? "SKU-{$newProduct->id}-{$legacyVariant->id}",
                         'price' => $legacyVariant->price ?? 0,
@@ -638,12 +640,12 @@ class MigrateLegacyProducts extends Command
                         'updated_at' => $legacyVariant->updated_at,
                     ]);
 
-                    $this->variantMap[$legacyVariant->id] = $newVariantId;
+                    $this->variantMap[$legacyVariant->id] = $legacyVariant->id;
                     $variantCount++;
 
                     // Create inventory record if quantity > 0
                     if ($quantity > 0 && $this->defaultWarehouse) {
-                        $this->createInventoryRecord($newStore->id, $newVariantId, $quantity, $cost, $legacyVariant->created_at);
+                        $this->createInventoryRecord($newStore->id, $legacyVariant->id, $quantity, $cost, $legacyVariant->created_at);
                     }
                 }
             }

@@ -237,20 +237,33 @@ class MigrateLegacyData extends Command
             if ($legacyOwner) {
                 $owner = User::where('email', $legacyOwner->email)->first();
                 if (! $owner) {
-                    $owner = User::create([
-                        'name' => trim(($legacyOwner->first_name ?? '').' '.($legacyOwner->last_name ?? '')) ?: 'Store Owner',
-                        'email' => $legacyOwner->email,
-                        'password' => $legacyOwner->password ?? Hash::make('changeme123'),
-                        'email_verified_at' => now(),
-                    ]);
-                    $this->line("  Created owner user: {$owner->email}");
-                    $this->userMap[$legacyStore->user_id] = $owner->id;
+                    // Check if a user with this ID already exists
+                    $existingById = User::find($legacyOwner->id);
+                    if ($existingById) {
+                        $owner = $existingById;
+                        $this->line("  ID conflict for owner - using existing user: {$owner->email} (ID: {$owner->id})");
+                        $this->userMap[$legacyStore->user_id] = $owner->id;
+                    } else {
+                        // Use DB::table to preserve original user ID
+                        DB::table('users')->insert([
+                            'id' => $legacyOwner->id, // Preserve original ID
+                            'name' => trim(($legacyOwner->first_name ?? '').' '.($legacyOwner->last_name ?? '')) ?: 'Store Owner',
+                            'email' => $legacyOwner->email,
+                            'password' => $legacyOwner->password ?? Hash::make('changeme123'),
+                            'email_verified_at' => now(),
+                            'created_at' => $legacyOwner->created_at ?? now(),
+                            'updated_at' => $legacyOwner->updated_at ?? now(),
+                        ]);
+                        $owner = User::find($legacyOwner->id);
+                        $this->line("  Created owner user: {$owner->email} (ID: {$owner->id})");
+                        $this->userMap[$legacyStore->user_id] = $legacyOwner->id;
+                    }
                 } else {
-                    $this->line("  Using existing owner user: {$owner->email}");
+                    $this->line("  Using existing owner user: {$owner->email} (ID: {$owner->id})");
                     $this->userMap[$legacyStore->user_id] = $owner->id;
                 }
             } else {
-                // Create a placeholder owner
+                // Create a placeholder owner - no legacy ID to preserve
                 $placeholderEmail = $legacyStore->account_email ?? "owner-{$legacyStore->id}@migrated.local";
                 $owner = User::where('email', $placeholderEmail)->first();
                 if (! $owner) {
@@ -311,12 +324,37 @@ class MigrateLegacyData extends Command
             'is_system' => true,
         ]);
 
-        StoreUser::create([
-            'user_id' => $owner->id,
-            'store_id' => $store->id,
-            'role_id' => $ownerRole->id,
-            'is_owner' => true,
-        ]);
+        // Get legacy store_user for owner to preserve ID
+        $legacyOwnerStoreUser = DB::connection('legacy')
+            ->table('store_users')
+            ->where('store_id', $legacyStore->id)
+            ->where('user_id', $legacyStore->user_id)
+            ->first();
+
+        if ($legacyOwnerStoreUser) {
+            // Check if store_user with this ID already exists
+            $existingStoreUserById = StoreUser::find($legacyOwnerStoreUser->id);
+            if (! $existingStoreUserById) {
+                // Preserve original store_user ID
+                DB::table('store_users')->insert([
+                    'id' => $legacyOwnerStoreUser->id,
+                    'user_id' => $owner->id,
+                    'store_id' => $store->id,
+                    'role_id' => $ownerRole->id,
+                    'is_owner' => true,
+                    'created_at' => $legacyOwnerStoreUser->created_at ?? now(),
+                    'updated_at' => $legacyOwnerStoreUser->updated_at ?? now(),
+                ]);
+            }
+        } else {
+            // No legacy store_user found, create new
+            StoreUser::create([
+                'user_id' => $owner->id,
+                'store_id' => $store->id,
+                'role_id' => $ownerRole->id,
+                'is_owner' => true,
+            ]);
+        }
 
         $owner->update(['current_store_id' => $store->id]);
 
@@ -389,15 +427,30 @@ class MigrateLegacyData extends Command
             }
 
             if (! $existingUser) {
-                $existingUser = User::create([
-                    'name' => trim(($legacyUser->first_name ?? '').' '.($legacyUser->last_name ?? '')) ?: $legacyUser->email,
-                    'email' => $legacyUser->email,
-                    'password' => $legacyUser->password ?? Hash::make('changeme123'),
-                    'email_verified_at' => now(),
-                ]);
-                $this->line("  Created user: {$existingUser->email}");
+                // Check if a user with this ID already exists (from another migration)
+                $existingById = User::find($legacyUser->id);
+                if ($existingById) {
+                    // ID conflict - user with this ID exists but different email
+                    // Use the existing user's ID for mapping
+                    $existingUser = $existingById;
+                    $this->line("  ID conflict for user {$legacyUser->email} - using existing ID: {$existingById->id}");
+                } else {
+                    // Use DB::table to preserve original user ID
+                    DB::table('users')->insert([
+                        'id' => $legacyUser->id, // Preserve original ID
+                        'name' => trim(($legacyUser->first_name ?? '').' '.($legacyUser->last_name ?? '')) ?: $legacyUser->email,
+                        'email' => $legacyUser->email,
+                        'password' => $legacyUser->password ?? Hash::make('changeme123'),
+                        'email_verified_at' => now(),
+                        'created_at' => $legacyUser->created_at ?? now(),
+                        'updated_at' => $legacyUser->updated_at ?? now(),
+                    ]);
+                    $existingUser = User::find($legacyUser->id);
+                    $this->line("  Created user: {$existingUser->email} (ID: {$existingUser->id})");
+                }
             }
 
+            // Map to preserved ID if new, or existing ID if user already existed
             $this->userMap[$legacyStoreUser->user_id] = $existingUser->id;
 
             // Check if store_user relationship exists
@@ -426,11 +479,19 @@ class MigrateLegacyData extends Command
                     ]);
                 }
 
-                StoreUser::create([
-                    'user_id' => $existingUser->id,
-                    'store_id' => $this->newStore->id,
-                    'role_id' => $staffRole->id,
-                ]);
+                // Check if store_user with this ID already exists
+                $existingStoreUserById = StoreUser::find($legacyStoreUser->id);
+                if (! $existingStoreUserById) {
+                    // Use DB::table to preserve original store_user ID
+                    DB::table('store_users')->insert([
+                        'id' => $legacyStoreUser->id, // Preserve original ID
+                        'user_id' => $existingUser->id,
+                        'store_id' => $this->newStore->id,
+                        'role_id' => $staffRole->id,
+                        'created_at' => $legacyStoreUser->created_at ?? now(),
+                        'updated_at' => $legacyStoreUser->updated_at ?? now(),
+                    ]);
+                }
             }
 
             $count++;
@@ -843,74 +904,98 @@ class MigrateLegacyData extends Command
             ->whereNull('deleted_at')
             ->where(function ($q) {
                 $q->where('is_vendor', false)->orWhereNull('is_vendor');
-            });
+            })
+            ->orderBy('id');
 
         if ($limit > 0) {
             $query->limit($limit);
         }
 
-        $legacyCustomers = $query->get();
+        $total = (clone $query)->count();
+        $this->line("  Found {$total} customers to process");
+
         $count = 0;
         $skipped = 0;
+        $processed = 0;
 
-        foreach ($legacyCustomers as $legacyCustomer) {
-            // Check if customer already exists by email (if they have one)
-            $existingCustomer = null;
-            if ($legacyCustomer->email) {
-                $existingCustomer = Customer::where('store_id', $this->newStore->id)
-                    ->where('email', $legacyCustomer->email)
-                    ->first();
+        // Use chunking to avoid memory issues
+        $query->chunk(1000, function ($legacyCustomers) use ($isDryRun, &$count, &$skipped, &$processed, $total) {
+            foreach ($legacyCustomers as $legacyCustomer) {
+                $this->processCustomer($legacyCustomer, $isDryRun, $count, $skipped);
+                $processed++;
             }
-
-            if ($existingCustomer) {
-                $this->customerMap[$legacyCustomer->id] = $existingCustomer->id;
-                $skipped++;
-
-                continue;
-            }
-
-            if ($isDryRun) {
-                $name = trim(($legacyCustomer->first_name ?? '').' '.($legacyCustomer->last_name ?? ''));
-                $this->line("  Would create customer: {$name} ({$legacyCustomer->email})");
-                $count++;
-
-                continue;
-            }
-
-            // Map lead source ID
-            $newLeadSourceId = null;
-            if (isset($legacyCustomer->lead_id) && $legacyCustomer->lead_id) {
-                $newLeadSourceId = $this->leadSourceMap[$legacyCustomer->lead_id] ?? null;
-            }
-
-            $newCustomer = Customer::create([
-                'store_id' => $this->newStore->id,
-                'lead_source_id' => $newLeadSourceId,
-                'first_name' => $legacyCustomer->first_name,
-                'last_name' => $legacyCustomer->last_name,
-                'email' => $legacyCustomer->email,
-                'phone_number' => $legacyCustomer->phone_number,
-                'address' => $legacyCustomer->street_address,
-                'address2' => $legacyCustomer->street_address2,
-                'city' => $legacyCustomer->city,
-                'zip' => $legacyCustomer->zip,
-                'company_name' => $legacyCustomer->company_name,
-                'ethnicity' => $legacyCustomer->ethnicity,
-                'photo' => $legacyCustomer->photo,
-                'accepts_marketing' => $legacyCustomer->accepts_marketing ?? false,
-                'is_active' => $legacyCustomer->is_active ?? true,
-                'number_of_sales' => $legacyCustomer->number_of_sales ?? 0,
-                'number_of_buys' => $legacyCustomer->number_of_buys ?? 0,
-                'last_sales_date' => $legacyCustomer->last_sales_date,
-                'created_at' => $legacyCustomer->created_at,
-                'updated_at' => $legacyCustomer->updated_at,
-            ]);
-
-            $this->customerMap[$legacyCustomer->id] = $newCustomer->id;
-            $count++;
-        }
+            $this->line("  Processed {$processed}/{$total} customers...");
+        });
 
         $this->line("  Created {$count} customers, skipped {$skipped} existing");
+    }
+
+    protected function processCustomer(object $legacyCustomer, bool $isDryRun, int &$count, int &$skipped): void
+    {
+        // Check if customer already exists by ID (preserving IDs)
+        $existingCustomer = Customer::withTrashed()->find($legacyCustomer->id);
+
+        if ($existingCustomer) {
+            // Customer with this ID already exists (from this or another store)
+            $this->customerMap[$legacyCustomer->id] = $existingCustomer->id;
+            $skipped++;
+
+            return;
+        }
+
+        // Also check by email within this store
+        if ($legacyCustomer->email) {
+            $existingByEmail = Customer::where('store_id', $this->newStore->id)
+                ->where('email', $legacyCustomer->email)
+                ->first();
+            if ($existingByEmail) {
+                $this->customerMap[$legacyCustomer->id] = $existingByEmail->id;
+                $skipped++;
+
+                return;
+            }
+        }
+
+        if ($isDryRun) {
+            $name = trim(($legacyCustomer->first_name ?? '').' '.($legacyCustomer->last_name ?? ''));
+            $count++;
+
+            return;
+        }
+
+        // Map lead source ID
+        $newLeadSourceId = null;
+        if (isset($legacyCustomer->lead_id) && $legacyCustomer->lead_id) {
+            $newLeadSourceId = $this->leadSourceMap[$legacyCustomer->lead_id] ?? null;
+        }
+
+        // Use DB::table to preserve original ID
+        DB::table('customers')->insert([
+            'id' => $legacyCustomer->id, // Preserve original ID
+            'store_id' => $this->newStore->id,
+            'lead_source_id' => $newLeadSourceId,
+            'first_name' => $legacyCustomer->first_name,
+            'last_name' => $legacyCustomer->last_name,
+            'email' => $legacyCustomer->email,
+            'phone_number' => $legacyCustomer->phone_number,
+            'address' => $legacyCustomer->street_address,
+            'address2' => $legacyCustomer->street_address2,
+            'city' => $legacyCustomer->city,
+            'zip' => $legacyCustomer->zip,
+            'company_name' => $legacyCustomer->company_name,
+            'ethnicity' => $legacyCustomer->ethnicity,
+            'photo' => $legacyCustomer->photo,
+            'accepts_marketing' => $legacyCustomer->accepts_marketing ?? false,
+            'is_active' => $legacyCustomer->is_active ?? true,
+            'number_of_sales' => $legacyCustomer->number_of_sales ?? 0,
+            'number_of_buys' => $legacyCustomer->number_of_buys ?? 0,
+            'last_sales_date' => $legacyCustomer->last_sales_date,
+            'created_at' => $this->fixDstTimestamp($legacyCustomer->created_at),
+            'updated_at' => $this->fixDstTimestamp($legacyCustomer->updated_at),
+        ]);
+
+        $this->customerMap[$legacyCustomer->id] = $legacyCustomer->id;
+        $count++;
     }
 
     protected function migrateTransactions(int $legacyStoreId, bool $isDryRun, int $limit = 0): void
@@ -927,9 +1012,12 @@ class MigrateLegacyData extends Command
             $query->limit($limit);
         }
 
-        $legacyTransactions = $query->get();
+        $total = (clone $query)->count();
+        $this->line("  Found {$total} transactions to process");
+
         $count = 0;
         $itemCount = 0;
+        $processed = 0;
 
         // Get default status
         $defaultStatus = Status::where('store_id', $this->newStore->id)
@@ -937,35 +1025,56 @@ class MigrateLegacyData extends Command
             ->where('is_default', true)
             ->first();
 
-        foreach ($legacyTransactions as $legacyTxn) {
-            // Get current status from status_updates table (most recent entry)
-            $currentStatusUpdate = DB::connection('legacy')
-                ->table('status_updates')
-                ->where('store_id', $legacyStoreId)
-                ->where('updateable_type', 'App\\Models\\Transaction')
-                ->where('updateable_id', $legacyTxn->id)
-                ->orderBy('created_at', 'desc')
+        // Use chunking to avoid memory issues
+        $query->chunk(500, function ($legacyTransactions) use ($legacyStoreId, $isDryRun, $defaultStatus, &$count, &$itemCount, &$processed, $total) {
+            foreach ($legacyTransactions as $legacyTxn) {
+                $this->processTransaction($legacyTxn, $legacyStoreId, $isDryRun, $defaultStatus, $count, $itemCount);
+                $processed++;
+            }
+            $this->line("  Processed {$processed}/{$total} transactions...");
+        });
+
+        $this->line("  Created {$count} transactions with {$itemCount} items");
+    }
+
+    protected function processTransaction(object $legacyTxn, int $legacyStoreId, bool $isDryRun, ?Status $defaultStatus, int &$count, int &$itemCount): void
+    {
+        // Get current status from status_updates table (most recent entry)
+        $currentStatusUpdate = DB::connection('legacy')
+            ->table('status_updates')
+            ->where('store_id', $legacyStoreId)
+            ->where('updateable_type', 'App\\Models\\Transaction')
+            ->where('updateable_id', $legacyTxn->id)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        // Map status name to new status_id
+        $newStatusId = $this->mapStatusNameToId($currentStatusUpdate?->current_status, $defaultStatus?->id);
+
+        // Map customer
+        $newCustomerId = null;
+        if ($legacyTxn->customer_id && isset($this->customerMap[$legacyTxn->customer_id])) {
+            $newCustomerId = $this->customerMap[$legacyTxn->customer_id];
+        } elseif ($legacyTxn->customer_id) {
+            // Customer not migrated yet, try to migrate just this one (skip vendors)
+            $legacyCustomer = DB::connection('legacy')
+                ->table('customers')
+                ->where('id', $legacyTxn->customer_id)
+                ->where(function ($q) {
+                    $q->where('is_vendor', false)->orWhereNull('is_vendor');
+                })
                 ->first();
 
-            // Map status name to new status_id
-            $newStatusId = $this->mapStatusNameToId($currentStatusUpdate?->current_status, $defaultStatus?->id);
-
-            // Map customer
-            $newCustomerId = null;
-            if ($legacyTxn->customer_id && isset($this->customerMap[$legacyTxn->customer_id])) {
-                $newCustomerId = $this->customerMap[$legacyTxn->customer_id];
-            } elseif ($legacyTxn->customer_id) {
-                // Customer not migrated yet, try to migrate just this one (skip vendors)
-                $legacyCustomer = DB::connection('legacy')
-                    ->table('customers')
-                    ->where('id', $legacyTxn->customer_id)
-                    ->where(function ($q) {
-                        $q->where('is_vendor', false)->orWhereNull('is_vendor');
-                    })
-                    ->first();
-
-                if ($legacyCustomer && ! $isDryRun) {
-                    $newCustomer = Customer::create([
+            if ($legacyCustomer && ! $isDryRun) {
+                // Check if customer with this ID already exists
+                $existingById = Customer::withTrashed()->find($legacyCustomer->id);
+                if ($existingById) {
+                    $this->customerMap[$legacyTxn->customer_id] = $existingById->id;
+                    $newCustomerId = $existingById->id;
+                } else {
+                    // Use DB::table to preserve original ID
+                    DB::table('customers')->insert([
+                        'id' => $legacyCustomer->id, // Preserve original ID
                         'store_id' => $this->newStore->id,
                         'first_name' => $legacyCustomer->first_name,
                         'last_name' => $legacyCustomer->last_name,
@@ -976,75 +1085,91 @@ class MigrateLegacyData extends Command
                         'zip' => $legacyCustomer->zip,
                         'is_active' => true,
                         'created_at' => $legacyCustomer->created_at,
+                        'updated_at' => $legacyCustomer->created_at,
                     ]);
-                    $this->customerMap[$legacyTxn->customer_id] = $newCustomer->id;
-                    $newCustomerId = $newCustomer->id;
+                    $this->customerMap[$legacyTxn->customer_id] = $legacyCustomer->id;
+                    $newCustomerId = $legacyCustomer->id;
                 }
             }
+        }
 
-            // Map user
-            $newUserId = null;
-            if ($legacyTxn->user_id && isset($this->userMap[$legacyTxn->user_id])) {
-                $newUserId = $this->userMap[$legacyTxn->user_id];
-            }
+        // Map user
+        $newUserId = null;
+        if ($legacyTxn->user_id && isset($this->userMap[$legacyTxn->user_id])) {
+            $newUserId = $this->userMap[$legacyTxn->user_id];
+        }
 
-            if ($isDryRun) {
-                $this->line("  Would create transaction #{$legacyTxn->id}: \${$legacyTxn->final_offer}");
-                $count++;
+        if ($isDryRun) {
+            $this->line("  Would create transaction #{$legacyTxn->id}: \${$legacyTxn->final_offer}");
+            $count++;
 
-                continue;
-            }
+            return;
+        }
 
-            // Get payment method from transaction_payment_addresses
-            $paymentData = $this->getTransactionPaymentMethod($legacyTxn->id, $legacyStoreId);
+        // Check if transaction with this ID already exists
+        $existingTransaction = Transaction::withTrashed()->find($legacyTxn->id);
+        if ($existingTransaction) {
+            // Skip - already migrated
+            $count++;
 
-            // Use insertGetId to preserve the legacy transaction ID
-            $transactionId = DB::table('transactions')->insertGetId([
-                'id' => $legacyTxn->id, // Preserve legacy ID
-                'store_id' => $this->newStore->id,
-                'customer_id' => $newCustomerId,
-                'user_id' => $newUserId,
-                'warehouse_id' => $this->warehouse?->id,
-                'status_id' => $newStatusId,
-                'status' => $this->deriveStatusString($legacyTxn, $currentStatusUpdate?->current_status),
-                'type' => $legacyTxn->is_in_house ? Transaction::TYPE_IN_STORE : Transaction::TYPE_MAIL_IN,
-                'source' => 'online',
-                'transaction_number' => "TXN-{$legacyTxn->id}",
-                'preliminary_offer' => $legacyTxn->preliminary_offer ?? 0,
-                'final_offer' => $legacyTxn->final_offer ?? 0,
-                'estimated_value' => $legacyTxn->estimated_value ?? 0,
-                'payment_method' => $paymentData['method'],
-                'payment_details' => $paymentData['details'] ? json_encode($paymentData['details']) : null,
-                'bin_location' => $legacyTxn->bin_location,
-                'customer_notes' => $legacyTxn->customer_description,
-                'internal_notes' => $legacyTxn->comments,
-                'customer_categories' => $legacyTxn->customer_categories,
-                'customer_amount' => $legacyTxn->customer_amount,
-                'created_at' => $this->fixDstTimestamp($legacyTxn->created_at),
-                'updated_at' => $this->fixDstTimestamp($legacyTxn->updated_at),
-            ]);
+            return;
+        }
 
-            // Migrate transaction items with category linking
-            $legacyItems = DB::connection('legacy')
-                ->table('transaction_items')
-                ->where('transaction_id', $legacyTxn->id)
-                ->get();
+        // Get payment method from transaction_payment_addresses
+        $paymentData = $this->getTransactionPaymentMethod($legacyTxn->id, $legacyStoreId);
 
-            // Calculate estimated values for items that don't have prices
-            $itemPrices = $this->calculateItemPrices($legacyItems, $legacyTxn->final_offer ?? 0);
+        // Use insert to preserve the legacy transaction ID
+        DB::table('transactions')->insert([
+            'id' => $legacyTxn->id, // Preserve legacy ID
+            'store_id' => $this->newStore->id,
+            'customer_id' => $newCustomerId,
+            'user_id' => $newUserId,
+            'warehouse_id' => $this->warehouse?->id,
+            'status_id' => $newStatusId,
+            'status' => $this->deriveStatusString($legacyTxn, $currentStatusUpdate?->current_status),
+            'type' => $legacyTxn->is_in_house ? Transaction::TYPE_IN_STORE : Transaction::TYPE_MAIL_IN,
+            'source' => 'online',
+            'transaction_number' => "TXN-{$legacyTxn->id}",
+            'preliminary_offer' => $legacyTxn->preliminary_offer ?? 0,
+            'final_offer' => $legacyTxn->final_offer ?? 0,
+            'estimated_value' => $legacyTxn->estimated_value ?? 0,
+            'payment_method' => $paymentData['method'],
+            'payment_details' => $paymentData['details'] ? json_encode($paymentData['details']) : null,
+            'bin_location' => $legacyTxn->bin_location,
+            'customer_notes' => $legacyTxn->customer_description,
+            'internal_notes' => $legacyTxn->comments,
+            'customer_categories' => $legacyTxn->customer_categories,
+            'customer_amount' => $legacyTxn->customer_amount,
+            'created_at' => $this->fixDstTimestamp($legacyTxn->created_at),
+            'updated_at' => $this->fixDstTimestamp($legacyTxn->updated_at),
+        ]);
+        $transactionId = $legacyTxn->id;
 
-            foreach ($legacyItems as $index => $legacyItem) {
-                // Find or create category by looking up the product_type_id in store_categories
-                $newCategoryId = $this->findOrCreateCategoryByLegacyProductType(
-                    $legacyItem->product_type_id ?? $legacyItem->category_id ?? null,
-                    $legacyStoreId
-                );
+        // Migrate transaction items with category linking
+        $legacyItems = DB::connection('legacy')
+            ->table('transaction_items')
+            ->where('transaction_id', $legacyTxn->id)
+            ->get();
 
-                // Get the calculated price for this item
-                $estimatedValue = $itemPrices[$index]['price'];
-                $buyPrice = $itemPrices[$index]['buy_price'];
+        // Calculate estimated values for items that don't have prices
+        $itemPrices = $this->calculateItemPrices($legacyItems, $legacyTxn->final_offer ?? 0);
 
+        foreach ($legacyItems as $index => $legacyItem) {
+            // Find or create category by looking up the product_type_id in store_categories
+            $newCategoryId = $this->findOrCreateCategoryByLegacyProductType(
+                $legacyItem->product_type_id ?? $legacyItem->category_id ?? null,
+                $legacyStoreId
+            );
+
+            // Get the calculated price for this item
+            $estimatedValue = $itemPrices[$index]['price'];
+            $buyPrice = $itemPrices[$index]['buy_price'];
+
+            // Check if transaction_item with this ID already exists
+            $existingItem = TransactionItem::find($legacyItem->id);
+            if (! $existingItem) {
                 DB::table('transaction_items')->insert([
+                    'id' => $legacyItem->id, // Preserve original ID
                     'transaction_id' => $transactionId,
                     'category_id' => $newCategoryId,
                     'sku' => $legacyItem->sku,
@@ -1062,18 +1187,12 @@ class MigrateLegacyData extends Command
                 ]);
                 $itemCount++;
             }
-
-            // Migrate activities for this transaction (status changes)
-            $this->migrateTransactionActivities($legacyTxn->id, $transactionId, $legacyStoreId);
-
-            $count++;
-
-            if ($count % 100 === 0) {
-                $this->line("  Processed {$count} transactions...");
-            }
         }
 
-        $this->line("  Created {$count} transactions with {$itemCount} items");
+        // Migrate activities for this transaction (status changes)
+        $this->migrateTransactionActivities($legacyTxn->id, $legacyTxn->id, $legacyStoreId);
+
+        $count++;
     }
 
     protected function migrateTransactionActivities(int $legacyTxnId, int $newTxnId, int $legacyStoreId): void
@@ -1852,12 +1971,19 @@ class MigrateLegacyData extends Command
             }
         }
 
+        // Get user IDs before deleting store_users (to clean up orphaned users later)
+        $storeUserIds = StoreUser::where('store_id', $store->id)->pluck('user_id')->toArray();
+
         // Delete in order of dependencies (force delete to handle soft deletes)
         ActivityLog::where('store_id', $store->id)->delete();
         StatusHistory::whereHasMorph('trackable', [Transaction::class], fn ($q) => $q->where('store_id', $store->id))->delete();
         TransactionItem::whereHas('transaction', fn ($q) => $q->where('store_id', $store->id))->forceDelete();
         Transaction::where('store_id', $store->id)->forceDelete();
         Customer::where('store_id', $store->id)->forceDelete();
+
+        // Clean up vendors
+        DB::table('vendors')->where('store_id', $store->id)->delete();
+        $this->line('  Deleted vendors');
 
         // Clean up product templates
         $templateIds = ProductTemplate::where('store_id', $store->id)->pluck('id');
@@ -1876,6 +2002,15 @@ class MigrateLegacyData extends Command
             StoreUser::where('store_id', $store->id)->forceDelete();
             Role::where('store_id', $store->id)->forceDelete();
             $store->forceDelete();
+
+            // Delete users that are no longer associated with any store
+            foreach ($storeUserIds as $userId) {
+                $otherStoreCount = StoreUser::where('user_id', $userId)->count();
+                if ($otherStoreCount === 0) {
+                    User::where('id', $userId)->forceDelete();
+                    $this->line("  Deleted orphaned user ID: {$userId}");
+                }
+            }
         }
 
         $this->line('  Cleanup complete');

@@ -195,10 +195,8 @@ class MigrateLegacyTransactions extends Command
 
     protected function migrateTransaction(object $legacyTransaction): bool
     {
-        // Check if already migrated (by looking for existing transaction with same transaction_number)
-        $existing = Transaction::where('store_id', $this->newStoreId)
-            ->where('transaction_number', (string) $legacyTransaction->id)
-            ->first();
+        // Check if already migrated by ID (preserving original IDs)
+        $existing = Transaction::withTrashed()->find($legacyTransaction->id);
 
         if ($existing) {
             return false; // Already migrated
@@ -295,9 +293,12 @@ class MigrateLegacyTransactions extends Command
             $transactionData['return_carrier'] = 'fedex';
         }
 
-        // Use DB::table to preserve exact timestamps (Model::create overrides them)
-        $transactionId = DB::table('transactions')->insertGetId($transactionData);
-        $transaction = Transaction::find($transactionId);
+        // Add ID to preserve original
+        $transactionData['id'] = $legacyTransaction->id;
+
+        // Use DB::table to preserve exact timestamps and original ID
+        DB::table('transactions')->insert($transactionData);
+        $transaction = Transaction::find($legacyTransaction->id);
 
         // Migrate items
         $this->migrateTransactionItems($legacyTransaction->id, $transaction);
@@ -354,6 +355,14 @@ class MigrateLegacyTransactions extends Command
             return $existingCustomer->id;
         }
 
+        // Check if customer with this ID already exists (from another store migration)
+        $existingById = Customer::withTrashed()->find($legacyCustomerId);
+        if ($existingById) {
+            $this->customerMap[$legacyCustomerId] = $existingById->id;
+
+            return $existingById->id;
+        }
+
         if ($this->dryRun) {
             return null;
         }
@@ -367,8 +376,9 @@ class MigrateLegacyTransactions extends Command
                 ->first();
         }
 
-        // Create customer using DB insert to preserve exact timestamps
-        $customerId = DB::table('customers')->insertGetId([
+        // Create customer using DB insert to preserve exact timestamps and original ID
+        DB::table('customers')->insert([
+            'id' => $legacyCustomerId, // Preserve original ID
             'store_id' => $this->newStoreId,
             'first_name' => $legacyCustomer->first_name,
             'last_name' => $legacyCustomer->last_name,
@@ -384,21 +394,20 @@ class MigrateLegacyTransactions extends Command
             'accepts_marketing' => (bool) ($legacyCustomer->accepts_marketing ?? false),
             'is_active' => (bool) ($legacyCustomer->is_active ?? true),
             'additional_fields' => json_encode([
-                'legacy_id' => $legacyCustomerId,
                 'legacy_notes' => $legacyCustomer->customer_notes ?? null,
             ]),
             'created_at' => $legacyCustomer->created_at,
             'updated_at' => $legacyCustomer->updated_at,
         ]);
 
-        $customer = Customer::find($customerId);
+        $customer = Customer::find($legacyCustomerId);
 
         // Migrate customer address if exists
         $this->migrateCustomerAddress($legacyCustomerId, $customer);
 
-        $this->customerMap[$legacyCustomerId] = $customer->id;
+        $this->customerMap[$legacyCustomerId] = $legacyCustomerId;
 
-        return $customer->id;
+        return $legacyCustomerId;
     }
 
     protected function migrateCustomerAddress(int $legacyCustomerId, Customer $customer): void
@@ -500,13 +509,20 @@ class MigrateLegacyTransactions extends Command
                 continue;
             }
 
+            // Check if transaction item with this ID already exists
+            $existingItem = TransactionItem::find($legacyItem->id);
+            if ($existingItem) {
+                continue;
+            }
+
             // Find or create category by looking up product_type_id in store_categories
             $categoryId = $this->findOrCreateCategoryByLegacyProductType(
                 $legacyItem->product_type_id ?? $legacyItem->category_id ?? null
             );
 
-            // Use DB insert to preserve exact timestamps
-            $itemId = DB::table('transaction_items')->insertGetId([
+            // Use DB insert to preserve exact timestamps and original ID
+            DB::table('transaction_items')->insert([
+                'id' => $legacyItem->id, // Preserve original ID
                 'transaction_id' => $transaction->id,
                 'category_id' => $categoryId,
                 'sku' => $legacyItem->sku,
@@ -522,7 +538,6 @@ class MigrateLegacyTransactions extends Command
                 'date_added_to_inventory' => $legacyItem->date_added_to_inventory,
                 'reviewed_at' => $legacyItem->reviewed_date_time ?? null,
                 'attributes' => json_encode([
-                    'legacy_id' => $legacyItem->id,
                     'legacy_category_id' => $legacyItem->category_id,
                     'legacy_product_type_id' => $legacyItem->product_type_id ?? null,
                     'legacy_html_form_id' => $legacyItem->html_form_id ?? null,
@@ -531,7 +546,7 @@ class MigrateLegacyTransactions extends Command
                 'updated_at' => $legacyItem->updated_at,
             ]);
 
-            $item = TransactionItem::find($itemId);
+            $item = TransactionItem::find($legacyItem->id);
 
             // Migrate item images
             if (! $this->option('skip-images')) {

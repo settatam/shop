@@ -329,8 +329,18 @@ class MigrateLegacyRepairs extends Command
             // Map status
             $status = $this->mapRepairStatus($legacyRepair->status);
 
-            // Use DB::table to preserve timestamps from legacy data
-            $newRepairId = DB::table('repairs')->insertGetId([
+            // Check if repair with this ID already exists
+            $existingRepair = Repair::withTrashed()->find($legacyRepair->id);
+            if ($existingRepair) {
+                $this->repairMap[$legacyRepair->id] = $existingRepair->id;
+                $skipped++;
+
+                continue;
+            }
+
+            // Use DB::table to preserve timestamps and original ID
+            DB::table('repairs')->insert([
+                'id' => $legacyRepair->id, // Preserve original ID
                 'store_id' => $newStore->id,
                 'warehouse_id' => $this->warehouse?->id,
                 'customer_id' => $customerId,
@@ -354,8 +364,8 @@ class MigrateLegacyRepairs extends Command
                 'updated_at' => $legacyRepair->updated_at,
             ]);
 
-            $newRepair = Repair::find($newRepairId);
-            $this->repairMap[$legacyRepair->id] = $newRepair->id;
+            $newRepair = Repair::find($legacyRepair->id);
+            $this->repairMap[$legacyRepair->id] = $legacyRepair->id;
             $repairCount++;
 
             // Check if there's a repair_items table in legacy
@@ -375,8 +385,9 @@ class MigrateLegacyRepairs extends Command
                         $productId = $this->productMap[$legacyItem->product_id];
                     }
 
-                    // Use DB::table to preserve timestamps
+                    // Use DB::table to preserve timestamps and original ID
                     DB::table('repair_items')->insert([
+                        'id' => $legacyItem->id, // Preserve original ID
                         'repair_id' => $newRepair->id,
                         'product_id' => $productId,
                         'sku' => $legacyItem->sku ?? null,

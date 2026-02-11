@@ -288,8 +288,18 @@ class MigrateLegacyMemos extends Command
             // Map status
             $status = $this->mapMemoStatus($legacyMemo->status);
 
-            // Use DB::table to preserve timestamps from legacy data
-            $newMemoId = DB::table('memos')->insertGetId([
+            // Check if memo with this ID already exists
+            $existingMemo = Memo::withTrashed()->find($legacyMemo->id);
+            if ($existingMemo) {
+                $this->memoMap[$legacyMemo->id] = $existingMemo->id;
+                $skipped++;
+
+                continue;
+            }
+
+            // Use DB::table to preserve timestamps and original ID
+            DB::table('memos')->insert([
+                'id' => $legacyMemo->id, // Preserve original ID
                 'store_id' => $newStore->id,
                 'warehouse_id' => $this->warehouse?->id,
                 'vendor_id' => $vendorId,
@@ -309,8 +319,8 @@ class MigrateLegacyMemos extends Command
                 'updated_at' => $legacyMemo->updated_at,
             ]);
 
-            $newMemo = Memo::find($newMemoId);
-            $this->memoMap[$legacyMemo->id] = $newMemo->id;
+            $newMemo = Memo::find($legacyMemo->id);
+            $this->memoMap[$legacyMemo->id] = $legacyMemo->id;
             $memoCount++;
 
             // Find products that belong to this memo (via consignment_id)

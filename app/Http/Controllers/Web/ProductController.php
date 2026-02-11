@@ -752,7 +752,7 @@ class ProductController extends Controller
             'availableStatuses' => Product::getStatusesForStore($store),
             'fieldRequirements' => $this->featureManager->getFieldRequirements($store, 'products'),
             'activity' => [
-                'orders' => $product->orderItems->map(fn ($item) => [
+                'orders' => $product->orderItems->filter(fn ($item) => $item->order)->map(fn ($item) => [
                     'id' => $item->order->id,
                     'title' => $item->order->order_number ?? "Order #{$item->order->id}",
                     'status' => $item->order->status,

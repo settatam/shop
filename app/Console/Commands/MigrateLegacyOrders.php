@@ -332,11 +332,26 @@ class MigrateLegacyOrders extends Command
             // Map sales channel from legacy store_marketplace_id
             $salesChannelId = null;
             if ($legacyOrder->store_marketplace_id && isset($this->salesChannelMap[$legacyOrder->store_marketplace_id])) {
-                $salesChannelId = $this->salesChannelMap[$legacyOrder->store_marketplace_id];
+                $mappedChannelId = $this->salesChannelMap[$legacyOrder->store_marketplace_id];
+                // Verify the sales channel exists and belongs to this store
+                $salesChannel = \App\Models\SalesChannel::where('id', $mappedChannelId)
+                    ->where('store_id', $this->newStore->id)
+                    ->first();
+                $salesChannelId = $salesChannel?->id;
             }
 
-            // Use DB::table to preserve timestamps
-            $newOrderId = DB::table('orders')->insertGetId([
+            // Check if order with this ID already exists
+            $existingOrder = Order::withTrashed()->find($legacyOrder->id);
+            if ($existingOrder) {
+                $this->orderMap[$legacyOrder->id] = $existingOrder->id;
+                $skipped++;
+
+                continue;
+            }
+
+            // Use DB::table to preserve timestamps and original ID
+            DB::table('orders')->insert([
+                'id' => $legacyOrder->id, // Preserve original ID
                 'store_id' => $this->newStore->id,
                 'customer_id' => $customerId,
                 'user_id' => $userId,
@@ -362,6 +377,7 @@ class MigrateLegacyOrders extends Command
                 'updated_at' => $legacyOrder->updated_at,
             ]);
 
+            $newOrderId = $legacyOrder->id; // Use original ID
             $this->orderMap[$legacyOrder->id] = $newOrderId;
             $orderCount++;
 
@@ -453,8 +469,15 @@ class MigrateLegacyOrders extends Command
                 $wholesaleValue = $variant?->wholesale_price;
             }
 
-            // Use DB::table to preserve timestamps
+            // Check if order_item with this ID already exists
+            $existingItem = \App\Models\OrderItem::find($legacyItem->id);
+            if ($existingItem) {
+                continue;
+            }
+
+            // Use DB::table to preserve timestamps and original ID
             DB::table('order_items')->insert([
+                'id' => $legacyItem->id, // Preserve original ID
                 'order_id' => $newOrderId,
                 'product_id' => $productId,
                 'product_variant_id' => $variantId,
@@ -507,8 +530,19 @@ class MigrateLegacyOrders extends Command
             // Map status
             $paymentStatus = $this->mapPaymentStatus($legacyPayment->status);
 
-            // Use DB::table to preserve timestamps
+            // Check if payment with this ID already exists
+            $existingPayment = Payment::find($legacyPayment->id);
+            if ($existingPayment) {
+                if ($paymentStatus === Payment::STATUS_COMPLETED) {
+                    $totalPaid += (float) ($legacyPayment->amount ?? 0);
+                }
+
+                continue;
+            }
+
+            // Use DB::table to preserve timestamps and original ID
             DB::table('payments')->insert([
+                'id' => $legacyPayment->id, // Preserve original ID
                 'store_id' => $this->newStore->id,
                 'payable_type' => Order::class,
                 'payable_id' => $newOrderId,
@@ -529,7 +563,6 @@ class MigrateLegacyOrders extends Command
                 'gateway_response' => $legacyPayment->payment_gateway_data ? json_encode(['legacy' => $legacyPayment->payment_gateway_data]) : null,
                 'notes' => $legacyPayment->description ?: null,
                 'metadata' => json_encode([
-                    'legacy_id' => $legacyPayment->id,
                     'card_type' => $legacyPayment->card_type ?? null,
                     'last_4' => $legacyPayment->last_4 ?? null,
                     'entry_type' => $legacyPayment->entry_type ?? null,
