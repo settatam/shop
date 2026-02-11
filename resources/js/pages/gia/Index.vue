@@ -300,8 +300,8 @@ function formatGrade(report: any): string {
                                 <!-- Preview for first stone -->
                                 <div v-if="giaPreview1" class="mt-3 rounded-md bg-gray-50 p-3 dark:bg-gray-700/50">
                                     <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ giaPreview1.results?.carat_weight || '-' }}ct
-                                        {{ giaPreview1.results?.shape_and_cutting_style || '-' }}
+                                        {{ giaPreview1.results?.carat_weight || '' }}
+                                        {{ giaPreview1.results?.shape_and_cutting_style || '' }}
                                     </p>
                                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                         Grades: {{ formatGrade(giaPreview1) }}
@@ -337,8 +337,8 @@ function formatGrade(report: any): string {
                                 <!-- Preview for second stone -->
                                 <div v-if="giaPreview2" class="mt-3 rounded-md bg-gray-50 p-3 dark:bg-gray-700/50">
                                     <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ giaPreview2.results?.carat_weight || '-' }}
-                                        {{ giaPreview2.results?.shape_and_cutting_style || '-' }}
+                                        {{ giaPreview2.results?.carat_weight || '' }}
+                                        {{ giaPreview2.results?.shape_and_cutting_style || '' }}
                                     </p>
                                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                         Grades: {{ formatGrade(giaPreview2) }}
