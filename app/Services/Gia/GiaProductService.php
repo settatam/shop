@@ -5,9 +5,9 @@ namespace App\Services\Gia;
 use App\Models\Category;
 use App\Models\Certification;
 use App\Models\Gemstone;
+use App\Models\Image;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
-use App\Models\ProductImage;
 use App\Models\Store;
 use App\Services\Rapnet\RapnetPriceService;
 use Illuminate\Support\Facades\DB;
@@ -683,7 +683,7 @@ class GiaProductService
     public function createImagesFromPdf(Product $product, Store $store, array $reports): array
     {
         $images = [];
-        $sortOrder = $product->publicImages()->count();
+        $sortOrder = $product->images()->where('is_internal', false)->count();
 
         foreach ($reports as $index => $report) {
             $pdfUrl = data_get($report, 'links.pdf');
@@ -715,7 +715,7 @@ class GiaProductService
     /**
      * Convert a PDF URL to an image and store it.
      */
-    protected function convertPdfToImage(string $pdfUrl, Product $product, Store $store, int $sortOrder): ?ProductImage
+    protected function convertPdfToImage(string $pdfUrl, Product $product, Store $store, int $sortOrder): ?Image
     {
         // Download PDF to temp file
         $response = Http::timeout(30)->get($pdfUrl);
@@ -775,13 +775,16 @@ class GiaProductService
             $url = $this->getFullUrl($imagePath);
             $thumbnailUrl = $this->getFullUrl($thumbnailPath);
 
-            // Create ProductImage record
-            return ProductImage::create([
-                'product_id' => $product->id,
+            // Create Image record (polymorphic)
+            return Image::create([
+                'store_id' => $store->id,
+                'imageable_type' => Product::class,
+                'imageable_id' => $product->id,
                 'path' => $imagePath,
                 'url' => $url,
                 'thumbnail_url' => $thumbnailUrl,
                 'alt_text' => 'GIA Certificate',
+                'disk' => $this->disk,
                 'sort_order' => $sortOrder,
                 'is_primary' => $sortOrder === 0,
                 'is_internal' => false,

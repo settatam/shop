@@ -115,4 +115,17 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Developer Email (Non-Production)
+    |--------------------------------------------------------------------------
+    |
+    | When the application is not running in production, all emails will be
+    | redirected to this address. This prevents accidentally sending emails
+    | to real users during development and testing.
+    |
+    */
+
+    'developer_email' => env('DEVELOPER_EMAIL'),
+
 ];
