@@ -215,24 +215,25 @@ class MigrateLegacyRepairs extends Command
             return;
         }
 
-        $this->info('Building customer mapping...');
+        $this->info('Building customer mapping (ID-preserving mode)...');
 
-        $legacyCustomers = DB::connection('legacy')
+        // Since we preserve customer IDs during migration, just verify which exist
+        $count = 0;
+        DB::connection('legacy')
             ->table('customers')
             ->where('store_id', $legacyStoreId)
+            ->select('id')
+            ->orderBy('id')
+            ->chunk(1000, function ($legacyCustomers) use (&$count) {
+                foreach ($legacyCustomers as $legacy) {
+                    if (Customer::where('id', $legacy->id)->exists()) {
+                        $this->customerMap[$legacy->id] = $legacy->id;
+                        $count++;
+                    }
+                }
+            });
 
-            ->get();
-
-        $newCustomers = Customer::where('store_id', $newStore->id)->get();
-        $newCustomersByEmail = $newCustomers->filter(fn ($c) => $c->email)->keyBy(fn ($c) => strtolower($c->email));
-
-        foreach ($legacyCustomers as $legacy) {
-            if ($legacy->email && $newCustomersByEmail->has(strtolower($legacy->email))) {
-                $this->customerMap[$legacy->id] = $newCustomersByEmail->get(strtolower($legacy->email))->id;
-            }
-        }
-
-        $this->line('  Mapped '.count($this->customerMap).' customers');
+        $this->line("  Mapped {$count} customers (ID-preserved)");
     }
 
     protected function buildUserMapping(int $legacyStoreId, Store $newStore): void

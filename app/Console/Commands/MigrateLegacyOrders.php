@@ -192,45 +192,27 @@ class MigrateLegacyOrders extends Command
             return;
         }
 
-        $this->info('Building customer mapping...');
+        $this->info('Building customer mapping (ID-preserving mode)...');
 
-        $legacyCustomers = DB::connection('legacy')
+        // Since we preserve customer IDs during migration, we just need to verify
+        // which customers exist in the new database. Use chunking to avoid memory issues.
+        $count = 0;
+        DB::connection('legacy')
             ->table('customers')
             ->where('store_id', $legacyStoreId)
-            ->get();
+            ->select('id')
+            ->orderBy('id')
+            ->chunk(1000, function ($legacyCustomers) use (&$count) {
+                foreach ($legacyCustomers as $legacy) {
+                    // Since we preserve IDs, just check if the customer exists
+                    if (Customer::where('id', $legacy->id)->exists()) {
+                        $this->customerMap[$legacy->id] = $legacy->id;
+                        $count++;
+                    }
+                }
+            });
 
-        $newCustomers = Customer::where('store_id', $this->newStore->id)->get();
-        $newCustomersByEmail = $newCustomers->filter(fn ($c) => $c->email)->keyBy(fn ($c) => strtolower($c->email));
-
-        // Also index by normalized name for fallback matching
-        $newCustomersByName = $newCustomers->keyBy(fn ($c) => $this->normalizeCustomerName($c->first_name, $c->last_name));
-
-        $mappedByEmail = 0;
-        $mappedByName = 0;
-        $notMapped = 0;
-
-        foreach ($legacyCustomers as $legacy) {
-            // First try to match by email
-            if ($legacy->email && $newCustomersByEmail->has(strtolower($legacy->email))) {
-                $this->customerMap[$legacy->id] = $newCustomersByEmail->get(strtolower($legacy->email))->id;
-                $mappedByEmail++;
-
-                continue;
-            }
-
-            // Fall back to matching by name
-            $normalizedName = $this->normalizeCustomerName($legacy->first_name, $legacy->last_name);
-            if ($normalizedName && $newCustomersByName->has($normalizedName)) {
-                $this->customerMap[$legacy->id] = $newCustomersByName->get($normalizedName)->id;
-                $mappedByName++;
-
-                continue;
-            }
-
-            $notMapped++;
-        }
-
-        $this->line('  Mapped '.count($this->customerMap)." customers ({$mappedByEmail} by email, {$mappedByName} by name, {$notMapped} not mapped)");
+        $this->line("  Mapped {$count} customers (ID-preserved)");
     }
 
     /**

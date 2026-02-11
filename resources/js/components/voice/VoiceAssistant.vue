@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { MicrophoneIcon, StopIcon, SpeakerWaveIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import axios from 'axios';
 
 const isOpen = ref(false);
 const isRecording = ref(false);
@@ -82,16 +83,13 @@ async function processAudio(audioBlob: Blob) {
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
 
-        const res = await fetch('/api/v1/voice/query', {
-            method: 'POST',
-            body: formData,
+        const res = await axios.post('/api/v1/voice/query', formData, {
             headers: {
-                'Accept': 'application/json',
+                'Content-Type': 'multipart/form-data',
             },
-            credentials: 'include',
         });
 
-        const data = await res.json();
+        const data = res.data;
 
         if (data.success) {
             transcript.value = data.transcript || '';
@@ -104,9 +102,9 @@ async function processAudio(audioBlob: Blob) {
         } else {
             error.value = data.error || 'Failed to process voice query';
         }
-    } catch (err) {
+    } catch (err: any) {
         console.error('Failed to process audio:', err);
-        error.value = 'Failed to process voice query';
+        error.value = err.response?.data?.error || 'Failed to process voice query';
     } finally {
         isProcessing.value = false;
     }

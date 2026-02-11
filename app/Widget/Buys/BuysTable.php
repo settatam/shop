@@ -48,12 +48,12 @@ class BuysTable extends Table
             ],
             [
                 'key' => 'purchase_price',
-                'label' => 'Purchase Price',
+                'label' => 'We Paid',
                 'sortable' => true,
             ],
             [
                 'key' => 'est_value',
-                'label' => 'Est Value',
+                'label' => 'Est. Value',
                 'sortable' => true,
             ],
             [
@@ -125,14 +125,26 @@ class BuysTable extends Table
             $query->where('final_offer', '<=', $maxAmount);
         }
 
-        // Apply from date filter
+        // Apply from date filter (use payment_processed_at if set, otherwise created_at)
         if ($fromDate = data_get($filter, 'from_date')) {
-            $query->whereDate('payment_processed_at', '>=', $fromDate);
+            $query->where(function ($q) use ($fromDate) {
+                $q->whereDate('payment_processed_at', '>=', $fromDate)
+                    ->orWhere(function ($q2) use ($fromDate) {
+                        $q2->whereNull('payment_processed_at')
+                            ->whereDate('created_at', '>=', $fromDate);
+                    });
+            });
         }
 
-        // Apply to date filter
+        // Apply to date filter (use payment_processed_at if set, otherwise created_at)
         if ($toDate = data_get($filter, 'to_date')) {
-            $query->whereDate('payment_processed_at', '<=', $toDate);
+            $query->where(function ($q) use ($toDate) {
+                $q->whereDate('payment_processed_at', '<=', $toDate)
+                    ->orWhere(function ($q2) use ($toDate) {
+                        $q2->whereNull('payment_processed_at')
+                            ->whereDate('created_at', '<=', $toDate);
+                    });
+            });
         }
 
         return $query;
@@ -162,7 +174,8 @@ class BuysTable extends Table
         } elseif ($sortBy === 'est_value') {
             $query->orderBy('estimated_value', $sortDirection);
         } elseif ($sortBy === 'date') {
-            $query->orderBy('payment_processed_at', $sortDirection);
+            // Sort by payment_processed_at if set, otherwise by created_at
+            $query->orderByRaw("COALESCE(payment_processed_at, created_at) {$sortDirection}");
         } else {
             $query->orderBy($sortBy, $sortDirection);
         }
@@ -199,11 +212,15 @@ class BuysTable extends Table
 
         $statusLabels = Transaction::getAvailableStatuses();
 
-        // Calculate profit
+        // Calculate values from items
         $purchasePrice = (float) ($transaction->final_offer ?? 0);
-        $estValue = (float) ($transaction->estimated_value ?? 0);
+        // Estimated value is the sum of items' price (what they're worth)
+        $estValue = (float) $transaction->items->sum('price');
         $estProfit = $estValue - $purchasePrice;
         $estProfitPct = $purchasePrice > 0 ? ($estProfit / $purchasePrice) * 100 : 0;
+
+        // Date: use payment_processed_at if set, otherwise fall back to created_at
+        $transactionDate = $transaction->payment_processed_at ?? $transaction->created_at;
 
         // Get first image - check transaction images first (online), then item images (in-house)
         $firstImage = null;
@@ -231,8 +248,8 @@ class BuysTable extends Table
                 'class' => 'font-mono text-sm font-medium',
             ],
             'date' => [
-                'data' => $transaction->payment_processed_at
-                    ? Carbon::parse($transaction->payment_processed_at)->format('M d, Y')
+                'data' => $transactionDate
+                    ? Carbon::parse($transactionDate)->format('M d, Y')
                     : '-',
                 'class' => 'text-sm text-gray-500',
             ],

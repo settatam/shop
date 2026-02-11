@@ -28,12 +28,29 @@ class SpeechToText
         }
 
         try {
+            // Get the file content and determine proper extension
+            $content = file_get_contents($audio->getRealPath());
+            $mimeType = $audio->getMimeType() ?? 'audio/webm';
+
+            // Map mime types to extensions that OpenAI accepts
+            $extension = match ($mimeType) {
+                'audio/webm' => 'webm',
+                'audio/mp3', 'audio/mpeg' => 'mp3',
+                'audio/wav', 'audio/x-wav' => 'wav',
+                'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
+                'audio/ogg' => 'ogg',
+                default => 'webm',
+            };
+
+            $filename = 'audio.'.$extension;
+
             $response = Http::withToken($this->apiKey)
                 ->timeout(30)
                 ->attach(
                     'file',
-                    file_get_contents($audio->getRealPath()),
-                    $audio->getClientOriginalName()
+                    $content,
+                    $filename,
+                    ['Content-Type' => $mimeType]
                 )
                 ->post('https://api.openai.com/v1/audio/transcriptions', [
                     'model' => $this->model,
@@ -42,12 +59,18 @@ class SpeechToText
                 ]);
 
             if ($response->failed()) {
+                $errorBody = $response->json();
+                $errorMessage = $errorBody['error']['message'] ?? $response->body();
+
                 Log::error('Whisper transcription failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
+                    'mime_type' => $mimeType,
+                    'filename' => $filename,
+                    'file_size' => strlen($content),
                 ]);
 
-                return TranscriptionResult::failure('Transcription failed: '.$response->status());
+                return TranscriptionResult::failure('Transcription failed: '.$errorMessage);
             }
 
             $data = $response->json();

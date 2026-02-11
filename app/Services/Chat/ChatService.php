@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 
 class ChatService
 {
-    protected string $apiKey;
+    protected ?string $apiKey;
 
     protected string $model;
 
