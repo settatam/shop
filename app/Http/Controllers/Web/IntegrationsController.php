@@ -239,6 +239,34 @@ class IntegrationsController extends Controller
         return back()->with('success', 'SerpAPI integration saved successfully.');
     }
 
+    public function storeRapnet(Request $request, StoreContext $storeContext): RedirectResponse
+    {
+        $validated = $request->validate([
+            'client_id' => ['required', 'string'],
+            'client_secret' => ['required', 'string'],
+        ]);
+
+        $storeId = $storeContext->getCurrentStoreId();
+
+        StoreIntegration::updateOrCreate(
+            [
+                'store_id' => $storeId,
+                'provider' => StoreIntegration::PROVIDER_RAPNET,
+            ],
+            [
+                'name' => 'Rapnet',
+                'environment' => StoreIntegration::ENV_PRODUCTION,
+                'credentials' => [
+                    'client_id' => $validated['client_id'],
+                    'client_secret' => $validated['client_secret'],
+                ],
+                'status' => StoreIntegration::STATUS_ACTIVE,
+            ]
+        );
+
+        return back()->with('success', 'Rapnet integration saved successfully.');
+    }
+
     public function destroy(StoreIntegration $integration, StoreContext $storeContext): RedirectResponse
     {
         $storeId = $storeContext->getCurrentStoreId();

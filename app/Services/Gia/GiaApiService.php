@@ -325,15 +325,12 @@ class GiaApiService
      */
     public static function getWeightRangeLabel(float $weight): ?string
     {
+        // Values must match select option values (e.g., '51-75', '76-99', '100-125')
         $ranges = self::getDiamondWeightRanges();
 
         foreach ($ranges as $range) {
             if ($weight >= $range['low'] && $weight <= $range['high']) {
-                if ($range['high'] > 1000) {
-                    return '10.0 +';
-                }
-
-                return sprintf('%s - %s', $range['low'], $range['high']);
+                return $range['value'];
             }
         }
 
@@ -342,25 +339,24 @@ class GiaApiService
 
     /**
      * Get diamond weight ranges for categorization.
+     * Values match the select field option values.
      *
-     * @return array<array{low: float, high: float}>
+     * @return array<array{low: float, high: float, value: string}>
      */
     public static function getDiamondWeightRanges(): array
     {
         return [
-            ['low' => 0.00, 'high' => 0.29],
-            ['low' => 0.30, 'high' => 0.39],
-            ['low' => 0.40, 'high' => 0.49],
-            ['low' => 0.50, 'high' => 0.69],
-            ['low' => 0.70, 'high' => 0.89],
-            ['low' => 0.90, 'high' => 0.99],
-            ['low' => 1.00, 'high' => 1.49],
-            ['low' => 1.50, 'high' => 1.99],
-            ['low' => 2.00, 'high' => 2.99],
-            ['low' => 3.00, 'high' => 3.99],
-            ['low' => 4.00, 'high' => 4.99],
-            ['low' => 5.00, 'high' => 9.99],
-            ['low' => 10.00, 'high' => 99999.00],
+            ['low' => 0.00, 'high' => 0.25, 'value' => '0-25'],
+            ['low' => 0.26, 'high' => 0.50, 'value' => '26-50'],
+            ['low' => 0.51, 'high' => 0.75, 'value' => '51-75'],
+            ['low' => 0.76, 'high' => 0.99, 'value' => '76-99'],
+            ['low' => 1.00, 'high' => 1.25, 'value' => '100-125'],
+            ['low' => 1.26, 'high' => 1.50, 'value' => '126-150'],
+            ['low' => 1.51, 'high' => 1.99, 'value' => '151-199'],
+            ['low' => 2.00, 'high' => 2.50, 'value' => '200-250'],
+            ['low' => 2.51, 'high' => 3.00, 'value' => '251-300'],
+            ['low' => 3.01, 'high' => 5.00, 'value' => '301-500'],
+            ['low' => 5.01, 'high' => 99999.00, 'value' => '500-plus'],
         ];
     }
 }

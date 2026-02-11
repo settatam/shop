@@ -23,3 +23,9 @@ Schedule::job(new RunScheduledAgents)->everyFiveMinutes();
 
 // Generate agent digests daily at 8am
 Schedule::job(new GenerateAgentDigest)->dailyAt('08:00');
+
+// Sync Rapnet prices every Friday at 6am and update all diamond products
+Schedule::command('sync:rapnet-prices --update-products')
+    ->weeklyOn(5, '06:00') // Friday at 6am
+    ->withoutOverlapping()
+    ->runInBackground();

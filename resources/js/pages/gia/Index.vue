@@ -126,16 +126,8 @@ async function submitForm() {
             warnings.value = response.data.warnings;
         }
 
-        success.value = {
-            message: 'Product created successfully!',
-            productUrl: response.data.redirect_url,
-        };
-
-        // Reset form for next entry
-        giaNumber1.value = '';
-        giaNumber2.value = '';
-        giaPreview1.value = null;
-        giaPreview2.value = null;
+        // Redirect to the product edit page
+        router.visit(response.data.redirect_url);
     } catch (err: any) {
         const messages = err.response?.data?.message;
         if (Array.isArray(messages)) {

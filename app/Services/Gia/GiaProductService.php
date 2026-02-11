@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductImage;
 use App\Models\Store;
+use App\Services\Rapnet\RapnetPriceService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +30,7 @@ class GiaProductService
 
     public function __construct(
         protected GiaApiService $giaApiService,
+        protected RapnetPriceService $rapnetPriceService,
     ) {
         $this->disk = config('filesystems.disks.do_spaces.bucket')
             ? 'do_spaces'
@@ -231,6 +233,11 @@ class GiaProductService
                 // Calculate total carat weight
                 $this->setTotalCaratWeight($product, $template, $results, $secondResults);
             }
+
+            // Set rap price for Loose Stones (not Earrings)
+            if (! $isEarrings) {
+                $this->setRapPriceFromResults($product, $store, $results, isInitial: true);
+            }
         }
 
         // Create images from GIA PDF certificates
@@ -281,6 +288,11 @@ class GiaProductService
 
                 // Calculate total carat weight
                 $this->setTotalCaratWeight($product, $template, $results, $secondResults);
+            }
+
+            // Update current rap price for Loose Stones (not initial, so only updates current_rap_price)
+            if (! $isEarrings) {
+                $this->setRapPriceFromResults($product, $store, $results, isInitial: false);
             }
         }
 
@@ -352,6 +364,10 @@ class GiaProductService
 
     /**
      * Set template attribute values for main stone.
+     *
+     * Hardcoded fields by template:
+     * - Earrings: main_stone_gia_report_number, main_stone_cert_type='GIA', main_stone_type='Natural Diamond'
+     * - Loose Stones: gia_report_number, cert_type='GIA', main_stone_type='Natural Diamond', includes='Certificate'
      */
     protected function setTemplateAttributes(
         Product $product,
@@ -362,37 +378,56 @@ class GiaProductService
     ): void {
         $fields = $template->fields;
 
-        // GIA report number field
-        $giaFieldName = $isEarrings ? 'main_stone_gia_report_number' : 'gia_report_number';
-        $this->setAttributeByName($product, $fields, $giaFieldName, $reportNumber);
-
-        // Certification type
-        $certFieldName = $isEarrings ? 'main_stone_cert_type' : 'cert_type';
-        $this->setAttributeByName($product, $fields, $certFieldName, 'GIA');
-
-        // Stone type
-        $this->setAttributeByName($product, $fields, 'main_stone_type', 'Natural Diamond');
-
-        if (! $isEarrings) {
-            $this->setAttributeByName($product, $fields, 'includes', 'Certificate');
-        }
-
-        // Map GIA fields to template fields using appropriate mapping
-        $mapping = $isEarrings
-            ? GiaApiService::getEarringsMainStoneMapping()
-            : GiaApiService::getLooseStonesMapping();
-        $mappedValues = GiaApiService::extractMappedValues($results, $mapping);
-
-        foreach ($mappedValues as $fieldName => $value) {
-            if ($value !== null) {
-                $this->setAttributeByName($product, $fields, $fieldName, (string) $value);
-            }
-        }
-
-        // Handle measurements - field names differ by template
+        // Extract values from GIA response
+        $colorRaw = data_get($results, 'data.color_grades.color_grade_code') ?? $results['color_grade'] ?? null;
+        $clarityRaw = data_get($results, 'data.clarity') ?? $results['clarity_grade'] ?? null;
+        $weight = data_get($results, 'data.weight.weight');
+        $caratWeight = $results['carat_weight'] ?? ($weight ? $weight.' carat' : null);
+        $shape = $results['shape_and_cutting_style'] ?? null;
+        $cutGradeRaw = $results['cut_grade'] ?? null;
+        $polishRaw = $results['polish'] ?? null;
+        $symmetryRaw = $results['symmetry'] ?? null;
+        $fluorescence = $results['fluorescence'] ?? null;
         $measurements = GiaApiService::parseMeasurements($results['measurements'] ?? null);
+
+        // Convert values to lowercase/kebab-case to match select field options
+        $color = $colorRaw ? strtolower($colorRaw) : null;
+        $clarity = $clarityRaw ? strtolower($clarityRaw) : null;
+        $cutGrade = $cutGradeRaw ? Str::slug($cutGradeRaw) : null;
+        $polish = $polishRaw ? Str::slug($polishRaw) : null;
+        $symmetry = $symmetryRaw ? Str::slug($symmetryRaw) : null;
+
         if ($isEarrings) {
-            // Earrings template uses main_stone_ prefix for measurements
+            // ===== EARRINGS TEMPLATE HARDCODED FIELDS =====
+            // Use lowercase/kebab-case values to match select field options
+            $this->setAttributeByName($product, $fields, 'main_stone_gia_report_number', $reportNumber);
+            $this->setAttributeByName($product, $fields, 'main_stone_cert_type', 'gia');
+            $this->setAttributeByName($product, $fields, 'main_stone_type', 'natural-diamond');
+
+            // Main stone fields for Earrings
+            if ($shape) {
+                $this->setAttributeByName($product, $fields, 'main_stone_shape', $shape);
+            }
+            if ($caratWeight) {
+                $this->setAttributeByName($product, $fields, 'main_stone_wt', $caratWeight);
+            }
+            if ($color) {
+                $this->setAttributeByName($product, $fields, 'diamond_color', $color);
+            }
+            if ($clarity) {
+                $this->setAttributeByName($product, $fields, 'diamond_clarity', $clarity);
+            }
+            if ($cutGrade) {
+                $this->setAttributeByName($product, $fields, 'diamond_cut', $cutGrade);
+            }
+            if ($polish) {
+                $this->setAttributeByName($product, $fields, 'main_stone_polish', $polish);
+            }
+            if ($symmetry) {
+                $this->setAttributeByName($product, $fields, 'main_stone_symmetry', $symmetry);
+            }
+
+            // Measurements for Earrings
             if ($measurements['min_diameter']) {
                 $this->setAttributeByName($product, $fields, 'main_stone_min_diameter_length', $measurements['min_diameter']);
             }
@@ -402,8 +437,49 @@ class GiaProductService
             if ($measurements['depth']) {
                 $this->setAttributeByName($product, $fields, 'main_stone_depth', $measurements['depth']);
             }
+
+            // Weight range for Earrings
+            if ($weight) {
+                $weightRange = GiaApiService::getWeightRangeLabel((float) $weight);
+                if ($weightRange) {
+                    $this->setAttributeByName($product, $fields, 'main_stone_weight', $weightRange);
+                }
+            }
         } else {
-            // Loose Stones template
+            // ===== LOOSE STONES TEMPLATE HARDCODED FIELDS =====
+            // Use lowercase/kebab-case values to match select field options
+            $this->setAttributeByName($product, $fields, 'gia_report_number', $reportNumber);
+            $this->setAttributeByName($product, $fields, 'cert_type', 'gia');
+            $this->setAttributeByName($product, $fields, 'main_stone_type', 'natural-diamond');
+            $this->setAttributeByName($product, $fields, 'includes', 'certificate');
+
+            // Main stone fields for Loose Stones
+            if ($shape) {
+                $this->setAttributeByName($product, $fields, 'main_stone_shape', $shape);
+            }
+            if ($caratWeight) {
+                $this->setAttributeByName($product, $fields, 'main_stone_wt', $caratWeight);
+            }
+            if ($color) {
+                $this->setAttributeByName($product, $fields, 'diamond_color', $color);
+            }
+            if ($clarity) {
+                $this->setAttributeByName($product, $fields, 'diamond_clarity', $clarity);
+            }
+            if ($cutGrade) {
+                $this->setAttributeByName($product, $fields, 'diamond_cut', $cutGrade);
+            }
+            if ($polish) {
+                $this->setAttributeByName($product, $fields, 'polish', $polish);
+            }
+            if ($symmetry) {
+                $this->setAttributeByName($product, $fields, 'symmetry', $symmetry);
+            }
+            if ($fluorescence) {
+                $this->setAttributeByName($product, $fields, 'fluorescence', $fluorescence);
+            }
+
+            // Measurements for Loose Stones
             if ($measurements['min_diameter']) {
                 $this->setAttributeByName($product, $fields, 'min_diameter_length', $measurements['min_diameter']);
             }
@@ -413,14 +489,29 @@ class GiaProductService
             if ($measurements['depth']) {
                 $this->setAttributeByName($product, $fields, 'stone_depth', $measurements['depth']);
             }
-        }
 
-        // Weight range
-        $weight = data_get($results, 'data.weight.weight');
-        if ($weight) {
-            $weightRange = GiaApiService::getWeightRangeLabel((float) $weight);
-            if ($weightRange) {
-                $this->setAttributeByName($product, $fields, 'main_stone_weight', $weightRange);
+            // Weight range for Loose Stones
+            if ($weight) {
+                $weightRange = GiaApiService::getWeightRangeLabel((float) $weight);
+                if ($weightRange) {
+                    $this->setAttributeByName($product, $fields, 'main_stone_weight', $weightRange);
+                }
+            }
+
+            // Diamond color range (Loose Stones only) - use raw value for range calculation
+            if ($colorRaw) {
+                $colorRange = $this->getDiamondColorRange($colorRaw);
+                if ($colorRange) {
+                    $this->setAttributeByName($product, $fields, 'diamond_color_range', $colorRange);
+                }
+            }
+
+            // Diamond clarity range (Loose Stones only) - use raw value for range calculation
+            if ($clarityRaw) {
+                $clarityRange = $this->getDiamondClarityRange($clarityRaw);
+                if ($clarityRange) {
+                    $this->setAttributeByName($product, $fields, 'diamond_clarity_range', $clarityRange);
+                }
             }
         }
     }
@@ -437,9 +528,10 @@ class GiaProductService
         $fields = $template->fields;
 
         // Second GIA report number
+        // Use lowercase/kebab-case values to match select field options
         $this->setAttributeByName($product, $fields, 'second_gia_report_number', $reportNumber);
-        $this->setAttributeByName($product, $fields, 'second_stone_cert_type', 'GIA');
-        $this->setAttributeByName($product, $fields, 'second_stone_type', 'Natural Diamond');
+        $this->setAttributeByName($product, $fields, 'second_stone_cert_type', 'gia');
+        $this->setAttributeByName($product, $fields, 'second_stone_type', 'natural-diamond');
 
         // Map second stone fields
         $mappedValues = GiaApiService::extractMappedValues($results, GiaApiService::getEarringsSecondStoneMapping());
@@ -677,5 +769,102 @@ class GiaProductService
         }
 
         return Storage::disk($this->disk)->url($path);
+    }
+
+    /**
+     * Get diamond color range label based on color grade.
+     */
+    protected function getDiamondColorRange(string $color): ?string
+    {
+        // Values must match select option values (lowercase with dashes)
+        $groups = [
+            'd-e-f' => ['D', 'E', 'F'],
+            'g-h-i-j' => ['G', 'H', 'I', 'J'],
+            'k-l-m' => ['K', 'L', 'M'],
+            'n-to-z' => ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'ST'],
+            'fancy' => ['Fancy'],
+            'lab-grown' => ['Lab Grown'],
+        ];
+
+        if (Str::contains($color, 'Fancy')) {
+            return 'fancy';
+        }
+
+        foreach ($groups as $groupName => $groupLetters) {
+            // Split the color if it's a combination (e.g., D-E, E-F)
+            $colorParts = explode('-', $color);
+            $allInGroup = true;
+
+            // Check if all parts of the combination are within the same group
+            foreach ($colorParts as $part) {
+                if (! in_array(trim($part), $groupLetters)) {
+                    $allInGroup = false;
+                    break;
+                }
+            }
+
+            // If all parts are found in a group, return the group name
+            if ($allInGroup) {
+                return $groupName;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get diamond clarity range label based on clarity grade.
+     */
+    protected function getDiamondClarityRange(string $clarity): ?string
+    {
+        // Values must match select option values (lowercase with dashes)
+        $ranges = [
+            'fl-if' => ['FL', 'IF'],
+            'vvs1-vvs2' => ['VVS1', 'VVS2'],
+            'vs1-vs2' => ['VS1', 'VS2'],
+            'si1-si2' => ['SI1', 'SI2'],
+            'i1-i3' => ['I1', 'I2', 'I3'],
+        ];
+
+        foreach ($ranges as $rangeName => $clarities) {
+            if (in_array($clarity, $clarities)) {
+                return $rangeName;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Set rap price on a product from GIA results.
+     */
+    protected function setRapPriceFromResults(Product $product, Store $store, array $results, bool $isInitial): void
+    {
+        // Extract diamond characteristics from GIA results
+        $shape = $results['shape_and_cutting_style'] ?? null;
+        $colorRaw = data_get($results, 'data.color_grades.color_grade_code') ?? $results['color_grade'] ?? null;
+        $clarityRaw = data_get($results, 'data.clarity') ?? $results['clarity_grade'] ?? null;
+        $weight = data_get($results, 'data.weight.weight');
+
+        if (! $shape || ! $colorRaw || ! $clarityRaw || ! $weight) {
+            Log::info('Missing data for rap price lookup', [
+                'product_id' => $product->id,
+                'shape' => $shape,
+                'color' => $colorRaw,
+                'clarity' => $clarityRaw,
+                'weight' => $weight,
+            ]);
+
+            return;
+        }
+
+        $this->rapnetPriceService->setProductRapPrice(
+            $product,
+            $shape,
+            $colorRaw,
+            $clarityRaw,
+            (float) $weight,
+            $isInitial,
+        );
     }
 }

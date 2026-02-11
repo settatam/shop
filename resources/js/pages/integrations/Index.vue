@@ -5,7 +5,7 @@ import { Head, useForm, router, usePage } from '@inertiajs/vue3';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package, Sparkles, Search } from 'lucide-vue-next';
+import { Plug, ExternalLink, Truck, MessageSquare, Trash2, Check, AlertCircle, Gem, Package, Sparkles, Search, DollarSign } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -273,6 +273,35 @@ function deleteSerpapi() {
     if (!confirm('Are you sure you want to remove the SerpAPI integration?')) return;
 
     router.delete(`/integrations/${serpapiIntegration.value.id}`, {
+        preserveScroll: true,
+    });
+}
+
+// Rapnet form
+const rapnetForm = useForm({
+    client_id: '',
+    client_secret: '',
+});
+
+const showRapnetForm = ref(false);
+
+const rapnetIntegration = computed(() => props.integrations?.rapnet);
+
+function saveRapnet() {
+    rapnetForm.post('/integrations/rapnet', {
+        preserveScroll: true,
+        onSuccess: () => {
+            showRapnetForm.value = false;
+            rapnetForm.reset();
+        },
+    });
+}
+
+function deleteRapnet() {
+    if (!rapnetIntegration.value?.id) return;
+    if (!confirm('Are you sure you want to remove the Rapnet integration?')) return;
+
+    router.delete(`/integrations/${rapnetIntegration.value.id}`, {
         preserveScroll: true,
     });
 }
@@ -902,6 +931,90 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                                     type="button"
                                     variant="ghost"
                                     @click="showSerpapiForm = false"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                <!-- Rapnet -->
+                <Card>
+                    <CardHeader>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900">
+                                    <DollarSign class="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                </div>
+                                <div>
+                                    <CardTitle class="text-lg">Rapnet</CardTitle>
+                                    <CardDescription>Diamond price list (Rap prices)</CardDescription>
+                                </div>
+                            </div>
+                            <Badge
+                                v-if="rapnetIntegration?.has_credentials"
+                                :variant="getStatusBadgeVariant(rapnetIntegration.status)"
+                            >
+                                <Check v-if="rapnetIntegration.status === 'active'" class="mr-1 h-3 w-3" />
+                                <AlertCircle v-else-if="rapnetIntegration.status === 'error'" class="mr-1 h-3 w-3" />
+                                {{ rapnetIntegration.status === 'active' ? 'Connected' : rapnetIntegration.status }}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <!-- Show configured state -->
+                        <div v-if="rapnetIntegration?.has_credentials && !showRapnetForm" class="space-y-4">
+                            <div class="rounded-lg border p-3 text-sm">
+                                <p class="text-muted-foreground">API credentials configured</p>
+                                <p class="text-xs text-muted-foreground mt-1">Rap prices sync every Friday at 6am</p>
+                                <div v-if="rapnetIntegration.last_error" class="mt-2 text-red-600 dark:text-red-400">
+                                    {{ rapnetIntegration.last_error }}
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button variant="outline" size="sm" @click="showRapnetForm = true">
+                                    Update Credentials
+                                </Button>
+                                <Button variant="ghost" size="sm" class="text-red-600" @click="deleteRapnet">
+                                    <Trash2 class="mr-1 h-4 w-4" />
+                                    Remove
+                                </Button>
+                            </div>
+                        </div>
+
+                        <!-- Show form -->
+                        <form v-else @submit.prevent="saveRapnet" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Client ID</label>
+                                <input
+                                    v-model="rapnetForm.client_id"
+                                    type="text"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Enter Rapnet Client ID"
+                                />
+                                <p v-if="rapnetForm.errors.client_id" class="mt-1 text-sm text-red-600">{{ rapnetForm.errors.client_id }}</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Client Secret</label>
+                                <input
+                                    v-model="rapnetForm.client_secret"
+                                    type="password"
+                                    class="w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    placeholder="Enter Rapnet Client Secret"
+                                />
+                                <p v-if="rapnetForm.errors.client_secret" class="mt-1 text-sm text-red-600">{{ rapnetForm.errors.client_secret }}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">Get credentials from <a href="https://technet.rapaport.com" target="_blank" class="text-indigo-600 hover:underline">technet.rapaport.com</a></p>
+                            </div>
+                            <div class="flex gap-2">
+                                <Button type="submit" :disabled="rapnetForm.processing">
+                                    {{ rapnetForm.processing ? 'Saving...' : 'Save Rapnet' }}
+                                </Button>
+                                <Button
+                                    v-if="rapnetIntegration?.has_credentials"
+                                    type="button"
+                                    variant="ghost"
+                                    @click="showRapnetForm = false"
                                 >
                                     Cancel
                                 </Button>

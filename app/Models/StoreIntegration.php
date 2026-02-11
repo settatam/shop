@@ -28,6 +28,8 @@ class StoreIntegration extends Model
 
     public const PROVIDER_SERPAPI = 'serpapi';
 
+    public const PROVIDER_RAPNET = 'rapnet';
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_INACTIVE = 'inactive';
@@ -293,5 +295,21 @@ class StoreIntegration extends Model
     public function getSerpApiUrl(): string
     {
         return 'https://serpapi.com/search';
+    }
+
+    /**
+     * Get Rapnet Client ID.
+     */
+    public function getRapnetClientId(): ?string
+    {
+        return $this->credentials['client_id'] ?? null;
+    }
+
+    /**
+     * Get Rapnet Client Secret.
+     */
+    public function getRapnetClientSecret(): ?string
+    {
+        return $this->credentials['client_secret'] ?? null;
     }
 }

@@ -558,6 +558,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('integrations/shipstation', [IntegrationsController::class, 'storeShipStation'])->name('integrations.shipstation.store');
         Route::post('integrations/anthropic', [IntegrationsController::class, 'storeAnthropic'])->name('integrations.anthropic.store');
         Route::post('integrations/serpapi', [IntegrationsController::class, 'storeSerpApi'])->name('integrations.serpapi.store');
+        Route::post('integrations/rapnet', [IntegrationsController::class, 'storeRapnet'])->name('integrations.rapnet.store');
         Route::delete('integrations/{integration}', [IntegrationsController::class, 'destroy'])->name('integrations.destroy');
 
         // Platform connections (Shopify, eBay, etc.)
