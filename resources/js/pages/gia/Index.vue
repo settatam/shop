@@ -149,7 +149,7 @@ function goToProduct() {
 function formatGrade(report: any): string {
     const color = report.results?.data?.color_grades?.color_grade_code || report.results?.color_grade || '-';
     const clarity = report.results?.data?.clarity || report.results?.clarity_grade || '-';
-    const cut = report.results?.cut_grade || '-';
+    const cut = report.results?.cut_grade || '';
     return `${color} / ${clarity} / ${cut}`;
 }
 </script>
@@ -337,7 +337,7 @@ function formatGrade(report: any): string {
                                 <!-- Preview for second stone -->
                                 <div v-if="giaPreview2" class="mt-3 rounded-md bg-gray-50 p-3 dark:bg-gray-700/50">
                                     <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ giaPreview2.results?.carat_weight || '-' }}ct
+                                        {{ giaPreview2.results?.carat_weight || '-' }}
                                         {{ giaPreview2.results?.shape_and_cutting_style || '-' }}
                                     </p>
                                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
