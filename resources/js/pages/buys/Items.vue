@@ -24,7 +24,7 @@ function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
     if (params.get('status')) filter.status = params.get('status') || undefined;
-    if (params.get('type')) filter.type = params.get('type') || undefined;
+    if (params.get('transaction_type')) filter.transaction_type = params.get('transaction_type') || undefined;
     if (params.get('payment_method')) filter.payment_method = params.get('payment_method') || undefined;
     if (params.get('min_amount')) filter.min_amount = params.get('min_amount') || undefined;
     if (params.get('max_amount')) filter.max_amount = params.get('max_amount') || undefined;
@@ -41,7 +41,7 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, upda
 
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status as string || '');
-const selectedType = ref<string>(initialParams.type as string || '');
+const selectedType = ref<string>(initialParams.transaction_type as string || '');
 const selectedPaymentMethod = ref<string>(initialParams.payment_method as string || '');
 const selectedCategory = ref<string>(initialParams.category_id as string || '');
 const minAmount = ref<string>(initialParams.min_amount as string || '');
@@ -67,7 +67,7 @@ onMounted(() => {
 watch([selectedStatus, selectedType, selectedPaymentMethod, selectedCategory, minAmount, maxAmount, fromDate, toDate], () => {
     updateFilter({
         status: selectedStatus.value || undefined,
-        type: selectedType.value || undefined,
+        transaction_type: selectedType.value || undefined,
         payment_method: selectedPaymentMethod.value || undefined,
         category_id: selectedCategory.value || undefined,
         min_amount: minAmount.value || undefined,

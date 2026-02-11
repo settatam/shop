@@ -19,7 +19,7 @@ class BuyItemsTable extends Table
 
     protected bool $isSearchable = true;
 
-    protected string $noDataMessage = 'No buy items found.';
+    protected string $noDataMessage = 'No buy items found. Items appear here after a transaction reaches "Payment Processed" status.';
 
     /**
      * Define the table fields/columns.
@@ -137,19 +137,19 @@ class BuyItemsTable extends Table
         }
 
         // Apply status filter
-        if ($statusSlug = data_get($filter, 'status')) {
-            $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
-            $status = Status::where('store_id', $storeId)
-                ->where('entity_type', 'transaction')
-                ->where('slug', $statusSlug)
-                ->first();
+                if ($statusSlug = data_get($filter, 'status')) {
+                    $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
+                    $status = Status::where('store_id', $storeId)
+                        ->where('entity_type', 'transaction')
+                        ->where('slug', $statusSlug)
+                        ->first();
 
-            if ($status) {
-                $query->whereHas('transaction', function ($q) use ($status) {
-                    $q->where('status_id', $status->id);
-                });
-            }
-        }
+                    if ($status) {
+                        $query->whereHas('transaction', function ($q) use ($status) {
+                            $q->where('status_id', $status->id);
+                        });
+                    }
+                }
 
         // Apply payment method filter
         if ($paymentMethod = data_get($filter, 'payment_method')) {
@@ -158,10 +158,10 @@ class BuyItemsTable extends Table
             });
         }
 
-        // Apply type filter (in_store / mail_in)
-        if ($type = data_get($filter, 'type')) {
-            $query->whereHas('transaction', function ($q) use ($type) {
-                $q->where('type', $type);
+        // Apply transaction type filter (in_store / mail_in)
+        if ($transactionType = data_get($filter, 'transaction_type')) {
+            $query->whereHas('transaction', function ($q) use ($transactionType) {
+                $q->where('type', $transactionType);
             });
         }
 
