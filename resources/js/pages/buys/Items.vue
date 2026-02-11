@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import { DatePicker } from '@/components/ui/date-picker';
 import { computed, onMounted, ref, watch } from 'vue';
 import { XMarkIcon, PlusIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface FilterOption {
     value: string;
     label: string;
+    color?: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -23,13 +23,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
+    if (params.get('status')) filter.status = params.get('status') || undefined;
+    if (params.get('type')) filter.type = params.get('type') || undefined;
     if (params.get('payment_method')) filter.payment_method = params.get('payment_method') || undefined;
     if (params.get('min_amount')) filter.min_amount = params.get('min_amount') || undefined;
     if (params.get('max_amount')) filter.max_amount = params.get('max_amount') || undefined;
     if (params.get('from_date')) filter.from_date = params.get('from_date') || undefined;
     if (params.get('to_date')) filter.to_date = params.get('to_date') || undefined;
     if (params.get('category_id')) filter.category_id = params.get('category_id') || undefined;
-    if (params.get('review_status')) filter.review_status = params.get('review_status') || undefined;
     return filter;
 }
 
@@ -39,9 +40,10 @@ const initialParams = getUrlParams();
 const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuyItemsTable', initialParams);
 
 // Filters - initialize from URL params
+const selectedStatus = ref<string>(initialParams.status as string || '');
+const selectedType = ref<string>(initialParams.type as string || '');
 const selectedPaymentMethod = ref<string>(initialParams.payment_method as string || '');
 const selectedCategory = ref<string>(initialParams.category_id as string || '');
-const selectedReviewStatus = ref<string>(initialParams.review_status as string || '');
 const minAmount = ref<string>(initialParams.min_amount as string || '');
 const maxAmount = ref<string>(initialParams.max_amount as string || '');
 const fromDate = ref<string>(initialParams.from_date as string || '');
@@ -51,9 +53,10 @@ const toDate = ref<string>(initialParams.to_date as string || '');
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
 
 // Get available filters from widget data
+const availableStatuses = computed<FilterOption[]>(() => data.value?.filters?.available?.statuses || []);
+const availableTypes = computed<FilterOption[]>(() => data.value?.filters?.available?.types || []);
 const availablePaymentMethods = computed<FilterOption[]>(() => data.value?.filters?.available?.payment_methods || []);
 const availableCategories = computed<FilterOption[]>(() => data.value?.filters?.available?.categories || []);
-const availableReviewStatuses = computed<FilterOption[]>(() => data.value?.filters?.available?.review_statuses || []);
 
 // Load widget on mount
 onMounted(() => {
@@ -61,11 +64,12 @@ onMounted(() => {
 });
 
 // Watch filter changes
-watch([selectedPaymentMethod, selectedCategory, selectedReviewStatus, minAmount, maxAmount, fromDate, toDate], () => {
+watch([selectedStatus, selectedType, selectedPaymentMethod, selectedCategory, minAmount, maxAmount, fromDate, toDate], () => {
     updateFilter({
+        status: selectedStatus.value || undefined,
+        type: selectedType.value || undefined,
         payment_method: selectedPaymentMethod.value || undefined,
         category_id: selectedCategory.value || undefined,
-        review_status: selectedReviewStatus.value || undefined,
         min_amount: minAmount.value || undefined,
         max_amount: maxAmount.value || undefined,
         from_date: fromDate.value || undefined,
@@ -91,30 +95,18 @@ function handlePerPageChange(perPage: number) {
 }
 
 function clearFilters() {
+    selectedStatus.value = '';
+    selectedType.value = '';
     selectedPaymentMethod.value = '';
     selectedCategory.value = '';
-    selectedReviewStatus.value = '';
     minAmount.value = '';
     maxAmount.value = '';
     fromDate.value = '';
     toDate.value = '';
 }
 
-// Handle review item action
-async function handleReviewItem(transactionId: number, itemId: number) {
-    try {
-        await axios.post(`/transactions/${transactionId}/items/${itemId}/review`);
-        // Reload the widget data to reflect the change
-        loadWidget();
-        dataTableRef.value?.clearReviewingState();
-    } catch (error: any) {
-        alert(error.response?.data?.message || 'Failed to review item. Please try again.');
-        dataTableRef.value?.clearReviewingState();
-    }
-}
-
 const hasActiveFilters = computed(() => {
-    return selectedPaymentMethod.value || selectedCategory.value || selectedReviewStatus.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
+    return selectedStatus.value || selectedType.value || selectedPaymentMethod.value || selectedCategory.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
 });
 </script>
 
@@ -128,7 +120,7 @@ const hasActiveFilters = computed(() => {
                 <div>
                     <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Buy Items</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        View all individual items from completed buy transactions
+                        View all individual items from bought transactions
                     </p>
                 </div>
                 <div class="flex items-center gap-3">
@@ -150,6 +142,32 @@ const hasActiveFilters = computed(() => {
 
             <!-- Filters -->
             <div class="flex flex-wrap items-end gap-4">
+                <div v-if="availableStatuses.length > 0">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select
+                        v-model="selectedStatus"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Statuses</option>
+                        <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
+                            {{ status.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div v-if="availableTypes.length > 0">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
+                    <select
+                        v-model="selectedType"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Types</option>
+                        <option v-for="type in availableTypes" :key="type.value" :value="type.value">
+                            {{ type.label }}
+                        </option>
+                    </select>
+                </div>
+
                 <div>
                     <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
                     <select
@@ -172,19 +190,6 @@ const hasActiveFilters = computed(() => {
                         <option value="">All Categories</option>
                         <option v-for="category in availableCategories" :key="category.value" :value="category.value">
                             {{ category.label }}
-                        </option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Review Status</label>
-                    <select
-                        v-model="selectedReviewStatus"
-                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                    >
-                        <option value="">All Items</option>
-                        <option v-for="status in availableReviewStatuses" :key="status.value" :value="status.value">
-                            {{ status.label }}
                         </option>
                     </select>
                 </div>
@@ -251,14 +256,14 @@ const hasActiveFilters = computed(() => {
                 :loading="loading"
                 :show-totals="true"
                 :total-columns="[
-                    { key: 'buy_price', format: 'currency' },
                     { key: 'est_value', format: 'currency' },
+                    { key: 'amount_paid', format: 'currency' },
+                    { key: 'profit', format: 'currency' },
                 ]"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
                 @per-page-change="handlePerPageChange"
-                @review-item="handleReviewItem"
             />
 
             <!-- Loading skeleton -->

@@ -3,6 +3,7 @@
 namespace App\Widget\Buys;
 
 use App\Models\Category;
+use App\Models\Status;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Services\StoreContext;
@@ -18,7 +19,7 @@ class BuyItemsTable extends Table
 
     protected bool $isSearchable = true;
 
-    protected string $noDataMessage = 'No buy items found. Complete a buy transaction with payment to see items here.';
+    protected string $noDataMessage = 'No buy items found.';
 
     /**
      * Define the table fields/columns.
@@ -29,28 +30,38 @@ class BuyItemsTable extends Table
     {
         return [
             [
-                'key' => 'title',
-                'label' => 'Item',
+                'key' => 'purchase_date',
+                'label' => 'Purchase Date',
                 'sortable' => true,
             ],
             [
-                'key' => 'category',
-                'label' => 'Category',
+                'key' => 'image',
+                'label' => 'Picture',
                 'sortable' => false,
             ],
             [
-                'key' => 'buy_price',
-                'label' => 'We Paid',
+                'key' => 'transaction_number',
+                'label' => 'Transaction ID',
+                'sortable' => false,
+            ],
+            [
+                'key' => 'title',
+                'label' => 'Title',
                 'sortable' => true,
             ],
             [
                 'key' => 'est_value',
-                'label' => 'Est. Value',
+                'label' => 'Est Value',
                 'sortable' => true,
             ],
             [
-                'key' => 'transaction_number',
-                'label' => 'Transaction #',
+                'key' => 'amount_paid',
+                'label' => 'Amount Paid',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'profit',
+                'label' => 'Profit',
                 'sortable' => false,
             ],
             [
@@ -59,25 +70,26 @@ class BuyItemsTable extends Table
                 'sortable' => false,
             ],
             [
-                'key' => 'payment_method',
-                'label' => 'Payment Method',
+                'key' => 'payment_type',
+                'label' => 'Payment Type',
                 'sortable' => false,
             ],
             [
-                'key' => 'paid_at',
-                'label' => 'Date Paid',
+                'key' => 'type',
+                'label' => 'Type',
                 'sortable' => false,
             ],
             [
-                'key' => 'review',
-                'label' => 'Review',
+                'key' => 'status',
+                'label' => 'Status',
                 'sortable' => true,
             ],
         ];
     }
 
     /**
-     * Build the query for fetching transaction items with completed payments.
+     * Build the query for fetching transaction items from "bought" transactions.
+     * A transaction is considered "bought" if it has passed through "Payment Processed" status.
      *
      * @param  array<string, mixed>|null  $filter
      */
@@ -85,11 +97,27 @@ class BuyItemsTable extends Table
     {
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
+        // Get the "Payment Processed" status for this store
+        $paymentProcessedStatus = Status::where('store_id', $storeId)
+            ->where('entity_type', 'transaction')
+            ->where('slug', 'payment_processed')
+            ->first();
+
         $query = TransactionItem::query()
-            ->with(['transaction.customer', 'category'])
-            ->whereHas('transaction', function ($q) use ($storeId) {
-                $q->where('store_id', $storeId)
-                    ->where('status', Transaction::STATUS_PAYMENT_PROCESSED);
+            ->with(['transaction.customer', 'transaction.statusModel', 'category', 'images', 'product.images'])
+            ->whereHas('transaction', function ($q) use ($storeId, $paymentProcessedStatus) {
+                $q->where('store_id', $storeId);
+
+                // Filter by payment processed status (either current status_id or legacy status field)
+                if ($paymentProcessedStatus) {
+                    $q->where(function ($sq) use ($paymentProcessedStatus) {
+                        $sq->where('status_id', $paymentProcessedStatus->id)
+                            ->orWhere('status', 'payment_processed');
+                    });
+                } else {
+                    // Fallback to legacy status field
+                    $q->where('status', 'payment_processed');
+                }
             });
 
         // Apply search filter
@@ -108,10 +136,32 @@ class BuyItemsTable extends Table
             });
         }
 
+        // Apply status filter
+        if ($statusSlug = data_get($filter, 'status')) {
+            $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
+            $status = Status::where('store_id', $storeId)
+                ->where('entity_type', 'transaction')
+                ->where('slug', $statusSlug)
+                ->first();
+
+            if ($status) {
+                $query->whereHas('transaction', function ($q) use ($status) {
+                    $q->where('status_id', $status->id);
+                });
+            }
+        }
+
         // Apply payment method filter
         if ($paymentMethod = data_get($filter, 'payment_method')) {
             $query->whereHas('transaction', function ($q) use ($paymentMethod) {
                 $q->where('payment_method', $paymentMethod);
+            });
+        }
+
+        // Apply type filter (in_store / mail_in)
+        if ($type = data_get($filter, 'type')) {
+            $query->whereHas('transaction', function ($q) use ($type) {
+                $q->where('type', $type);
             });
         }
 
@@ -125,32 +175,23 @@ class BuyItemsTable extends Table
             $query->where('buy_price', '<=', $maxAmount);
         }
 
-        // Apply from date filter (by payment_processed_at)
+        // Apply from date filter
         if ($fromDate = data_get($filter, 'from_date')) {
             $query->whereHas('transaction', function ($q) use ($fromDate) {
-                $q->whereDate('payment_processed_at', '>=', $fromDate);
+                $q->whereDate('created_at', '>=', $fromDate);
             });
         }
 
-        // Apply to date filter (by payment_processed_at)
+        // Apply to date filter
         if ($toDate = data_get($filter, 'to_date')) {
             $query->whereHas('transaction', function ($q) use ($toDate) {
-                $q->whereDate('payment_processed_at', '<=', $toDate);
+                $q->whereDate('created_at', '<=', $toDate);
             });
         }
 
         // Apply category filter
         if ($categoryId = data_get($filter, 'category_id')) {
             $query->where('category_id', $categoryId);
-        }
-
-        // Apply review status filter
-        if ($reviewStatus = data_get($filter, 'review_status')) {
-            if ($reviewStatus === 'reviewed') {
-                $query->whereNotNull('reviewed_at');
-            } elseif ($reviewStatus === 'not_reviewed') {
-                $query->whereNull('reviewed_at');
-            }
         }
 
         return $query;
@@ -171,8 +212,18 @@ class BuyItemsTable extends Table
         $sortDirection = data_get($filter, 'sortDirection', 'desc');
 
         // Handle special sort columns
-        if ($sortBy === 'review') {
-            $query->orderBy('reviewed_at', $sortDirection);
+        if ($sortBy === 'purchase_date') {
+            $query->join('transactions', 'transactions.id', '=', 'transaction_items.transaction_id')
+                ->orderBy('transactions.created_at', $sortDirection)
+                ->select('transaction_items.*');
+        } elseif ($sortBy === 'status') {
+            $query->join('transactions as t', 't.id', '=', 'transaction_items.transaction_id')
+                ->orderBy('t.status_id', $sortDirection)
+                ->select('transaction_items.*');
+        } elseif ($sortBy === 'amount_paid') {
+            $query->orderBy('buy_price', $sortDirection);
+        } elseif ($sortBy === 'est_value') {
+            $query->orderBy('price', $sortDirection);
         } else {
             $query->orderBy($sortBy, $sortDirection);
         }
@@ -209,31 +260,41 @@ class BuyItemsTable extends Table
             Transaction::PAYMENT_WIRE_TRANSFER => 'Wire Transfer',
         ];
 
+        $typeLabels = [
+            Transaction::TYPE_IN_STORE => 'In-Store',
+            Transaction::TYPE_MAIL_IN => 'Mail-In',
+        ];
+
+        // Get status from statusModel
+        $statusName = $transaction->statusModel?->name ?? ucfirst(str_replace('_', ' ', $transaction->status ?? 'Unknown'));
+        $statusColor = $transaction->statusModel?->color ?? '#6b7280';
+
+        // Calculate profit
+        $estValue = (float) ($item->price ?? 0);
+        $amountPaid = (float) ($item->buy_price ?? 0);
+        $profit = $estValue - $amountPaid;
+
+        // Get first image - check item images first, then product images
+        $firstImage = null;
+        if ($item->images->isNotEmpty()) {
+            $firstImage = $item->images->first();
+        } elseif ($item->product && $item->product->images->isNotEmpty()) {
+            $firstImage = $item->product->images->first();
+        }
+
         return [
             'id' => [
                 'data' => $item->id,
             ],
-            'title' => [
-                'type' => 'link',
-                'href' => "/transactions/{$transaction->id}/items/{$item->id}",
-                'data' => $item->title ?: 'Untitled Item',
-                'class' => 'font-medium',
+            'purchase_date' => [
+                'data' => Carbon::parse($transaction->created_at)->format('M d, Y'),
+                'class' => 'text-sm text-gray-500',
             ],
-            'category' => [
-                'data' => $item->category?->name ?? '-',
-                'class' => 'text-sm',
-            ],
-            'buy_price' => [
-                'type' => 'currency',
-                'data' => $item->buy_price ?? 0,
-                'currency' => 'USD',
-                'class' => 'font-semibold',
-            ],
-            'est_value' => [
-                'type' => 'currency',
-                'data' => $item->price ?? 0,
-                'currency' => 'USD',
-                'class' => 'text-sm',
+            'image' => [
+                'type' => 'image',
+                'data' => $firstImage?->url ?? $firstImage?->path,
+                'alt' => $item->title ?? 'Item image',
+                'class' => 'size-10 rounded object-cover',
             ],
             'transaction_number' => [
                 'type' => 'link',
@@ -241,31 +302,68 @@ class BuyItemsTable extends Table
                 'data' => $transaction->transaction_number,
                 'class' => 'font-mono text-sm',
             ],
+            'title' => [
+                'type' => 'link',
+                'href' => "/transactions/{$transaction->id}/items/{$item->id}",
+                'data' => $item->title ?: 'Untitled Item',
+                'class' => 'font-medium',
+            ],
+            'est_value' => [
+                'type' => 'currency',
+                'data' => $estValue,
+                'currency' => 'USD',
+            ],
+            'amount_paid' => [
+                'type' => 'currency',
+                'data' => $amountPaid,
+                'currency' => 'USD',
+                'class' => 'font-semibold',
+            ],
+            'profit' => [
+                'type' => 'currency',
+                'data' => $profit,
+                'currency' => 'USD',
+                'class' => $profit >= 0 ? 'text-green-600' : 'text-red-600',
+            ],
             'customer' => [
                 'type' => 'link',
                 'href' => $transaction->customer ? "/customers/{$transaction->customer->id}" : null,
                 'data' => $transaction->customer?->full_name ?? 'No Customer',
                 'class' => $transaction->customer ? 'text-sm' : 'text-sm text-gray-400 italic',
             ],
-            'payment_method' => [
+            'payment_type' => [
+                'data' => $this->formatPaymentMethods($transaction->payment_method, $paymentMethodLabels),
+                'class' => 'text-sm',
+            ],
+            'type' => [
                 'type' => 'badge',
-                'data' => $paymentMethodLabels[$transaction->payment_method] ?? ucfirst($transaction->payment_method ?? 'Unknown'),
-                'variant' => 'secondary',
+                'data' => $typeLabels[$transaction->type] ?? ucfirst($transaction->type ?? 'Unknown'),
+                'variant' => $transaction->type === Transaction::TYPE_MAIL_IN ? 'info' : 'secondary',
             ],
-            'paid_at' => [
-                'data' => $transaction->payment_processed_at
-                    ? Carbon::parse($transaction->payment_processed_at)->format('M d, Y')
-                    : '-',
-                'class' => 'text-sm text-gray-500',
-            ],
-            'review' => [
-                'type' => 'review_action',
-                'data' => $item->reviewed_at ? Carbon::parse($item->reviewed_at)->format('M d, Y g:i A') : null,
-                'reviewed' => $item->isReviewed(),
-                'transaction_id' => $transaction->id,
-                'item_id' => $item->id,
+            'status' => [
+                'type' => 'status-badge',
+                'data' => $statusName,
+                'color' => $statusColor,
             ],
         ];
+    }
+
+    /**
+     * Format payment methods for display (handles comma-separated values).
+     *
+     * @param  array<string, string>  $labels
+     */
+    protected function formatPaymentMethods(?string $paymentMethod, array $labels): string
+    {
+        if (! $paymentMethod) {
+            return '-';
+        }
+
+        $methods = explode(',', $paymentMethod);
+
+        return collect($methods)
+            ->map(fn ($method) => $labels[trim($method)] ?? ucfirst(trim($method)))
+            ->implode(', ');
     }
 
     /**
@@ -316,9 +414,21 @@ class BuyItemsTable extends Table
             ])
             ->toArray();
 
-        $reviewStatuses = [
-            ['value' => 'reviewed', 'label' => 'Reviewed'],
-            ['value' => 'not_reviewed', 'label' => 'Not Reviewed'],
+        // Get transaction statuses
+        $statuses = Status::where('store_id', $storeId)
+            ->where('entity_type', 'transaction')
+            ->orderBy('sort_order')
+            ->get(['id', 'name', 'slug', 'color'])
+            ->map(fn ($status) => [
+                'value' => $status->slug,
+                'label' => $status->name,
+                'color' => $status->color,
+            ])
+            ->toArray();
+
+        $types = [
+            ['value' => Transaction::TYPE_IN_STORE, 'label' => 'In-Store'],
+            ['value' => Transaction::TYPE_MAIL_IN, 'label' => 'Mail-In'],
         ];
 
         return [
@@ -326,7 +436,8 @@ class BuyItemsTable extends Table
             'available' => [
                 'payment_methods' => $paymentMethods,
                 'categories' => $categories,
-                'review_statuses' => $reviewStatuses,
+                'statuses' => $statuses,
+                'types' => $types,
             ],
         ];
     }
