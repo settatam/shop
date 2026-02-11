@@ -447,6 +447,8 @@ class MigrateLegacyProducts extends Command
             $this->warn('  No legacy store location found - inventory quantities will be 0');
         }
 
+        $this->line('  Counting legacy products...');
+
         $query = DB::connection('legacy')
             ->table('products')
             ->where('store_id', $legacyStoreId);
@@ -455,13 +457,20 @@ class MigrateLegacyProducts extends Command
             $query->whereNull('deleted_at');
         }
 
+        $totalCount = $query->count();
+        $this->line("  Found {$totalCount} legacy products");
+
         $query->orderBy('id', 'asc');
 
         if ($limit > 0) {
             $query->limit($limit);
+            $this->line("  Limiting to {$limit} products");
         }
 
+        $this->line('  Fetching products from legacy database...');
         $legacyProducts = $query->get();
+        $this->line('  Products fetched, starting migration...');
+
         $productCount = 0;
         $variantCount = 0;
         $skipped = 0;
