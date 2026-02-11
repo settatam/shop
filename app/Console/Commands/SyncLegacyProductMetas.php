@@ -251,9 +251,12 @@ class SyncLegacyProductMetas extends Command
 
                     // Store select options for value transformation
                     if ($newField->type === 'select' && $newField->options) {
-                        $options = is_string($newField->options)
-                            ? json_decode($newField->options, true)
-                            : $newField->options;
+                        $options = $newField->options;
+                        if (is_string($options)) {
+                            $options = json_decode($options, true);
+                        } elseif ($options instanceof \Illuminate\Support\Collection) {
+                            $options = $options->toArray();
+                        }
                         $this->templateFieldOptionsMap[$newTemplateId][$legacyName] = $options ?? [];
                     }
 
