@@ -94,7 +94,7 @@ class BuysTable extends Table
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
         $query = Transaction::query()
-            ->with(['customer.leadSource', 'images', 'items.images'])
+            ->with(['customer.leadSource', 'images', 'items.images', 'items.product.images'])
             ->where('store_id', $storeId)
             ->where('status', Transaction::STATUS_PAYMENT_PROCESSED);
 
@@ -222,16 +222,21 @@ class BuysTable extends Table
         // Date: use payment_processed_at if set, otherwise fall back to created_at
         $transactionDate = $transaction->payment_processed_at ?? $transaction->created_at;
 
-        // Get first image - check transaction images first (online), then item images (in-house)
+        // Get first image - check transaction images first (online), then item images, then product images
         $firstImage = null;
         if ($transaction->images->isNotEmpty()) {
             // Online transactions store images on the transaction
             $firstImage = $transaction->images->first();
         } else {
-            // In-house transactions store images on items
+            // Check item images first, then product images
             foreach ($transaction->items as $item) {
                 if ($item->images->isNotEmpty()) {
                     $firstImage = $item->images->first();
+                    break;
+                }
+                // Check if item has a linked product with images
+                if ($item->product && $item->product->images->isNotEmpty()) {
+                    $firstImage = $item->product->images->first();
                     break;
                 }
             }

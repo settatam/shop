@@ -83,7 +83,7 @@ class TransactionsTable extends Table
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
         $query = Transaction::query()
-            ->with(['customer', 'items.images', 'images', 'statusModel', 'tags'])
+            ->with(['customer', 'items.images', 'items.product.images', 'images', 'statusModel', 'tags'])
             ->withCount('items')
             ->where('store_id', $storeId);
 
@@ -199,16 +199,21 @@ class TransactionsTable extends Table
         $statusName = $transaction->statusModel?->name ?? ucfirst(str_replace('_', ' ', $transaction->status ?? 'Unknown'));
         $statusColor = $transaction->statusModel?->color ?? '#6b7280';
 
-        // Get first image - check transaction images first (online), then item images (in-house)
+        // Get first image - check transaction images first (online), then item images, then product images
         $firstImage = null;
         if ($transaction->images->isNotEmpty()) {
             // Online transactions store images on the transaction
             $firstImage = $transaction->images->first();
         } else {
-            // In-house transactions store images on items
+            // Check item images first, then product images
             foreach ($transaction->items as $item) {
                 if ($item->images->isNotEmpty()) {
                     $firstImage = $item->images->first();
+                    break;
+                }
+                // Check if item has a linked product with images
+                if ($item->product && $item->product->images->isNotEmpty()) {
+                    $firstImage = $item->product->images->first();
                     break;
                 }
             }
