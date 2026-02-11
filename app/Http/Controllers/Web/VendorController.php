@@ -206,13 +206,14 @@ class VendorController extends Controller
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->join('products', 'order_items.product_id', '=', 'products.id')
             ->where('products.vendor_id', $vendor->id)
-            ->whereIn('orders.status', ['completed', 'shipped', 'delivered'])
+            ->whereIn('orders.status', ['confirmed', 'completed', 'shipped', 'delivered'])
             ->select([
                 'order_items.id',
                 'order_items.sku',
                 'order_items.title',
                 'order_items.price',
                 'order_items.cost',
+                'order_items.wholesale_value',
                 'order_items.quantity',
                 'orders.id as order_id',
                 'orders.invoice_number',
@@ -225,8 +226,10 @@ class VendorController extends Controller
         $items = $soldItems->map(function ($item) {
             $cost = (float) ($item->cost ?? 0);
             $price = (float) ($item->price ?? 0);
+            $wholesale = (float) ($item->wholesale_value ?? 0);
             $quantity = (int) ($item->quantity ?? 1);
             $totalCost = $cost * $quantity;
+            $totalWholesale = $wholesale * $quantity;
             $totalSold = $price * $quantity;
             $profit = $totalSold - $totalCost;
             $profitPercent = $totalCost > 0 ? ($profit / $totalCost) * 100 : 0;
@@ -239,6 +242,7 @@ class VendorController extends Controller
                 'invoice_number' => $item->invoice_number,
                 'date' => $this->formatDate($item->date_of_purchase ?? $item->order_date),
                 'cost' => $totalCost,
+                'wholesale' => $totalWholesale,
                 'amount_sold' => $totalSold,
                 'profit' => $profit,
                 'profit_percent' => round($profitPercent, 1),
@@ -247,6 +251,7 @@ class VendorController extends Controller
 
         $totals = [
             'cost' => $items->sum('cost'),
+            'wholesale' => $items->sum('wholesale'),
             'amount_sold' => $items->sum('amount_sold'),
             'profit' => $items->sum('profit'),
             'profit_percent' => $items->sum('cost') > 0

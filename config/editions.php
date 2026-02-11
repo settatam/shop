@@ -16,13 +16,14 @@ return [
     'editions' => [
         'standard' => [
             'name' => 'Standard',
-            'description' => 'Standard retail edition',
+            'description' => 'Standard retail edition with all features enabled',
             'features' => [
                 // UI Features
                 'dashboard',
                 'customers',
                 'leads',
                 'products',
+                'gia', // GIA diamond lookup
                 'categories',
                 'product_types',
                 'templates',
@@ -33,9 +34,12 @@ return [
                 'transactions',
                 'buys',
                 'vendors',
+                'repairs', // Item repairs
+                'memos', // Memo tracking
                 'invoices',
                 'payments',
                 'labels',
+                'buckets', // Bucket grouping
                 'reports',
                 'tags',
                 'integrations',
@@ -44,6 +48,13 @@ return [
                 'xoom',
                 'agents',
                 'marketplaces',
+
+                // Additional features
+                'product_status_in_memo',
+                'product_status_in_repair',
+                'product_status_in_bucket',
+                'product_status_awaiting_confirmation',
+                'single_item_inventory',
             ],
         ],
 

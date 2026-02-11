@@ -102,6 +102,7 @@ interface SoldItem {
     invoice_number: string | null;
     date: string | null;
     cost: number;
+    wholesale: number;
     amount_sold: number;
     profit: number;
     profit_percent: number;
@@ -111,6 +112,7 @@ interface SoldItemsData {
     items: SoldItem[];
     totals: {
         cost: number;
+        wholesale: number;
         amount_sold: number;
         profit: number;
         profit_percent: number;
@@ -475,7 +477,8 @@ const formatRepairStatus = (status: string) => {
                                             <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Order</th>
                                             <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
                                             <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cost</th>
-                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount Sold</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Wholesale</th>
+                                            <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sold For</th>
                                             <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Profit</th>
                                             <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Profit %</th>
                                         </tr>
@@ -497,6 +500,9 @@ const formatRepairStatus = (status: string) => {
                                                 {{ formatCurrency(item.cost) }}
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.wholesale) }}
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 dark:text-white">
                                                 {{ formatCurrency(item.amount_sold) }}
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-right" :class="item.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
@@ -511,6 +517,7 @@ const formatRepairStatus = (status: string) => {
                                         <tr class="font-semibold">
                                             <td colspan="3" class="px-4 py-3 text-sm text-gray-900 dark:text-white">Totals</td>
                                             <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(soldItems.totals.cost) }}</td>
+                                            <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(soldItems.totals.wholesale) }}</td>
                                             <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(soldItems.totals.amount_sold) }}</td>
                                             <td class="px-4 py-3 text-sm text-right" :class="soldItems.totals.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">{{ formatCurrency(soldItems.totals.profit) }}</td>
                                             <td class="px-4 py-3 text-sm text-right" :class="soldItems.totals.profit_percent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">{{ soldItems.totals.profit_percent }}%</td>
