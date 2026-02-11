@@ -136,6 +136,11 @@ class ProductsTable extends Table
             $query->whereIn('category_id', $categoryIds);
         }
 
+        // Apply uncategorized filter (products with no category)
+        if (data_get($filter, 'uncategorized')) {
+            $query->whereNull('category_id');
+        }
+
         // Apply brand filter
         if ($brandId = data_get($filter, 'brand_id')) {
             $query->where('brand_id', $brandId);

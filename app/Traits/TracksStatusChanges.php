@@ -2,6 +2,7 @@
 
 namespace App\Traits;
 
+use App\Models\Status;
 use App\Models\StatusHistory;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
@@ -13,13 +14,37 @@ trait TracksStatusChanges
     public static function bootTracksStatusChanges(): void
     {
         static::created(function ($model) {
-            if ($model->status) {
+            // Track status_id (modern) or status (legacy)
+            if ($model->status_id) {
+                $status = Status::find($model->status_id);
+                $model->recordStatusChange(null, $status?->slug ?? (string) $model->status_id);
+            } elseif ($model->status) {
                 $model->recordStatusChange(null, $model->status);
             }
         });
 
         static::updating(function ($model) {
-            if ($model->isDirty('status')) {
+            // Track status_id changes (modern Status model)
+            if ($model->isDirty('status_id')) {
+                $fromStatus = null;
+                $toStatus = null;
+
+                if ($model->getOriginal('status_id')) {
+                    $from = Status::find($model->getOriginal('status_id'));
+                    $fromStatus = $from?->slug ?? (string) $model->getOriginal('status_id');
+                }
+
+                if ($model->status_id) {
+                    $to = Status::find($model->status_id);
+                    $toStatus = $to?->slug ?? (string) $model->status_id;
+                }
+
+                if ($toStatus) {
+                    $model->recordStatusChange($fromStatus, $toStatus);
+                }
+            }
+            // Also track legacy status field changes
+            elseif ($model->isDirty('status')) {
                 $model->recordStatusChange(
                     $model->getOriginal('status'),
                     $model->status

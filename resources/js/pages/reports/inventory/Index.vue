@@ -101,6 +101,16 @@ function toggleViewAll() {
     router.get('/reports/inventory', params, { preserveState: true });
 }
 
+function viewCategoryItems(categoryId: number | null, event: Event) {
+    event.stopPropagation();
+    if (categoryId === null) {
+        // For uncategorized, link to products without category
+        router.get('/products', { stock: 'in_stock', uncategorized: '1' });
+    } else {
+        router.get('/products', { category_id: categoryId, stock: 'in_stock' });
+    }
+}
+
 // Get display title based on current state
 const displayTitle = computed(() => {
     if (props.viewAll) return 'All Categories';
@@ -364,8 +374,15 @@ const currentViewTotals = computed(() => ({
                                         />
                                     </div>
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">
-                                    {{ formatNumber(row.total_stock) }}
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right">
+                                    <button
+                                        v-if="row.total_stock > 0"
+                                        @click="viewCategoryItems(row.category_id, $event)"
+                                        class="font-medium text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                                    >
+                                        {{ formatNumber(row.total_stock) }}
+                                    </button>
+                                    <span v-else class="text-gray-400">0</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">
                                     {{ formatCurrency(row.total_value) }}

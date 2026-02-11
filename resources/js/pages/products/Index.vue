@@ -90,6 +90,7 @@ function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
     if (params.get('search')) filter.term = params.get('search') || undefined;
+    if (params.get('category_id')) filter.category_id = params.get('category_id') || undefined;
     if (params.get('category_level2_id')) filter.category_level2_id = params.get('category_level2_id') || undefined;
     if (params.get('category_level3_id')) filter.category_level3_id = params.get('category_level3_id') || undefined;
     if (params.get('brand_id')) filter.brand_id = params.get('brand_id') || undefined;
@@ -97,6 +98,7 @@ function getUrlParams(): WidgetFilter {
     if (params.get('stock')) filter.stock = params.get('stock') || undefined;
     if (params.get('type')) filter.type = params.get('type') || undefined;
     if (params.get('marketplace_id')) filter.marketplace_id = params.get('marketplace_id') || undefined;
+    if (params.get('uncategorized')) filter.uncategorized = params.get('uncategorized') || undefined;
     return filter;
 }
 
@@ -633,6 +635,11 @@ function handleGiaScanSuccess(productId: number) {
                 bulk-action-url="/products/bulk-action"
                 enable-quick-view
                 quick-view-field="title"
+                :show-totals="true"
+                :total-columns="[
+                    { key: 'quantity', format: 'number' },
+                    { key: 'price', format: 'currency' },
+                ]"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
