@@ -574,13 +574,13 @@ const totalLabels = computed(() => {
                             v-for="variant in product.variants"
                             :key="variant.id"
                             :class="[
-                                'barcode-label border border-gray-200 p-4 print:border print:p-2 print:break-inside-avoid',
+                                'barcode-label border border-gray-200 p-4 print:border print:p-2 print:break-inside-avoid min-w-[250px]',
                                 (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
                             ]"
                         >
                             <div class="text-center">
                                 <!-- SKU/code at top -->
-                                <p class="text-sm font-semibold text-gray-900 truncate">
+                                <p class="text-sm font-bold text-black truncate">
                                     {{ variant.barcode || variant.sku }}
                                 </p>
                                 <!-- Barcode image (no text below) -->
@@ -589,7 +589,7 @@ const totalLabels = computed(() => {
                                     class="mx-auto mt-1"
                                 ></svg>
                                 <!-- Configured attribute values (horizontal) -->
-                                <p class="mt-1 text-xs text-gray-700">
+                                <p class="mt-1 text-xs font-semibold text-black text-balance">
                                     {{ getLabelLine(variant) }}
                                 </p>
                             </div>
