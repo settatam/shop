@@ -145,15 +145,20 @@ function submitForm() {
         : '/settings/printers';
     const method = isEditing.value ? 'put' : 'post';
 
+    console.log('Submitting form:', { url, method, data: form.value });
+
     router[method](url, form.value, {
         preserveScroll: true,
         onSuccess: () => {
+            console.log('Form submitted successfully');
             closeModals();
         },
         onError: (errors) => {
+            console.log('Form errors:', errors);
             formErrors.value = errors;
         },
         onFinish: () => {
+            console.log('Form submission finished');
             isSubmitting.value = false;
         },
     });
@@ -397,6 +402,14 @@ async function testNetworkPrint(setting: PrinterSetting) {
                                 </div>
 
                                 <div class="mt-6 space-y-4">
+                                    <!-- General errors -->
+                                    <div v-if="Object.keys(formErrors).length > 0" class="p-3 rounded-md bg-red-50 dark:bg-red-900/20">
+                                        <p class="text-sm font-medium text-red-800 dark:text-red-200">Please fix the following errors:</p>
+                                        <ul class="mt-2 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                                            <li v-for="(error, field) in formErrors" :key="field">{{ field }}: {{ error }}</li>
+                                        </ul>
+                                    </div>
+
                                     <!-- Name -->
                                     <div>
                                         <Label for="name">Name</Label>
@@ -534,7 +547,7 @@ async function testNetworkPrint(setting: PrinterSetting) {
                                                 id="text_size"
                                                 v-model.number="form.text_size"
                                                 type="number"
-                                                min="10"
+                                                min="6"
                                                 max="100"
                                                 class="mt-1"
                                             />
@@ -545,7 +558,7 @@ async function testNetworkPrint(setting: PrinterSetting) {
                                                 id="barcode_height"
                                                 v-model.number="form.barcode_height"
                                                 type="number"
-                                                min="20"
+                                                min="10"
                                                 max="200"
                                                 class="mt-1"
                                             />
@@ -556,7 +569,7 @@ async function testNetworkPrint(setting: PrinterSetting) {
                                                 id="line_height"
                                                 v-model.number="form.line_height"
                                                 type="number"
-                                                min="10"
+                                                min="6"
                                                 max="100"
                                                 class="mt-1"
                                             />
