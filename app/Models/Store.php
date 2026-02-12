@@ -66,6 +66,7 @@ class Store extends Model
         'default_tax_rate',
         'tax_id_number',
         'edition',
+        'metal_price_settings',
     ];
 
     protected function casts(): array
@@ -82,7 +83,45 @@ class Store extends Model
             'last_payment_date' => 'datetime',
             'next_payment_date' => 'datetime',
             'default_tax_rate' => 'decimal:4',
+            'metal_price_settings' => 'array',
         ];
+    }
+
+    /**
+     * Get the metal buy percentage for a specific metal type.
+     * Returns the percentage as a decimal (e.g., 0.75 for 75%).
+     */
+    public function getMetalBuyPercentage(string $metalType): float
+    {
+        $settings = $this->metal_price_settings ?? [];
+        $buyPercentages = $settings['buy_percentages'] ?? [];
+
+        // Check for specific metal percentage, fall back to default
+        return (float) ($buyPercentages[$metalType] ?? $buyPercentages['default'] ?? 0.75);
+    }
+
+    /**
+     * Get all metal price settings with defaults.
+     *
+     * @return array<string, mixed>
+     */
+    public function getMetalPriceSettingsWithDefaults(): array
+    {
+        $defaults = [
+            'buy_percentages' => [
+                'default' => 0.75,
+                '10k' => 0.75,
+                '14k' => 0.75,
+                '18k' => 0.75,
+                '22k' => 0.75,
+                '24k' => 0.75,
+                'sterling' => 0.75,
+                'platinum' => 0.75,
+                'palladium' => 0.75,
+            ],
+        ];
+
+        return array_replace_recursive($defaults, $this->metal_price_settings ?? []);
     }
 
     public function owner(): BelongsTo

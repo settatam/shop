@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import {
     Dialog,
     DialogPanel,
@@ -8,6 +9,10 @@ import {
     TransitionRoot,
 } from '@headlessui/vue';
 import { XMarkIcon, PhotoIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon, CheckIcon } from '@heroicons/vue/24/outline';
+
+// Get current store from Inertia shared data
+const page = usePage();
+const currentStoreId = computed(() => (page.props.currentStore as { id: number } | null)?.id);
 
 interface Category {
     id: number;
@@ -344,13 +349,19 @@ function calculateSpotPrice() {
     spotPriceTimeout = setTimeout(async () => {
         loadingSpotPrice.value = true;
         try {
-            const response = await fetch(`/api/v1/metal-prices/calculate?precious_metal=${encodeURIComponent(metal)}&dwt=${dwt}`, {
+            // Build URL with optional store_id for buy percentage calculation
+            let url = `/api/v1/metal-prices/calculate?precious_metal=${encodeURIComponent(metal)}&dwt=${dwt}`;
+            if (currentStoreId.value) {
+                url += `&store_id=${currentStoreId.value}`;
+            }
+            const response = await fetch(url, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin',
             });
             if (response.ok) {
                 const data = await response.json();
-                spotPrice.value = data.spot_price;
+                // Use buy_price (with store markup) if available, fallback to spot_price
+                spotPrice.value = data.buy_price ?? data.spot_price;
             } else {
                 spotPrice.value = null;
             }

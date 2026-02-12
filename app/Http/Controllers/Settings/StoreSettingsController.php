@@ -58,10 +58,12 @@ class StoreSettingsController extends Controller
                 'default_tax_rate' => $store->default_tax_rate ? (float) $store->default_tax_rate * 100 : null,
                 'tax_id_number' => $store->tax_id_number,
                 'edition' => $store->edition ?? config('editions.default', 'standard'),
+                'metal_price_settings' => $store->getMetalPriceSettingsWithDefaults(),
             ],
             'currencies' => $this->getCurrencies(),
             'timezones' => $this->getTimezones(),
             'availableEditions' => $this->getAvailableEditionsForSelect(),
+            'metalTypes' => $this->getMetalTypesForSettings(),
         ]);
     }
 
@@ -101,6 +103,9 @@ class StoreSettingsController extends Controller
             'default_tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'tax_id_number' => ['nullable', 'string', 'max:50'],
             'edition' => ['nullable', 'string', 'in:'.implode(',', array_keys($this->featureManager->getAvailableEditions()))],
+            'metal_price_settings' => ['nullable', 'array'],
+            'metal_price_settings.buy_percentages' => ['nullable', 'array'],
+            'metal_price_settings.buy_percentages.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         // Map currency and timezone back to IDs (or store directly if no lookup tables exist)
@@ -130,6 +135,26 @@ class StoreSettingsController extends Controller
             'tax_id_number' => $validated['tax_id_number'] ?? null,
             'edition' => $validated['edition'] ?? $store->edition,
         ];
+
+        // Handle metal price settings - convert percentages from 0-100 to 0-1 and merge
+        if (isset($validated['metal_price_settings']['buy_percentages'])) {
+            $buyPercentages = [];
+            foreach ($validated['metal_price_settings']['buy_percentages'] as $metal => $percentage) {
+                // Only store if a value was provided (not empty)
+                if ($percentage !== null && $percentage !== '') {
+                    $buyPercentages[$metal] = (float) $percentage / 100;
+                }
+            }
+
+            if (! empty($buyPercentages)) {
+                $existingSettings = $store->metal_price_settings ?? [];
+                $existingSettings['buy_percentages'] = array_merge(
+                    $existingSettings['buy_percentages'] ?? [],
+                    $buyPercentages
+                );
+                $updateData['metal_price_settings'] = $existingSettings;
+            }
+        }
 
         $store->update($updateData);
 
@@ -267,5 +292,27 @@ class StoreSettingsController extends Controller
             array_keys($editions),
             array_values($editions)
         );
+    }
+
+    /**
+     * Get metal types for settings UI.
+     *
+     * @return array<array{value: string, label: string, group: string}>
+     */
+    protected function getMetalTypesForSettings(): array
+    {
+        return [
+            // Gold karats
+            ['value' => '10k', 'label' => '10K Gold', 'group' => 'Gold'],
+            ['value' => '14k', 'label' => '14K Gold', 'group' => 'Gold'],
+            ['value' => '18k', 'label' => '18K Gold', 'group' => 'Gold'],
+            ['value' => '22k', 'label' => '22K Gold', 'group' => 'Gold'],
+            ['value' => '24k', 'label' => '24K Gold', 'group' => 'Gold'],
+            // Silver
+            ['value' => 'sterling', 'label' => 'Sterling Silver', 'group' => 'Silver'],
+            // Other precious metals
+            ['value' => 'platinum', 'label' => 'Platinum', 'group' => 'Other'],
+            ['value' => 'palladium', 'label' => 'Palladium', 'group' => 'Other'],
+        ];
     }
 }

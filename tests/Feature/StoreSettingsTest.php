@@ -228,4 +228,112 @@ class StoreSettingsTest extends TestCase
 
         $response->assertSessionHasErrors('edition');
     }
+
+    public function test_metal_price_settings_page_includes_metal_types(): void
+    {
+        $response = $this->actingAs($this->user)->get('/settings/store');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('settings/Store')
+            ->has('metalTypes')
+        );
+    }
+
+    public function test_metal_price_settings_can_be_updated(): void
+    {
+        $response = $this->actingAs($this->user)->patch('/settings/store', [
+            'name' => $this->store->name,
+            'metal_price_settings' => [
+                'buy_percentages' => [
+                    '14k' => 80, // 80% entered, should be stored as 0.80
+                    '18k' => 75, // 75% entered, should be stored as 0.75
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->store->refresh();
+
+        $settings = $this->store->metal_price_settings;
+        $this->assertNotNull($settings);
+        $this->assertArrayHasKey('buy_percentages', $settings);
+        $this->assertEquals(0.80, $settings['buy_percentages']['14k']);
+        $this->assertEquals(0.75, $settings['buy_percentages']['18k']);
+    }
+
+    public function test_metal_price_settings_stores_as_decimal(): void
+    {
+        $response = $this->actingAs($this->user)->patch('/settings/store', [
+            'name' => $this->store->name,
+            'metal_price_settings' => [
+                'buy_percentages' => [
+                    'sterling' => 70,
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect();
+
+        $this->store->refresh();
+
+        // Verify the percentage was converted from 70 to 0.70
+        $this->assertEquals(0.70, $this->store->metal_price_settings['buy_percentages']['sterling']);
+
+        // Verify the helper method returns correct value
+        $this->assertEquals(0.70, $this->store->getMetalBuyPercentage('sterling'));
+    }
+
+    public function test_metal_price_settings_merges_with_existing(): void
+    {
+        // Set initial settings
+        $this->store->update([
+            'metal_price_settings' => [
+                'buy_percentages' => [
+                    '10k' => 0.65,
+                    '14k' => 0.70,
+                ],
+            ],
+        ]);
+
+        // Update only 14k
+        $response = $this->actingAs($this->user)->patch('/settings/store', [
+            'name' => $this->store->name,
+            'metal_price_settings' => [
+                'buy_percentages' => [
+                    '14k' => 75,
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect();
+
+        $this->store->refresh();
+
+        // 10k should remain unchanged, 14k should be updated
+        $this->assertEquals(0.65, $this->store->metal_price_settings['buy_percentages']['10k']);
+        $this->assertEquals(0.75, $this->store->metal_price_settings['buy_percentages']['14k']);
+    }
+
+    public function test_get_metal_buy_percentage_returns_default_when_not_set(): void
+    {
+        $this->store->update(['metal_price_settings' => null]);
+
+        // Should return the default (0.75)
+        $this->assertEquals(0.75, $this->store->getMetalBuyPercentage('14k'));
+    }
+
+    public function test_get_metal_price_settings_with_defaults(): void
+    {
+        $this->store->update(['metal_price_settings' => null]);
+
+        $settings = $this->store->getMetalPriceSettingsWithDefaults();
+
+        $this->assertArrayHasKey('buy_percentages', $settings);
+        $this->assertEquals(0.75, $settings['buy_percentages']['default']);
+        $this->assertEquals(0.75, $settings['buy_percentages']['10k']);
+        $this->assertEquals(0.75, $settings['buy_percentages']['14k']);
+    }
 }

@@ -117,8 +117,14 @@ class MetalPrice extends Model
 
     /**
      * Calculate the spot price for a given precious metal and weight in DWT.
+     *
+     * @param  string  $preciousMetal  The precious metal type (e.g., '14k', 'sterling')
+     * @param  float  $dwt  Weight in pennyweights
+     * @param  int  $qty  Quantity
+     * @param  Store|null  $store  Optional store to apply buy percentage markup
+     * @return float|null The calculated price, or null if metal type/price not found
      */
-    public static function calcSpotPrice(string $preciousMetal, float $dwt, int $qty = 1): ?float
+    public static function calcSpotPrice(string $preciousMetal, float $dwt, int $qty = 1, ?Store $store = null): ?float
     {
         $purityRatio = self::PURITY_RATIOS[$preciousMetal] ?? null;
 
@@ -135,7 +141,19 @@ class MetalPrice extends Model
             return null;
         }
 
-        return round((float) $price->price_per_dwt * $purityRatio * $dwt * $qty, 2);
+        $spotPrice = (float) $price->price_per_dwt * $purityRatio * $dwt * $qty;
+
+        // Apply store buy percentage if store is provided
+        // If no percentage is set, we use 1.0 (100% - full spot price)
+        if ($store) {
+            $buyPercentage = $store->getMetalBuyPercentage($preciousMetal);
+            // Only apply if a percentage is actually set (> 0)
+            if ($buyPercentage > 0) {
+                $spotPrice *= $buyPercentage;
+            }
+        }
+
+        return round($spotPrice, 2);
     }
 
     public function scopeLatest($query)

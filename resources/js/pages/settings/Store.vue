@@ -24,6 +24,10 @@ interface EditionOption {
     description: string;
 }
 
+interface MetalPriceSettings {
+    buy_percentages: Record<string, number>;
+}
+
 interface Store {
     id: number;
     name: string;
@@ -54,6 +58,13 @@ interface Store {
     default_tax_rate: number | null;
     tax_id_number: string | null;
     edition: string;
+    metal_price_settings: MetalPriceSettings;
+}
+
+interface MetalType {
+    value: string;
+    label: string;
+    group: string;
 }
 
 interface Props {
@@ -61,9 +72,10 @@ interface Props {
     currencies: SelectOption[];
     timezones: SelectOption[];
     availableEditions: EditionOption[];
+    metalTypes: MetalType[];
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -589,6 +601,130 @@ function removeLogo() {
                                     <p class="text-sm text-muted-foreground">
                                         Your business tax ID (EIN, VAT, etc.) for invoices
                                     </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Metal Price Settings -->
+                        <div class="border-t pt-6">
+                            <h4 class="mb-4 text-sm font-medium">Precious Metal Buy Rates</h4>
+                            <p class="mb-4 text-sm text-muted-foreground">
+                                Set the percentage of spot price you pay when buying precious metals.
+                                For example, 75% means you pay 75% of the current spot price.
+                                Leave empty to use the default rate (75%).
+                            </p>
+
+                            <!-- Gold -->
+                            <div class="mb-6">
+                                <h5 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                    Gold
+                                </h5>
+                                <div class="grid gap-4 sm:grid-cols-5">
+                                    <div
+                                        v-for="metal in metalTypes.filter((m) => m.group === 'Gold')"
+                                        :key="metal.value"
+                                        class="grid gap-2"
+                                    >
+                                        <Label :for="`metal_${metal.value}`">{{ metal.label }}</Label>
+                                        <div class="relative">
+                                            <Input
+                                                :id="`metal_${metal.value}`"
+                                                :name="`metal_price_settings[buy_percentages][${metal.value}]`"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                :default-value="
+                                                    store.metal_price_settings?.buy_percentages?.[metal.value]
+                                                        ? store.metal_price_settings.buy_percentages[metal.value] * 100
+                                                        : ''
+                                                "
+                                                placeholder="75"
+                                                class="pr-8"
+                                            />
+                                            <span
+                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                                            >
+                                                %
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Silver -->
+                            <div class="mb-6">
+                                <h5 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                    Silver
+                                </h5>
+                                <div class="grid gap-4 sm:grid-cols-5">
+                                    <div
+                                        v-for="metal in metalTypes.filter((m) => m.group === 'Silver')"
+                                        :key="metal.value"
+                                        class="grid gap-2"
+                                    >
+                                        <Label :for="`metal_${metal.value}`">{{ metal.label }}</Label>
+                                        <div class="relative">
+                                            <Input
+                                                :id="`metal_${metal.value}`"
+                                                :name="`metal_price_settings[buy_percentages][${metal.value}]`"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                :default-value="
+                                                    store.metal_price_settings?.buy_percentages?.[metal.value]
+                                                        ? store.metal_price_settings.buy_percentages[metal.value] * 100
+                                                        : ''
+                                                "
+                                                placeholder="75"
+                                                class="pr-8"
+                                            />
+                                            <span
+                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                                            >
+                                                %
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Other Precious Metals -->
+                            <div>
+                                <h5 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                    Other Precious Metals
+                                </h5>
+                                <div class="grid gap-4 sm:grid-cols-5">
+                                    <div
+                                        v-for="metal in metalTypes.filter((m) => m.group === 'Other')"
+                                        :key="metal.value"
+                                        class="grid gap-2"
+                                    >
+                                        <Label :for="`metal_${metal.value}`">{{ metal.label }}</Label>
+                                        <div class="relative">
+                                            <Input
+                                                :id="`metal_${metal.value}`"
+                                                :name="`metal_price_settings[buy_percentages][${metal.value}]`"
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                max="100"
+                                                :default-value="
+                                                    store.metal_price_settings?.buy_percentages?.[metal.value]
+                                                        ? store.metal_price_settings.buy_percentages[metal.value] * 100
+                                                        : ''
+                                                "
+                                                placeholder="75"
+                                                class="pr-8"
+                                            />
+                                            <span
+                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                                            >
+                                                %
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
