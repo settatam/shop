@@ -232,6 +232,57 @@ const preciousMetalOptions = [
     { value: 'palladium', label: 'Palladium' },
 ];
 
+// Map category names to metal values for auto-detection
+const categoryMetalMap: Record<string, string> = {
+    '10k': '10k',
+    '14k': '14k',
+    '18k': '18k',
+    '20k': '20k',
+    '22k': '22k',
+    '24k': '24k',
+    'gold': '24k', // Pure gold in Bullion context
+    'silver': 'sterling',
+    'platinum': 'platinum',
+    'palladium': 'palladium',
+};
+
+// Detect metal type from category name or path
+function detectMetalFromCategory(categoryId: number | undefined): string | undefined {
+    if (!categoryId) return undefined;
+
+    const category = props.categories.find(c => c.id === categoryId);
+    if (!category) return undefined;
+
+    // Check the category name itself
+    const nameLower = category.name.toLowerCase().trim();
+    if (categoryMetalMap[nameLower]) {
+        return categoryMetalMap[nameLower];
+    }
+
+    // Check if parent category suggests this is a metal category (Precious Metals, Bullion)
+    if (category.parent_id) {
+        const parent = props.categories.find(c => c.id === category.parent_id);
+        if (parent) {
+            const parentName = parent.name.toLowerCase();
+            if (parentName.includes('precious metal') || parentName.includes('bullion')) {
+                // The category name itself might be the metal
+                if (categoryMetalMap[nameLower]) {
+                    return categoryMetalMap[nameLower];
+                }
+            }
+        }
+    }
+
+    return undefined;
+}
+
+// Check if metal was auto-detected from category (to show in UI)
+const metalAutoDetected = computed(() => {
+    if (!form.value.category_id) return false;
+    const detected = detectMetalFromCategory(form.value.category_id);
+    return detected && detected === form.value.precious_metal;
+});
+
 // --- Spot price ---
 const spotPrice = ref<number | null>(null);
 const loadingSpotPrice = ref(false);
@@ -373,6 +424,12 @@ const form = ref<TransactionItem>(makeEmptyForm());
 watch(() => form.value.category_id, (newId) => {
     if (newId) {
         loadTemplateFields(newId);
+
+        // Auto-detect metal type from category name
+        const detectedMetal = detectMetalFromCategory(newId);
+        if (detectedMetal && !form.value.precious_metal) {
+            form.value.precious_metal = detectedMetal;
+        }
     } else {
         templateFields.value = [];
     }
@@ -614,11 +671,17 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                             <div>
                                                 <label for="precious_metal" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
                                                     Metal Type
+                                                    <span v-if="metalAutoDetected" class="ml-1 text-green-600 dark:text-green-400">(from category)</span>
                                                 </label>
                                                 <select
                                                     id="precious_metal"
                                                     v-model="form.precious_metal"
-                                                    class="block w-full rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-amber-500 text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    :class="[
+                                                        'block w-full rounded-md border-0 py-1.5 pl-3 pr-8 text-sm',
+                                                        metalAutoDetected
+                                                            ? 'bg-green-50 text-green-900 ring-1 ring-inset ring-green-300 focus:ring-2 focus:ring-green-500 dark:bg-green-900/30 dark:text-green-100 dark:ring-green-700'
+                                                            : 'text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-white dark:ring-gray-600'
+                                                    ]"
                                                 >
                                                     <option value="">Select metal...</option>
                                                     <option v-for="opt in preciousMetalOptions" :key="opt.value" :value="opt.value">

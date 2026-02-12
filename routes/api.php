@@ -37,6 +37,12 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:api');
 
+// Public API routes (no auth required)
+Route::prefix('v1')->group(function () {
+    // Metal Prices - public spot price calculation
+    Route::get('metal-prices/calculate', [MetalPriceController::class, 'calculate']);
+});
+
 // Store management routes (no store middleware required)
 Route::prefix('v1')->middleware(['auth:api'])->group(function () {
     Route::get('stores', [StoreController::class, 'index']);
@@ -231,9 +237,6 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     // Voice Assistant
     Route::post('voice/query', [VoiceController::class, 'query']);
     Route::post('voice/text-query', [VoiceController::class, 'textQuery']);
-
-    // Metal Prices
-    Route::get('metal-prices/calculate', [MetalPriceController::class, 'calculate']);
 
     // Global Search
     Route::get('search', SearchController::class)->name('search');
