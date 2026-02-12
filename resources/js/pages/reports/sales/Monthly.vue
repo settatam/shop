@@ -151,7 +151,7 @@ const avgProfitMargin = computed(() => {
 });
 
 function viewSales(row: MonthRow): void {
-    router.visit(`/orders?from_date=${row.start_date}&to_date=${row.end_date}`);
+    router.visit(`/orders?from_date=${row.start_date}&to_date=${row.end_date}&paid=1`);
 }
 </script>
 

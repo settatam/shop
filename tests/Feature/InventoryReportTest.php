@@ -206,7 +206,8 @@ class InventoryReportTest extends TestCase
         ]);
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
-            'wholesale_price' => 100,
+            'price' => 150, // Retail price (what we sell for)
+            'wholesale_price' => 100, // Cost basis (what we paid)
         ]);
 
         Inventory::factory()->create([
@@ -217,8 +218,10 @@ class InventoryReportTest extends TestCase
             'unit_cost' => 50,
         ]);
 
-        // Expected: wholesale_price (100) * 10 = 1000, cost = 50 * 10 = 500
-        // Projected profit = 1000 - 500 = 500
+        // Projected profit = retail_value - cost_basis
+        // retail_value = price (150) * quantity (10) = 1500
+        // cost_basis = wholesale_price (100) * quantity (10) = 1000 (uses wholesale_price as cost since it's set)
+        // profit = 1500 - 1000 = 500
 
         $response = $this->actingAs($this->user)
             ->get('/reports/inventory');
@@ -233,12 +236,12 @@ class InventoryReportTest extends TestCase
         $totalValue = $data['totals']['total_value'];
         $projectedProfit = $data['totals']['projected_profit'];
 
-        // The profit should be wholesale_value - total_value
-        // wholesale_value = 100 * 10 = 1000
-        // total_value = 50 * 10 = 500
-        // profit = 1000 - 500 = 500
+        // Projected profit = retail_value - cost_basis
+        // retail_value = price (150) * qty (10) = 1500
+        // cost_basis = wholesale_price (100) * qty (10) = 1000
+        // profit = 1500 - 1000 = 500
         $this->assertEquals(500, $totalValue, 'Total value should be 500 (10 qty * 50 unit_cost)');
-        $this->assertEquals(500, $projectedProfit, 'Projected profit should be 500 (1000 wholesale - 500 cost)');
+        $this->assertEquals(500, $projectedProfit, 'Projected profit should be 500 (1500 retail - 1000 cost)');
     }
 
     public function test_inventory_report_requires_authentication(): void

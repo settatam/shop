@@ -180,6 +180,11 @@ class OrdersTable extends Table
             $query->where('status', $status);
         }
 
+        // Apply paid filter (filters to all paid statuses)
+        if (data_get($filter, 'paid')) {
+            $query->whereIn('status', Order::PAID_STATUSES);
+        }
+
         return $query;
     }
 

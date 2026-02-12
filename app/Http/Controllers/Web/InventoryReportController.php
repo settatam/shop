@@ -102,7 +102,8 @@ class InventoryReportController extends Controller
             ->selectRaw('
                 COALESCE(SUM(inventory.quantity), 0) as total_stock,
                 COALESCE(SUM(inventory.quantity * inventory.unit_cost), 0) as total_value,
-                COALESCE(SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.price, 0)), 0) as total_wholesale
+                COALESCE(SUM(inventory.quantity * product_variants.price), 0) as total_retail_value,
+                COALESCE(SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.cost, inventory.unit_cost, 0)), 0) as total_cost_basis
             ')
             ->first();
 
@@ -123,7 +124,8 @@ class InventoryReportController extends Controller
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
-        $totalWholesale = (float) ($inventory->total_wholesale ?? 0);
+        $totalRetailValue = (float) ($inventory->total_retail_value ?? 0);
+        $totalCostBasis = (float) ($inventory->total_cost_basis ?? 0);
 
         return [
             'total_stock' => (int) ($inventory->total_stock ?? 0),
@@ -132,7 +134,7 @@ class InventoryReportController extends Controller
             'cost_added' => (float) ($additions->cost_added ?? 0),
             'deleted_this_week' => (int) ($deletions->deleted ?? 0),
             'deleted_cost' => (float) ($deletions->cost_deleted ?? 0),
-            'projected_profit' => $totalWholesale - $totalValue,
+            'projected_profit' => $totalRetailValue - $totalCostBasis,
         ];
     }
 
@@ -241,7 +243,8 @@ class InventoryReportController extends Controller
             ->selectRaw('
                 COALESCE(SUM(inventory.quantity), 0) as total_stock,
                 COALESCE(SUM(inventory.quantity * inventory.unit_cost), 0) as total_value,
-                COALESCE(SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.price, 0)), 0) as total_wholesale
+                COALESCE(SUM(inventory.quantity * product_variants.price), 0) as total_retail_value,
+                COALESCE(SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.cost, inventory.unit_cost, 0)), 0) as total_cost_basis
             ')
             ->first();
 
@@ -270,7 +273,8 @@ class InventoryReportController extends Controller
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
-        $totalWholesale = (float) ($inventory->total_wholesale ?? 0);
+        $totalRetailValue = (float) ($inventory->total_retail_value ?? 0);
+        $totalCostBasis = (float) ($inventory->total_cost_basis ?? 0);
 
         return [
             'total_stock' => (int) ($inventory->total_stock ?? 0),
@@ -279,7 +283,7 @@ class InventoryReportController extends Controller
             'cost_added' => (float) ($additions->cost_added ?? 0),
             'deleted_this_week' => (int) ($deletions->deleted ?? 0),
             'deleted_cost' => (float) ($deletions->cost_deleted ?? 0),
-            'projected_profit' => $totalWholesale - $totalValue,
+            'projected_profit' => $totalRetailValue - $totalCostBasis,
         ];
     }
 
@@ -298,7 +302,8 @@ class InventoryReportController extends Controller
             ->selectRaw('
                 COALESCE(SUM(inventory.quantity), 0) as total_stock,
                 COALESCE(SUM(inventory.quantity * inventory.unit_cost), 0) as total_value,
-                COALESCE(SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.price, 0)), 0) as total_wholesale
+                COALESCE(SUM(inventory.quantity * product_variants.price), 0) as total_retail_value,
+                COALESCE(SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.cost, inventory.unit_cost, 0)), 0) as total_cost_basis
             ')
             ->first();
 
@@ -325,7 +330,8 @@ class InventoryReportController extends Controller
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
-        $totalWholesale = (float) ($inventory->total_wholesale ?? 0);
+        $totalRetailValue = (float) ($inventory->total_retail_value ?? 0);
+        $totalCostBasis = (float) ($inventory->total_cost_basis ?? 0);
 
         return [
             'total_stock' => (int) ($inventory->total_stock ?? 0),
@@ -334,7 +340,7 @@ class InventoryReportController extends Controller
             'cost_added' => (float) ($additions->cost_added ?? 0),
             'deleted_this_week' => (int) ($deletions->deleted ?? 0),
             'deleted_cost' => (float) ($deletions->cost_deleted ?? 0),
-            'projected_profit' => $totalWholesale - $totalValue,
+            'projected_profit' => $totalRetailValue - $totalCostBasis,
         ];
     }
 
@@ -615,7 +621,8 @@ class InventoryReportController extends Controller
                 'products.category_id',
                 DB::raw('SUM(inventory.quantity) as total_stock'),
                 DB::raw('SUM(inventory.quantity * inventory.unit_cost) as total_value'),
-                DB::raw('SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.price, 0)) as total_wholesale_value')
+                DB::raw('SUM(inventory.quantity * product_variants.price) as total_retail_value'),
+                DB::raw('SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.cost, inventory.unit_cost, 0)) as total_cost_basis')
             )
             ->groupBy('products.category_id')
             ->get()
@@ -665,8 +672,9 @@ class InventoryReportController extends Controller
 
             $totalStock = (int) ($inventory->total_stock ?? 0);
             $totalValue = (float) ($inventory->total_value ?? 0);
-            $totalWholesaleValue = (float) ($inventory->total_wholesale_value ?? 0);
-            $projectedProfit = $totalWholesaleValue - $totalValue;
+            $totalRetailValue = (float) ($inventory->total_retail_value ?? 0);
+            $totalCostBasis = (float) ($inventory->total_cost_basis ?? 0);
+            $projectedProfit = $totalRetailValue - $totalCostBasis;
 
             // Only include categories that have inventory or recent activity
             if ($totalStock > 0 || $additions || $deletions) {
@@ -693,7 +701,8 @@ class InventoryReportController extends Controller
             ->select(
                 DB::raw('SUM(inventory.quantity) as total_stock'),
                 DB::raw('SUM(inventory.quantity * inventory.unit_cost) as total_value'),
-                DB::raw('SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.price, 0)) as total_wholesale_value')
+                DB::raw('SUM(inventory.quantity * product_variants.price) as total_retail_value'),
+                DB::raw('SUM(inventory.quantity * COALESCE(product_variants.wholesale_price, product_variants.cost, inventory.unit_cost, 0)) as total_cost_basis')
             )
             ->first();
 
@@ -728,7 +737,8 @@ class InventoryReportController extends Controller
         $uncategorizedStock = (int) ($uncategorizedInventory->total_stock ?? 0);
         if ($uncategorizedStock > 0 || ($uncategorizedAdditions->added_count ?? 0) > 0 || ($uncategorizedDeletions->deleted_count ?? 0) > 0) {
             $uncategorizedValue = (float) ($uncategorizedInventory->total_value ?? 0);
-            $uncategorizedWholesale = (float) ($uncategorizedInventory->total_wholesale_value ?? 0);
+            $uncategorizedRetail = (float) ($uncategorizedInventory->total_retail_value ?? 0);
+            $uncategorizedCostBasis = (float) ($uncategorizedInventory->total_cost_basis ?? 0);
 
             $result->push([
                 'category_id' => null,
@@ -739,7 +749,7 @@ class InventoryReportController extends Controller
                 'cost_added' => (float) ($uncategorizedAdditions->cost_added ?? 0),
                 'deleted_this_week' => (int) ($uncategorizedDeletions->deleted_count ?? 0),
                 'deleted_cost' => (float) ($uncategorizedDeletions->deleted_cost ?? 0),
-                'projected_profit' => $uncategorizedWholesale - $uncategorizedValue,
+                'projected_profit' => $uncategorizedRetail - $uncategorizedCostBasis,
             ]);
         }
 

@@ -35,6 +35,7 @@ function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
     if (params.get('status')) filter.status = params.get('status') || undefined;
+    if (params.get('paid')) filter.paid = params.get('paid') || undefined;
     if (params.get('marketplace')) filter.marketplace = params.get('marketplace') || undefined;
     if (params.get('payment_type')) filter.payment_type = params.get('payment_type') || undefined;
     if (params.get('vendor_id')) filter.vendor_id = params.get('vendor_id') || undefined;
