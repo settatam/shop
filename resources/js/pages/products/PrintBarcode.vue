@@ -134,6 +134,50 @@ const selectedPrinterSetting = computed<PrinterSettings | undefined>(() => {
     };
 });
 
+// Dynamic label styles based on printer settings
+// Convert dots to pixels (approximate: dots * 96 / 203 for screen display)
+const labelStyles = computed(() => {
+    const settings = selectedPrinterSetting.value;
+    // Default values if no settings
+    const labelWidth = settings?.label_width ?? 355;
+    const labelHeight = settings?.label_height ?? 152;
+    const topOffset = settings?.top_offset ?? 2;
+    const leftOffset = settings?.left_offset ?? 10;
+    const textSize = settings?.text_size ?? 12;
+
+    // Convert dots to approximate pixels for screen (96 DPI screen / 203 DPI printer)
+    const scale = 96 / 203;
+
+    return {
+        width: `${Math.round(labelWidth * scale * 2)}px`, // 2x for better screen visibility
+        height: `${Math.round(labelHeight * scale * 2)}px`,
+        paddingTop: `${Math.round(topOffset * scale)}px`,
+        paddingLeft: `${Math.round(leftOffset * scale)}px`,
+        fontSize: `${Math.max(6, Math.round(textSize * scale))}pt`,
+    };
+});
+
+// Print-specific styles (use actual dots as points for thermal printers)
+const printLabelStyles = computed(() => {
+    const settings = selectedPrinterSetting.value;
+    const labelWidth = settings?.label_width ?? 355;
+    const labelHeight = settings?.label_height ?? 152;
+    const topOffset = settings?.top_offset ?? 2;
+    const leftOffset = settings?.left_offset ?? 10;
+    const textSize = settings?.text_size ?? 12;
+
+    // For print: 1 dot at 203 DPI ≈ 0.35pt
+    const dotToPt = 72 / 203;
+
+    return {
+        width: `${Math.round(labelWidth * dotToPt)}pt`,
+        height: `${Math.round(labelHeight * dotToPt)}pt`,
+        paddingTop: `${Math.round(topOffset * dotToPt)}pt`,
+        paddingLeft: `${Math.round(leftOffset * dotToPt)}pt`,
+        fontSize: `${Math.max(4, Math.round(textSize * dotToPt))}pt`,
+    };
+});
+
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -578,33 +622,33 @@ const totalLabels = computed(() => {
             </div>
 
             <!-- Barcode Labels Preview -->
-            <div class="bg-white rounded-lg shadow print:shadow-none print:rounded-none">
-                <div class="p-6 print:p-2">
+            <div class="bg-white rounded-lg shadow print:shadow-none print:rounded-none print:bg-transparent">
+                <div class="p-6 print:p-0">
                     <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4 print:hidden">Label Preview</h3>
 
-                    <div class="grid grid-cols-1 gap-4 print:grid-cols-2 print:gap-2">
+                    <div class="flex flex-wrap gap-4 print:block">
                         <div
                             v-for="variant in product.variants"
                             :key="variant.id"
                             :class="[
-                                'barcode-label border border-gray-200 px-1 py-0 print:border print:p-0 print:break-inside-avoid',
+                                'barcode-label border border-gray-200 print:border-0',
                                 (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
                             ]"
+                            :style="labelStyles"
                         >
-                            <div class="text-center leading-none">
-                                <!-- SKU/code at top -->
-                                <p class="text-xs font-bold text-black truncate leading-none">
-                                    {{ variant.barcode || variant.sku }}
-                                </p>
-                                <!-- Barcode image (no text below) -->
+                            <!-- SKU/code at top -->
+                            <div class="label-sku">
+                                {{ variant.barcode || variant.sku }}
+                            </div>
+                            <!-- Barcode image -->
+                            <div class="label-barcode">
                                 <svg
                                     :ref="(el) => setBarcodeRef(el as SVGElement, variant.id)"
-                                    class="block mx-auto"
                                 ></svg>
-                                <!-- Configured attribute values (horizontal) -->
-                                <p class="text-[10px] font-semibold text-black leading-none">
-                                    {{ getLabelLine(variant) }}
-                                </p>
+                            </div>
+                            <!-- Configured attribute values -->
+                            <div class="label-attributes">
+                                {{ getLabelLine(variant) }}
                             </div>
                         </div>
                     </div>
@@ -631,18 +675,52 @@ const totalLabels = computed(() => {
 </template>
 
 <style>
+/* Label preview styles - dimensions set via inline styles from printer settings */
+.barcode-label {
+    overflow: hidden;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    color: #000;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    box-sizing: border-box;
+}
+
+.label-sku {
+    margin: 1px 0;
+    display: block;
+}
+
+.label-barcode {
+    display: block;
+}
+
+.label-barcode svg {
+    max-width: 100%;
+    display: block;
+}
+
+.label-attributes {
+    margin: 1px 0;
+    display: block;
+}
+
 @media print {
     @page {
         size: auto;
-        margin: 0.25cm;
+        margin: 0;
     }
 
     body {
+        margin: 0;
+        padding: 0;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
 
     .barcode-label {
+        page-break-after: always;
         page-break-inside: avoid;
     }
 }

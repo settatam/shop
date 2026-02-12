@@ -272,21 +272,21 @@ export const ZPL = {
         if (title) {
             const titleTrunc = title.substring(0, 30); // Limit title length
             zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${text_size},${text_size}^FD${titleTrunc}^FS`;
-            currentY += text_size + 2;
+            currentY += line_height;
         }
 
         // Subtitle (variant info)
         if (subtitle) {
             const subtitleSize = Math.floor(text_size * 0.9);
             zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${subtitleSize},${subtitleSize}^FD${subtitle}^FS`;
-            currentY += subtitleSize + 2;
+            currentY += line_height;
         }
 
         // Barcode (Code 128, centered)
         const barcodeWidth = Math.min(label_width - 20 - left_offset, 300);
         const barcodeX = Math.floor((label_width - barcodeWidth) / 2) + left_offset;
         zpl += `^FO${barcodeX},${currentY}^BY2,2,${barcode_height}^BCN,,Y,N,N^FD${barcode}^FS`;
-        currentY += barcode_height + 2;
+        currentY += barcode_height + line_height;
 
         // Price (centered at bottom)
         if (price) {
@@ -329,22 +329,22 @@ export const ZPL = {
 
         // Barcode value as text at top (centered)
         zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${text_size},${text_size}^FD${barcode}^FS`;
-        currentY += text_size + 2;
+        currentY += line_height;
 
         // Barcode (Code 128, centered)
         const barcodeWidth = Math.min(label_width - 20 - left_offset, 300);
         const barcodeX = Math.floor((label_width - barcodeWidth) / 2) + left_offset;
         zpl += `^FO${barcodeX},${currentY}^BY2,2,${barcode_height}^BCN,,N,N,N^FD${barcode}^FS`;
-        currentY += barcode_height + 2;
+        currentY += barcode_height + line_height;
 
         // Additional lines (attribute values)
         const attrSize = Math.floor(text_size * 0.9);
 
         for (const line of lines) {
-            if (line && currentY + attrSize + 2 <= label_height) {
+            if (line && currentY + line_height <= label_height) {
                 const lineTrunc = line.substring(0, 35); // Limit line length
                 zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${attrSize},${attrSize}^FD${lineTrunc}^FS`;
-                currentY += attrSize + 2;
+                currentY += line_height;
             }
         }
 
@@ -383,13 +383,13 @@ export const ZPL = {
 
         // SKU/code text at top (centered)
         zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${text_size},${text_size}^FD${barcode}^FS`;
-        currentY += text_size + 2; // Minimal gap after text
+        currentY += line_height;
 
         // Barcode (Code 128, centered) without human-readable text
         const barcodeWidth = Math.min(label_width - 20 - left_offset, 300);
         const barcodeX = Math.floor((label_width - barcodeWidth) / 2) + left_offset;
         zpl += `^FO${barcodeX},${currentY}^BY2,2,${barcode_height}^BCN,,N,N,N^FD${barcode}^FS`;
-        currentY += barcode_height + 2; // Minimal gap after barcode
+        currentY += barcode_height + line_height;
 
         // Single line with all attribute values (centered)
         if (attributeLine) {
@@ -439,18 +439,18 @@ export const ZPL = {
 
         // Type label at top
         zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${text_size},${text_size}^FD${type.toUpperCase()}^FS`;
-        currentY += text_size + 2;
+        currentY += line_height;
 
         // Barcode (transaction number)
         const barcodeWidth = Math.min(label_width - 20 - left_offset, 280);
         const barcodeX = Math.floor((label_width - barcodeWidth) / 2) + left_offset;
         zpl += `^FO${barcodeX},${currentY}^BY2,2,${barcode_height}^BCN,,Y,N,N^FD${transactionNumber}^FS`;
-        currentY += barcode_height + 2;
+        currentY += barcode_height + line_height;
 
         // Customer name
         if (customerName) {
             zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${text_size},${text_size}^FD${customerName.substring(0, 25)}^FS`;
-            currentY += text_size + 2;
+            currentY += line_height;
         }
 
         // Date
