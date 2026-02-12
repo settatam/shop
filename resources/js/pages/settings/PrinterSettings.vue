@@ -237,7 +237,7 @@ async function testNetworkPrint(setting: PrinterSetting) {
                 </div>
 
                 <!-- Printer settings list -->
-                <div v-if="printerSettings.length > 0" class="overflow-hidden rounded-lg border border-gray-200 dark:border-white/10">
+                <div v-if="printerSettings.length > 0" class="rounded-lg border border-gray-200 dark:border-white/10">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-white/10">
                         <thead class="bg-gray-50 dark:bg-white/5">
                             <tr>
