@@ -170,6 +170,7 @@ const printCssVars = computed(() => {
     // For print: 1 dot at 203 DPI ≈ 0.35pt (72 points per inch / 203 dots per inch)
     const dotToPt = 72 / 203;
     const barcodeHeight = settings?.barcode_height ?? 50;
+    const lineHeight = settings?.line_height ?? 10;
 
     return {
         '--print-label-width': `${Math.round(labelWidth * dotToPt)}pt`,
@@ -178,6 +179,7 @@ const printCssVars = computed(() => {
         '--print-left-offset': `${Math.round(leftOffset * dotToPt)}pt`,
         '--print-font-size': `${Math.max(4, Math.round(textSize * dotToPt))}pt`,
         '--print-barcode-height': `${Math.round(barcodeHeight * dotToPt)}pt`,
+        '--print-line-height': `${Math.round(lineHeight * dotToPt)}pt`,
     };
 });
 
@@ -743,9 +745,14 @@ const totalLabels = computed(() => {
         overflow: hidden;
     }
 
-    .label-sku,
+    .label-sku {
+        font-size: var(--print-font-size, 6pt) !important;
+        margin-bottom: var(--print-line-height, 2pt) !important;
+    }
+
     .label-attributes {
         font-size: var(--print-font-size, 6pt) !important;
+        margin-top: var(--print-line-height, 2pt) !important;
     }
 
     .label-barcode svg {
