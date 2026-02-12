@@ -219,14 +219,15 @@ async function loadTemplateFields(categoryId: number) {
     }
 }
 
-// --- Precious Metal Options ---
+// --- Precious Metal Options (matching template field values) ---
 const preciousMetalOptions = [
-    { value: 'gold_10k', label: '10K Gold' },
-    { value: 'gold_14k', label: '14K Gold' },
-    { value: 'gold_18k', label: '18K Gold' },
-    { value: 'gold_22k', label: '22K Gold' },
-    { value: 'gold_24k', label: '24K Gold' },
-    { value: 'silver', label: 'Sterling Silver' },
+    { value: '10k', label: '10K Gold' },
+    { value: '14k', label: '14K Gold' },
+    { value: '18k', label: '18K Gold' },
+    { value: '20k', label: '20K Gold' },
+    { value: '22k', label: '22K Gold' },
+    { value: '24k', label: '24K Gold' },
+    { value: 'sterling', label: 'Sterling Silver' },
     { value: 'platinum', label: 'Platinum' },
     { value: 'palladium', label: 'Palladium' },
 ];
@@ -238,10 +239,19 @@ let spotPriceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // Find precious metal and DWT fields in template (for syncing)
 const preciousMetalField = computed(() =>
-    templateFields.value.find(f => f.name === 'precious_metal' || f.name === 'metal_type')
+    templateFields.value.find(f =>
+        f.name === 'precious_metals' ||
+        f.name === 'precious_metal' ||
+        f.name === 'metal_type'
+    )
 );
 const dwtField = computed(() =>
-    templateFields.value.find(f => f.name === 'dwt' || f.name === 'weight_dwt')
+    templateFields.value.find(f =>
+        f.name === 'dwt' ||
+        f.name === 'total_dwt' ||
+        f.name === 'weight_dwt' ||
+        f.name === 'semi_mount_weight_dwt'
+    )
 );
 
 // Sync direct fields to template attributes

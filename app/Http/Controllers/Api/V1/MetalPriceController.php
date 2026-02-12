@@ -11,8 +11,10 @@ class MetalPriceController extends Controller
 {
     public function calculate(Request $request): JsonResponse
     {
+        $validMetals = array_keys(MetalPrice::PURITY_RATIOS);
+
         $validated = $request->validate([
-            'precious_metal' => ['required', 'string', 'in:gold_10k,gold_14k,gold_18k,gold_22k,gold_24k,silver,platinum,palladium'],
+            'precious_metal' => ['required', 'string', 'in:'.implode(',', $validMetals)],
             'dwt' => ['required', 'numeric', 'min:0.01'],
             'qty' => ['sometimes', 'integer', 'min:1'],
         ]);

@@ -61,18 +61,58 @@ class MetalPrice extends Model
 
     /**
      * Purity ratios for common precious metals.
+     * Keys match template field option values.
      *
      * @var array<string, float>
      */
     public const PURITY_RATIOS = [
+        // Gold karats (template values)
+        '10k' => 0.4167,
+        '14k' => 0.5833,
+        '18k' => 0.75,
+        '20k' => 0.8333,
+        '22k' => 0.9167,
+        '24k' => 0.999,
+        // Legacy format (gold_Xk)
         'gold_10k' => 0.4167,
         'gold_14k' => 0.5833,
         'gold_18k' => 0.75,
         'gold_22k' => 0.9167,
         'gold_24k' => 0.999,
+        // Pure metals
+        'gold' => 0.999,
+        'sterling' => 0.925,
         'silver' => 0.925,
+        'fine-silver' => 0.999,
         'platinum' => 0.95,
         'palladium' => 0.999,
+        'rhodium' => 0.999,
+    ];
+
+    /**
+     * Map precious metal values to base metal types for price lookup.
+     *
+     * @var array<string, string>
+     */
+    public const METAL_TYPE_MAP = [
+        '10k' => 'gold',
+        '14k' => 'gold',
+        '18k' => 'gold',
+        '20k' => 'gold',
+        '22k' => 'gold',
+        '24k' => 'gold',
+        'gold_10k' => 'gold',
+        'gold_14k' => 'gold',
+        'gold_18k' => 'gold',
+        'gold_22k' => 'gold',
+        'gold_24k' => 'gold',
+        'gold' => 'gold',
+        'sterling' => 'silver',
+        'silver' => 'silver',
+        'fine-silver' => 'silver',
+        'platinum' => 'platinum',
+        'palladium' => 'palladium',
+        'rhodium' => 'rhodium',
     ];
 
     /**
@@ -86,11 +126,8 @@ class MetalPrice extends Model
             return null;
         }
 
-        // Determine the base metal type from the precious metal key
-        $metalType = match (true) {
-            str_starts_with($preciousMetal, 'gold') => 'gold',
-            default => $preciousMetal,
-        };
+        // Determine the base metal type for price lookup
+        $metalType = self::METAL_TYPE_MAP[$preciousMetal] ?? $preciousMetal;
 
         $price = self::getLatest($metalType);
 
