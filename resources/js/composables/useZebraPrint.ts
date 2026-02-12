@@ -301,7 +301,7 @@ export const ZPL = {
 
     /**
      * Generate ZPL for a barcode label with configurable lines
-     * Format: Code at top, barcode underneath, then list of values
+     * Format: Code at top, barcode underneath, then list of values (vertical)
      */
     barcodeLabelWithLines(options: {
         barcode: string;
@@ -348,6 +348,57 @@ export const ZPL = {
                 zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${attrSize},${attrSize}^FD${lineTrunc}^FS`;
                 currentY += attrLineHeight;
             }
+        }
+
+        zpl += '^XZ'; // End format
+
+        return zpl;
+    },
+
+    /**
+     * Generate ZPL for a barcode label with attributes on a single horizontal line
+     * Format: SKU/code at top, barcode underneath, then single line with all attribute values
+     */
+    barcodeLabelWithAttributes(options: {
+        barcode: string;
+        attributeLine: string;
+        settings?: Partial<PrinterSettings>;
+    }): string {
+        const settings = { ...defaultSettings, ...options.settings };
+        const { barcode, attributeLine } = options;
+
+        const {
+            top_offset,
+            left_offset,
+            text_size,
+            barcode_height,
+            line_height,
+            label_width,
+            label_height,
+        } = settings;
+
+        let zpl = '^XA'; // Start format
+        zpl += `^PW${label_width}`; // Print width
+        zpl += `^LL${label_height}`; // Label length
+
+        let currentY = top_offset;
+
+        // SKU/code text at top (centered)
+        const codeSize = Math.floor(text_size * 0.9);
+        zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${codeSize},${codeSize}^FD${barcode}^FS`;
+        currentY += Math.floor(line_height * 0.9);
+
+        // Barcode (Code 128, centered) without human-readable text
+        const barcodeWidth = Math.min(label_width - 40 - left_offset, 300);
+        const barcodeX = Math.floor((label_width - barcodeWidth) / 2) + left_offset;
+        zpl += `^FO${barcodeX},${currentY}^BY2,2,${barcode_height}^BCN,,N,N,N^FD${barcode}^FS`;
+        currentY += barcode_height + 8;
+
+        // Single line with all attribute values (centered)
+        if (attributeLine) {
+            const attrSize = Math.floor(text_size * 0.85);
+            const lineTrunc = attributeLine.substring(0, 50); // Limit line length
+            zpl += `^FO${left_offset},${currentY}^FB${label_width - left_offset},1,0,C,0^A0N,${attrSize},${attrSize}^FD${lineTrunc}^FS`;
         }
 
         zpl += '^XZ'; // End format

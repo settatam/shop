@@ -47,14 +47,10 @@ interface Props {
 const props = defineProps<Props>();
 
 /**
- * Convert a price number to spelled-out format
- * e.g., 1234.56 -> "One Thousand Two Hundred Thirty-Four and 56/100"
- * For jewelry, we use a simpler format: "$1,234.56" -> "1234 56"
+ * Format price with currency symbol
  */
-const spellOutPrice = (price: number): string => {
-    const wholePart = Math.floor(price);
-    const centsPart = Math.round((price - wholePart) * 100);
-    return `${wholePart} ${centsPart.toString().padStart(2, '0')}`;
+const formatPriceForLabel = (price: number): string => {
+    return formatCurrency(price);
 };
 
 /**
@@ -67,7 +63,7 @@ const getAttributeValue = (attr: string, variant: Variant): string => {
         case 'category':
             return props.product.category || '';
         case 'price':
-            return spellOutPrice(variant.price);
+            return formatPriceForLabel(variant.price);
         case 'sku':
             return variant.sku || '';
         case 'barcode':
@@ -91,13 +87,20 @@ const formatAttributeName = (attr: string): string => {
 };
 
 /**
- * Get all label lines for a variant based on barcode attributes
+ * Get label values for a variant based on barcode attributes
+ * Returns values as array for horizontal display
  */
-const getLabelLines = (variant: Variant): { label: string; value: string }[] => {
-    return props.barcodeAttributes.map(attr => ({
-        label: formatAttributeName(attr),
-        value: getAttributeValue(attr, variant),
-    })).filter(line => line.value); // Only include non-empty values
+const getLabelValues = (variant: Variant): string[] => {
+    return props.barcodeAttributes
+        .map(attr => getAttributeValue(attr, variant))
+        .filter(value => value); // Only include non-empty values
+};
+
+/**
+ * Get formatted horizontal line for label (values separated by commas)
+ */
+const getLabelLine = (variant: Variant): string => {
+    return getLabelValues(variant).join(', ');
 };
 
 const barcodeRefs = ref<Map<number, SVGElement>>(new Map());
@@ -157,8 +160,7 @@ onMounted(async () => {
                 format: 'CODE128',
                 width: 2,
                 height: 50,
-                displayValue: true,
-                fontSize: 12,
+                displayValue: false,
                 margin: 8,
             });
         }
@@ -200,12 +202,12 @@ const generateZplLabels = (): string[] => {
         const code = variant.barcode || variant.sku;
         if (!code) continue;
 
-        // Get the label lines based on barcode attributes
-        const labelLines = getLabelLines(variant);
+        // Get the horizontal label line with all attribute values
+        const attributeLine = getLabelLine(variant);
 
-        const zpl = ZPL.barcodeLabelWithLines({
+        const zpl = ZPL.barcodeLabelWithAttributes({
             barcode: code,
-            lines: labelLines.map(l => l.value),
+            attributeLine: attributeLine,
             settings: selectedPrinterSetting.value,
         });
 
@@ -577,26 +579,19 @@ const totalLabels = computed(() => {
                             ]"
                         >
                             <div class="text-center">
-                                <!-- Barcode value at top -->
+                                <!-- SKU/code at top -->
                                 <p class="text-sm font-semibold text-gray-900 truncate">
                                     {{ variant.barcode || variant.sku }}
                                 </p>
-                                <!-- Barcode image -->
+                                <!-- Barcode image (no text below) -->
                                 <svg
                                     :ref="(el) => setBarcodeRef(el as SVGElement, variant.id)"
                                     class="mx-auto mt-1"
                                 ></svg>
-                                <!-- Configured attribute lines -->
-                                <div class="mt-1 space-y-0.5">
-                                    <p
-                                        v-for="(line, index) in getLabelLines(variant)"
-                                        :key="index"
-                                        class="text-xs text-gray-700"
-                                        :class="{ 'text-sm font-bold': line.label.toLowerCase() === 'price' }"
-                                    >
-                                        {{ line.value }}
-                                    </p>
-                                </div>
+                                <!-- Configured attribute values (horizontal) -->
+                                <p class="mt-1 text-xs text-gray-700">
+                                    {{ getLabelLine(variant) }}
+                                </p>
                             </div>
                         </div>
                     </div>
