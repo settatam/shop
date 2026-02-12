@@ -165,12 +165,45 @@ export function useZebraPrint() {
         }
     };
 
+    /**
+     * Send ZPL to network printer via server (for iPad/mobile)
+     */
+    const networkPrint = async (printerId: number, zpl: string): Promise<boolean> => {
+        printing.value = true;
+        status.value.error = null;
+
+        try {
+            const response = await fetch(`/settings/printers/${printerId}/network-print`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({ zpl }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to print');
+            }
+
+            return true;
+        } catch (err) {
+            status.value.error = err instanceof Error ? err.message : 'Failed to send print job via network.';
+            return false;
+        } finally {
+            printing.value = false;
+        }
+    };
+
     return {
         status,
         printing,
         connect,
         selectPrinter,
         print,
+        networkPrint,
         readPrinterStatus,
     };
 }

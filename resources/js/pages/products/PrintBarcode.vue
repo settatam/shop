@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { onMounted, ref, computed } from 'vue';
-import { ArrowLeftIcon, PrinterIcon, ComputerDesktopIcon, ExclamationTriangleIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, PrinterIcon, ComputerDesktopIcon, ExclamationTriangleIcon, WifiIcon } from '@heroicons/vue/20/solid';
 import JsBarcode from 'jsbarcode';
 import { useZebraPrint, ZPL, type PrinterSettings } from '@/composables/useZebraPrint';
 
@@ -16,6 +16,8 @@ interface Variant {
 interface PrinterSettingOption {
     id: number;
     name: string;
+    ip_address: string | null;
+    port: number;
     top_offset: number;
     left_offset: number;
     right_offset: number;
@@ -25,6 +27,7 @@ interface PrinterSettingOption {
     label_width: number;
     label_height: number;
     is_default: boolean;
+    network_print_enabled: boolean;
 }
 
 interface Props {
@@ -41,7 +44,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const barcodeRefs = ref<Map<number, SVGElement>>(new Map());
-const printMode = ref<'browser' | 'zebra'>('browser');
+const printMode = ref<'browser' | 'zebra' | 'network'>('browser');
 const copies = ref(1);
 const selectedVariants = ref<number[]>([]);
 const printSuccess = ref(false);
@@ -50,7 +53,11 @@ const selectedPrinterSettingId = ref<number | null>(
 );
 
 // Zebra Browser Print
-const { status: zebraStatus, printing, connect, selectPrinter, print } = useZebraPrint();
+const { status: zebraStatus, printing, connect, selectPrinter, print, networkPrint } = useZebraPrint();
+
+// Check if any printer has network printing enabled
+const networkPrinters = computed(() => props.printerSettings.filter(s => s.network_print_enabled));
+const hasNetworkPrinters = computed(() => networkPrinters.value.length > 0);
 
 const selectedPrinterSetting = computed<PrinterSettings | undefined>(() => {
     const setting = props.printerSettings.find(s => s.id === selectedPrinterSettingId.value);
@@ -129,10 +136,7 @@ const browserPrint = () => {
     window.print();
 };
 
-const zebraPrint = async () => {
-    printSuccess.value = false;
-
-    // Generate ZPL labels for selected variants
+const generateZplLabels = (): string[] => {
     const labels: string[] = [];
 
     for (const variant of variantsToprint.value) {
@@ -153,6 +157,13 @@ const zebraPrint = async () => {
         }
     }
 
+    return labels;
+};
+
+const zebraPrint = async () => {
+    printSuccess.value = false;
+    const labels = generateZplLabels();
+
     if (labels.length === 0) {
         return;
     }
@@ -167,9 +178,35 @@ const zebraPrint = async () => {
     }
 };
 
+const networkPrintHandler = async () => {
+    printSuccess.value = false;
+
+    if (!selectedPrinterSettingId.value) {
+        zebraStatus.value.error = 'Please select a printer with network printing configured.';
+        return;
+    }
+
+    const labels = generateZplLabels();
+
+    if (labels.length === 0) {
+        return;
+    }
+
+    const success = await networkPrint(selectedPrinterSettingId.value, ZPL.batch(labels));
+
+    if (success) {
+        printSuccess.value = true;
+        setTimeout(() => {
+            printSuccess.value = false;
+        }, 3000);
+    }
+};
+
 const handlePrint = () => {
     if (printMode.value === 'zebra') {
         zebraPrint();
+    } else if (printMode.value === 'network') {
+        networkPrintHandler();
     } else {
         browserPrint();
     }
@@ -202,7 +239,7 @@ const totalLabels = computed(() => {
                     <button
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-                        :disabled="printing || selectedVariants.length === 0 || (printMode === 'zebra' && !zebraStatus.selectedPrinter)"
+                        :disabled="printing || selectedVariants.length === 0 || (printMode === 'zebra' && !zebraStatus.selectedPrinter) || (printMode === 'network' && !selectedPrinterSettingId)"
                         @click="handlePrint"
                     >
                         <PrinterIcon class="-ml-0.5 size-5" />
@@ -217,7 +254,7 @@ const totalLabels = computed(() => {
             <div class="print:hidden mb-6 bg-white rounded-lg shadow dark:bg-gray-800 p-4">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Print Method</h3>
 
-                <div class="grid grid-cols-2 gap-3">
+                <div :class="['grid gap-3', hasNetworkPrinters ? 'grid-cols-3' : 'grid-cols-2']">
                     <!-- Browser Print -->
                     <button
                         type="button"
@@ -236,7 +273,7 @@ const totalLabels = computed(() => {
                         </div>
                     </button>
 
-                    <!-- Zebra Print -->
+                    <!-- Zebra Browser Print (desktop only) -->
                     <button
                         type="button"
                         :class="[
@@ -249,8 +286,27 @@ const totalLabels = computed(() => {
                     >
                         <PrinterIcon class="size-6 text-gray-400" />
                         <div>
-                            <p class="text-sm font-medium text-gray-900 dark:text-white">Zebra Printer</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">Direct label printing</p>
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">Zebra Desktop</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Via Browser Print app</p>
+                        </div>
+                    </button>
+
+                    <!-- Network Print (for iPad/mobile) -->
+                    <button
+                        v-if="hasNetworkPrinters"
+                        type="button"
+                        :class="[
+                            'flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-colors',
+                            printMode === 'network'
+                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                                : 'border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500',
+                        ]"
+                        @click="printMode = 'network'"
+                    >
+                        <WifiIcon class="size-6 text-gray-400" />
+                        <div>
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">Network Print</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">iPad/Mobile support</p>
                         </div>
                     </button>
                 </div>
@@ -345,10 +401,64 @@ const totalLabels = computed(() => {
                         </p>
                     </div>
                 </div>
+
+                <!-- Network Print Options (for iPad/mobile) -->
+                <div v-if="printMode === 'network'" class="mt-4 space-y-3">
+                    <div class="p-3 rounded-md bg-blue-50 dark:bg-blue-900/20">
+                        <p class="text-sm text-blue-800 dark:text-blue-200">
+                            Network printing sends labels directly to your printer over the network. Works from any device including iPads.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Network Printer Selection -->
+                        <div>
+                            <label for="networkPrinter" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Select Network Printer
+                            </label>
+                            <select
+                                id="networkPrinter"
+                                v-model="selectedPrinterSettingId"
+                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            >
+                                <option v-for="setting in networkPrinters" :key="setting.id" :value="setting.id">
+                                    {{ setting.name }} ({{ setting.ip_address }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Number of Copies -->
+                        <div>
+                            <label for="networkCopies" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Copies Per Variant
+                            </label>
+                            <input
+                                id="networkCopies"
+                                v-model.number="copies"
+                                type="number"
+                                min="1"
+                                max="100"
+                                class="mt-1 block w-24 rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div v-if="zebraStatus.error" class="p-3 rounded-md bg-red-50 dark:bg-red-900/20">
+                        <p class="text-sm text-red-800 dark:text-red-200">{{ zebraStatus.error }}</p>
+                    </div>
+
+                    <!-- Success Message -->
+                    <div v-if="printSuccess" class="p-3 rounded-md bg-green-50 dark:bg-green-900/20">
+                        <p class="text-sm text-green-800 dark:text-green-200">
+                            {{ totalLabels }} label{{ totalLabels !== 1 ? 's' : '' }} sent to printer successfully!
+                        </p>
+                    </div>
+                </div>
             </div>
 
-            <!-- Variant Selection (for Zebra only) -->
-            <div v-if="printMode === 'zebra' && product.variants.length > 1" class="print:hidden mb-6 bg-white rounded-lg shadow dark:bg-gray-800 p-4">
+            <!-- Variant Selection (for Zebra and Network modes) -->
+            <div v-if="(printMode === 'zebra' || printMode === 'network') && product.variants.length > 1" class="print:hidden mb-6 bg-white rounded-lg shadow dark:bg-gray-800 p-4">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-medium text-gray-900 dark:text-white">Select Variants to Print</h3>
                     <div class="flex gap-2">
@@ -405,7 +515,7 @@ const totalLabels = computed(() => {
                             :key="variant.id"
                             :class="[
                                 'barcode-label border border-gray-200 p-4 print:border print:p-2 print:break-inside-avoid',
-                                printMode === 'zebra' && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
+                                (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
                             ]"
                         >
                             <div class="text-center">
@@ -433,6 +543,10 @@ const totalLabels = computed(() => {
                 <p v-if="printMode === 'browser'" class="text-sm text-gray-500 dark:text-gray-400">
                     Showing {{ product.variants.length }} variant{{ product.variants.length !== 1 ? 's' : '' }}.
                     Use the browser's print dialog to adjust the number of copies.
+                </p>
+                <p v-else-if="printMode === 'network'" class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ selectedVariants.length }} variant{{ selectedVariants.length !== 1 ? 's' : '' }} selected.
+                    Labels will be sent via network to your printer.
                 </p>
                 <p v-else class="text-sm text-gray-500 dark:text-gray-400">
                     {{ selectedVariants.length }} variant{{ selectedVariants.length !== 1 ? 's' : '' }} selected.

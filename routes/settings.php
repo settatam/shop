@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\MaintenanceController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PaymentTerminalController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -77,6 +78,9 @@ Route::middleware('auth')->group(function () {
         Route::put('settings/printers/{printerSetting}', [PrinterSettingsController::class, 'update'])->name('settings.printers.update');
         Route::delete('settings/printers/{printerSetting}', [PrinterSettingsController::class, 'destroy'])->name('settings.printers.destroy');
         Route::post('settings/printers/{printerSetting}/make-default', [PrinterSettingsController::class, 'makeDefault'])->name('settings.printers.make-default');
+        Route::post('settings/printers/{printerSetting}/network-print', [PrinterSettingsController::class, 'networkPrint'])->name('settings.printers.network-print');
+        Route::post('settings/printers/{printerSetting}/test-connection', [PrinterSettingsController::class, 'testConnection'])->name('settings.printers.test-connection');
+        Route::post('settings/printers/{printerSetting}/test-print', [PrinterSettingsController::class, 'testPrint'])->name('settings.printers.test-print');
     });
 
     // Payment Terminal Settings
@@ -110,5 +114,12 @@ Route::middleware('auth')->group(function () {
         Route::put('/{salesChannel}', [SalesChannelController::class, 'update'])->name('update');
         Route::delete('/{salesChannel}', [SalesChannelController::class, 'destroy'])->name('destroy');
         Route::post('/reorder', [SalesChannelController::class, 'reorder'])->name('reorder');
+    });
+
+    // Maintenance
+    Route::middleware(['store', 'onboarding'])->prefix('settings/maintenance')->name('settings.maintenance.')->group(function () {
+        Route::get('/', [MaintenanceController::class, 'index'])->name('index');
+        Route::post('/reindex-search', [MaintenanceController::class, 'reindexSearch'])->name('reindex-search');
+        Route::post('/reindex-model/{model}', [MaintenanceController::class, 'reindexModel'])->name('reindex-model');
     });
 });

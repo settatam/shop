@@ -1198,6 +1198,8 @@ class TransactionController extends Controller
             ->map(fn (PrinterSetting $setting) => [
                 'id' => $setting->id,
                 'name' => $setting->name,
+                'ip_address' => $setting->ip_address,
+                'port' => $setting->port,
                 'top_offset' => $setting->top_offset,
                 'left_offset' => $setting->left_offset,
                 'right_offset' => $setting->right_offset,
@@ -1207,6 +1209,7 @@ class TransactionController extends Controller
                 'label_width' => $setting->label_width,
                 'label_height' => $setting->label_height,
                 'is_default' => $setting->is_default,
+                'network_print_enabled' => $setting->isNetworkPrintingEnabled(),
             ]);
 
         return Inertia::render('transactions/PrintBarcode', [

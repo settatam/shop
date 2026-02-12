@@ -8,6 +8,7 @@ import {
     TrashIcon,
     PencilIcon,
     StarIcon,
+    SignalIcon,
 } from '@heroicons/vue/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 
@@ -23,6 +24,8 @@ interface PrinterSetting {
     id: number;
     name: string;
     printer_type: string;
+    ip_address: string | null;
+    port: number;
     top_offset: number;
     left_offset: number;
     right_offset: number;
@@ -32,6 +35,7 @@ interface PrinterSetting {
     label_width: number;
     label_height: number;
     is_default: boolean;
+    network_print_enabled: boolean;
 }
 
 interface Props {
@@ -58,6 +62,8 @@ const selectedSetting = ref<PrinterSetting | null>(null);
 const form = ref({
     name: '',
     printer_type: 'zebra',
+    ip_address: '',
+    port: 9100,
     top_offset: 30,
     left_offset: 0,
     right_offset: 0,
@@ -78,6 +84,8 @@ function openCreateModal() {
     form.value = {
         name: '',
         printer_type: 'zebra',
+        ip_address: '',
+        port: 9100,
         top_offset: 30,
         left_offset: 0,
         right_offset: 0,
@@ -98,6 +106,8 @@ function openEditModal(setting: PrinterSetting) {
     form.value = {
         name: setting.name,
         printer_type: setting.printer_type,
+        ip_address: setting.ip_address || '',
+        port: setting.port || 9100,
         top_offset: setting.top_offset,
         left_offset: setting.left_offset,
         right_offset: setting.right_offset,
@@ -174,6 +184,39 @@ function makeDefault(setting: PrinterSetting) {
 function getPrinterTypeLabel(type: string): string {
     return props.printerTypes[type] || type;
 }
+
+const testingPrinterId = ref<number | null>(null);
+
+async function testNetworkPrint(setting: PrinterSetting) {
+    if (!setting.network_print_enabled) {
+        alert('Network printing is not configured for this printer. Please add an IP address first.');
+        return;
+    }
+
+    testingPrinterId.value = setting.id;
+
+    try {
+        const response = await fetch(`/settings/printers/${setting.id}/test-print`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+            },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert(data.message || 'Test label sent to printer!');
+        } else {
+            alert(data.error || 'Failed to send test print');
+        }
+    } catch (error) {
+        alert('Failed to connect to printer. Please check the IP address and ensure the printer is online.');
+    } finally {
+        testingPrinterId.value = null;
+    }
+}
 </script>
 
 <template>
@@ -210,6 +253,9 @@ function getPrinterTypeLabel(type: string): string {
                                 <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white md:table-cell">
                                     Barcode Height
                                 </th>
+                                <th scope="col" class="hidden px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white lg:table-cell">
+                                    Network
+                                </th>
                                 <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
                                     <span class="sr-only">Actions</span>
                                 </th>
@@ -235,6 +281,20 @@ function getPrinterTypeLabel(type: string): string {
                                 </td>
                                 <td class="hidden whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400 md:table-cell">
                                     {{ setting.barcode_height }} dots
+                                </td>
+                                <td class="hidden whitespace-nowrap px-3 py-4 text-sm lg:table-cell">
+                                    <span
+                                        v-if="setting.network_print_enabled"
+                                        class="inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20"
+                                    >
+                                        {{ setting.ip_address }}
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="text-gray-400 dark:text-gray-500"
+                                    >
+                                        Not configured
+                                    </span>
                                 </td>
                                 <td class="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                     <Menu as="div" class="relative inline-block text-left">
@@ -273,6 +333,19 @@ function getPrinterTypeLabel(type: string): string {
                                                     >
                                                         <StarIcon class="mr-3 h-5 w-5 text-gray-400" />
                                                         Make default
+                                                    </button>
+                                                </MenuItem>
+                                                <MenuItem v-if="setting.network_print_enabled" v-slot="{ active }">
+                                                    <button
+                                                        @click="testNetworkPrint(setting)"
+                                                        :disabled="testingPrinterId === setting.id"
+                                                        :class="[
+                                                            active ? 'bg-gray-50 dark:bg-white/5' : '',
+                                                            'flex w-full items-center px-3 py-2 text-sm text-gray-900 dark:text-white',
+                                                        ]"
+                                                    >
+                                                        <SignalIcon class="mr-3 h-5 w-5 text-gray-400" />
+                                                        {{ testingPrinterId === setting.id ? 'Sending...' : 'Test network print' }}
                                                     </button>
                                                 </MenuItem>
                                                 <MenuItem v-slot="{ active }">
@@ -351,6 +424,42 @@ function getPrinterTypeLabel(type: string): string {
                                                 {{ label }}
                                             </option>
                                         </select>
+                                    </div>
+
+                                    <!-- Network Printing (for iPad/mobile support) -->
+                                    <div class="rounded-lg border border-gray-200 p-4 dark:border-white/10">
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                            Network Printing (iPad/Mobile)
+                                        </h4>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                                            Enter the printer's IP address to enable printing from mobile devices.
+                                        </p>
+                                        <div class="grid grid-cols-3 gap-4">
+                                            <div class="col-span-2">
+                                                <Label for="ip_address">IP Address</Label>
+                                                <Input
+                                                    id="ip_address"
+                                                    v-model="form.ip_address"
+                                                    type="text"
+                                                    placeholder="e.g., 192.168.1.100"
+                                                    class="mt-1"
+                                                />
+                                                <p v-if="formErrors.ip_address" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                    {{ formErrors.ip_address }}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <Label for="port">Port</Label>
+                                                <Input
+                                                    id="port"
+                                                    v-model.number="form.port"
+                                                    type="number"
+                                                    min="1"
+                                                    max="65535"
+                                                    class="mt-1"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <!-- Label Dimensions -->

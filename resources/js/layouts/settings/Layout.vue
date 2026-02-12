@@ -55,6 +55,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Notifications',
         href: '/settings/notifications',
     },
+    {
+        title: 'Maintenance',
+        href: '/settings/maintenance',
+    },
 ];
 
 const currentPath = typeof window !== undefined ? window.location.pathname : '';

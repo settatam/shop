@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\PrinterSetting;
+use App\Services\NetworkPrintService;
 use App\Services\StoreContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,7 +14,10 @@ use Inertia\Response;
 
 class PrinterSettingsController extends Controller
 {
-    public function __construct(protected StoreContext $storeContext) {}
+    public function __construct(
+        protected StoreContext $storeContext,
+        protected NetworkPrintService $networkPrintService,
+    ) {}
 
     public function index(): Response|RedirectResponse
     {
@@ -31,6 +36,8 @@ class PrinterSettingsController extends Controller
                 'id' => $setting->id,
                 'name' => $setting->name,
                 'printer_type' => $setting->printer_type,
+                'ip_address' => $setting->ip_address,
+                'port' => $setting->port,
                 'top_offset' => $setting->top_offset,
                 'left_offset' => $setting->left_offset,
                 'right_offset' => $setting->right_offset,
@@ -40,6 +47,7 @@ class PrinterSettingsController extends Controller
                 'label_width' => $setting->label_width,
                 'label_height' => $setting->label_height,
                 'is_default' => $setting->is_default,
+                'network_print_enabled' => $setting->isNetworkPrintingEnabled(),
             ]);
 
         return Inertia::render('settings/PrinterSettings', [
@@ -60,6 +68,8 @@ class PrinterSettingsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:printer_settings,name,NULL,id,store_id,'.$store->id,
             'printer_type' => 'required|string|in:zebra,godex,other',
+            'ip_address' => 'nullable|ip',
+            'port' => 'nullable|integer|min:1|max:65535',
             'top_offset' => 'required|integer|min:0|max:500',
             'left_offset' => 'required|integer|min:0|max:500',
             'right_offset' => 'required|integer|min:0|max:500',
@@ -74,6 +84,7 @@ class PrinterSettingsController extends Controller
         $setting = PrinterSetting::create([
             ...$validated,
             'store_id' => $store->id,
+            'port' => $validated['port'] ?? 9100,
         ]);
 
         // If this is set as default, unset other defaults
@@ -103,6 +114,8 @@ class PrinterSettingsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:printer_settings,name,'.$printerSetting->id.',id,store_id,'.$store->id,
             'printer_type' => 'required|string|in:zebra,godex,other',
+            'ip_address' => 'nullable|ip',
+            'port' => 'nullable|integer|min:1|max:65535',
             'top_offset' => 'required|integer|min:0|max:500',
             'left_offset' => 'required|integer|min:0|max:500',
             'right_offset' => 'required|integer|min:0|max:500',
@@ -114,7 +127,10 @@ class PrinterSettingsController extends Controller
             'is_default' => 'boolean',
         ]);
 
-        $printerSetting->update($validated);
+        $printerSetting->update([
+            ...$validated,
+            'port' => $validated['port'] ?? 9100,
+        ]);
 
         // If this is set as default, unset other defaults
         if ($request->boolean('is_default')) {
@@ -167,5 +183,107 @@ class PrinterSettingsController extends Controller
 
         return redirect()->route('settings.printers.index')
             ->with('success', $printerSetting->name.' is now the default printer setting.');
+    }
+
+    /**
+     * Send ZPL to printer via network (for iPad/mobile devices).
+     */
+    public function networkPrint(Request $request, PrinterSetting $printerSetting): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $printerSetting->store_id !== $store->id) {
+            return response()->json(['error' => 'Printer not found'], 404);
+        }
+
+        if (! $printerSetting->isNetworkPrintingEnabled()) {
+            return response()->json([
+                'error' => 'Network printing is not configured for this printer. Please add an IP address in printer settings.',
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'zpl' => 'required|string',
+        ]);
+
+        try {
+            $this->networkPrintService->print($printerSetting, $validated['zpl']);
+
+            return response()->json(['success' => true, 'message' => 'Print job sent successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Test network printer connection.
+     */
+    public function testConnection(PrinterSetting $printerSetting): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $printerSetting->store_id !== $store->id) {
+            return response()->json(['error' => 'Printer not found'], 404);
+        }
+
+        if (! $printerSetting->isNetworkPrintingEnabled()) {
+            return response()->json([
+                'error' => 'Network printing is not configured for this printer.',
+            ], 400);
+        }
+
+        $reachable = $this->networkPrintService->isPrinterReachable(
+            $printerSetting->ip_address,
+            $printerSetting->port
+        );
+
+        if ($reachable) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Printer is reachable at '.$printerSetting->ip_address.':'.$printerSetting->port,
+            ]);
+        }
+
+        return response()->json([
+            'error' => 'Could not connect to printer at '.$printerSetting->ip_address.':'.$printerSetting->port,
+        ], 400);
+    }
+
+    /**
+     * Print a test label to verify network configuration.
+     */
+    public function testPrint(PrinterSetting $printerSetting): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $printerSetting->store_id !== $store->id) {
+            return response()->json(['error' => 'Printer not found'], 404);
+        }
+
+        if (! $printerSetting->isNetworkPrintingEnabled()) {
+            return response()->json([
+                'error' => 'Network printing is not configured for this printer.',
+            ], 400);
+        }
+
+        // Generate a test label ZPL
+        $testZpl = "^XA\n";
+        $testZpl .= "^PW{$printerSetting->label_width}\n";
+        $testZpl .= "^LL{$printerSetting->label_height}\n";
+        $testZpl .= "^FO{$printerSetting->left_offset},{$printerSetting->top_offset}";
+        $testZpl .= '^FB'.($printerSetting->label_width - $printerSetting->left_offset).',1,0,C,0';
+        $testZpl .= "^A0N,{$printerSetting->text_size},{$printerSetting->text_size}";
+        $testZpl .= "^FDTEST PRINT^FS\n";
+        $testZpl .= '^FO'.floor($printerSetting->label_width / 4).','.($printerSetting->top_offset + 30);
+        $testZpl .= "^BY2,2,{$printerSetting->barcode_height}^BCN,,Y,N,N^FD123456789^FS\n";
+        $testZpl .= "^XZ\n";
+
+        try {
+            $this->networkPrintService->print($printerSetting, $testZpl);
+
+            return response()->json(['success' => true, 'message' => 'Test label sent to printer']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

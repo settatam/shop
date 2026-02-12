@@ -21,6 +21,8 @@ class PrinterSetting extends Model
         'store_id',
         'name',
         'printer_type',
+        'ip_address',
+        'port',
         'top_offset',
         'left_offset',
         'right_offset',
@@ -35,6 +37,7 @@ class PrinterSetting extends Model
     protected function casts(): array
     {
         return [
+            'port' => 'integer',
             'top_offset' => 'integer',
             'left_offset' => 'integer',
             'right_offset' => 'integer',
@@ -45,6 +48,14 @@ class PrinterSetting extends Model
             'label_height' => 'integer',
             'is_default' => 'boolean',
         ];
+    }
+
+    /**
+     * Check if network printing is configured.
+     */
+    public function isNetworkPrintingEnabled(): bool
+    {
+        return ! empty($this->ip_address);
     }
 
     public function store(): BelongsTo
