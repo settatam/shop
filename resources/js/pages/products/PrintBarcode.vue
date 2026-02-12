@@ -158,7 +158,8 @@ const labelStyles = computed(() => {
 });
 
 // Print-specific styles (use actual dots as points for thermal printers)
-const printLabelStyles = computed(() => {
+// These are set as CSS custom properties for @media print to use
+const printCssVars = computed(() => {
     const settings = selectedPrinterSetting.value;
     const labelWidth = settings?.label_width ?? 355;
     const labelHeight = settings?.label_height ?? 152;
@@ -166,15 +167,17 @@ const printLabelStyles = computed(() => {
     const leftOffset = settings?.left_offset ?? 10;
     const textSize = settings?.text_size ?? 12;
 
-    // For print: 1 dot at 203 DPI ≈ 0.35pt
+    // For print: 1 dot at 203 DPI ≈ 0.35pt (72 points per inch / 203 dots per inch)
     const dotToPt = 72 / 203;
+    const barcodeHeight = settings?.barcode_height ?? 50;
 
     return {
-        width: `${Math.round(labelWidth * dotToPt)}pt`,
-        height: `${Math.round(labelHeight * dotToPt)}pt`,
-        paddingTop: `${Math.round(topOffset * dotToPt)}pt`,
-        paddingLeft: `${Math.round(leftOffset * dotToPt)}pt`,
-        fontSize: `${Math.max(4, Math.round(textSize * dotToPt))}pt`,
+        '--print-label-width': `${Math.round(labelWidth * dotToPt)}pt`,
+        '--print-label-height': `${Math.round(labelHeight * dotToPt)}pt`,
+        '--print-top-offset': `${Math.round(topOffset * dotToPt)}pt`,
+        '--print-left-offset': `${Math.round(leftOffset * dotToPt)}pt`,
+        '--print-font-size': `${Math.max(4, Math.round(textSize * dotToPt))}pt`,
+        '--print-barcode-height': `${Math.round(barcodeHeight * dotToPt)}pt`,
     };
 });
 
@@ -626,13 +629,13 @@ const totalLabels = computed(() => {
                 <div class="p-6 print:p-0">
                     <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4 print:hidden">Label Preview</h3>
 
-                    <div class="flex flex-wrap gap-4 print:block">
+                    <div class="flex flex-wrap gap-4 print:block" :style="printCssVars">
                         <div
                             v-for="variant in product.variants"
                             :key="variant.id"
                             :class="[
                                 'barcode-label border border-gray-200 print:border-0',
-                                (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
+                                (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40 print:hidden' : '',
                             ]"
                             :style="labelStyles"
                         >
@@ -685,15 +688,21 @@ const totalLabels = computed(() => {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     box-sizing: border-box;
+    text-align: center;
 }
 
 .label-sku {
-    margin: 1px 0;
+    margin: 0;
+    padding: 0;
+    line-height: 1.1;
     display: block;
 }
 
 .label-barcode {
-    display: block;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
 }
 
 .label-barcode svg {
@@ -702,13 +711,16 @@ const totalLabels = computed(() => {
 }
 
 .label-attributes {
-    margin: 1px 0;
+    margin: 0;
+    padding: 0;
+    line-height: 1.1;
     display: block;
 }
 
 @media print {
     @page {
-        size: auto;
+        /* Use exact label size for thermal printing */
+        size: var(--print-label-width, 126pt) var(--print-label-height, 54pt);
         margin: 0;
     }
 
@@ -720,8 +732,31 @@ const totalLabels = computed(() => {
     }
 
     .barcode-label {
-        page-break-after: always;
+        /* Use print-specific dimensions */
+        width: var(--print-label-width, 126pt) !important;
+        height: var(--print-label-height, 54pt) !important;
+        padding-top: var(--print-top-offset, 1pt) !important;
+        padding-left: var(--print-left-offset, 4pt) !important;
+        padding-right: var(--print-left-offset, 4pt) !important;
         page-break-inside: avoid;
+        break-inside: avoid;
+        overflow: hidden;
+    }
+
+    .label-sku,
+    .label-attributes {
+        font-size: var(--print-font-size, 6pt) !important;
+    }
+
+    .label-barcode svg {
+        height: var(--print-barcode-height, 18pt) !important;
+        width: auto;
+        max-width: 100%;
+    }
+
+    /* Only add page break after each label if multiple labels */
+    .barcode-label:not(:last-child) {
+        page-break-after: always;
     }
 }
 </style>
