@@ -29,3 +29,12 @@ Schedule::command('sync:rapnet-prices --update-products')
     ->weeklyOn(5, '06:00') // Friday at 6am
     ->withoutOverlapping()
     ->runInBackground();
+
+// Fetch precious metal spot prices 3 times daily (6am, 12pm, 6pm)
+Schedule::command('metals:fetch-prices')
+    ->twiceDaily(6, 18) // 6am and 6pm
+    ->withoutOverlapping();
+
+Schedule::command('metals:fetch-prices')
+    ->dailyAt('12:00') // noon
+    ->withoutOverlapping();

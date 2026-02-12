@@ -112,4 +112,9 @@ return [
         'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
     ],
 
+    'metals' => [
+        'api_key' => env('METALS_API_KEY'),
+        'api_url' => env('METALS_API_URL', 'https://metals-api.com/api/latest'),
+    ],
+
 ];

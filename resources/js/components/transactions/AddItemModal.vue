@@ -45,6 +45,8 @@ interface TransactionItem {
     category_id?: number;
     price?: number;
     buy_price: number;
+    precious_metal?: string;
+    dwt?: number;
     attributes: Record<number, string>;
     images: File[];
 }
@@ -217,12 +219,24 @@ async function loadTemplateFields(categoryId: number) {
     }
 }
 
+// --- Precious Metal Options ---
+const preciousMetalOptions = [
+    { value: 'gold_10k', label: '10K Gold' },
+    { value: 'gold_14k', label: '14K Gold' },
+    { value: 'gold_18k', label: '18K Gold' },
+    { value: 'gold_22k', label: '22K Gold' },
+    { value: 'gold_24k', label: '24K Gold' },
+    { value: 'silver', label: 'Sterling Silver' },
+    { value: 'platinum', label: 'Platinum' },
+    { value: 'palladium', label: 'Palladium' },
+];
+
 // --- Spot price ---
 const spotPrice = ref<number | null>(null);
 const loadingSpotPrice = ref(false);
 let spotPriceTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// Find precious metal and DWT fields in template
+// Find precious metal and DWT fields in template (for syncing)
 const preciousMetalField = computed(() =>
     templateFields.value.find(f => f.name === 'precious_metal' || f.name === 'metal_type')
 );
@@ -230,17 +244,35 @@ const dwtField = computed(() =>
     templateFields.value.find(f => f.name === 'dwt' || f.name === 'weight_dwt')
 );
 
-function watchSpotPrice() {
-    const metalFieldId = preciousMetalField.value?.id;
-    const dwtFieldId = dwtField.value?.id;
-
-    if (!metalFieldId || !dwtFieldId) {
-        spotPrice.value = null;
-        return;
+// Sync direct fields to template attributes
+function syncMetalToTemplate() {
+    if (preciousMetalField.value && form.value.precious_metal) {
+        form.value.attributes[preciousMetalField.value.id] = form.value.precious_metal;
     }
+    if (dwtField.value && form.value.dwt) {
+        form.value.attributes[dwtField.value.id] = String(form.value.dwt);
+    }
+}
 
-    const metal = form.value.attributes[metalFieldId];
-    const dwt = parseFloat(form.value.attributes[dwtFieldId]);
+// Sync template attributes to direct fields
+function syncTemplateToMetal() {
+    if (preciousMetalField.value) {
+        const val = form.value.attributes[preciousMetalField.value.id];
+        if (val && val !== form.value.precious_metal) {
+            form.value.precious_metal = val;
+        }
+    }
+    if (dwtField.value) {
+        const val = form.value.attributes[dwtField.value.id];
+        if (val && parseFloat(val) !== form.value.dwt) {
+            form.value.dwt = parseFloat(val) || undefined;
+        }
+    }
+}
+
+function calculateSpotPrice() {
+    const metal = form.value.precious_metal;
+    const dwt = form.value.dwt;
 
     if (!metal || !dwt || dwt <= 0) {
         spotPrice.value = null;
@@ -319,6 +351,8 @@ function makeEmptyForm(): TransactionItem {
         category_id: undefined,
         price: undefined,
         buy_price: 0,
+        precious_metal: undefined,
+        dwt: undefined,
         attributes: {},
         images: [],
     };
@@ -334,9 +368,15 @@ watch(() => form.value.category_id, (newId) => {
     }
 });
 
-// Watch attribute changes for spot price
+// Watch precious metal/dwt changes for spot price calculation
+watch([() => form.value.precious_metal, () => form.value.dwt], () => {
+    calculateSpotPrice();
+    syncMetalToTemplate();
+});
+
+// Watch attribute changes to sync back to direct fields
 watch(() => form.value.attributes, () => {
-    watchSpotPrice();
+    syncTemplateToMetal();
 }, { deep: true });
 
 const isEditing = computed(() => !!props.editingItem);
@@ -550,6 +590,71 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                                 placeholder="Detailed description of the item..."
                                             />
                                         </div>
+                                    </div>
+
+                                    <!-- Precious Metal Quick Entry -->
+                                    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                                        <h4 class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
+                                            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                            </svg>
+                                            Metal Value Calculator
+                                        </h4>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label for="precious_metal" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                                    Metal Type
+                                                </label>
+                                                <select
+                                                    id="precious_metal"
+                                                    v-model="form.precious_metal"
+                                                    class="block w-full rounded-md border-0 py-1.5 pl-3 pr-8 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-amber-500 text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option value="">Select metal...</option>
+                                                    <option v-for="opt in preciousMetalOptions" :key="opt.value" :value="opt.value">
+                                                        {{ opt.label }}
+                                                    </option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label for="dwt" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                                    Weight (DWT)
+                                                </label>
+                                                <input
+                                                    id="dwt"
+                                                    v-model.number="form.dwt"
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    placeholder="0.00"
+                                                    class="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-amber-500 text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                        </div>
+                                        <!-- Spot Price Result -->
+                                        <div v-if="loadingSpotPrice" class="mt-3 flex items-center gap-2 text-sm text-gray-500">
+                                            <svg class="animate-spin size-4" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            Calculating...
+                                        </div>
+                                        <div v-else-if="spotPrice !== null" class="mt-3 flex items-center justify-between rounded-md bg-white px-3 py-2 dark:bg-gray-800">
+                                            <div>
+                                                <span class="text-xs text-gray-500 dark:text-gray-400">Spot Value:</span>
+                                                <span class="ml-2 text-lg font-semibold text-green-600 dark:text-green-400">${{ spotPrice.toFixed(2) }}</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                class="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-500"
+                                                @click="fillSpotPrice"
+                                            >
+                                                Use as Value
+                                            </button>
+                                        </div>
+                                        <p v-else-if="form.precious_metal && form.dwt" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                            Unable to calculate spot price. Please ensure metal prices are up to date.
+                                        </p>
                                     </div>
 
                                     <!-- Template Fields -->
