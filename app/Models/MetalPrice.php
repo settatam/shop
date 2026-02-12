@@ -69,6 +69,7 @@ class MetalPrice extends Model
         // Gold karats (template values)
         '10k' => 0.4167,
         '14k' => 0.5833,
+        '16k' => 0.6667,
         '18k' => 0.75,
         '20k' => 0.8333,
         '22k' => 0.9167,
@@ -76,6 +77,7 @@ class MetalPrice extends Model
         // Legacy format (gold_Xk)
         'gold_10k' => 0.4167,
         'gold_14k' => 0.5833,
+        'gold_16k' => 0.6667,
         'gold_18k' => 0.75,
         'gold_22k' => 0.9167,
         'gold_24k' => 0.999,
@@ -90,6 +92,24 @@ class MetalPrice extends Model
     ];
 
     /**
+     * Default DWT multipliers for calculating buy prices.
+     * These are multiplied by spot price per oz and DWT weight.
+     * Formula: buy_price = multiplier * spot_price_per_oz * dwt
+     */
+    public const DEFAULT_DWT_MULTIPLIERS = [
+        '10k' => 0.0188,
+        '14k' => 0.0261,
+        '16k' => 0.0303,
+        '18k' => 0.0342,
+        '20k' => 0.0415,
+        '22k' => 0.043,
+        '24k' => 0.045,
+        'sterling' => 0.04,
+        'platinum' => 0.04,
+        'palladium' => 0.04,
+    ];
+
+    /**
      * Map precious metal values to base metal types for price lookup.
      *
      * @var array<string, string>
@@ -97,12 +117,14 @@ class MetalPrice extends Model
     public const METAL_TYPE_MAP = [
         '10k' => 'gold',
         '14k' => 'gold',
+        '16k' => 'gold',
         '18k' => 'gold',
         '20k' => 'gold',
         '22k' => 'gold',
         '24k' => 'gold',
         'gold_10k' => 'gold',
         'gold_14k' => 'gold',
+        'gold_16k' => 'gold',
         'gold_18k' => 'gold',
         'gold_22k' => 'gold',
         'gold_24k' => 'gold',
@@ -121,7 +143,7 @@ class MetalPrice extends Model
      * @param  string  $preciousMetal  The precious metal type (e.g., '14k', 'sterling')
      * @param  float  $dwt  Weight in pennyweights
      * @param  int  $qty  Quantity
-     * @param  Store|null  $store  Optional store to apply buy percentage markup
+     * @param  Store|null  $store  Optional store to apply DWT multiplier for buy price
      * @return float|null The calculated price, or null if metal type/price not found
      */
     public static function calcSpotPrice(string $preciousMetal, float $dwt, int $qty = 1, ?Store $store = null): ?float
@@ -137,20 +159,23 @@ class MetalPrice extends Model
 
         $price = self::getLatest($metalType);
 
-        if (! $price || ! $price->price_per_dwt) {
+        if (! $price || ! $price->price_per_ounce) {
             return null;
         }
 
+        // Calculate raw spot price using price per DWT and purity
         $spotPrice = (float) $price->price_per_dwt * $purityRatio * $dwt * $qty;
 
-        // Apply store buy percentage if store is provided
-        // If no percentage is set, we use 1.0 (100% - full spot price)
+        // Apply store DWT multiplier if store is provided AND has a multiplier set
+        // Formula: buy_price = multiplier * spot_price_per_oz * dwt * qty
+        // If no multiplier is set, return the raw spot price as-is
         if ($store) {
-            $buyPercentage = $store->getMetalBuyPercentage($preciousMetal);
-            // Only apply if a percentage is actually set (> 0)
-            if ($buyPercentage > 0) {
-                $spotPrice *= $buyPercentage;
+            $multiplier = $store->getDwtMultiplier($preciousMetal);
+            if ($multiplier !== null && $multiplier > 0) {
+                // Use the DWT multiplier formula
+                $spotPrice = $multiplier * (float) $price->price_per_ounce * $dwt * $qty;
             }
+            // If multiplier is null or 0, $spotPrice remains unchanged (raw spot price)
         }
 
         return round($spotPrice, 2);

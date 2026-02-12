@@ -163,7 +163,7 @@ class MetalPriceCalculationTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_calc_spot_price_applies_store_buy_percentage(): void
+    public function test_calc_spot_price_applies_store_dwt_multiplier(): void
     {
         MetalPrice::create([
             'metal_type' => 'gold',
@@ -176,11 +176,11 @@ class MetalPriceCalculationTest extends TestCase
             'effective_at' => now(),
         ]);
 
-        // Set store buy percentage to 80%
+        // Set store DWT multiplier for 14k gold
         $this->store->update([
             'metal_price_settings' => [
-                'buy_percentages' => [
-                    '14k' => 0.80,
+                'dwt_multipliers' => [
+                    '14k' => 0.0261,
                 ],
             ],
         ]);
@@ -190,11 +190,12 @@ class MetalPriceCalculationTest extends TestCase
 
         $this->assertNotNull($rawSpotPrice);
         $this->assertNotNull($buyPrice);
-        // Buy price should be 80% of raw spot price
-        $this->assertEqualsWithDelta($rawSpotPrice * 0.80, $buyPrice, 0.01);
+        // Buy price should be: multiplier * spot_per_oz * dwt = 0.0261 * 1866 * 5 = 243.52
+        $expectedBuyPrice = 0.0261 * 1866.00 * 5.0;
+        $this->assertEqualsWithDelta($expectedBuyPrice, $buyPrice, 0.5);
     }
 
-    public function test_calc_spot_price_uses_default_when_no_store_percentage(): void
+    public function test_calc_spot_price_returns_spot_price_when_no_multiplier_set(): void
     {
         MetalPrice::create([
             'metal_type' => 'gold',
@@ -207,16 +208,16 @@ class MetalPriceCalculationTest extends TestCase
             'effective_at' => now(),
         ]);
 
-        // No buy percentages set - store has default settings
+        // No DWT multipliers set - store has no settings
         $this->store->update(['metal_price_settings' => null]);
 
         $rawSpotPrice = MetalPrice::calcSpotPrice('14k', 5.0);
-        $buyPriceWithStore = MetalPrice::calcSpotPrice('14k', 5.0, 1, $this->store);
+        $priceWithStore = MetalPrice::calcSpotPrice('14k', 5.0, 1, $this->store);
 
         $this->assertNotNull($rawSpotPrice);
-        $this->assertNotNull($buyPriceWithStore);
-        // When no percentage is set, getMetalBuyPercentage returns 0.75 default
-        $this->assertEqualsWithDelta($rawSpotPrice * 0.75, $buyPriceWithStore, 0.01);
+        $this->assertNotNull($priceWithStore);
+        // When no multiplier is set, should return raw spot price unchanged
+        $this->assertEqualsWithDelta($rawSpotPrice, $priceWithStore, 0.01);
     }
 
     public function test_calc_spot_price_returns_full_price_without_store(): void
@@ -241,7 +242,7 @@ class MetalPriceCalculationTest extends TestCase
         $this->assertEqualsWithDelta($spotPrice, $spotPriceWithNullStore, 0.01);
     }
 
-    public function test_api_endpoint_returns_buy_price_with_store_id(): void
+    public function test_api_endpoint_returns_buy_price_with_store_dwt_multiplier(): void
     {
         MetalPrice::create([
             'metal_type' => 'gold',
@@ -254,11 +255,11 @@ class MetalPriceCalculationTest extends TestCase
             'effective_at' => now(),
         ]);
 
-        // Set store buy percentage to 70%
+        // Set store DWT multiplier
         $this->store->update([
             'metal_price_settings' => [
-                'buy_percentages' => [
-                    '14k' => 0.70,
+                'dwt_multipliers' => [
+                    '14k' => 0.0261,
                 ],
             ],
         ]);
@@ -266,14 +267,15 @@ class MetalPriceCalculationTest extends TestCase
         $response = $this->getJson("/api/v1/metal-prices/calculate?precious_metal=14k&dwt=5&store_id={$this->store->id}");
 
         $response->assertStatus(200)
-            ->assertJsonStructure(['spot_price', 'buy_price', 'buy_percentage']);
+            ->assertJsonStructure(['spot_price', 'buy_price', 'dwt_multiplier']);
 
-        $spotPrice = $response->json('spot_price');
         $buyPrice = $response->json('buy_price');
-        $buyPercentage = $response->json('buy_percentage');
+        $dwtMultiplier = $response->json('dwt_multiplier');
 
-        $this->assertEquals(0.70, $buyPercentage);
-        $this->assertEqualsWithDelta($spotPrice * 0.70, $buyPrice, 0.01);
+        $this->assertEquals(0.0261, $dwtMultiplier);
+        // buy_price = multiplier * spot_per_oz * dwt = 0.0261 * 1866 * 5 = 243.52
+        $expectedBuyPrice = 0.0261 * 1866.00 * 5.0;
+        $this->assertEqualsWithDelta($expectedBuyPrice, $buyPrice, 0.5);
     }
 
     public function test_api_endpoint_returns_same_prices_without_store_id(): void

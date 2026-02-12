@@ -88,16 +88,22 @@ class Store extends Model
     }
 
     /**
-     * Get the metal buy percentage for a specific metal type.
-     * Returns the percentage as a decimal (e.g., 0.75 for 75%).
+     * Get the DWT multiplier for a specific metal type.
+     * These multipliers are used with spot price per oz: buy_price = multiplier * spot_per_oz * dwt
+     * Returns null if no multiplier is set (spot price should be used as-is).
      */
-    public function getMetalBuyPercentage(string $metalType): float
+    public function getDwtMultiplier(string $metalType): ?float
     {
         $settings = $this->metal_price_settings ?? [];
-        $buyPercentages = $settings['buy_percentages'] ?? [];
+        $multipliers = $settings['dwt_multipliers'] ?? [];
 
-        // Check for specific metal percentage, fall back to default
-        return (float) ($buyPercentages[$metalType] ?? $buyPercentages['default'] ?? 0.75);
+        // Only return multiplier if explicitly set for this metal type
+        if (isset($multipliers[$metalType])) {
+            return (float) $multipliers[$metalType];
+        }
+
+        // Return null if no multiplier is set - spot price will be used as-is
+        return null;
     }
 
     /**
@@ -108,17 +114,7 @@ class Store extends Model
     public function getMetalPriceSettingsWithDefaults(): array
     {
         $defaults = [
-            'buy_percentages' => [
-                'default' => 0.75,
-                '10k' => 0.75,
-                '14k' => 0.75,
-                '18k' => 0.75,
-                '22k' => 0.75,
-                '24k' => 0.75,
-                'sterling' => 0.75,
-                'platinum' => 0.75,
-                'palladium' => 0.75,
-            ],
+            'dwt_multipliers' => MetalPrice::DEFAULT_DWT_MULTIPLIERS,
         ];
 
         return array_replace_recursive($defaults, $this->metal_price_settings ?? []);

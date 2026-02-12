@@ -245,9 +245,9 @@ class StoreSettingsTest extends TestCase
         $response = $this->actingAs($this->user)->patch('/settings/store', [
             'name' => $this->store->name,
             'metal_price_settings' => [
-                'buy_percentages' => [
-                    '14k' => 80, // 80% entered, should be stored as 0.80
-                    '18k' => 75, // 75% entered, should be stored as 0.75
+                'dwt_multipliers' => [
+                    '14k' => 0.0261,
+                    '18k' => 0.0342,
                 ],
             ],
         ]);
@@ -259,18 +259,18 @@ class StoreSettingsTest extends TestCase
 
         $settings = $this->store->metal_price_settings;
         $this->assertNotNull($settings);
-        $this->assertArrayHasKey('buy_percentages', $settings);
-        $this->assertEquals(0.80, $settings['buy_percentages']['14k']);
-        $this->assertEquals(0.75, $settings['buy_percentages']['18k']);
+        $this->assertArrayHasKey('dwt_multipliers', $settings);
+        $this->assertEquals(0.0261, $settings['dwt_multipliers']['14k']);
+        $this->assertEquals(0.0342, $settings['dwt_multipliers']['18k']);
     }
 
-    public function test_metal_price_settings_stores_as_decimal(): void
+    public function test_metal_price_settings_stores_multiplier_directly(): void
     {
         $response = $this->actingAs($this->user)->patch('/settings/store', [
             'name' => $this->store->name,
             'metal_price_settings' => [
-                'buy_percentages' => [
-                    'sterling' => 70,
+                'dwt_multipliers' => [
+                    'sterling' => 0.04,
                 ],
             ],
         ]);
@@ -279,11 +279,11 @@ class StoreSettingsTest extends TestCase
 
         $this->store->refresh();
 
-        // Verify the percentage was converted from 70 to 0.70
-        $this->assertEquals(0.70, $this->store->metal_price_settings['buy_percentages']['sterling']);
+        // Verify the multiplier was stored as-is
+        $this->assertEquals(0.04, $this->store->metal_price_settings['dwt_multipliers']['sterling']);
 
         // Verify the helper method returns correct value
-        $this->assertEquals(0.70, $this->store->getMetalBuyPercentage('sterling'));
+        $this->assertEquals(0.04, $this->store->getDwtMultiplier('sterling'));
     }
 
     public function test_metal_price_settings_merges_with_existing(): void
@@ -291,9 +291,9 @@ class StoreSettingsTest extends TestCase
         // Set initial settings
         $this->store->update([
             'metal_price_settings' => [
-                'buy_percentages' => [
-                    '10k' => 0.65,
-                    '14k' => 0.70,
+                'dwt_multipliers' => [
+                    '10k' => 0.0188,
+                    '14k' => 0.025,
                 ],
             ],
         ]);
@@ -302,8 +302,8 @@ class StoreSettingsTest extends TestCase
         $response = $this->actingAs($this->user)->patch('/settings/store', [
             'name' => $this->store->name,
             'metal_price_settings' => [
-                'buy_percentages' => [
-                    '14k' => 75,
+                'dwt_multipliers' => [
+                    '14k' => 0.0261,
                 ],
             ],
         ]);
@@ -313,16 +313,16 @@ class StoreSettingsTest extends TestCase
         $this->store->refresh();
 
         // 10k should remain unchanged, 14k should be updated
-        $this->assertEquals(0.65, $this->store->metal_price_settings['buy_percentages']['10k']);
-        $this->assertEquals(0.75, $this->store->metal_price_settings['buy_percentages']['14k']);
+        $this->assertEquals(0.0188, $this->store->metal_price_settings['dwt_multipliers']['10k']);
+        $this->assertEquals(0.0261, $this->store->metal_price_settings['dwt_multipliers']['14k']);
     }
 
-    public function test_get_metal_buy_percentage_returns_default_when_not_set(): void
+    public function test_get_dwt_multiplier_returns_null_when_not_set(): void
     {
         $this->store->update(['metal_price_settings' => null]);
 
-        // Should return the default (0.75)
-        $this->assertEquals(0.75, $this->store->getMetalBuyPercentage('14k'));
+        // Should return null when no multiplier is set (spot price used as-is)
+        $this->assertNull($this->store->getDwtMultiplier('14k'));
     }
 
     public function test_get_metal_price_settings_with_defaults(): void
@@ -331,9 +331,9 @@ class StoreSettingsTest extends TestCase
 
         $settings = $this->store->getMetalPriceSettingsWithDefaults();
 
-        $this->assertArrayHasKey('buy_percentages', $settings);
-        $this->assertEquals(0.75, $settings['buy_percentages']['default']);
-        $this->assertEquals(0.75, $settings['buy_percentages']['10k']);
-        $this->assertEquals(0.75, $settings['buy_percentages']['14k']);
+        $this->assertArrayHasKey('dwt_multipliers', $settings);
+        // Should have default multipliers from MetalPrice::DEFAULT_DWT_MULTIPLIERS
+        $this->assertEquals(0.0188, $settings['dwt_multipliers']['10k']);
+        $this->assertEquals(0.0261, $settings['dwt_multipliers']['14k']);
     }
 }

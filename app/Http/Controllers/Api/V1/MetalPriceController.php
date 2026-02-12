@@ -32,20 +32,18 @@ class MetalPriceController extends Controller
         // Calculate raw spot price (without store markup)
         $spotPrice = MetalPrice::calcSpotPrice($preciousMetal, $dwt, $qty);
 
-        // Calculate buy price (with store markup applied)
+        // Calculate buy price (with store DWT multiplier applied)
         $buyPrice = $store
             ? MetalPrice::calcSpotPrice($preciousMetal, $dwt, $qty, $store)
             : $spotPrice;
 
-        // Get the buy percentage for reference
-        $buyPercentage = $store
-            ? $store->getMetalBuyPercentage($preciousMetal)
-            : 1.0;
+        // Get the DWT multiplier for reference (null means no multiplier set, using spot price as-is)
+        $dwtMultiplier = $store ? $store->getDwtMultiplier($preciousMetal) : null;
 
         return response()->json([
             'spot_price' => $spotPrice,
             'buy_price' => $buyPrice,
-            'buy_percentage' => $buyPercentage,
+            'dwt_multiplier' => $dwtMultiplier,
         ]);
     }
 }

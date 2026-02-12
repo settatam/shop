@@ -607,11 +607,11 @@ function removeLogo() {
 
                         <!-- Metal Price Settings -->
                         <div class="border-t pt-6">
-                            <h4 class="mb-4 text-sm font-medium">Precious Metal Buy Rates</h4>
+                            <h4 class="mb-4 text-sm font-medium">Precious Metal DWT Multipliers</h4>
                             <p class="mb-4 text-sm text-muted-foreground">
-                                Set the percentage of spot price you pay when buying precious metals.
-                                For example, 75% means you pay 75% of the current spot price.
-                                Leave empty to use the default rate (75%).
+                                Set the DWT multiplier for calculating buy prices.
+                                Formula: buy_price = multiplier × spot_price_per_oz × dwt.
+                                Leave empty to use the default values shown as placeholders.
                             </p>
 
                             <!-- Gold -->
@@ -619,35 +619,25 @@ function removeLogo() {
                                 <h5 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                     Gold
                                 </h5>
-                                <div class="grid gap-4 sm:grid-cols-5">
+                                <div class="grid gap-4 sm:grid-cols-4 lg:grid-cols-7">
                                     <div
                                         v-for="metal in metalTypes.filter((m) => m.group === 'Gold')"
                                         :key="metal.value"
                                         class="grid gap-2"
                                     >
                                         <Label :for="`metal_${metal.value}`">{{ metal.label }}</Label>
-                                        <div class="relative">
-                                            <Input
-                                                :id="`metal_${metal.value}`"
-                                                :name="`metal_price_settings[buy_percentages][${metal.value}]`"
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max="100"
-                                                :default-value="
-                                                    store.metal_price_settings?.buy_percentages?.[metal.value]
-                                                        ? store.metal_price_settings.buy_percentages[metal.value] * 100
-                                                        : ''
-                                                "
-                                                placeholder="75"
-                                                class="pr-8"
-                                            />
-                                            <span
-                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                                            >
-                                                %
-                                            </span>
-                                        </div>
+                                        <Input
+                                            :id="`metal_${metal.value}`"
+                                            :name="`metal_price_settings[dwt_multipliers][${metal.value}]`"
+                                            type="number"
+                                            step="0.0001"
+                                            min="0"
+                                            max="1"
+                                            :default-value="
+                                                store.metal_price_settings?.dwt_multipliers?.[metal.value] ?? ''
+                                            "
+                                            :placeholder="metal.default"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -657,35 +647,25 @@ function removeLogo() {
                                 <h5 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                     Silver
                                 </h5>
-                                <div class="grid gap-4 sm:grid-cols-5">
+                                <div class="grid gap-4 sm:grid-cols-4 lg:grid-cols-7">
                                     <div
                                         v-for="metal in metalTypes.filter((m) => m.group === 'Silver')"
                                         :key="metal.value"
                                         class="grid gap-2"
                                     >
                                         <Label :for="`metal_${metal.value}`">{{ metal.label }}</Label>
-                                        <div class="relative">
-                                            <Input
-                                                :id="`metal_${metal.value}`"
-                                                :name="`metal_price_settings[buy_percentages][${metal.value}]`"
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max="100"
-                                                :default-value="
-                                                    store.metal_price_settings?.buy_percentages?.[metal.value]
-                                                        ? store.metal_price_settings.buy_percentages[metal.value] * 100
-                                                        : ''
-                                                "
-                                                placeholder="75"
-                                                class="pr-8"
-                                            />
-                                            <span
-                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                                            >
-                                                %
-                                            </span>
-                                        </div>
+                                        <Input
+                                            :id="`metal_${metal.value}`"
+                                            :name="`metal_price_settings[dwt_multipliers][${metal.value}]`"
+                                            type="number"
+                                            step="0.0001"
+                                            min="0"
+                                            max="1"
+                                            :default-value="
+                                                store.metal_price_settings?.dwt_multipliers?.[metal.value] ?? ''
+                                            "
+                                            :placeholder="metal.default"
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -695,35 +675,25 @@ function removeLogo() {
                                 <h5 class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                     Other Precious Metals
                                 </h5>
-                                <div class="grid gap-4 sm:grid-cols-5">
+                                <div class="grid gap-4 sm:grid-cols-4 lg:grid-cols-7">
                                     <div
                                         v-for="metal in metalTypes.filter((m) => m.group === 'Other')"
                                         :key="metal.value"
                                         class="grid gap-2"
                                     >
                                         <Label :for="`metal_${metal.value}`">{{ metal.label }}</Label>
-                                        <div class="relative">
-                                            <Input
-                                                :id="`metal_${metal.value}`"
-                                                :name="`metal_price_settings[buy_percentages][${metal.value}]`"
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max="100"
-                                                :default-value="
-                                                    store.metal_price_settings?.buy_percentages?.[metal.value]
-                                                        ? store.metal_price_settings.buy_percentages[metal.value] * 100
-                                                        : ''
-                                                "
-                                                placeholder="75"
-                                                class="pr-8"
-                                            />
-                                            <span
-                                                class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
-                                            >
-                                                %
-                                            </span>
-                                        </div>
+                                        <Input
+                                            :id="`metal_${metal.value}`"
+                                            :name="`metal_price_settings[dwt_multipliers][${metal.value}]`"
+                                            type="number"
+                                            step="0.0001"
+                                            min="0"
+                                            max="1"
+                                            :default-value="
+                                                store.metal_price_settings?.dwt_multipliers?.[metal.value] ?? ''
+                                            "
+                                            :placeholder="metal.default"
+                                        />
                                     </div>
                                 </div>
                             </div>

@@ -104,8 +104,8 @@ class StoreSettingsController extends Controller
             'tax_id_number' => ['nullable', 'string', 'max:50'],
             'edition' => ['nullable', 'string', 'in:'.implode(',', array_keys($this->featureManager->getAvailableEditions()))],
             'metal_price_settings' => ['nullable', 'array'],
-            'metal_price_settings.buy_percentages' => ['nullable', 'array'],
-            'metal_price_settings.buy_percentages.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'metal_price_settings.dwt_multipliers' => ['nullable', 'array'],
+            'metal_price_settings.dwt_multipliers.*' => ['nullable', 'numeric', 'min:0', 'max:1'],
         ]);
 
         // Map currency and timezone back to IDs (or store directly if no lookup tables exist)
@@ -136,21 +136,21 @@ class StoreSettingsController extends Controller
             'edition' => $validated['edition'] ?? $store->edition,
         ];
 
-        // Handle metal price settings - convert percentages from 0-100 to 0-1 and merge
-        if (isset($validated['metal_price_settings']['buy_percentages'])) {
-            $buyPercentages = [];
-            foreach ($validated['metal_price_settings']['buy_percentages'] as $metal => $percentage) {
+        // Handle metal price settings - store DWT multipliers as-is
+        if (isset($validated['metal_price_settings']['dwt_multipliers'])) {
+            $dwtMultipliers = [];
+            foreach ($validated['metal_price_settings']['dwt_multipliers'] as $metal => $multiplier) {
                 // Only store if a value was provided (not empty)
-                if ($percentage !== null && $percentage !== '') {
-                    $buyPercentages[$metal] = (float) $percentage / 100;
+                if ($multiplier !== null && $multiplier !== '') {
+                    $dwtMultipliers[$metal] = (float) $multiplier;
                 }
             }
 
-            if (! empty($buyPercentages)) {
+            if (! empty($dwtMultipliers)) {
                 $existingSettings = $store->metal_price_settings ?? [];
-                $existingSettings['buy_percentages'] = array_merge(
-                    $existingSettings['buy_percentages'] ?? [],
-                    $buyPercentages
+                $existingSettings['dwt_multipliers'] = array_merge(
+                    $existingSettings['dwt_multipliers'] ?? [],
+                    $dwtMultipliers
                 );
                 $updateData['metal_price_settings'] = $existingSettings;
             }
@@ -297,22 +297,24 @@ class StoreSettingsController extends Controller
     /**
      * Get metal types for settings UI.
      *
-     * @return array<array{value: string, label: string, group: string}>
+     * @return array<array{value: string, label: string, group: string, default: float}>
      */
     protected function getMetalTypesForSettings(): array
     {
         return [
             // Gold karats
-            ['value' => '10k', 'label' => '10K Gold', 'group' => 'Gold'],
-            ['value' => '14k', 'label' => '14K Gold', 'group' => 'Gold'],
-            ['value' => '18k', 'label' => '18K Gold', 'group' => 'Gold'],
-            ['value' => '22k', 'label' => '22K Gold', 'group' => 'Gold'],
-            ['value' => '24k', 'label' => '24K Gold', 'group' => 'Gold'],
+            ['value' => '10k', 'label' => '10K Gold', 'group' => 'Gold', 'default' => 0.0188],
+            ['value' => '14k', 'label' => '14K Gold', 'group' => 'Gold', 'default' => 0.0261],
+            ['value' => '16k', 'label' => '16K Gold', 'group' => 'Gold', 'default' => 0.0303],
+            ['value' => '18k', 'label' => '18K Gold', 'group' => 'Gold', 'default' => 0.0342],
+            ['value' => '20k', 'label' => '20K Gold', 'group' => 'Gold', 'default' => 0.0415],
+            ['value' => '22k', 'label' => '22K Gold', 'group' => 'Gold', 'default' => 0.043],
+            ['value' => '24k', 'label' => '24K Gold', 'group' => 'Gold', 'default' => 0.045],
             // Silver
-            ['value' => 'sterling', 'label' => 'Sterling Silver', 'group' => 'Silver'],
+            ['value' => 'sterling', 'label' => 'Sterling Silver', 'group' => 'Silver', 'default' => 0.04],
             // Other precious metals
-            ['value' => 'platinum', 'label' => 'Platinum', 'group' => 'Other'],
-            ['value' => 'palladium', 'label' => 'Palladium', 'group' => 'Other'],
+            ['value' => 'platinum', 'label' => 'Platinum', 'group' => 'Other', 'default' => 0.04],
+            ['value' => 'palladium', 'label' => 'Palladium', 'group' => 'Other', 'default' => 0.04],
         ];
     }
 }
