@@ -32,7 +32,7 @@ class StoreSettingsController extends Controller
                 'id' => $store->id,
                 'name' => $store->name,
                 'logo' => $store->logo,
-                'logo_url' => $store->logo ? Storage::disk('public')->url($store->logo) : null,
+                'logo_url' => $store->logo ? Storage::disk('do_spaces')->url($store->logo) : null,
                 'business_name' => $store->business_name,
                 'account_email' => $store->account_email,
                 'customer_email' => $store->customer_email,
@@ -179,11 +179,11 @@ class StoreSettingsController extends Controller
 
         // Delete old logo if exists
         if ($store->logo) {
-            Storage::disk('public')->delete($store->logo);
+            Storage::disk('do_spaces')->delete($store->logo);
         }
 
-        // Store new logo
-        $path = $request->file('logo')->store("stores/{$store->id}/logos", 'public');
+        // Store new logo to DigitalOcean Spaces
+        $path = $request->file('logo')->store("stores/{$store->id}/logos", 'do_spaces');
 
         $store->update(['logo' => $path]);
 
@@ -203,7 +203,7 @@ class StoreSettingsController extends Controller
         }
 
         if ($store->logo) {
-            Storage::disk('public')->delete($store->logo);
+            Storage::disk('do_spaces')->delete($store->logo);
             $store->update(['logo' => null]);
         }
 

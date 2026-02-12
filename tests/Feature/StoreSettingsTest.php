@@ -118,7 +118,7 @@ class StoreSettingsTest extends TestCase
 
     public function test_store_logo_can_be_uploaded(): void
     {
-        Storage::fake('public');
+        Storage::fake('do_spaces');
 
         $file = UploadedFile::fake()->image('logo.png', 200, 200);
 
@@ -131,12 +131,12 @@ class StoreSettingsTest extends TestCase
 
         $this->store->refresh();
         $this->assertNotNull($this->store->logo);
-        Storage::disk('public')->assertExists($this->store->logo);
+        Storage::disk('do_spaces')->assertExists($this->store->logo);
     }
 
     public function test_store_logo_must_be_an_image(): void
     {
-        Storage::fake('public');
+        Storage::fake('do_spaces');
 
         $file = UploadedFile::fake()->create('document.pdf', 100, 'application/pdf');
 
@@ -149,7 +149,7 @@ class StoreSettingsTest extends TestCase
 
     public function test_store_logo_has_max_size(): void
     {
-        Storage::fake('public');
+        Storage::fake('do_spaces');
 
         $file = UploadedFile::fake()->image('logo.png')->size(3000); // 3MB
 
@@ -162,7 +162,7 @@ class StoreSettingsTest extends TestCase
 
     public function test_store_logo_can_be_removed(): void
     {
-        Storage::fake('public');
+        Storage::fake('do_spaces');
 
         // First upload a logo
         $file = UploadedFile::fake()->image('logo.png', 200, 200);
@@ -176,12 +176,12 @@ class StoreSettingsTest extends TestCase
 
         $this->store->refresh();
         $this->assertNull($this->store->logo);
-        Storage::disk('public')->assertMissing($path);
+        Storage::disk('do_spaces')->assertMissing($path);
     }
 
     public function test_uploading_new_logo_removes_old_logo(): void
     {
-        Storage::fake('public');
+        Storage::fake('do_spaces');
 
         // First upload a logo
         $oldFile = UploadedFile::fake()->image('old-logo.png', 200, 200);
@@ -201,8 +201,8 @@ class StoreSettingsTest extends TestCase
         $this->store->refresh();
         $this->assertNotNull($this->store->logo);
         $this->assertNotEquals($oldPath, $this->store->logo);
-        Storage::disk('public')->assertMissing($oldPath);
-        Storage::disk('public')->assertExists($this->store->logo);
+        Storage::disk('do_spaces')->assertMissing($oldPath);
+        Storage::disk('do_spaces')->assertExists($this->store->logo);
     }
 
     public function test_store_edition_can_be_updated(): void

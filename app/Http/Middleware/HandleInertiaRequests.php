@@ -107,7 +107,7 @@ class HandleInertiaRequests extends Middleware
                 'name' => $store->name,
                 'slug' => $store->slug,
                 'logo' => $store->logo,
-                'logo_url' => $store->logo ? Storage::disk('public')->url($store->logo) : null,
+                'logo_url' => $store->logo ? Storage::disk('do_spaces')->url($store->logo) : null,
             ] : null,
         ];
     }
@@ -159,7 +159,7 @@ class HandleInertiaRequests extends Middleware
                     'name' => $store->name,
                     'slug' => $store->slug,
                     'logo' => $store->logo,
-                    'logo_url' => $store->logo ? Storage::disk('public')->url($store->logo) : null,
+                    'logo_url' => $store->logo ? Storage::disk('do_spaces')->url($store->logo) : null,
                     'initial' => strtoupper(substr($store->name, 0, 1)),
                     'is_owner' => $store->user_id === $user->id || ($storeUser?->is_owner ?? false),
                     'role' => $storeUser?->role,

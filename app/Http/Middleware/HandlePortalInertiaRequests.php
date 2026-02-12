@@ -31,7 +31,7 @@ class HandlePortalInertiaRequests extends Middleware
                 'name' => $store->name,
                 'slug' => $store->slug,
                 'logo' => $store->logo,
-                'logo_url' => $store->logo ? \Illuminate\Support\Facades\Storage::disk('public')->url($store->logo) : null,
+                'logo_url' => $store->logo ? \Illuminate\Support\Facades\Storage::disk('do_spaces')->url($store->logo) : null,
             ] : null,
         ];
     }
