@@ -65,6 +65,11 @@ class PrinterSettingsController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
+        // Convert empty ip_address to null
+        if ($request->input('ip_address') === '') {
+            $request->merge(['ip_address' => null]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:printer_settings,name,NULL,id,store_id,'.$store->id,
             'printer_type' => 'required|string|in:zebra,godex,other',
@@ -109,6 +114,11 @@ class PrinterSettingsController extends Controller
 
         if (! $store || $printerSetting->store_id !== $store->id) {
             abort(404);
+        }
+
+        // Convert empty ip_address to null
+        if ($request->input('ip_address') === '') {
+            $request->merge(['ip_address' => null]);
         }
 
         $validated = $request->validate([
