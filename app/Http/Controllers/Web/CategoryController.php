@@ -413,13 +413,34 @@ class CategoryController extends Controller
                 'label_template_id' => $category->label_template_id,
                 'label_template_name' => $category->labelTemplate?->name,
                 'effective_label_template_name' => $category->getEffectiveLabelTemplate()?->name,
+                'barcode_attributes' => $category->barcode_attributes,
+                'effective_barcode_attributes' => $category->getEffectiveBarcodeAttributes(),
                 'current_sequence' => $category->skuSequence?->current_value ?? 0,
             ],
             'templates' => $templates,
             'labelTemplates' => $labelTemplates,
             'skuPreview' => $skuPreview,
             'availableVariables' => $availableVariables,
+            'templateFields' => $this->getTemplateFieldsForCategory($category),
         ]);
+    }
+
+    /**
+     * Get template fields for a category's effective template.
+     *
+     * @return array<int, array{name: string, label: string}>
+     */
+    private function getTemplateFieldsForCategory(Category $category): array
+    {
+        $template = $category->getEffectiveTemplate();
+        if (! $template) {
+            return [];
+        }
+
+        return $template->fields->map(fn ($field) => [
+            'name' => $field->name,
+            'label' => $field->label,
+        ])->values()->toArray();
     }
 
     /**
@@ -444,7 +465,14 @@ class CategoryController extends Controller
             'sku_prefix' => 'nullable|string|max:50',
             'title_format' => 'nullable|string|max:255',
             'label_template_id' => 'nullable|integer|exists:label_templates,id',
+            'barcode_attributes' => 'nullable|array',
+            'barcode_attributes.*' => 'string|max:100',
         ]);
+
+        // Convert empty array to null so it inherits from parent
+        if (isset($validated['barcode_attributes']) && empty($validated['barcode_attributes'])) {
+            $validated['barcode_attributes'] = null;
+        }
 
         $category->update($validated);
 

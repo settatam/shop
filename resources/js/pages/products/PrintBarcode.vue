@@ -35,13 +35,70 @@ interface Props {
         id: number;
         title: string;
         sku: string | null;
+        price_code: string | null;
         category: string | null;
         variants: Variant[];
     };
+    barcodeAttributes: string[];
+    templateFieldValues: Record<string, string | null>;
     printerSettings: PrinterSettingOption[];
 }
 
 const props = defineProps<Props>();
+
+/**
+ * Convert a price number to spelled-out format
+ * e.g., 1234.56 -> "One Thousand Two Hundred Thirty-Four and 56/100"
+ * For jewelry, we use a simpler format: "$1,234.56" -> "1234 56"
+ */
+const spellOutPrice = (price: number): string => {
+    const wholePart = Math.floor(price);
+    const centsPart = Math.round((price - wholePart) * 100);
+    return `${wholePart} ${centsPart.toString().padStart(2, '0')}`;
+};
+
+/**
+ * Get the display value for a barcode attribute
+ */
+const getAttributeValue = (attr: string, variant: Variant): string => {
+    switch (attr.toLowerCase()) {
+        case 'price_code':
+            return props.product.price_code || '';
+        case 'category':
+            return props.product.category || '';
+        case 'price':
+            return spellOutPrice(variant.price);
+        case 'sku':
+            return variant.sku || '';
+        case 'barcode':
+            return variant.barcode || variant.sku || '';
+        default:
+            // Check template field values (try both original and snake_case)
+            const snakeAttr = attr.toLowerCase().replace(/\s+/g, '_');
+            return props.templateFieldValues[attr] || props.templateFieldValues[snakeAttr] || '';
+    }
+};
+
+/**
+ * Format attribute name for display
+ */
+const formatAttributeName = (attr: string): string => {
+    // Convert snake_case or camelCase to Title Case
+    return attr
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, c => c.toUpperCase());
+};
+
+/**
+ * Get all label lines for a variant based on barcode attributes
+ */
+const getLabelLines = (variant: Variant): { label: string; value: string }[] => {
+    return props.barcodeAttributes.map(attr => ({
+        label: formatAttributeName(attr),
+        value: getAttributeValue(attr, variant),
+    })).filter(line => line.value); // Only include non-empty values
+};
 
 const barcodeRefs = ref<Map<number, SVGElement>>(new Map());
 const printMode = ref<'browser' | 'zebra' | 'network'>('browser');
@@ -143,11 +200,12 @@ const generateZplLabels = (): string[] => {
         const code = variant.barcode || variant.sku;
         if (!code) continue;
 
-        const zpl = ZPL.barcodeLabel({
+        // Get the label lines based on barcode attributes
+        const labelLines = getLabelLines(variant);
+
+        const zpl = ZPL.barcodeLabelWithLines({
             barcode: code,
-            title: props.product.title,
-            subtitle: variant.title || undefined,
-            price: formatCurrency(variant.price),
+            lines: labelLines.map(l => l.value),
             settings: selectedPrinterSetting.value,
         });
 
@@ -519,19 +577,26 @@ const totalLabels = computed(() => {
                             ]"
                         >
                             <div class="text-center">
+                                <!-- Barcode value at top -->
                                 <p class="text-sm font-semibold text-gray-900 truncate">
-                                    {{ product.title }}
+                                    {{ variant.barcode || variant.sku }}
                                 </p>
-                                <p v-if="variant.title" class="text-xs text-gray-500">
-                                    {{ variant.title }}
-                                </p>
+                                <!-- Barcode image -->
                                 <svg
                                     :ref="(el) => setBarcodeRef(el as SVGElement, variant.id)"
                                     class="mx-auto mt-1"
                                 ></svg>
-                                <p class="text-lg font-bold text-gray-900 mt-1">
-                                    {{ formatCurrency(variant.price) }}
-                                </p>
+                                <!-- Configured attribute lines -->
+                                <div class="mt-1 space-y-0.5">
+                                    <p
+                                        v-for="(line, index) in getLabelLines(variant)"
+                                        :key="index"
+                                        class="text-xs text-gray-700"
+                                        :class="{ 'text-sm font-bold': line.label.toLowerCase() === 'price' }"
+                                    >
+                                        {{ line.value }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>

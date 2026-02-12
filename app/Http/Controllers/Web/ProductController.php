@@ -1075,7 +1075,42 @@ class ProductController extends Controller
             abort(404);
         }
 
-        $product->load(['variants', 'category']);
+        $product->load(['variants', 'category', 'attributeValues.field']);
+
+        // Get effective barcode attributes from category
+        $barcodeAttributes = $product->category?->getEffectiveBarcodeAttributes() ?? ['price_code', 'category', 'price'];
+
+        // Get template field values for the product
+        $templateFieldValues = [];
+        $template = $product->getTemplate();
+        if ($template) {
+            $template->load('fields.options');
+            foreach ($product->attributeValues as $attrValue) {
+                $field = $attrValue->field;
+                if ($field) {
+                    $storedValue = $attrValue->value;
+                    $displayValue = $storedValue;
+
+                    // Map to label for select/radio/checkbox fields
+                    if ($storedValue && in_array($field->type, [ProductTemplateField::TYPE_SELECT, ProductTemplateField::TYPE_RADIO, ProductTemplateField::TYPE_CHECKBOX])) {
+                        $option = $field->options->firstWhere('value', $storedValue);
+                        $displayValue = $option?->label ?? $storedValue;
+                    }
+
+                    // For brand fields, get the brand name
+                    if ($field->type === ProductTemplateField::TYPE_BRAND && $storedValue) {
+                        $brand = Brand::find($storedValue);
+                        $displayValue = $brand?->name ?? $storedValue;
+                    }
+
+                    $templateFieldValues[$field->name] = $displayValue;
+                    // Also store by canonical name for easier matching
+                    if ($field->canonical_name) {
+                        $templateFieldValues[$field->canonical_name] = $displayValue;
+                    }
+                }
+            }
+        }
 
         $printerSettings = PrinterSetting::where('store_id', $store->id)
             ->orderByDesc('is_default')
@@ -1103,6 +1138,7 @@ class ProductController extends Controller
                 'id' => $product->id,
                 'title' => $product->title,
                 'sku' => $product->sku,
+                'price_code' => $product->price_code,
                 'category' => $product->category?->name,
                 'variants' => $product->variants->map(fn (ProductVariant $variant) => [
                     'id' => $variant->id,
@@ -1112,6 +1148,8 @@ class ProductController extends Controller
                     'price' => $variant->price,
                 ]),
             ],
+            'barcodeAttributes' => $barcodeAttributes,
+            'templateFieldValues' => $templateFieldValues,
             'printerSettings' => $printerSettings,
         ]);
     }

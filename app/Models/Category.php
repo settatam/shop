@@ -205,7 +205,14 @@ class Category extends Model
     /**
      * Get the effective barcode attributes for this category.
      * If no attributes are set, it will inherit from the parent category.
-     * Defaults to ['category', 'sku', 'price', 'material'] if not set anywhere.
+     * Defaults to ['price_code', 'category', 'price'] if not set anywhere.
+     *
+     * Supported attributes:
+     * - price_code: Product price code
+     * - category: Category name
+     * - price: Formatted price (spelled out)
+     * - sku: Product SKU/barcode
+     * - Template field names (e.g., 'main_stone_wt', 'diamond_color', 'diamond_clarity')
      *
      * @return array<int, string>
      */
@@ -220,7 +227,7 @@ class Category extends Model
         }
 
         // Default sequence
-        return ['category', 'sku', 'price', 'material'];
+        return ['price_code', 'category', 'price'];
     }
 
     /**

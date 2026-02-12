@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
+import { ChevronUpIcon, ChevronDownIcon, XMarkIcon } from '@heroicons/vue/20/solid';
 import { ArrowLeftIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/vue/20/solid';
 import {
     Dialog,
@@ -29,6 +30,8 @@ interface Category {
     label_template_id: number | null;
     label_template_name: string | null;
     effective_label_template_name: string | null;
+    barcode_attributes: string[] | null;
+    effective_barcode_attributes: string[];
     current_sequence: number;
 }
 
@@ -42,12 +45,18 @@ interface LabelTemplate {
     name: string;
 }
 
+interface TemplateField {
+    name: string;
+    label: string;
+}
+
 interface Props {
     category: Category;
     templates: Template[];
     labelTemplates: LabelTemplate[];
     skuPreview: string | null;
     availableVariables: Record<string, string>;
+    templateFields: TemplateField[];
 }
 
 const props = defineProps<Props>();
@@ -65,7 +74,69 @@ const form = useForm({
     sku_prefix: props.category.sku_prefix || '',
     title_format: props.category.title_format || '',
     label_template_id: props.category.label_template_id,
+    barcode_attributes: props.category.barcode_attributes || [],
 });
+
+// Available built-in barcode attributes
+const builtInBarcodeAttributes = [
+    { name: 'price_code', label: 'Price Code' },
+    { name: 'category', label: 'Category Name' },
+    { name: 'price', label: 'Price (spelled out)' },
+    { name: 'sku', label: 'SKU' },
+];
+
+// Combine built-in and template field attributes
+const availableBarcodeAttributes = computed(() => {
+    return [
+        ...builtInBarcodeAttributes,
+        ...props.templateFields.map(f => ({ name: f.name, label: `${f.label} (template)` })),
+    ];
+});
+
+// Check if barcode attributes are inherited
+const isBarcodeAttributesInherited = computed(() => {
+    return (!props.category.barcode_attributes || props.category.barcode_attributes.length === 0)
+        && props.category.effective_barcode_attributes.length > 0;
+});
+
+// Add a barcode attribute
+function addBarcodeAttribute(attr: string) {
+    if (!form.barcode_attributes.includes(attr)) {
+        form.barcode_attributes = [...form.barcode_attributes, attr];
+    }
+}
+
+// Remove a barcode attribute
+function removeBarcodeAttribute(index: number) {
+    form.barcode_attributes = form.barcode_attributes.filter((_, i) => i !== index);
+}
+
+// Move barcode attribute up
+function moveBarcodeAttributeUp(index: number) {
+    if (index > 0) {
+        const newAttrs = [...form.barcode_attributes];
+        [newAttrs[index - 1], newAttrs[index]] = [newAttrs[index], newAttrs[index - 1]];
+        form.barcode_attributes = newAttrs;
+    }
+}
+
+// Move barcode attribute down
+function moveBarcodeAttributeDown(index: number) {
+    if (index < form.barcode_attributes.length - 1) {
+        const newAttrs = [...form.barcode_attributes];
+        [newAttrs[index], newAttrs[index + 1]] = [newAttrs[index + 1], newAttrs[index]];
+        form.barcode_attributes = newAttrs;
+    }
+}
+
+// Get display label for attribute
+function getAttributeLabel(name: string): string {
+    const builtin = builtInBarcodeAttributes.find(a => a.name === name);
+    if (builtin) return builtin.label;
+    const field = props.templateFields.find(f => f.name === name);
+    if (field) return field.label;
+    return name;
+}
 
 // SKU preview state
 const skuPreview = ref(props.skuPreview || '');
@@ -400,6 +471,119 @@ function insertTitleVariable(variable: string) {
                                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                             Used when printing labels for products in this category
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barcode Label Configuration -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Barcode Label Content</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    Configure which fields appear on printed barcode labels. The barcode/SKU is always shown, followed by the fields you select below.
+                                    <span v-if="isBarcodeAttributesInherited" class="text-amber-600 dark:text-amber-400">
+                                        (inheriting from parent)
+                                    </span>
+                                </p>
+
+                                <div class="space-y-4">
+                                    <!-- Current attributes list -->
+                                    <div v-if="form.barcode_attributes.length > 0" class="space-y-2">
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Label Fields (in order)</p>
+                                        <div
+                                            v-for="(attr, index) in form.barcode_attributes"
+                                            :key="index"
+                                            class="flex items-center gap-2 rounded-lg border border-gray-200 p-2 dark:border-gray-700"
+                                        >
+                                            <span class="text-sm text-gray-500 dark:text-gray-400 w-6 text-center">{{ index + 1 }}.</span>
+                                            <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ getAttributeLabel(attr) }}</span>
+                                            <div class="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
+                                                    :disabled="index === 0"
+                                                    @click="moveBarcodeAttributeUp(index)"
+                                                    title="Move up"
+                                                >
+                                                    <ChevronUpIcon class="size-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
+                                                    :disabled="index === form.barcode_attributes.length - 1"
+                                                    @click="moveBarcodeAttributeDown(index)"
+                                                    title="Move down"
+                                                >
+                                                    <ChevronDownIcon class="size-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="p-1 text-red-400 hover:text-red-600"
+                                                    @click="removeBarcodeAttribute(index)"
+                                                    title="Remove"
+                                                >
+                                                    <XMarkIcon class="size-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Preview of effective attributes when inheriting -->
+                                    <div v-else-if="isBarcodeAttributesInherited" class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
+                                        <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">Inherited from parent:</p>
+                                        <ol class="list-decimal list-inside text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                                            <li v-for="attr in category.effective_barcode_attributes" :key="attr">
+                                                {{ getAttributeLabel(attr) }}
+                                            </li>
+                                        </ol>
+                                    </div>
+
+                                    <!-- Add attribute dropdown -->
+                                    <div>
+                                        <label for="add_barcode_attr" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Add Field
+                                        </label>
+                                        <div class="flex gap-2">
+                                            <select
+                                                id="add_barcode_attr"
+                                                class="flex-1 rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                @change="(e) => { addBarcodeAttribute((e.target as HTMLSelectElement).value); (e.target as HTMLSelectElement).value = ''; }"
+                                            >
+                                                <option value="">Select a field to add...</option>
+                                                <optgroup label="Built-in Fields">
+                                                    <option
+                                                        v-for="attr in builtInBarcodeAttributes"
+                                                        :key="attr.name"
+                                                        :value="attr.name"
+                                                        :disabled="form.barcode_attributes.includes(attr.name)"
+                                                    >
+                                                        {{ attr.label }}
+                                                    </option>
+                                                </optgroup>
+                                                <optgroup v-if="templateFields.length > 0" label="Template Fields">
+                                                    <option
+                                                        v-for="field in templateFields"
+                                                        :key="field.name"
+                                                        :value="field.name"
+                                                        :disabled="form.barcode_attributes.includes(field.name)"
+                                                    >
+                                                        {{ field.label }}
+                                                    </option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <!-- Clear to inherit -->
+                                    <div v-if="form.barcode_attributes.length > 0" class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                                        <button
+                                            type="button"
+                                            class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                            @click="form.barcode_attributes = []"
+                                        >
+                                            Clear and inherit from parent
+                                        </button>
                                     </div>
                                 </div>
                             </div>
