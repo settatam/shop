@@ -144,8 +144,9 @@ class GiaCardScannerController extends Controller
                 'handle' => $handle,
                 'category_id' => $validated['product']['category_id'] ?? null,
                 'brand_id' => $validated['product']['brand_id'] ?? null,
+                'status' => Product::STATUS_ACTIVE,
                 'is_published' => false,
-                'is_draft' => true,
+                'is_draft' => false,
                 'has_variants' => false,
                 'track_quantity' => true,
             ]);
