@@ -158,10 +158,10 @@ onMounted(async () => {
         if (el && code) {
             JsBarcode(el, code, {
                 format: 'CODE128',
-                width: 2,
-                height: 50,
+                width: 1.5,
+                height: 35,
                 displayValue: false,
-                margin: 8,
+                margin: 2,
             });
         }
     });
@@ -574,22 +574,22 @@ const totalLabels = computed(() => {
                             v-for="variant in product.variants"
                             :key="variant.id"
                             :class="[
-                                'barcode-label border border-gray-200 p-4 print:border print:p-2 print:break-inside-avoid min-w-[250px]',
+                                'barcode-label border border-gray-200 p-2 print:border print:p-1 print:break-inside-avoid min-w-[200px]',
                                 (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
                             ]"
                         >
-                            <div class="text-center">
+                            <div class="text-center leading-tight">
                                 <!-- SKU/code at top -->
-                                <p class="text-sm font-bold text-black truncate">
+                                <p class="text-xs font-bold text-black truncate">
                                     {{ variant.barcode || variant.sku }}
                                 </p>
                                 <!-- Barcode image (no text below) -->
                                 <svg
                                     :ref="(el) => setBarcodeRef(el as SVGElement, variant.id)"
-                                    class="mx-auto mt-1"
+                                    class="mx-auto"
                                 ></svg>
                                 <!-- Configured attribute values (horizontal) -->
-                                <p class="mt-1 text-xs font-semibold text-black text-balance">
+                                <p class="text-[10px] font-semibold text-black leading-tight">
                                     {{ getLabelLine(variant) }}
                                 </p>
                             </div>
