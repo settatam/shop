@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import { ArrowLeftIcon, PrinterIcon, ComputerDesktopIcon, ExclamationTriangleIcon, WifiIcon } from '@heroicons/vue/20/solid';
 import JsBarcode from 'jsbarcode';
 import { useZebraPrint, ZPL, type PrinterSettings } from '@/composables/useZebraPrint';
@@ -147,11 +147,11 @@ const setBarcodeRef = (el: SVGElement | null, variantId: number) => {
     }
 };
 
-// Initialize selected variants to all
-onMounted(async () => {
-    selectedVariants.value = props.product.variants.map(v => v.id);
+// Generate browser barcodes using current printer settings
+const generateBarcodes = () => {
+    const settings = selectedPrinterSetting.value;
+    const barcodeHeight = settings?.barcode_height ?? 30;
 
-    // Generate browser barcodes
     props.product.variants.forEach((variant) => {
         const el = barcodeRefs.value.get(variant.id);
         const code = variant.barcode || variant.sku;
@@ -159,12 +159,25 @@ onMounted(async () => {
             JsBarcode(el, code, {
                 format: 'CODE128',
                 width: 1.5,
-                height: 35,
+                height: barcodeHeight,
                 displayValue: false,
-                margin: 2,
+                margin: 0,
             });
         }
     });
+};
+
+// Regenerate barcodes when printer setting changes
+watch(selectedPrinterSettingId, () => {
+    generateBarcodes();
+});
+
+// Initialize selected variants to all
+onMounted(async () => {
+    selectedVariants.value = props.product.variants.map(v => v.id);
+
+    // Generate browser barcodes
+    generateBarcodes();
 
     // Try to connect to Zebra Browser Print
     await connect();
@@ -574,22 +587,22 @@ const totalLabels = computed(() => {
                             v-for="variant in product.variants"
                             :key="variant.id"
                             :class="[
-                                'barcode-label border border-gray-200 p-2 print:border print:p-1 print:break-inside-avoid min-w-[200px]',
+                                'barcode-label border border-gray-200 px-1 py-0 print:border print:p-0 print:break-inside-avoid',
                                 (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40' : '',
                             ]"
                         >
-                            <div class="text-center leading-tight">
+                            <div class="text-center leading-none">
                                 <!-- SKU/code at top -->
-                                <p class="text-xs font-bold text-black truncate">
+                                <p class="text-xs font-bold text-black truncate leading-none">
                                     {{ variant.barcode || variant.sku }}
                                 </p>
                                 <!-- Barcode image (no text below) -->
                                 <svg
                                     :ref="(el) => setBarcodeRef(el as SVGElement, variant.id)"
-                                    class="mx-auto"
+                                    class="block mx-auto"
                                 ></svg>
                                 <!-- Configured attribute values (horizontal) -->
-                                <p class="text-[10px] font-semibold text-black leading-tight">
+                                <p class="text-[10px] font-semibold text-black leading-none">
                                     {{ getLabelLine(variant) }}
                                 </p>
                             </div>
