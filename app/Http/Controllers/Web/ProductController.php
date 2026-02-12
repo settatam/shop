@@ -420,6 +420,9 @@ class ProductController extends Controller
             }
         }
 
+        // Auto-generate SKU and barcode in format: CATEGORY_PREFIX-product_id
+        $product->generateSkusForVariants();
+
         // Save template attribute values
         if (! empty($validated['attributes'])) {
             foreach ($validated['attributes'] as $fieldId => $value) {
@@ -492,7 +495,7 @@ class ProductController extends Controller
             abort(404);
         }
 
-        $product->load(['category', 'brand', 'variants', 'images', 'tags', 'attributeValues.field']);
+        $product->load(['category', 'brand', 'vendor', 'variants', 'images', 'tags', 'attributeValues.field']);
 
         // Get template and fields with values
         $template = null;
@@ -505,18 +508,32 @@ class ProductController extends Controller
         }
 
         if ($template) {
-            $template->load('fields');
+            $template->load('fields.options');
             $attributeValues = $product->attributeValues->keyBy('product_template_field_id');
 
             $templateFieldsWithValues = $template->fields->map(function ($field) use ($attributeValues) {
                 $attrValue = $attributeValues->get($field->id);
+                $storedValue = $attrValue?->value;
+                $displayValue = $storedValue;
+
+                // For select/radio/checkbox fields, map the stored value to the option label
+                if ($storedValue && in_array($field->type, [ProductTemplateField::TYPE_SELECT, ProductTemplateField::TYPE_RADIO, ProductTemplateField::TYPE_CHECKBOX])) {
+                    $option = $field->options->firstWhere('value', $storedValue);
+                    $displayValue = $option?->label ?? $storedValue;
+                }
+
+                // For brand fields, get the brand name
+                if ($field->type === ProductTemplateField::TYPE_BRAND && $storedValue) {
+                    $brand = Brand::find($storedValue);
+                    $displayValue = $brand?->name ?? $storedValue;
+                }
 
                 return [
                     'id' => $field->id,
                     'label' => $field->label,
                     'name' => $field->name,
                     'type' => $field->type,
-                    'value' => $attrValue?->value,
+                    'value' => $displayValue,
                 ];
             })->values();
         }
@@ -543,6 +560,10 @@ class ProductController extends Controller
                 'brand' => $product->brand ? [
                     'id' => $product->brand->id,
                     'name' => $product->brand->name,
+                ] : null,
+                'vendor' => $product->vendor ? [
+                    'id' => $product->vendor->id,
+                    'name' => $product->vendor->name,
                 ] : null,
                 'tags' => $product->tags->map(fn (Tag $tag) => [
                     'id' => $tag->id,
@@ -796,7 +817,7 @@ class ProductController extends Controller
             'sku' => 'nullable|string|max:255',
             'upc' => 'nullable|string|max:255',
             'category_id' => ($fieldRequirements['category_id']['required'] ?? false ? 'required' : 'nullable').'|exists:categories,id',
-            'vendor_id' => ($fieldRequirements['vendor_id']['required'] ?? false ? 'required' : 'nullable').'|exists:vendors,id',
+            'vendor_id' => 'required|exists:vendors,id',
             'brand_id' => ($fieldRequirements['brand_id']['required'] ?? false ? 'required' : 'nullable').'|exists:brands,id',
             'tag_ids' => 'nullable|array',
             'tag_ids.*' => 'exists:tags,id',

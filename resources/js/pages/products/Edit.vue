@@ -12,6 +12,7 @@ import {
     ArrowLeftIcon,
     XMarkIcon,
     StarIcon,
+    PrinterIcon,
 } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
@@ -621,6 +622,13 @@ function deleteProduct() {
                         >
                             <TrashIcon class="size-5" />
                         </button>
+                        <Link
+                            :href="`/products/${product.id}/print-barcode`"
+                            class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+                        >
+                            <PrinterIcon class="-ml-0.5 size-5" />
+                            Print Barcode
+                        </Link>
                         <button
                             type="button"
                             class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700"
@@ -1692,12 +1700,12 @@ function deleteProduct() {
 
                                 <div>
                                     <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Vendor <span v-if="isFieldRequired('vendor_id')" class="text-red-500">*</span>
+                                        Vendor <span class="text-red-500">*</span>
                                     </label>
                                     <select
                                         id="vendor_id"
                                         v-model="form.vendor_id"
-                                        :required="isFieldRequired('vendor_id')"
+                                        required
                                         class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >
                                         <option value="">Select a vendor...</option>
@@ -1706,9 +1714,6 @@ function deleteProduct() {
                                         </option>
                                     </select>
                                     <p v-if="form.errors.vendor_id" class="mt-1 text-sm text-red-600">{{ form.errors.vendor_id }}</p>
-                                    <p v-if="getFieldRequirementMessage('vendor_id')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {{ getFieldRequirementMessage('vendor_id') }}
-                                    </p>
                                 </div>
                             </div>
                         </div>

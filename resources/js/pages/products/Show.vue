@@ -5,7 +5,7 @@ import { ImageLightbox } from '@/components/images';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { PencilIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/vue/20/solid';
+import { PencilIcon, TrashIcon, ArrowLeftIcon, PrinterIcon } from '@heroicons/vue/20/solid';
 
 interface Variant {
     id: number;
@@ -76,6 +76,7 @@ interface Product {
     updated_at: string;
     category: { id: number; name: string } | null;
     brand: { id: number; name: string } | null;
+    vendor: { id: number; name: string } | null;
     tags: Tag[];
     variants: Variant[];
     images: Image[];
@@ -150,6 +151,13 @@ const deleteProduct = () => {
                     </div>
                 </div>
                 <div class="flex gap-3">
+                    <Link
+                        :href="`/products/${product.id}/print-barcode`"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+                    >
+                        <PrinterIcon class="-ml-0.5 size-5" />
+                        Print Barcode
+                    </Link>
                     <button
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 dark:bg-gray-800 dark:ring-gray-600 dark:hover:bg-red-900/20"
@@ -327,6 +335,16 @@ const deleteProduct = () => {
                                     </span>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Vendor -->
+                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Vendor</h3>
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                {{ product.vendor?.name || '-' }}
+                            </p>
                         </div>
                     </div>
 

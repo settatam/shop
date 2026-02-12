@@ -420,4 +420,41 @@ class Product extends Model
     {
         return ! $this->trashed();
     }
+
+    /**
+     * Generate SKU in the format: CATEGORY_PREFIX-product_id
+     */
+    public function generateSku(): string
+    {
+        $prefix = $this->category?->getEffectiveSkuPrefix() ?? 'PROD';
+
+        return strtoupper($prefix).'-'.$this->id;
+    }
+
+    /**
+     * Generate SKU and barcode for all variants of this product.
+     */
+    public function generateSkusForVariants(): void
+    {
+        $baseSku = $this->generateSku();
+
+        $variants = $this->variants()->get();
+
+        if ($variants->count() === 1) {
+            // Single variant - use base SKU
+            $variants->first()->update([
+                'sku' => $baseSku,
+                'barcode' => $baseSku,
+            ]);
+        } else {
+            // Multiple variants - append variant index
+            foreach ($variants as $index => $variant) {
+                $variantSku = $baseSku.'-'.($index + 1);
+                $variant->update([
+                    'sku' => $variantSku,
+                    'barcode' => $variantSku,
+                ]);
+            }
+        }
+    }
 }
