@@ -148,6 +148,9 @@ class SalesReportController extends Controller
             'total_cost' => $monthlyData->sum('total_cost'),
             'total_wholesale_value' => $monthlyData->sum('total_wholesale_value'),
             'total_sales_price' => $monthlyData->sum('total_sales_price'),
+            'total_service_fee' => $monthlyData->sum('total_service_fee'),
+            'total_tax' => $monthlyData->sum('total_tax'),
+            'total_shipping' => $monthlyData->sum('total_shipping'),
             'total_paid' => $monthlyData->sum('total_paid'),
             'gross_profit' => $monthlyData->sum('gross_profit'),
             'profit_percent' => $monthlyData->sum('total_sales_price') > 0
@@ -191,6 +194,9 @@ class SalesReportController extends Controller
             'total_cost' => $dailyData->sum('total_cost'),
             'total_wholesale_value' => $dailyData->sum('total_wholesale_value'),
             'total_sales_price' => $dailyData->sum('total_sales_price'),
+            'total_service_fee' => $dailyData->sum('total_service_fee'),
+            'total_tax' => $dailyData->sum('total_tax'),
+            'total_shipping' => $dailyData->sum('total_shipping'),
             'total_paid' => $dailyData->sum('total_paid'),
             'gross_profit' => $dailyData->sum('gross_profit'),
             'profit_percent' => $dailyData->sum('total_sales_price') > 0
@@ -253,6 +259,7 @@ class SalesReportController extends Controller
                 'Cost',
                 'Wholesale Value',
                 'Sub Total',
+                'Service Fee',
                 'Profit',
                 'Tax',
                 'Shipping Cost',
@@ -264,6 +271,7 @@ class SalesReportController extends Controller
             $totalCost = 0;
             $totalWholesale = 0;
             $totalSubTotal = 0;
+            $totalServiceFee = 0;
             $totalProfit = 0;
             $totalTax = 0;
             $totalShipping = 0;
@@ -321,6 +329,7 @@ class SalesReportController extends Controller
                     number_format($cost, 2),
                     number_format($wholesaleValue, 2),
                     number_format($order->sub_total ?? 0, 2),
+                    number_format($serviceFee, 2),
                     number_format($profit, 2),
                     number_format($order->sales_tax ?? 0, 2),
                     number_format($order->shipping_cost ?? 0, 2),
@@ -333,6 +342,7 @@ class SalesReportController extends Controller
                 $totalCost += $cost;
                 $totalWholesale += $wholesaleValue;
                 $totalSubTotal += $order->sub_total ?? 0;
+                $totalServiceFee += $serviceFee;
                 $totalProfit += $profit;
                 $totalTax += $order->sales_tax ?? 0;
                 $totalShipping += $order->shipping_cost ?? 0;
@@ -352,6 +362,7 @@ class SalesReportController extends Controller
                 number_format($totalCost, 2),
                 number_format($totalWholesale, 2),
                 number_format($totalSubTotal, 2),
+                number_format($totalServiceFee, 2),
                 number_format($totalProfit, 2),
                 number_format($totalTax, 2),
                 number_format($totalShipping, 2),
@@ -391,6 +402,9 @@ class SalesReportController extends Controller
                 'Total Cost',
                 'Total Wholesale Value',
                 'Total Sales Price',
+                'Service Fee',
+                'Tax',
+                'Shipping',
             ];
 
             // Add channel columns
@@ -412,6 +426,9 @@ class SalesReportController extends Controller
                     number_format($row['total_cost'], 2),
                     number_format($row['total_wholesale_value'], 2),
                     number_format($row['total_sales_price'], 2),
+                    number_format($row['total_service_fee'] ?? 0, 2),
+                    number_format($row['total_tax'] ?? 0, 2),
+                    number_format($row['total_shipping'] ?? 0, 2),
                 ];
 
                 // Add channel values
@@ -434,6 +451,9 @@ class SalesReportController extends Controller
                 'total_cost' => $monthlyData->sum('total_cost'),
                 'total_wholesale_value' => $monthlyData->sum('total_wholesale_value'),
                 'total_sales_price' => $monthlyData->sum('total_sales_price'),
+                'total_service_fee' => $monthlyData->sum('total_service_fee'),
+                'total_tax' => $monthlyData->sum('total_tax'),
+                'total_shipping' => $monthlyData->sum('total_shipping'),
                 'total_paid' => $monthlyData->sum('total_paid'),
                 'gross_profit' => $monthlyData->sum('gross_profit'),
             ];
@@ -449,6 +469,9 @@ class SalesReportController extends Controller
                 number_format($totals['total_cost'], 2),
                 number_format($totals['total_wholesale_value'], 2),
                 number_format($totals['total_sales_price'], 2),
+                number_format($totals['total_service_fee'], 2),
+                number_format($totals['total_tax'], 2),
+                number_format($totals['total_shipping'], 2),
             ];
 
             // Add channel totals
@@ -494,6 +517,9 @@ class SalesReportController extends Controller
                 'Total Cost',
                 'Total Wholesale Value',
                 'Total Sales Price',
+                'Service Fee',
+                'Tax',
+                'Shipping',
             ];
 
             // Add channel columns
@@ -515,6 +541,9 @@ class SalesReportController extends Controller
                     number_format($row['total_cost'], 2),
                     number_format($row['total_wholesale_value'], 2),
                     number_format($row['total_sales_price'], 2),
+                    number_format($row['total_service_fee'] ?? 0, 2),
+                    number_format($row['total_tax'] ?? 0, 2),
+                    number_format($row['total_shipping'] ?? 0, 2),
                 ];
 
                 // Add channel values
@@ -537,6 +566,9 @@ class SalesReportController extends Controller
                 'total_cost' => $dailyData->sum('total_cost'),
                 'total_wholesale_value' => $dailyData->sum('total_wholesale_value'),
                 'total_sales_price' => $dailyData->sum('total_sales_price'),
+                'total_service_fee' => $dailyData->sum('total_service_fee'),
+                'total_tax' => $dailyData->sum('total_tax'),
+                'total_shipping' => $dailyData->sum('total_shipping'),
                 'total_paid' => $dailyData->sum('total_paid'),
                 'gross_profit' => $dailyData->sum('gross_profit'),
             ];
@@ -552,6 +584,9 @@ class SalesReportController extends Controller
                 number_format($totals['total_cost'], 2),
                 number_format($totals['total_wholesale_value'], 2),
                 number_format($totals['total_sales_price'], 2),
+                number_format($totals['total_service_fee'], 2),
+                number_format($totals['total_tax'], 2),
+                number_format($totals['total_shipping'], 2),
             ];
 
             // Add channel totals
@@ -736,6 +771,8 @@ class SalesReportController extends Controller
             $totalWholesaleValue = 0;
             $itemsSold = 0;
             $totalServiceFee = 0;
+            $totalTax = 0;
+            $totalShipping = 0;
 
             // Initialize channel totals
             $channelTotals = [];
@@ -762,6 +799,12 @@ class SalesReportController extends Controller
                 // Add service fee
                 $totalServiceFee += (float) ($order->service_fee_value ?? 0);
 
+                // Add tax
+                $totalTax += (float) ($order->sales_tax ?? 0);
+
+                // Add shipping
+                $totalShipping += (float) ($order->shipping_cost ?? 0);
+
                 // Add to appropriate channel total
                 $channelCode = $this->getOrderChannelCode($order, $channels);
                 if (isset($channelTotals[$channelCode])) {
@@ -784,6 +827,9 @@ class SalesReportController extends Controller
                 'total_cost' => $totalCost,
                 'total_wholesale_value' => $totalWholesaleValue,
                 'total_sales_price' => $totalSalesPrice,
+                'total_service_fee' => $totalServiceFee,
+                'total_tax' => $totalTax,
+                'total_shipping' => $totalShipping,
                 'total_paid' => $totalPaid,
                 'gross_profit' => $grossProfit,
                 'profit_percent' => $profitPercent,
@@ -833,6 +879,8 @@ class SalesReportController extends Controller
             $totalWholesaleValue = 0;
             $itemsSold = 0;
             $totalServiceFee = 0;
+            $totalTax = 0;
+            $totalShipping = 0;
 
             // Initialize channel totals
             $channelTotals = [];
@@ -859,6 +907,12 @@ class SalesReportController extends Controller
                 // Add service fee
                 $totalServiceFee += (float) ($order->service_fee_value ?? 0);
 
+                // Add tax
+                $totalTax += (float) ($order->sales_tax ?? 0);
+
+                // Add shipping
+                $totalShipping += (float) ($order->shipping_cost ?? 0);
+
                 // Add to appropriate channel total
                 $channelCode = $this->getOrderChannelCode($order, $channels);
                 if (isset($channelTotals[$channelCode])) {
@@ -880,6 +934,9 @@ class SalesReportController extends Controller
                 'total_cost' => $totalCost,
                 'total_wholesale_value' => $totalWholesaleValue,
                 'total_sales_price' => $totalSalesPrice,
+                'total_service_fee' => $totalServiceFee,
+                'total_tax' => $totalTax,
+                'total_shipping' => $totalShipping,
                 'total_paid' => $totalPaid,
                 'gross_profit' => $grossProfit,
                 'profit_percent' => $profitPercent,

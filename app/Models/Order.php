@@ -448,9 +448,9 @@ class Order extends Model implements Payable
         // Just refresh to recalculate balance
         $this->refresh();
 
-        // Update status if partial payment
-        if (! $this->isFullyPaid() && $this->total_paid > 0) {
-            $this->update(['status' => self::STATUS_PARTIAL_PAYMENT]);
+        // Update status to confirmed when any payment is made
+        if ($this->total_paid > 0 && $this->status === self::STATUS_PENDING) {
+            $this->update(['status' => self::STATUS_CONFIRMED]);
         }
 
         // Sync invoice if exists

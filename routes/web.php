@@ -661,18 +661,24 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('in-store/export', [BuysReportController::class, 'exportInStore'])->name('in-store.export');
         Route::get('in-store/monthly', [BuysReportController::class, 'inStoreMonthly'])->name('in-store.monthly');
         Route::get('in-store/monthly/export', [BuysReportController::class, 'exportInStoreMonthly'])->name('in-store.monthly.export');
+        Route::get('in-store/yearly', [BuysReportController::class, 'inStoreYearly'])->name('in-store.yearly');
+        Route::get('in-store/yearly/export', [BuysReportController::class, 'exportInStoreYearly'])->name('in-store.yearly.export');
 
         // Online
         Route::get('online', [BuysReportController::class, 'online'])->name('online');
         Route::get('online/export', [BuysReportController::class, 'exportOnline'])->name('online.export');
         Route::get('online/monthly', [BuysReportController::class, 'onlineMonthly'])->name('onlineMonthly');
         Route::get('online/monthly/export', [BuysReportController::class, 'exportOnlineMonthly'])->name('online.monthly.export');
+        Route::get('online/yearly', [BuysReportController::class, 'onlineYearly'])->name('online.yearly');
+        Route::get('online/yearly/export', [BuysReportController::class, 'exportOnlineYearly'])->name('online.yearly.export');
 
         // Trade-In
         Route::get('trade-in', [BuysReportController::class, 'tradeIn'])->name('trade-in');
         Route::get('trade-in/export', [BuysReportController::class, 'exportTradeIn'])->name('trade-in.export');
         Route::get('trade-in/monthly', [BuysReportController::class, 'tradeInMonthly'])->name('trade-in.monthly');
         Route::get('trade-in/monthly/export', [BuysReportController::class, 'exportTradeInMonthly'])->name('trade-in.monthly.export');
+        Route::get('trade-in/yearly', [BuysReportController::class, 'tradeInYearly'])->name('trade-in.yearly');
+        Route::get('trade-in/yearly/export', [BuysReportController::class, 'exportTradeInYearly'])->name('trade-in.yearly.export');
     });
 
     // Transactions Reports

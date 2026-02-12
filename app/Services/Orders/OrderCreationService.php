@@ -477,10 +477,9 @@ class OrderCreationService
     {
         $this->order->refresh();
 
-        if ($this->order->isFullyPaid()) {
+        // Any payment confirms the order
+        if ($this->order->total_paid > 0) {
             $this->order->update(['status' => Order::STATUS_CONFIRMED]);
-        } elseif ($this->order->total_paid > 0) {
-            $this->order->update(['status' => Order::STATUS_PARTIAL_PAYMENT]);
         }
     }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
@@ -9,6 +9,7 @@ import AreaChart from '@/components/charts/AreaChart.vue';
 
 interface DayRow {
     date: string;
+    date_key: string;
     buys_count: number;
     purchase_amt: number;
     estimated_value: number;
@@ -95,6 +96,10 @@ const profitTrend = computed(() => {
     if (prev7 === 0) return last7 > 0 ? 100 : 0;
     return ((last7 - prev7) / Math.abs(prev7)) * 100;
 });
+
+function viewBuys(row: DayRow): void {
+    router.visit(`/transactions?date_from=${row.date_key}&date_to=${row.date_key}&status=payment_processed`);
+}
 </script>
 
 <template>
@@ -193,7 +198,7 @@ const profitTrend = computed(() => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in dailyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <tr v-for="row in dailyData" :key="row.date" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" @click="viewBuys(row)">
                                 <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.date }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ row.buys_count }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.purchase_amt) }}</td>

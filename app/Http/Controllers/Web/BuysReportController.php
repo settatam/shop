@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Status;
 use App\Models\Transaction;
 use App\Services\StoreContext;
 use Carbon\Carbon;
@@ -16,6 +17,16 @@ class BuysReportController extends Controller
     public function __construct(
         protected StoreContext $storeContext,
     ) {}
+
+    /**
+     * Get the "Payment Processed" status ID for a store.
+     */
+    protected function getPaymentProcessedStatusId(int $storeId): ?int
+    {
+        return Status::where('store_id', $storeId)
+            ->where('slug', 'payment_processed')
+            ->value('id');
+    }
 
     /**
      * In-Store Buys Report - Month to Date (daily breakdown).
@@ -219,6 +230,84 @@ class BuysReportController extends Controller
     }
 
     /**
+     * In-Store Buys Report - Year over Year.
+     */
+    public function inStoreYearly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getInStoreYearlyData($store->id);
+        $totals = $this->calculateTotals($yearlyData);
+
+        return Inertia::render('reports/buys/InStoreYearly', [
+            'yearlyData' => $yearlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Online Buys Report - Year over Year.
+     */
+    public function onlineYearly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getOnlineYearlyData($store->id);
+        $totals = $this->calculateTotals($yearlyData);
+
+        return Inertia::render('reports/buys/OnlineYearly', [
+            'yearlyData' => $yearlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Trade-In Buys Report - Year over Year.
+     */
+    public function tradeInYearly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getTradeInYearlyData($store->id);
+        $totals = $this->calculateTotals($yearlyData);
+
+        return Inertia::render('reports/buys/TradeInYearly', [
+            'yearlyData' => $yearlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Export In-Store Yearly to CSV.
+     */
+    public function exportInStoreYearly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getInStoreYearlyData($store->id);
+
+        return $this->exportToCsv($yearlyData, 'buys-in-store-yearly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export Online Yearly to CSV.
+     */
+    public function exportOnlineYearly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getOnlineYearlyData($store->id);
+
+        return $this->exportToCsv($yearlyData, 'buys-online-yearly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export Trade-In Yearly to CSV.
+     */
+    public function exportTradeInYearly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getTradeInYearlyData($store->id);
+
+        return $this->exportToCsv($yearlyData, 'buys-trade-in-yearly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
      * Get in-store daily aggregated data.
      * In-store means in_house type with source NOT online.
      */
@@ -298,23 +387,63 @@ class BuysReportController extends Controller
     }
 
     /**
+     * Get in-store yearly aggregated data.
+     */
+    protected function getInStoreYearlyData(int $storeId)
+    {
+        return $this->getYearlyBuysData($storeId, function ($query) {
+            $query->where('type', Transaction::TYPE_IN_STORE)
+                ->where(function ($q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
+                })
+                ->where('source', '!=', Transaction::SOURCE_TRADE_IN);
+        });
+    }
+
+    /**
+     * Get online yearly aggregated data.
+     */
+    protected function getOnlineYearlyData(int $storeId)
+    {
+        return $this->getYearlyBuysData($storeId, function ($query) {
+            $query->where(function ($q) {
+                $q->where('type', Transaction::TYPE_MAIL_IN)
+                    ->orWhere('source', Transaction::SOURCE_ONLINE);
+            });
+        });
+    }
+
+    /**
+     * Get trade-in yearly aggregated data.
+     */
+    protected function getTradeInYearlyData(int $storeId)
+    {
+        return $this->getYearlyBuysData($storeId, function ($query) {
+            $query->where('source', Transaction::SOURCE_TRADE_IN);
+        });
+    }
+
+    /**
      * Get daily buys data with custom filter.
-     * Includes all transactions that have passed through payment_processed status.
+     * Includes all transactions that have reached payment_processed status.
      */
     protected function getDailyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
     {
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($storeId);
+
         $query = Transaction::query()
             ->where('store_id', $storeId)
-            ->whereNotNull('payment_processed_at')
-            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereBetween('updated_at', [$startDate, $endDate])
             ->with(['items']);
 
         $filter($query);
 
         $transactions = $query->get();
 
-        // Group by day
-        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y-m-d'));
+        // Group by day (using updated_at as proxy for when payment was processed)
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->updated_at)->format('Y-m-d'));
 
         // Generate all days in range
         $days = collect();
@@ -333,6 +462,7 @@ class BuysReportController extends Controller
 
             $days->push([
                 'date' => $current->format('M d, Y'),
+                'date_key' => $current->format('Y-m-d'),
                 'buys_count' => $buysCount,
                 'purchase_amt' => $purchaseAmt,
                 'estimated_value' => $estimatedValue,
@@ -348,23 +478,83 @@ class BuysReportController extends Controller
     }
 
     /**
-     * Get monthly buys data with custom filter.
-     * Includes all transactions that have passed through payment_processed status.
+     * Get yearly buys data with custom filter.
+     * Includes all transactions that have reached payment_processed status.
      */
-    protected function getMonthlyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
+    protected function getYearlyBuysData(int $storeId, callable $filter)
     {
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($storeId);
+
+        // Get last 5 years of data
+        $startDate = now()->subYears(4)->startOfYear();
+        $endDate = now()->endOfYear();
+
         $query = Transaction::query()
             ->where('store_id', $storeId)
-            ->whereNotNull('payment_processed_at')
-            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereBetween('updated_at', [$startDate, $endDate])
             ->with(['items']);
 
         $filter($query);
 
         $transactions = $query->get();
 
-        // Group by month
-        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y-m'));
+        // Group by year (using updated_at as proxy for when payment was processed)
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->updated_at)->format('Y'));
+
+        // Generate all years in range
+        $years = collect();
+        $current = $startDate->copy();
+        while ($current <= $endDate) {
+            $key = $current->format('Y');
+            $yearTransactions = $grouped->get($key, collect());
+
+            $buysCount = $yearTransactions->count();
+            $purchaseAmt = $yearTransactions->sum('final_offer');
+            // Estimated value comes from sum of item prices (resale value)
+            $estimatedValue = $yearTransactions->sum(fn ($t) => $t->items->sum('price'));
+            $profit = $estimatedValue - $purchaseAmt;
+            $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
+            $avgBuyPrice = $buysCount > 0 ? $purchaseAmt / $buysCount : 0;
+
+            $years->push([
+                'date' => $current->format('Y'),
+                'start_date' => $current->copy()->startOfYear()->format('Y-m-d'),
+                'end_date' => $current->copy()->endOfYear()->format('Y-m-d'),
+                'buys_count' => $buysCount,
+                'purchase_amt' => $purchaseAmt,
+                'estimated_value' => $estimatedValue,
+                'profit' => $profit,
+                'profit_percent' => $profitPercent,
+                'avg_buy_price' => $avgBuyPrice,
+            ]);
+
+            $current->addYear();
+        }
+
+        return $years;
+    }
+
+    /**
+     * Get monthly buys data with custom filter.
+     * Includes all transactions that have reached payment_processed status.
+     */
+    protected function getMonthlyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
+    {
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($storeId);
+
+        $query = Transaction::query()
+            ->where('store_id', $storeId)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereBetween('updated_at', [$startDate, $endDate])
+            ->with(['items']);
+
+        $filter($query);
+
+        $transactions = $query->get();
+
+        // Group by month (using updated_at as proxy for when payment was processed)
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->updated_at)->format('Y-m'));
 
         // Generate all months in range
         $months = collect();
@@ -383,6 +573,8 @@ class BuysReportController extends Controller
 
             $months->push([
                 'date' => $current->format('M Y'),
+                'start_date' => $current->copy()->startOfMonth()->format('Y-m-d'),
+                'end_date' => $current->copy()->endOfMonth()->format('Y-m-d'),
                 'buys_count' => $buysCount,
                 'purchase_amt' => $purchaseAmt,
                 'estimated_value' => $estimatedValue,

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 
 interface MonthRow {
     date: string;
+    start_date: string;
+    end_date: string;
     buys_count: number;
     purchase_amt: number;
     estimated_value: number;
@@ -48,6 +50,10 @@ function formatPercent(value: number): string {
         maximumFractionDigits: 1,
     }).format(value / 100);
 }
+
+function viewBuys(row: MonthRow): void {
+    router.visit(`/transactions?date_from=${row.start_date}&date_to=${row.end_date}&status=payment_processed`);
+}
 </script>
 
 <template>
@@ -64,6 +70,12 @@ function formatPercent(value: number): string {
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
+                    <Link
+                        href="/reports/buys/online/yearly"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    >
+                        View Year over Year
+                    </Link>
                     <Link
                         href="/reports/buys/online"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
@@ -96,7 +108,7 @@ function formatPercent(value: number): string {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in monthlyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <tr v-for="row in monthlyData" :key="row.date" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" @click="viewBuys(row)">
                                 <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.date }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ row.buys_count }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.purchase_amt) }}</td>

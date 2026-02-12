@@ -5,11 +5,12 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
-import AreaChart from '@/components/charts/AreaChart.vue';
+import BarChart from '@/components/charts/BarChart.vue';
 
-interface DayRow {
+interface YearRow {
     date: string;
-    date_key: string;
+    start_date: string;
+    end_date: string;
     buys_count: number;
     purchase_amt: number;
     estimated_value: number;
@@ -28,14 +29,14 @@ interface Totals {
 }
 
 const props = defineProps<{
-    dailyData: DayRow[];
+    yearlyData: YearRow[];
     totals: Totals;
-    month: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
-    { title: 'Buys (Online)', href: '/reports/buys/online' },
+    { title: 'Buys (Trade-In)', href: '/reports/buys/trade-in' },
+    { title: 'Yearly', href: '/reports/buys/trade-in/yearly' },
 ];
 
 function formatCurrency(value: number): string {
@@ -64,59 +65,76 @@ function formatPercent(value: number): string {
 }
 
 // Chart data
-const chartLabels = computed(() => props.dailyData.map(row => {
-    const parts = row.date.split('/');
-    return parts.length > 1 ? parts[1] : row.date;
-}));
+const chartLabels = computed(() => props.yearlyData.map(row => row.date));
+const purchaseAmtData = computed(() => props.yearlyData.map(row => row.purchase_amt));
+const estimatedValueData = computed(() => props.yearlyData.map(row => row.estimated_value));
+const profitData = computed(() => props.yearlyData.map(row => row.profit));
+const buysCountData = computed(() => props.yearlyData.map(row => row.buys_count));
 
-const purchaseAmtData = computed(() => props.dailyData.map(row => row.purchase_amt));
-const estimatedValueData = computed(() => props.dailyData.map(row => row.estimated_value));
-const profitData = computed(() => props.dailyData.map(row => row.profit));
-
-// Week over week trend
+// Trends
 const purchaseTrend = computed(() => {
-    if (props.dailyData.length < 14) return 0;
-    const last7 = props.dailyData.slice(-7).reduce((sum, row) => sum + row.purchase_amt, 0);
-    const prev7 = props.dailyData.slice(-14, -7).reduce((sum, row) => sum + row.purchase_amt, 0);
-    if (prev7 === 0) return last7 > 0 ? 100 : 0;
-    return ((last7 - prev7) / Math.abs(prev7)) * 100;
+    if (props.yearlyData.length < 2) return 0;
+    const current = props.yearlyData[props.yearlyData.length - 1]?.purchase_amt || 0;
+    const previous = props.yearlyData[props.yearlyData.length - 2]?.purchase_amt || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
 });
 
 const profitTrend = computed(() => {
-    if (props.dailyData.length < 14) return 0;
-    const last7 = props.dailyData.slice(-7).reduce((sum, row) => sum + row.profit, 0);
-    const prev7 = props.dailyData.slice(-14, -7).reduce((sum, row) => sum + row.profit, 0);
-    if (prev7 === 0) return last7 > 0 ? 100 : 0;
-    return ((last7 - prev7) / Math.abs(prev7)) * 100;
+    if (props.yearlyData.length < 2) return 0;
+    const current = props.yearlyData[props.yearlyData.length - 1]?.profit || 0;
+    const previous = props.yearlyData[props.yearlyData.length - 2]?.profit || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
 });
 
-function viewBuys(row: DayRow): void {
-    router.visit(`/transactions?date_from=${row.date_key}&date_to=${row.date_key}&status=payment_processed`);
+const buysTrend = computed(() => {
+    if (props.yearlyData.length < 2) return 0;
+    const current = props.yearlyData[props.yearlyData.length - 1]?.buys_count || 0;
+    const previous = props.yearlyData[props.yearlyData.length - 2]?.buys_count || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+// Average profit margin
+const avgProfitMargin = computed(() => {
+    if (props.totals.estimated_value === 0) return 0;
+    return (props.totals.profit / props.totals.estimated_value) * 100;
+});
+
+function viewBuys(row: YearRow): void {
+    router.visit(`/transactions?date_from=${row.start_date}&date_to=${row.end_date}&status=payment_processed`);
 }
 </script>
 
 <template>
-    <Head title="Online Buys Report (MTD)" />
+    <Head title="Trade-In Buys Report (Year over Year)" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Online Buys Report</h1>
+                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Trade-In Buys Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Month to Date - {{ month }}
+                        Year over Year - Past 5 Years
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
                     <Link
-                        href="/reports/buys/online/monthly"
+                        href="/reports/buys/trade-in/monthly"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         View Month over Month
                     </Link>
+                    <Link
+                        href="/reports/buys/trade-in"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    >
+                        View Month to Date
+                    </Link>
                     <a
-                        href="/reports/buys/online/export"
+                        href="/reports/buys/trade-in/yearly/export"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ArrowDownTrayIcon class="size-4" />
@@ -131,40 +149,41 @@ function viewBuys(row: DayRow): void {
                     title="Total Purchased"
                     :value="formatCurrency(totals.purchase_amt)"
                     :trend="purchaseTrend"
-                    trend-label="vs prev week"
+                    trend-label="vs last year"
                     :sparkline-data="purchaseAmtData"
                 />
                 <StatCard
-                    title="Estimated Value"
-                    :value="formatCurrency(totals.estimated_value)"
-                    :sparkline-data="estimatedValueData"
-                />
-                <StatCard
-                    title="Expected Profit"
+                    title="Total Expected Profit"
                     :value="formatCurrency(totals.profit)"
                     :trend="profitTrend"
-                    trend-label="vs prev week"
+                    trend-label="vs last year"
                     :sparkline-data="profitData"
                 />
                 <StatCard
-                    title="Avg Buy Price"
-                    :value="formatCurrency(totals.avg_buy_price)"
+                    title="Total Buys"
+                    :value="totals.buys_count.toLocaleString()"
+                    :trend="buysTrend"
+                    trend-label="vs last year"
+                    :sparkline-data="buysCountData"
+                />
+                <StatCard
+                    title="Avg Profit Margin"
+                    :value="formatPercent(avgProfitMargin)"
                 />
             </div>
 
             <!-- Chart -->
             <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                 <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Daily Purchase vs Estimated Value</h3>
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Yearly Purchase vs Estimated Value</h3>
                 </div>
                 <div class="p-4">
-                    <AreaChart
-                        v-if="dailyData.length > 0"
+                    <BarChart
+                        v-if="yearlyData.length > 0"
                         :labels="chartLabels"
                         :datasets="[
                             { label: 'Estimated Value', data: estimatedValueData, color: '#6366f1' },
                             { label: 'Purchase Amount', data: purchaseAmtData, color: '#f59e0b' },
-                            { label: 'Profit', data: profitData, color: '#22c55e' },
                         ]"
                         :height="250"
                         :format-value="formatCurrencyShort"
@@ -181,7 +200,7 @@ function viewBuys(row: DayRow): void {
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Date</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Year</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300"># of Buys</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Purchase Amt</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Estimated Value</th>
@@ -191,7 +210,7 @@ function viewBuys(row: DayRow): void {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr v-for="row in dailyData" :key="row.date" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" @click="viewBuys(row)">
+                            <tr v-for="row in yearlyData" :key="row.date" class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" @click="viewBuys(row)">
                                 <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.date }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ row.buys_count }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ formatCurrency(row.purchase_amt) }}</td>
@@ -206,14 +225,14 @@ function viewBuys(row: DayRow): void {
                             </tr>
 
                             <!-- Empty state -->
-                            <tr v-if="dailyData.length === 0">
+                            <tr v-if="yearlyData.length === 0">
                                 <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                    No buys data found for this month.
+                                    No buys data found.
                                 </td>
                             </tr>
                         </tbody>
                         <!-- Totals row -->
-                        <tfoot v-if="dailyData.length > 0" class="bg-gray-100 dark:bg-gray-700">
+                        <tfoot v-if="yearlyData.length > 0" class="bg-gray-100 dark:bg-gray-700">
                             <tr class="font-semibold">
                                 <td class="px-4 py-4 text-sm text-gray-900 dark:text-white">TOTALS</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-gray-900 dark:text-white">{{ totals.buys_count }}</td>

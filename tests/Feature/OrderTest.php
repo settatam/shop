@@ -211,8 +211,9 @@ class OrderTest extends TestCase
             ],
         ]);
 
+        // Any payment confirms the order, even partial payments
         $response->assertStatus(200)
-            ->assertJsonPath('data.status', Order::STATUS_PARTIAL_PAYMENT)
+            ->assertJsonPath('data.status', Order::STATUS_CONFIRMED)
             ->assertJsonPath('data.is_fully_paid', false);
     }
 
