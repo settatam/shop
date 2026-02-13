@@ -24,7 +24,8 @@ class MigrateLegacyTransactions extends Command
                             {--skip-customers : Skip migrating customers}
                             {--skip-images : Skip migrating images}
                             {--skip-activities : Skip migrating activities}
-                            {--skip-category-mapping : Skip using category mappings (set category_id to null)}';
+                            {--skip-category-mapping : Skip using category mappings (set category_id to null)}
+                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
 
     protected $description = 'Migrate legacy transactions from shopmata-new database for a specific store';
 
@@ -126,13 +127,23 @@ class MigrateLegacyTransactions extends Command
             }
         }
 
+        $syncDeletes = (bool) $this->option('sync-deletes');
+
+        if ($syncDeletes) {
+            $this->info('Sync deletes enabled - will soft-delete transactions if legacy is soft-deleted');
+        }
+
         // Get transactions from legacy database
         $order = $this->option('latest') ? 'desc' : 'asc';
         $query = DB::connection('legacy')
             ->table('transactions')
             ->where('store_id', $this->legacyStoreId)
-            ->whereNull('deleted_at')
             ->orderBy('created_at', $order);
+
+        // Only skip deleted if NOT syncing deletes
+        if (! $syncDeletes) {
+            $query->whereNull('deleted_at');
+        }
 
         if ($this->option('limit')) {
             $query->limit((int) $this->option('limit'));
@@ -153,13 +164,16 @@ class MigrateLegacyTransactions extends Command
 
         $migrated = 0;
         $skipped = 0;
+        $synced = 0;
         $errors = 0;
 
         foreach ($legacyTransactions as $legacyTransaction) {
             try {
-                $result = $this->migrateTransaction($legacyTransaction);
-                if ($result === false) {
+                $result = $this->migrateTransaction($legacyTransaction, $syncDeletes);
+                if ($result === 'skipped') {
                     $skipped++;
+                } elseif ($result === 'synced') {
+                    $synced++;
                 } else {
                     $migrated++;
                 }
@@ -186,6 +200,7 @@ class MigrateLegacyTransactions extends Command
             [
                 ['Migrated', $migrated],
                 ['Skipped', $skipped],
+                ['Soft-deleted (synced)', $synced],
                 ['Errors', $errors],
             ]
         );
@@ -193,13 +208,22 @@ class MigrateLegacyTransactions extends Command
         return self::SUCCESS;
     }
 
-    protected function migrateTransaction(object $legacyTransaction): bool
+    protected function migrateTransaction(object $legacyTransaction, bool $syncDeletes = false): string
     {
         // Check if already migrated by ID (preserving original IDs)
         $existing = Transaction::withTrashed()->find($legacyTransaction->id);
 
         if ($existing) {
-            return false; // Already migrated
+            // Sync soft-delete status if enabled
+            if ($syncDeletes && $legacyTransaction->deleted_at && ! $existing->deleted_at) {
+                if (! $this->dryRun) {
+                    $existing->delete();
+                }
+
+                return 'synced';
+            }
+
+            return 'skipped'; // Already migrated
         }
 
         // Migrate customer first if not skipped
@@ -245,7 +269,7 @@ class MigrateLegacyTransactions extends Command
         $paymentMethods = $this->mapPaymentMethods($legacyPaymentAddresses);
 
         if ($this->dryRun) {
-            return true;
+            return 'migrated';
         }
 
         // Determine if this is a payment_processed status (for setting timestamps)
@@ -316,7 +340,7 @@ class MigrateLegacyTransactions extends Command
         // Migrate shipping address if exists
         $this->migrateShippingAddress($legacyTransaction, $transaction);
 
-        return true;
+        return 'migrated';
     }
 
     protected function migrateCustomer(int $legacyCustomerId): ?int

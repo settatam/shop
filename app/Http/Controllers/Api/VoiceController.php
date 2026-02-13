@@ -19,7 +19,7 @@ class VoiceController extends Controller
     public function query(Request $request): JsonResponse
     {
         $request->validate([
-            'audio' => 'required|file|mimes:mp3,wav,webm,m4a,ogg|max:10240',
+            'audio' => 'required|file|mimes:mp3,mp4,mpeg,mpga,wav,webm,m4a,ogg|max:10240',
         ]);
 
         $user = $request->user();

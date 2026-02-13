@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 class SpeechToText
 {
-    protected string $apiKey;
+    protected ?string $apiKey;
 
     protected string $model;
 
@@ -28,33 +28,47 @@ class SpeechToText
         }
 
         try {
-            // Get the file content and determine proper extension
             $content = file_get_contents($audio->getRealPath());
-            $mimeType = $audio->getMimeType() ?? 'audio/webm';
+            $fileSize = strlen($content);
+
+            // Check minimum file size (very short recordings fail)
+            if ($fileSize < 1000) {
+                return TranscriptionResult::failure('Recording too short. Please speak for at least 1 second.');
+            }
+
+            // Use the original filename extension if available, otherwise detect from mime type
+            $originalExtension = pathinfo($audio->getClientOriginalName(), PATHINFO_EXTENSION);
+            $mimeType = $audio->getMimeType() ?? $audio->getClientMimeType() ?? 'audio/webm';
 
             // Map mime types to extensions that OpenAI accepts
-            $extension = match ($mimeType) {
-                'audio/webm' => 'webm',
-                'audio/mp3', 'audio/mpeg' => 'mp3',
-                'audio/wav', 'audio/x-wav' => 'wav',
-                'audio/mp4', 'audio/m4a', 'audio/x-m4a' => 'm4a',
-                'audio/ogg' => 'ogg',
+            $extension = $originalExtension ?: match (true) {
+                str_contains($mimeType, 'mp4') => 'mp4',
+                str_contains($mimeType, 'm4a') => 'm4a',
+                str_contains($mimeType, 'mp3'), str_contains($mimeType, 'mpeg') => 'mp3',
+                str_contains($mimeType, 'wav') => 'wav',
+                str_contains($mimeType, 'ogg') => 'ogg',
+                str_contains($mimeType, 'webm') => 'webm',
                 default => 'webm',
             };
 
             $filename = 'audio.'.$extension;
 
+            Log::debug('Whisper transcription request', [
+                'original_name' => $audio->getClientOriginalName(),
+                'mime_type' => $mimeType,
+                'extension' => $extension,
+                'file_size' => $fileSize,
+            ]);
+
             $response = Http::withToken($this->apiKey)
-                ->timeout(30)
+                ->timeout(60)
                 ->attach(
                     'file',
                     $content,
-                    $filename,
-                    ['Content-Type' => $mimeType]
+                    $filename
                 )
                 ->post('https://api.openai.com/v1/audio/transcriptions', [
                     'model' => $this->model,
-                    'language' => 'en',
                     'response_format' => 'json',
                 ]);
 
@@ -67,7 +81,7 @@ class SpeechToText
                     'body' => $response->body(),
                     'mime_type' => $mimeType,
                     'filename' => $filename,
-                    'file_size' => strlen($content),
+                    'file_size' => $fileSize,
                 ]);
 
                 return TranscriptionResult::failure('Transcription failed: '.$errorMessage);

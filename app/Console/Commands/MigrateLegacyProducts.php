@@ -25,7 +25,10 @@ class MigrateLegacyProducts extends Command
                             {--limit=0 : Number of products to migrate (0 for all)}
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing products and start fresh}
-                            {--skip-deleted : Skip soft-deleted products}';
+                            {--skip-deleted : Skip soft-deleted products}
+                            {--skip-categories : Skip building category mappings}
+                            {--skip-templates : Skip building template mappings}
+                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
 
     protected $description = 'Migrate products and variants from the legacy database';
 
@@ -124,20 +127,30 @@ class MigrateLegacyProducts extends Command
             }
         }
 
+        $syncDeletes = $this->option('sync-deletes');
+
         try {
             DB::beginTransaction();
 
             // Build category mapping from existing categories
-            $this->buildCategoryMapping($legacyStoreId, $newStore);
+            if (! $this->option('skip-categories')) {
+                $this->buildCategoryMapping($legacyStoreId, $newStore);
+            } else {
+                $this->info('Skipping category mapping (--skip-categories)');
+            }
 
             // Build template mapping
-            $this->buildTemplateMapping($legacyStoreId, $newStore);
+            if (! $this->option('skip-templates')) {
+                $this->buildTemplateMapping($legacyStoreId, $newStore);
+            } else {
+                $this->info('Skipping template mapping (--skip-templates)');
+            }
 
             // Build vendor mapping
             $this->buildVendorMapping($legacyStoreId, $newStore);
 
             // Migrate products
-            $this->migrateProducts($legacyStoreId, $newStore, $isDryRun, $limit, $skipDeleted);
+            $this->migrateProducts($legacyStoreId, $newStore, $isDryRun, $limit, $skipDeleted, $syncDeletes);
 
             if ($isDryRun) {
                 DB::rollBack();
@@ -426,9 +439,13 @@ class MigrateLegacyProducts extends Command
         $this->line("  Saved vendor map to {$vendorMapFile}");
     }
 
-    protected function migrateProducts(int $legacyStoreId, Store $newStore, bool $isDryRun, int $limit, bool $skipDeleted): void
+    protected function migrateProducts(int $legacyStoreId, Store $newStore, bool $isDryRun, int $limit, bool $skipDeleted, bool $syncDeletes = false): void
     {
         $this->info('Migrating products...');
+
+        if ($syncDeletes) {
+            $this->info('  Sync deletes enabled - will soft-delete products if legacy is soft-deleted');
+        }
 
         // Get or create default warehouse for inventory
         $this->defaultWarehouse = Warehouse::where('store_id', $newStore->id)
@@ -503,6 +520,17 @@ class MigrateLegacyProducts extends Command
 
             if ($existingProduct) {
                 $this->productMap[$legacyProduct->id] = $existingProduct->id;
+
+                // Sync soft-delete status if enabled
+                if ($syncDeletes && $legacyProduct->deleted_at && ! $existingProduct->deleted_at) {
+                    if (! $isDryRun) {
+                        $existingProduct->delete();
+                        $this->line("  Soft-deleted product #{$existingProduct->id} (legacy was deleted)");
+                    } else {
+                        $this->line("  Would soft-delete product #{$existingProduct->id} (legacy was deleted)");
+                    }
+                }
+
                 $skipped++;
 
                 continue;

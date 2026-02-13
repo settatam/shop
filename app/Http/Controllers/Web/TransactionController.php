@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateBuyTransactionRequest;
 use App\Models\Category;
+use App\Models\Image;
 use App\Models\NotificationChannel;
 use App\Models\NotificationLog;
 use App\Models\PrinterSetting;
@@ -13,6 +14,7 @@ use App\Models\TransactionItem;
 use App\Models\TransactionOffer;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
+use App\Services\Image\ImageService;
 use App\Services\Notifications\NotificationManager;
 use App\Services\Payments\PayPalPayoutsService;
 use App\Services\Shipping\ShippingLabelService;
@@ -31,6 +33,7 @@ class TransactionController extends Controller
         protected StoreContext $storeContext,
         protected TransactionService $transactionService,
         protected ShippingLabelService $shippingLabelService,
+        protected ImageService $imageService,
     ) {}
 
     public function index(Request $request): Response|RedirectResponse
@@ -123,6 +126,7 @@ class TransactionController extends Controller
             'returnLabel',
             'payouts',
             'notes.user',
+            'images', // Transaction-level attachments
         ]);
 
         // Get statuses based on transaction type
@@ -203,6 +207,12 @@ class TransactionController extends Controller
 
         return Inertia::render('transactions/Show', [
             'transaction' => $this->formatTransaction($transaction),
+            'attachments' => $transaction->images->map(fn ($image) => [
+                'id' => $image->id,
+                'url' => $image->url,
+                'thumbnail_url' => $image->thumbnail_url,
+                'alt_text' => $image->alt_text,
+            ]),
             'statuses' => $statuses,
             'paymentMethods' => $this->getPaymentMethods(),
             'teamMembers' => $teamMembers,
@@ -1716,5 +1726,56 @@ class TransactionController extends Controller
 
         return redirect()->route('web.transactions.show', $transaction)
             ->with('success', $message);
+    }
+
+    /**
+     * Upload attachments (ID photos, documentation) to a transaction.
+     */
+    public function uploadAttachments(Request $request, Transaction $transaction): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizeTransaction($transaction);
+
+        $request->validate([
+            'images' => ['required', 'array', 'min:1'],
+            'images.*' => ['image', 'max:10240'],
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+        $existingCount = $transaction->images()->count();
+
+        $images = $this->imageService->uploadMultiple(
+            files: $request->file('images'),
+            imageable: $transaction,
+            store: $store,
+            folder: 'transaction-attachments',
+            startSortOrder: $existingCount,
+            setFirstAsPrimary: false, // Transaction attachments don't need a primary
+        );
+
+        return response()->json([
+            'success' => true,
+            'attachments' => $images->map(fn ($image) => [
+                'id' => $image->id,
+                'url' => $image->url,
+                'thumbnail_url' => $image->thumbnail_url,
+                'alt_text' => $image->alt_text,
+            ]),
+        ]);
+    }
+
+    /**
+     * Delete an attachment from a transaction.
+     */
+    public function deleteAttachment(Transaction $transaction, Image $image): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizeTransaction($transaction);
+
+        if ($image->imageable_id !== $transaction->id || $image->imageable_type !== Transaction::class) {
+            return response()->json(['error' => 'Attachment not found'], 404);
+        }
+
+        $this->imageService->delete($image);
+
+        return response()->json(['success' => true]);
     }
 }

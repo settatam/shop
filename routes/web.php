@@ -336,6 +336,12 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('transactions/{transaction}/refresh-payout-status', [\App\Http\Controllers\Web\TransactionController::class, 'refreshPayoutStatus'])->name('web.transactions.refresh-payout-status');
     });
 
+    // Transaction Attachments (ID photos, documentation)
+    Route::middleware('permission:transactions.update')->group(function () {
+        Route::post('transactions/{transaction}/attachments', [\App\Http\Controllers\Web\TransactionController::class, 'uploadAttachments'])->name('web.transactions.upload-attachments');
+        Route::delete('transactions/{transaction}/attachments/{image}', [\App\Http\Controllers\Web\TransactionController::class, 'deleteAttachment'])->name('web.transactions.delete-attachment');
+    });
+
     // SMS Messaging
     Route::post('transactions/{transaction}/send-sms', [\App\Http\Controllers\Web\TransactionController::class, 'sendSms'])->name('web.transactions.send-sms')->middleware('permission:transactions.update');
 

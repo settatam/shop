@@ -220,11 +220,13 @@ const currentViewTotals = computed(() => ({
                     trend-label="vs last week"
                     :sparkline-data="addedData"
                 />
+                <!-- Projected Profit - temporarily hidden
                 <StatCard
                     title="Projected Profit"
                     :value="formatCurrency(totals.projected_profit)"
                     :class="totals.projected_profit >= 0 ? '' : 'text-red-600'"
                 />
+                -->
             </div>
 
             <!-- Charts Row -->
@@ -350,7 +352,7 @@ const currentViewTotals = computed(() => ({
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Cost Added ($)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Deleted This Week</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Deleted Cost ($)</th>
-                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Projected Profit ($)</th>
+                                <!-- <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Projected Profit ($)</th> -->
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -403,9 +405,9 @@ const currentViewTotals = computed(() => ({
                                     <span v-if="row.deleted_cost > 0">-{{ formatCurrency(row.deleted_cost) }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="row.projected_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                <!-- <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="row.projected_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ formatCurrency(row.projected_profit) }}
-                                </td>
+                                </td> -->
                             </tr>
 
                             <!-- Empty state -->
@@ -448,9 +450,9 @@ const currentViewTotals = computed(() => ({
                                     <span v-if="currentViewTotals.deleted_cost > 0">-{{ formatCurrency(currentViewTotals.deleted_cost) }}</span>
                                     <span v-else>-</span>
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="currentViewTotals.projected_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                <!-- <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="currentViewTotals.projected_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ formatCurrency(currentViewTotals.projected_profit) }}
-                                </td>
+                                </td> -->
                             </tr>
                         </tfoot>
                     </table>

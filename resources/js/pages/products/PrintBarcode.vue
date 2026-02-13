@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { onMounted, ref, computed, watch } from 'vue';
-import { ArrowLeftIcon, PrinterIcon, ComputerDesktopIcon, ExclamationTriangleIcon, WifiIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, PrinterIcon, ComputerDesktopIcon, ExclamationTriangleIcon, WifiIcon, AdjustmentsHorizontalIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/20/solid';
 import JsBarcode from 'jsbarcode';
 import { useZebraPrint, ZPL, type PrinterSettings } from '@/composables/useZebraPrint';
 
@@ -112,6 +112,68 @@ const selectedPrinterSettingId = ref<number | null>(
     props.printerSettings.find(s => s.is_default)?.id || props.printerSettings[0]?.id || null
 );
 
+// Inline settings editing
+const showSettingsPanel = ref(false);
+const savingSettings = ref(false);
+const settingsChanged = ref(false);
+
+// Local editable settings (copy of selected printer setting)
+const editableSettings = ref({
+    label_width: 406,
+    label_height: 203,
+    top_offset: 30,
+    left_offset: 0,
+    right_offset: 0,
+    text_size: 20,
+    barcode_height: 50,
+    line_height: 25,
+});
+
+// Initialize editable settings from selected printer
+function initEditableSettings() {
+    const setting = props.printerSettings.find(s => s.id === selectedPrinterSettingId.value);
+    if (setting) {
+        editableSettings.value = {
+            label_width: setting.label_width,
+            label_height: setting.label_height,
+            top_offset: setting.top_offset,
+            left_offset: setting.left_offset,
+            right_offset: setting.right_offset,
+            text_size: setting.text_size,
+            barcode_height: setting.barcode_height,
+            line_height: setting.line_height,
+        };
+    }
+    settingsChanged.value = false;
+}
+
+// Watch for setting changes
+watch(editableSettings, () => {
+    settingsChanged.value = true;
+    // Regenerate barcodes when settings change
+    generateBarcodes();
+}, { deep: true });
+
+// Save settings to server
+async function saveSettings() {
+    if (!selectedPrinterSettingId.value || savingSettings.value) return;
+
+    savingSettings.value = true;
+
+    router.put(`/settings/printers/${selectedPrinterSettingId.value}`, {
+        ...props.printerSettings.find(s => s.id === selectedPrinterSettingId.value),
+        ...editableSettings.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            settingsChanged.value = false;
+        },
+        onFinish: () => {
+            savingSettings.value = false;
+        },
+    });
+}
+
 // Zebra Browser Print
 const { status: zebraStatus, printing, connect, selectPrinter, print, networkPrint } = useZebraPrint();
 
@@ -119,18 +181,19 @@ const { status: zebraStatus, printing, connect, selectPrinter, print, networkPri
 const networkPrinters = computed(() => props.printerSettings.filter(s => s.network_print_enabled));
 const hasNetworkPrinters = computed(() => networkPrinters.value.length > 0);
 
+// Use editable settings for real-time preview
 const selectedPrinterSetting = computed<PrinterSettings | undefined>(() => {
-    const setting = props.printerSettings.find(s => s.id === selectedPrinterSettingId.value);
-    if (!setting) return undefined;
+    if (!selectedPrinterSettingId.value) return undefined;
+    // Return editable settings for real-time preview
     return {
-        top_offset: setting.top_offset,
-        left_offset: setting.left_offset,
-        right_offset: setting.right_offset,
-        text_size: setting.text_size,
-        barcode_height: setting.barcode_height,
-        line_height: setting.line_height,
-        label_width: setting.label_width,
-        label_height: setting.label_height,
+        top_offset: editableSettings.value.top_offset,
+        left_offset: editableSettings.value.left_offset,
+        right_offset: editableSettings.value.right_offset,
+        text_size: editableSettings.value.text_size,
+        barcode_height: editableSettings.value.barcode_height,
+        line_height: editableSettings.value.line_height,
+        label_width: editableSettings.value.label_width,
+        label_height: editableSettings.value.label_height,
     };
 });
 
@@ -216,14 +279,18 @@ const generateBarcodes = () => {
     });
 };
 
-// Regenerate barcodes when printer setting changes
+// Regenerate barcodes and reset editable settings when printer setting changes
 watch(selectedPrinterSettingId, () => {
+    initEditableSettings();
     generateBarcodes();
 });
 
 // Initialize selected variants to all
 onMounted(async () => {
     selectedVariants.value = props.product.variants.map(v => v.id);
+
+    // Initialize editable settings from selected printer
+    initEditableSettings();
 
     // Generate browser barcodes
     generateBarcodes();
@@ -495,9 +562,21 @@ const totalLabels = computed(() => {
 
                         <!-- Label Settings -->
                         <div v-if="printerSettings.length > 0">
-                            <label for="printerSetting" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Label Settings
-                            </label>
+                            <div class="flex items-center justify-between">
+                                <label for="printerSetting" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Label Settings
+                                </label>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                    @click="showSettingsPanel = !showSettingsPanel"
+                                >
+                                    <AdjustmentsHorizontalIcon class="size-4" />
+                                    {{ showSettingsPanel ? 'Hide' : 'Adjust' }}
+                                    <ChevronUpIcon v-if="showSettingsPanel" class="size-3" />
+                                    <ChevronDownIcon v-else class="size-3" />
+                                </button>
+                            </div>
                             <select
                                 id="printerSetting"
                                 v-model="selectedPrinterSettingId"
@@ -507,6 +586,133 @@ const totalLabels = computed(() => {
                                     {{ setting.name }}{{ setting.is_default ? ' (Default)' : '' }}
                                 </option>
                             </select>
+
+                            <!-- Inline Settings Panel -->
+                            <Transition
+                                enter-active-class="transition ease-out duration-200"
+                                enter-from-class="opacity-0 -translate-y-2"
+                                enter-to-class="opacity-100 translate-y-0"
+                                leave-active-class="transition ease-in duration-150"
+                                leave-from-class="opacity-100 translate-y-0"
+                                leave-to-class="opacity-0 -translate-y-2"
+                            >
+                                <div v-if="showSettingsPanel" class="mt-4 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">Adjust Settings</h4>
+                                        <div class="flex items-center gap-2">
+                                            <span v-if="settingsChanged" class="text-xs text-amber-600 dark:text-amber-400">Unsaved changes</span>
+                                            <button
+                                                type="button"
+                                                class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+                                                :disabled="!settingsChanged || savingSettings"
+                                                @click="saveSettings"
+                                            >
+                                                {{ savingSettings ? 'Saving...' : 'Save' }}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                        Changes preview instantly. Click Save to keep them.
+                                    </p>
+
+                                    <!-- Label Dimensions -->
+                                    <div class="grid grid-cols-2 gap-3 mb-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Label Width (dots)</label>
+                                            <input
+                                                v-model.number="editableSettings.label_width"
+                                                type="number"
+                                                min="100"
+                                                max="1000"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Label Height (dots)</label>
+                                            <input
+                                                v-model.number="editableSettings.label_height"
+                                                type="number"
+                                                min="50"
+                                                max="1000"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Offsets -->
+                                    <div class="grid grid-cols-3 gap-3 mb-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Top Offset</label>
+                                            <input
+                                                v-model.number="editableSettings.top_offset"
+                                                type="number"
+                                                min="0"
+                                                max="200"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Left Offset</label>
+                                            <input
+                                                v-model.number="editableSettings.left_offset"
+                                                type="number"
+                                                min="0"
+                                                max="200"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Right Offset</label>
+                                            <input
+                                                v-model.number="editableSettings.right_offset"
+                                                type="number"
+                                                min="0"
+                                                max="200"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <!-- Text & Barcode Settings -->
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Text Size</label>
+                                            <input
+                                                v-model.number="editableSettings.text_size"
+                                                type="number"
+                                                min="8"
+                                                max="50"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Barcode Height</label>
+                                            <input
+                                                v-model.number="editableSettings.barcode_height"
+                                                type="number"
+                                                min="20"
+                                                max="150"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Line Height</label>
+                                            <input
+                                                v-model.number="editableSettings.line_height"
+                                                type="number"
+                                                min="8"
+                                                max="50"
+                                                class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <p class="mt-3 text-xs text-gray-400 dark:text-gray-500">
+                                        203 dots = 1 inch at standard Zebra resolution
+                                    </p>
+                                </div>
+                            </Transition>
                         </div>
                         <div v-else class="text-sm text-gray-500 dark:text-gray-400">
                             <a href="/settings/printers" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
@@ -535,9 +741,19 @@ const totalLabels = computed(() => {
                     <div class="grid grid-cols-2 gap-4">
                         <!-- Network Printer Selection -->
                         <div>
-                            <label for="networkPrinter" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Select Network Printer
-                            </label>
+                            <div class="flex items-center justify-between">
+                                <label for="networkPrinter" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Select Network Printer
+                                </label>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                    @click="showSettingsPanel = !showSettingsPanel"
+                                >
+                                    <AdjustmentsHorizontalIcon class="size-4" />
+                                    {{ showSettingsPanel ? 'Hide' : 'Adjust' }}
+                                </button>
+                            </div>
                             <select
                                 id="networkPrinter"
                                 v-model="selectedPrinterSettingId"
@@ -564,6 +780,133 @@ const totalLabels = computed(() => {
                             />
                         </div>
                     </div>
+
+                    <!-- Inline Settings Panel for Network Mode -->
+                    <Transition
+                        enter-active-class="transition ease-out duration-200"
+                        enter-from-class="opacity-0 -translate-y-2"
+                        enter-to-class="opacity-100 translate-y-0"
+                        leave-active-class="transition ease-in duration-150"
+                        leave-from-class="opacity-100 translate-y-0"
+                        leave-to-class="opacity-0 -translate-y-2"
+                    >
+                        <div v-if="showSettingsPanel" class="p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-white">Adjust Settings</h4>
+                                <div class="flex items-center gap-2">
+                                    <span v-if="settingsChanged" class="text-xs text-amber-600 dark:text-amber-400">Unsaved changes</span>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+                                        :disabled="!settingsChanged || savingSettings"
+                                        @click="saveSettings"
+                                    >
+                                        {{ savingSettings ? 'Saving...' : 'Save' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                Changes preview instantly. Click Save to keep them.
+                            </p>
+
+                            <!-- Label Dimensions -->
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Label Width (dots)</label>
+                                    <input
+                                        v-model.number="editableSettings.label_width"
+                                        type="number"
+                                        min="100"
+                                        max="1000"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Label Height (dots)</label>
+                                    <input
+                                        v-model.number="editableSettings.label_height"
+                                        type="number"
+                                        min="50"
+                                        max="1000"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Offsets -->
+                            <div class="grid grid-cols-3 gap-3 mb-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Top Offset</label>
+                                    <input
+                                        v-model.number="editableSettings.top_offset"
+                                        type="number"
+                                        min="0"
+                                        max="200"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Left Offset</label>
+                                    <input
+                                        v-model.number="editableSettings.left_offset"
+                                        type="number"
+                                        min="0"
+                                        max="200"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Right Offset</label>
+                                    <input
+                                        v-model.number="editableSettings.right_offset"
+                                        type="number"
+                                        min="0"
+                                        max="200"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Text & Barcode Settings -->
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Text Size</label>
+                                    <input
+                                        v-model.number="editableSettings.text_size"
+                                        type="number"
+                                        min="8"
+                                        max="50"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Barcode Height</label>
+                                    <input
+                                        v-model.number="editableSettings.barcode_height"
+                                        type="number"
+                                        min="20"
+                                        max="150"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Line Height</label>
+                                    <input
+                                        v-model.number="editableSettings.line_height"
+                                        type="number"
+                                        min="8"
+                                        max="50"
+                                        class="mt-1 block w-full rounded-md border-0 py-1 px-2 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                            </div>
+
+                            <p class="mt-3 text-xs text-gray-400 dark:text-gray-500">
+                                203 dots = 1 inch at standard Zebra resolution
+                            </p>
+                        </div>
+                    </Transition>
 
                     <!-- Error Message -->
                     <div v-if="zebraStatus.error" class="p-3 rounded-md bg-red-50 dark:bg-red-900/20">

@@ -2,6 +2,7 @@
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { NotesSection } from '@/components/notes';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
+import AttachmentsSection from '@/components/transactions/AttachmentsSection.vue';
 import ShippingLabelsSection from '@/components/transactions/ShippingLabelsSection.vue';
 import SmsMessagesSection from '@/components/transactions/SmsMessagesSection.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -329,8 +330,16 @@ interface CustomerAddress {
     phone: string | null;
 }
 
+interface Attachment {
+    id: number;
+    url: string;
+    thumbnail_url: string | null;
+    alt_text: string | null;
+}
+
 interface Props {
     transaction: Transaction;
+    attachments?: Attachment[];
     statuses: Status[];
     paymentMethods: PaymentMethod[];
     teamMembers?: TeamMember[];
@@ -2077,6 +2086,13 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         :notes="transaction.note_entries ?? []"
                         notable-type="transaction"
                         :notable-id="transaction.id"
+                    />
+
+                    <!-- Attachments Section (ID photos, documentation) -->
+                    <AttachmentsSection
+                        :transaction-id="transaction.id"
+                        :attachments="attachments ?? []"
+                        @updated="router.reload({ only: ['attachments'] })"
                     />
 
                     <!-- Activity Log -->

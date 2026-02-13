@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 class TextToSpeech
 {
-    protected string $apiKey;
+    protected ?string $apiKey;
 
     protected string $model;
 
@@ -28,11 +28,19 @@ class TextToSpeech
     public function synthesize(string $text): SynthesisResult
     {
         if (! $this->apiKey) {
+            Log::warning('TTS: OpenAI API key not configured');
+
             return SynthesisResult::failure('OpenAI API key not configured');
         }
 
         // Truncate text to avoid excessive TTS costs
         $text = Str::limit($text, 4000, '...');
+
+        Log::debug('TTS: Starting synthesis', [
+            'text_length' => strlen($text),
+            'model' => $this->model,
+            'voice' => $this->voice,
+        ]);
 
         try {
             $response = Http::withToken($this->apiKey)
@@ -53,16 +61,29 @@ class TextToSpeech
                 return SynthesisResult::failure('Speech synthesis failed: '.$response->status());
             }
 
+            // Ensure directory exists
+            $directory = 'voice/responses';
+            if (! Storage::disk('public')->exists($directory)) {
+                Storage::disk('public')->makeDirectory($directory);
+            }
+
             // Save the audio file
-            $filename = 'voice/responses/'.Str::uuid().'.mp3';
+            $filename = $directory.'/'.Str::uuid().'.mp3';
             Storage::disk('public')->put($filename, $response->body());
 
             $url = Storage::disk('public')->url($filename);
+
+            Log::debug('TTS: Synthesis complete', [
+                'filename' => $filename,
+                'url' => $url,
+                'file_size' => strlen($response->body()),
+            ]);
 
             return SynthesisResult::success($url, $filename);
         } catch (\Throwable $e) {
             Log::error('TTS synthesis error', [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return SynthesisResult::failure($e->getMessage());

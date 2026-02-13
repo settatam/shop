@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/vue/20/solid';
+
+type InvoiceType = 'customer' | 'store';
 
 interface TransactionItem {
     id: number;
@@ -8,7 +11,8 @@ interface TransactionItem {
     description: string | null;
     category: { id: number; name: string } | null;
     quantity: number;
-    buy_price: number | null;
+    price: number | null; // Estimated value
+    buy_price: number | null; // Actual purchase price
     images: { url: string }[];
 }
 
@@ -187,6 +191,28 @@ const getPaymentAddress = () => {
 
 const paymentAddress = getPaymentAddress();
 
+// Invoice type toggle (customer vs store)
+const invoiceType = ref<InvoiceType>('customer');
+
+// Calculate total estimated value
+const totalEstimatedValue = computed(() => {
+    return props.transaction.items.reduce((sum, item) => {
+        return sum + ((item.price || 0) * (item.quantity || 1));
+    }, 0);
+});
+
+// Calculate total profit (estimated value - buy price)
+const totalProfit = computed(() => {
+    return totalEstimatedValue.value - total;
+});
+
+// Get item profit
+const getItemProfit = (item: TransactionItem) => {
+    const estValue = (item.price || 0) * (item.quantity || 1);
+    const buyPrice = (item.buy_price || 0) * (item.quantity || 1);
+    return estValue - buyPrice;
+};
+
 const print = () => {
     window.print();
 };
@@ -209,14 +235,46 @@ const print = () => {
                         </Link>
                         <h1 class="text-lg font-semibold text-gray-900">Print Invoice</h1>
                     </div>
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                        @click="print"
-                    >
-                        <PrinterIcon class="-ml-0.5 size-5" />
-                        Print
-                    </button>
+                    <div class="flex items-center gap-4">
+                        <!-- Invoice Type Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">Type:</span>
+                            <div class="inline-flex rounded-md shadow-sm">
+                                <button
+                                    type="button"
+                                    :class="[
+                                        'px-3 py-1.5 text-sm font-medium rounded-l-md border',
+                                        invoiceType === 'customer'
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                    ]"
+                                    @click="invoiceType = 'customer'"
+                                >
+                                    Customer
+                                </button>
+                                <button
+                                    type="button"
+                                    :class="[
+                                        'px-3 py-1.5 text-sm font-medium rounded-r-md border-t border-b border-r',
+                                        invoiceType === 'store'
+                                            ? 'bg-indigo-600 text-white border-indigo-600'
+                                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                    ]"
+                                    @click="invoiceType = 'store'"
+                                >
+                                    Store
+                                </button>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                            @click="print"
+                        >
+                            <PrinterIcon class="-ml-0.5 size-5" />
+                            Print
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -318,8 +376,16 @@ const print = () => {
                                         <th scope="col" class="hidden py-3.5 px-3 text-right text-sm font-normal text-slate-700 sm:table-cell">
                                             Quantity
                                         </th>
+                                        <!-- Store Invoice Only: Est Value -->
+                                        <th v-if="invoiceType === 'store'" scope="col" class="hidden py-3.5 px-3 text-right text-sm font-normal text-slate-700 sm:table-cell">
+                                            Est. Value
+                                        </th>
                                         <th scope="col" class="py-3.5 pl-3 pr-4 text-right text-sm font-normal text-slate-700 sm:pr-6 md:pr-0">
-                                            Amount
+                                            {{ invoiceType === 'store' ? 'Buy Price' : 'Amount' }}
+                                        </th>
+                                        <!-- Store Invoice Only: Est Profit -->
+                                        <th v-if="invoiceType === 'store'" scope="col" class="hidden py-3.5 px-3 text-right text-sm font-normal text-slate-700 sm:table-cell">
+                                            Est. Profit
                                         </th>
                                     </tr>
                                 </thead>
@@ -341,15 +407,23 @@ const print = () => {
                                         <td class="hidden px-3 py-4 text-sm text-right text-slate-500 sm:table-cell">
                                             {{ item.quantity || 1 }}
                                         </td>
+                                        <!-- Store Invoice Only: Est Value -->
+                                        <td v-if="invoiceType === 'store'" class="hidden px-3 py-4 text-sm text-right text-slate-500 sm:table-cell">
+                                            {{ formatCurrency((item.price || 0) * (item.quantity || 1)) }}
+                                        </td>
                                         <td class="py-4 pl-3 pr-4 text-sm text-right text-slate-500 sm:pr-6 md:pr-0">
                                             {{ formatCurrency((item.buy_price || 0) * (item.quantity || 1)) }}
+                                        </td>
+                                        <!-- Store Invoice Only: Est Profit -->
+                                        <td v-if="invoiceType === 'store'" class="hidden px-3 py-4 text-sm text-right sm:table-cell" :class="getItemProfit(item) >= 0 ? 'text-green-600' : 'text-red-600'">
+                                            {{ formatCurrency(getItemProfit(item)) }}
                                         </td>
                                     </tr>
                                 </tbody>
                                 <tfoot>
                                     <!-- Payment Modes (if multiple) -->
                                     <tr v-if="transaction.payments && transaction.payments.length > 1">
-                                        <th scope="row" colspan="4" class="hidden pt-6 pl-6 pr-3 text-sm font-light text-right text-slate-500 sm:table-cell md:pl-0">
+                                        <th scope="row" :colspan="invoiceType === 'store' ? 6 : 4" class="hidden pt-6 pl-6 pr-3 text-sm font-light text-right text-slate-500 sm:table-cell md:pl-0">
                                             Payment Modes
                                         </th>
                                         <td class="pt-4 pl-3 pr-4 text-right text-slate-500 sm:pr-6 md:pr-0">
@@ -360,23 +434,32 @@ const print = () => {
                                                 </tr>
                                             </table>
                                         </td>
+                                        <td v-if="invoiceType === 'store'"></td>
                                     </tr>
 
-                                    <!-- Subtotal -->
+                                    <!-- Subtotal / Totals Row -->
                                     <tr>
-                                        <th scope="row" colspan="4" class="hidden pt-6 pl-6 pr-3 text-sm font-light text-right text-slate-500 sm:table-cell md:pl-0">
-                                            Subtotal
+                                        <th scope="row" :colspan="invoiceType === 'store' ? 4 : 4" class="hidden pt-6 pl-6 pr-3 text-sm font-light text-right text-slate-500 sm:table-cell md:pl-0">
+                                            {{ invoiceType === 'store' ? 'Totals' : 'Subtotal' }}
                                         </th>
                                         <th scope="row" class="pt-6 pl-4 pr-3 text-sm font-light text-left text-slate-500 sm:hidden">
-                                            Subtotal
+                                            {{ invoiceType === 'store' ? 'Totals' : 'Subtotal' }}
                                         </th>
+                                        <!-- Store Invoice: Est Value Total -->
+                                        <td v-if="invoiceType === 'store'" class="hidden pt-6 pl-3 pr-4 text-sm text-right text-slate-500 sm:table-cell">
+                                            {{ formatCurrency(totalEstimatedValue) }}
+                                        </td>
                                         <td class="pt-6 pl-3 pr-4 text-sm text-right text-slate-500 sm:pr-6 md:pr-0">
                                             {{ formatCurrency(total) }}
                                         </td>
+                                        <!-- Store Invoice: Est Profit Total -->
+                                        <td v-if="invoiceType === 'store'" class="hidden pt-6 pl-3 pr-4 text-sm font-semibold text-right sm:table-cell" :class="totalProfit >= 0 ? 'text-green-600' : 'text-red-600'">
+                                            {{ formatCurrency(totalProfit) }}
+                                        </td>
                                     </tr>
 
-                                    <!-- Total -->
-                                    <tr>
+                                    <!-- Total (Customer Invoice Only) -->
+                                    <tr v-if="invoiceType === 'customer'">
                                         <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-sm font-normal text-right text-slate-700 sm:table-cell md:pl-0">
                                             Total
                                         </th>

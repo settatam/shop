@@ -170,6 +170,9 @@ class VoiceService
      */
     protected function callClaude(string $apiKey, string $systemPrompt, array $messages, array $tools): array
     {
+        // Fix tool schemas - empty arrays must be objects for Anthropic API
+        $tools = $this->normalizeToolSchemas($tools);
+
         $response = Http::withHeaders([
             'x-api-key' => $apiKey,
             'anthropic-version' => '2023-06-01',
@@ -254,5 +257,30 @@ TOOLS AVAILABLE:
 
 Always use the appropriate tool to get real data. Never guess or make up numbers.
 PROMPT;
+    }
+
+    /**
+     * Normalize tool schemas for Anthropic API.
+     * Ensures empty arrays are converted to objects where required.
+     *
+     * @param  array<int, array<string, mixed>>  $tools
+     * @return array<int, array<string, mixed>>
+     */
+    protected function normalizeToolSchemas(array $tools): array
+    {
+        return array_map(function (array $tool) {
+            if (isset($tool['input_schema'])) {
+                $schema = $tool['input_schema'];
+
+                // Ensure properties is an object (empty object if empty array)
+                if (isset($schema['properties']) && is_array($schema['properties']) && empty($schema['properties'])) {
+                    $schema['properties'] = (object) [];
+                }
+
+                $tool['input_schema'] = $schema;
+            }
+
+            return $tool;
+        }, $tools);
     }
 }

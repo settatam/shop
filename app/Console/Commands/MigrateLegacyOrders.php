@@ -24,7 +24,8 @@ class MigrateLegacyOrders extends Command
                             {--limit=0 : Number of orders to migrate (0 for all)}
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing orders and start fresh}
-                            {--with-payments : Migrate payments for orders}';
+                            {--with-payments : Migrate payments for orders}
+                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
 
     protected $description = 'Migrate orders, order items, and payments from the legacy database';
 
@@ -110,8 +111,13 @@ class MigrateLegacyOrders extends Command
             // Build user mapping
             $this->buildUserMapping($legacyStoreId);
 
+            $syncDeletes = $this->option('sync-deletes');
+            if ($syncDeletes) {
+                $this->info('Sync deletes enabled - will soft-delete orders if legacy is soft-deleted');
+            }
+
             // Migrate orders
-            $this->migrateOrders($legacyStoreId, $isDryRun, $limit, $withPayments);
+            $this->migrateOrders($legacyStoreId, $isDryRun, $limit, $withPayments, $syncDeletes);
 
             if ($isDryRun) {
                 DB::rollBack();
@@ -255,7 +261,7 @@ class MigrateLegacyOrders extends Command
         $this->line('  Mapped '.count($this->userMap).' users');
     }
 
-    protected function migrateOrders(int $legacyStoreId, bool $isDryRun, int $limit, bool $withPayments): void
+    protected function migrateOrders(int $legacyStoreId, bool $isDryRun, int $limit, bool $withPayments, bool $syncDeletes = false): void
     {
         $this->info('Migrating orders...');
 
@@ -272,6 +278,7 @@ class MigrateLegacyOrders extends Command
         $orderCount = 0;
         $itemCount = 0;
         $skipped = 0;
+        $synced = 0;
 
         foreach ($legacyOrders as $legacyOrder) {
             // Check if order already exists by order_id (maintain the original)
@@ -284,6 +291,17 @@ class MigrateLegacyOrders extends Command
 
             if ($existingOrder) {
                 $this->orderMap[$legacyOrder->id] = $existingOrder->id;
+
+                // Sync soft-delete status if enabled
+                if ($syncDeletes && $legacyOrder->deleted_at && ! $existingOrder->deleted_at) {
+                    if (! $isDryRun) {
+                        $existingOrder->delete();
+                        $synced++;
+                    } else {
+                        $this->line("  Would soft-delete order #{$existingOrder->id} (legacy was deleted)");
+                    }
+                }
+
                 $skipped++;
 
                 continue;
@@ -380,7 +398,7 @@ class MigrateLegacyOrders extends Command
             }
         }
 
-        $this->line("  Created {$orderCount} orders with {$itemCount} items, {$this->invoiceCount} invoices, {$this->paymentCount} payments, skipped {$skipped} existing");
+        $this->line("  Created {$orderCount} orders with {$itemCount} items, {$this->invoiceCount} invoices, {$this->paymentCount} payments, skipped {$skipped} existing, synced {$synced} deletes");
     }
 
     protected function migrateOrderItems(int $legacyOrderId, int $newOrderId, int $legacyStoreId): int

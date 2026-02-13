@@ -14,8 +14,11 @@ const error = ref('');
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let audioElement: HTMLAudioElement | null = null;
+let recordingStartTime: number = 0;
+let currentStream: MediaStream | null = null;
 
 const canRecord = ref(false);
+const MIN_RECORDING_MS = 800; // Minimum recording duration in milliseconds
 
 onMounted(async () => {
     // Check if browser supports audio recording
@@ -25,9 +28,30 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-    stopRecording();
+    cancelRecording();
     stopAudio();
 });
+
+// Get the best supported audio mime type for recording
+function getSupportedMimeType(): string {
+    // Prefer formats that work well with OpenAI Whisper
+    const mimeTypes = [
+        'audio/mp4',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/webm;codecs=opus',
+    ];
+
+    for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+            return mimeType;
+        }
+    }
+
+    return ''; // Let browser choose default
+}
+
+let currentMimeType = '';
 
 async function startRecording() {
     if (!canRecord.value) {
@@ -41,9 +65,15 @@ async function startRecording() {
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus'
-        });
+        currentStream = stream;
+        currentMimeType = getSupportedMimeType();
+
+        const options: MediaRecorderOptions = {};
+        if (currentMimeType) {
+            options.mimeType = currentMimeType;
+        }
+
+        mediaRecorder = new MediaRecorder(stream, options);
         audioChunks = [];
 
         mediaRecorder.ondataavailable = (event) => {
@@ -53,14 +83,28 @@ async function startRecording() {
         };
 
         mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            await processAudio(audioBlob);
+            const recordingDuration = Date.now() - recordingStartTime;
 
             // Stop all tracks
-            stream.getTracks().forEach(track => track.stop());
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+
+            // Check if recording was long enough
+            if (recordingDuration < MIN_RECORDING_MS) {
+                error.value = 'Recording too short. Hold the button and speak for at least 1 second.';
+                return;
+            }
+
+            const blobType = currentMimeType || mediaRecorder?.mimeType || 'audio/webm';
+            const audioBlob = new Blob(audioChunks, { type: blobType });
+            await processAudio(audioBlob);
         };
 
-        mediaRecorder.start();
+        // Start recording with timeslice to collect data periodically
+        mediaRecorder.start(100);
+        recordingStartTime = Date.now();
         isRecording.value = true;
     } catch (err) {
         console.error('Failed to start recording:', err);
@@ -75,13 +119,44 @@ function stopRecording() {
     }
 }
 
+function cancelRecording() {
+    if (mediaRecorder && isRecording.value) {
+        // Remove the onstop handler to prevent processing
+        mediaRecorder.onstop = null;
+        mediaRecorder.stop();
+        isRecording.value = false;
+
+        // Stop all tracks
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+            currentStream = null;
+        }
+    }
+}
+
+function getFileExtension(mimeType: string): string {
+    const mimeToExt: Record<string, string> = {
+        'audio/mp4': 'mp4',
+        'audio/m4a': 'm4a',
+        'audio/webm': 'webm',
+        'audio/ogg': 'ogg',
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+    };
+
+    // Handle mime types with codecs (e.g., 'audio/webm;codecs=opus')
+    const baseMime = mimeType.split(';')[0];
+    return mimeToExt[baseMime] || 'webm';
+}
+
 async function processAudio(audioBlob: Blob) {
     isProcessing.value = true;
     error.value = '';
 
     try {
+        const extension = getFileExtension(audioBlob.type);
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('audio', audioBlob, `recording.${extension}`);
 
         const res = await axios.post('/api/v1/voice/query', formData, {
             headers: {
@@ -147,14 +222,14 @@ function stopAudio() {
 function togglePanel() {
     isOpen.value = !isOpen.value;
     if (!isOpen.value) {
-        stopRecording();
+        cancelRecording();
         stopAudio();
     }
 }
 
 function close() {
     isOpen.value = false;
-    stopRecording();
+    cancelRecording();
     stopAudio();
 }
 
