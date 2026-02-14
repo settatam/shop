@@ -265,22 +265,24 @@ class MigrateLegacyCategories extends Command
 
     protected function migrateCategory(object $legacyCategory): void
     {
-        // Check if already migrated - match by name and level since store_categories can have duplicate names at different levels
-        $existing = Category::withoutGlobalScopes()
-            ->where('store_id', $this->newStoreId)
-            ->where('name', $legacyCategory->name)
-            ->where('level', $legacyCategory->level ?? 0)
-            ->first();
+        // Check if already migrated by ID (preserving original IDs)
+        $existing = Category::withoutGlobalScopes()->find($legacyCategory->id);
 
         if ($existing) {
-            $this->categoryMap[$legacyCategory->id] = $existing->id;
-            $this->line("  Category '{$legacyCategory->name}' (level {$legacyCategory->level}) already exists, mapping to ID {$existing->id}");
+            // Verify it belongs to the correct store
+            if ($existing->store_id == $this->newStoreId) {
+                $this->categoryMap[$legacyCategory->id] = $existing->id;
+                $this->line("  Category '{$legacyCategory->name}' (ID {$legacyCategory->id}) already exists");
 
-            return;
+                return;
+            }
+            // ID conflict with another store - we'll create with a new ID
+            $this->warn("  Category ID {$legacyCategory->id} taken by store {$existing->store_id}, will generate new ID");
         }
 
         if ($this->dryRun) {
-            $this->line("  [DRY RUN] Would create category: {$legacyCategory->name} (level {$legacyCategory->level})");
+            $this->line("  [DRY RUN] Would create category: {$legacyCategory->name} (ID {$legacyCategory->id}, level {$legacyCategory->level})");
+            $this->categoryMap[$legacyCategory->id] = $legacyCategory->id;
 
             return;
         }
@@ -291,21 +293,47 @@ class MigrateLegacyCategories extends Command
             $templateId = $this->templateMap[$legacyCategory->html_form_id];
         }
 
-        // Create the category
-        $category = Category::create([
-            'store_id' => $this->newStoreId,
-            'name' => $legacyCategory->name,
-            'slug' => Str::slug($legacyCategory->name).'-'.Str::random(4),
-            'description' => null, // store_categories doesn't have description
-            'type' => 'transaction_item_category', // Default type for store categories
-            'template_id' => $templateId,
-            'sort_order' => $legacyCategory->sort_order ?? 0,
-            'level' => $legacyCategory->level ?? 0,
-            'parent_id' => null, // Will be set in second pass
-        ]);
+        // Try to preserve original ID, otherwise let DB generate new one
+        $canPreserveId = ! $existing;
 
-        $this->categoryMap[$legacyCategory->id] = $category->id;
-        $this->line("  Created category: {$legacyCategory->name} (level {$legacyCategory->level}, ID: {$category->id})");
+        if ($canPreserveId) {
+            // Preserve original ID
+            DB::table('categories')->insert([
+                'id' => $legacyCategory->id,
+                'store_id' => $this->newStoreId,
+                'name' => $legacyCategory->name,
+                'slug' => Str::slug($legacyCategory->name).'-'.Str::random(4),
+                'description' => null,
+                'type' => 'transaction_item_category',
+                'template_id' => $templateId,
+                'sort_order' => $legacyCategory->sort_order ?? 0,
+                'level' => $legacyCategory->level ?? 0,
+                'parent_id' => null,
+                'created_at' => $legacyCategory->created_at ?? now(),
+                'updated_at' => $legacyCategory->updated_at ?? now(),
+            ]);
+
+            $this->categoryMap[$legacyCategory->id] = $legacyCategory->id;
+            $this->line("  Created category: {$legacyCategory->name} (ID {$legacyCategory->id}, level {$legacyCategory->level})");
+        } else {
+            // ID collision - generate new ID
+            $newId = DB::table('categories')->insertGetId([
+                'store_id' => $this->newStoreId,
+                'name' => $legacyCategory->name,
+                'slug' => Str::slug($legacyCategory->name).'-'.Str::random(4),
+                'description' => null,
+                'type' => 'transaction_item_category',
+                'template_id' => $templateId,
+                'sort_order' => $legacyCategory->sort_order ?? 0,
+                'level' => $legacyCategory->level ?? 0,
+                'parent_id' => null,
+                'created_at' => $legacyCategory->created_at ?? now(),
+                'updated_at' => $legacyCategory->updated_at ?? now(),
+            ]);
+
+            $this->categoryMap[$legacyCategory->id] = $newId;
+            $this->line("  Created category: {$legacyCategory->name} (legacy ID {$legacyCategory->id} -> new ID {$newId}, level {$legacyCategory->level})");
+        }
     }
 
     protected function updateParentRelationships($legacyCategories): void

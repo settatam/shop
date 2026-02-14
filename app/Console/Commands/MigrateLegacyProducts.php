@@ -229,73 +229,67 @@ class MigrateLegacyProducts extends Command
 
         $this->info('Building category mapping...');
 
-        // Get legacy categories
-        $legacyCategories = DB::connection('legacy')
-            ->table('store_categories')
+        // First, try to load saved mappings from migrate:legacy-categories
+        // This handles cases where IDs couldn't be preserved due to collisions
+        $mappings = MigrateLegacyCategories::loadMappings($legacyStoreId, $newStore->id);
+        if ($mappings && ! empty($mappings['categories'])) {
+            $this->categoryMap = $mappings['categories'];
+            $this->line('  Loaded '.count($this->categoryMap).' category mappings from saved file');
+
+            return;
+        }
+
+        // Fallback: try to find categories by ID (for stores that share categories)
+        // NOTE: Some legacy stores share categories (e.g., store 44 uses store 43's categories).
+        $this->info('  No saved mappings found, checking categories by ID...');
+
+        // Get all unique category IDs used by products in this legacy store
+        $usedCategoryIds = DB::connection('legacy')
+            ->table('products')
             ->where('store_id', $legacyStoreId)
-            ->get()
-            ->keyBy('id');
+            ->whereNotNull('store_category_id')
+            ->distinct()
+            ->pluck('store_category_id');
 
-        // Build legacy category full paths
-        $legacyPaths = [];
-        foreach ($legacyCategories as $legacy) {
-            $legacyPaths[$legacy->id] = $this->buildLegacyCategoryPath($legacy, $legacyCategories);
-        }
+        $mapped = 0;
+        $missing = 0;
+        $missingIds = [];
 
-        // Get new categories with parent relationship loaded
-        $newCategories = Category::where('store_id', $newStore->id)->get();
+        foreach ($usedCategoryIds as $legacyCategoryId) {
+            // Verify this category exists in the legacy system (regardless of which store it belongs to)
+            $legacyCategory = DB::connection('legacy')
+                ->table('store_categories')
+                ->where('id', $legacyCategoryId)
+                ->whereNull('deleted_at')
+                ->first();
 
-        // Build new category full paths and index by path
-        $newCategoriesByPath = [];
-        foreach ($newCategories as $category) {
-            $path = Str::slug($category->full_path, '-');
-            $newCategoriesByPath[$path] = $category;
-        }
+            if (! $legacyCategory) {
+                $missing++;
+                $missingIds[] = $legacyCategoryId;
 
-        // Also index by name only as fallback for categories without path conflicts
-        $newCategoriesByName = [];
-        $nameConflicts = [];
-        foreach ($newCategories as $category) {
-            $slug = Str::slug($category->name);
-            if (isset($newCategoriesByName[$slug])) {
-                $nameConflicts[$slug] = true;
+                continue;
             }
-            $newCategoriesByName[$slug] = $category;
-        }
 
-        // Map categories - prefer full path match, fall back to name if no conflict
-        foreach ($legacyCategories as $legacy) {
-            $legacyPath = $legacyPaths[$legacy->id];
-            $pathSlug = Str::slug($legacyPath, '-');
-            $nameSlug = Str::slug($legacy->name);
+            // Check if category exists in the new system (might have different ID due to collision)
+            $category = Category::withoutGlobalScopes()->find($legacyCategoryId);
 
-            // Try full path match first
-            if (isset($newCategoriesByPath[$pathSlug])) {
-                $this->categoryMap[$legacy->id] = $newCategoriesByPath[$pathSlug]->id;
-            }
-            // Fall back to name match only if there's no conflict
-            elseif (isset($newCategoriesByName[$nameSlug]) && ! isset($nameConflicts[$nameSlug])) {
-                $this->categoryMap[$legacy->id] = $newCategoriesByName[$nameSlug]->id;
+            if ($category) {
+                $this->categoryMap[$legacyCategoryId] = $legacyCategoryId;
+                $mapped++;
+            } else {
+                $missing++;
+                $missingIds[] = $legacyCategoryId;
             }
         }
 
-        $this->line('  Mapped '.count($this->categoryMap).' categories');
-    }
+        $this->line("  Mapped {$mapped} categories by ID, {$missing} not found");
 
-    /**
-     * Build the full path for a legacy category.
-     */
-    protected function buildLegacyCategoryPath(object $category, $allCategories): string
-    {
-        $path = [$category->name];
-        $current = $category;
-
-        while ($current->parent_id && isset($allCategories[$current->parent_id])) {
-            $current = $allCategories[$current->parent_id];
-            array_unshift($path, $current->name);
+        if ($missing > 0 && count($missingIds) <= 10) {
+            $this->warn('  Missing category IDs: '.implode(', ', $missingIds));
+            $this->warn('  Run migrate:legacy-categories for the store that owns these categories');
+        } elseif ($missing > 0) {
+            $this->warn("  {$missing} categories not found. Run migrate:legacy-categories for the source store.");
         }
-
-        return implode(' > ', $path);
     }
 
     protected function buildTemplateMapping(int $legacyStoreId, Store $newStore): void
