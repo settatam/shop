@@ -107,7 +107,7 @@ class OrderController extends Controller
         }
 
         $order->load([
-            'customer',
+            'customer.leadSource',
             'user',
             'warehouse',
             'salesChannel.storeMarketplace',

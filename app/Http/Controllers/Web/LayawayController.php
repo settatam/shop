@@ -51,7 +51,7 @@ class LayawayController extends Controller
         }
 
         $layaway->load([
-            'customer',
+            'customer.leadSource',
             'user',
             'warehouse',
             'items.product.images',

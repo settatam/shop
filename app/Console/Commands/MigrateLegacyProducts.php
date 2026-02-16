@@ -46,6 +46,11 @@ class MigrateLegacyProducts extends Command
     protected array $unmappedVendors = [];
 
     /**
+     * Cache of legacy vendor ID => legacy vendor data
+     */
+    protected array $legacyVendorCache = [];
+
+    /**
      * Maps legacy html_form_field.id => new product_template_field.id
      */
     protected array $templateFieldMap = [];
@@ -153,9 +158,6 @@ class MigrateLegacyProducts extends Command
             } else {
                 $this->info('Skipping template mapping (--skip-templates)');
             }
-
-            // Build vendor mapping
-            $this->buildVendorMapping($legacyStoreId, $newStore);
 
             // Build marketplace mapping for platform listings
             if (! $this->option('skip-listings')) {
@@ -402,50 +404,124 @@ class MigrateLegacyProducts extends Command
         $this->line("  Mapped {$fieldCount} template fields");
     }
 
-    protected function buildVendorMapping(int $legacyStoreId, Store $newStore): void
+    /**
+     * Find or create a vendor from legacy vendor ID.
+     * Returns the new vendor ID, or null if legacy vendor not found.
+     */
+    protected function findOrCreateVendor(int $legacyVendorId, Store $newStore): ?int
     {
-        if (! empty($this->vendorMap)) {
-            return;
+        // Check cache first
+        if (isset($this->vendorMap[$legacyVendorId])) {
+            return $this->vendorMap[$legacyVendorId];
         }
 
-        $this->info('Building vendor mapping...');
+        // Fetch legacy vendor if not cached
+        if (! isset($this->legacyVendorCache[$legacyVendorId])) {
+            $legacyVendor = DB::connection('legacy')
+                ->table('customers')
+                ->where('id', $legacyVendorId)
+                ->first();
 
-        // Get legacy vendors from customers table (where is_vendor = 1)
-        $legacyVendors = DB::connection('legacy')
-            ->table('customers')
-            ->where('store_id', $legacyStoreId)
-            ->where('is_vendor', true)
+            $this->legacyVendorCache[$legacyVendorId] = $legacyVendor;
+        }
+
+        $legacyVendor = $this->legacyVendorCache[$legacyVendorId];
+
+        if (! $legacyVendor) {
+            return null;
+        }
+
+        // Build name from legacy vendor
+        $firstName = trim($legacyVendor->first_name ?? '');
+        $lastName = trim($legacyVendor->last_name ?? '');
+        $name = trim("{$firstName} {$lastName}");
+        if (empty($name)) {
+            $name = $legacyVendor->company_name ?? "Vendor {$legacyVendorId}";
+        }
+
+        $email = $legacyVendor->email ?? null;
+
+        // Try to find existing vendor by email first (more reliable)
+        $existingVendor = null;
+        if ($email) {
+            $existingVendor = Vendor::where('store_id', $newStore->id)
+                ->where('email', $email)
+                ->first();
+        }
+
+        // Fall back to name match
+        if (! $existingVendor) {
+            $existingVendor = Vendor::where('store_id', $newStore->id)
+                ->where('name', $name)
+                ->first();
+        }
+
+        if ($existingVendor) {
+            $this->vendorMap[$legacyVendorId] = $existingVendor->id;
+
+            return $existingVendor->id;
+        }
+
+        // Fetch legacy addresses from addresses table (polymorphic)
+        $legacyAddresses = DB::connection('legacy')
+            ->table('addresses')
+            ->where('addressable_type', 'App\\Models\\Customer')
+            ->where('addressable_id', $legacyVendorId)
             ->whereNull('deleted_at')
             ->get();
 
-        // Get new vendors
-        $newVendors = Vendor::where('store_id', $newStore->id)->get();
+        // Create new vendor with basic data
+        $newVendor = Vendor::create([
+            'store_id' => $newStore->id,
+            'name' => $name,
+            'email' => $email,
+            'phone' => $legacyVendor->phone ?? null,
+            'company_name' => $legacyVendor->company_name ?? null,
+            'contact_name' => trim("{$firstName} {$lastName}") ?: null,
+            'contact_email' => $email,
+            'contact_phone' => $legacyVendor->phone ?? null,
+            'notes' => $legacyVendor->notes ?? null,
+            'is_active' => true,
+        ]);
 
-        foreach ($legacyVendors as $legacy) {
-            $legacyName = trim(($legacy->first_name ?? '').' '.($legacy->last_name ?? ''));
-            if (empty($legacyName)) {
-                $legacyName = $legacy->company_name ?? '';
+        // Create addresses in the addresses table (polymorphic)
+        foreach ($legacyAddresses as $index => $legacyAddress) {
+            // Find state_id if state name/abbreviation provided
+            $stateId = null;
+            if ($legacyAddress->state ?? null) {
+                $state = \App\Models\State::where('abbreviation', $legacyAddress->state)
+                    ->orWhere('name', $legacyAddress->state)
+                    ->first();
+                $stateId = $state?->id;
             }
 
-            foreach ($newVendors as $new) {
-                if (strtolower($new->name) === strtolower($legacyName) ||
-                    ($legacy->email && strtolower($new->email) === strtolower($legacy->email))) {
-                    $this->vendorMap[$legacy->id] = $new->id;
-                    break;
-                }
-            }
+            DB::table('addresses')->insert([
+                'store_id' => $newStore->id,
+                'addressable_type' => 'App\\Models\\Vendor',
+                'addressable_id' => $newVendor->id,
+                'first_name' => $legacyAddress->first_name ?? $firstName,
+                'last_name' => $legacyAddress->last_name ?? $lastName,
+                'company' => $legacyAddress->company ?? $legacyVendor->company_name ?? null,
+                'address' => $legacyAddress->address ?? $legacyAddress->address1 ?? null,
+                'address2' => $legacyAddress->address2 ?? null,
+                'city' => $legacyAddress->city ?? null,
+                'state_id' => $stateId,
+                'zip' => $legacyAddress->zip ?? $legacyAddress->postal_code ?? null,
+                'phone' => $legacyAddress->phone ?? $legacyVendor->phone ?? null,
+                'is_default' => $index === 0 || ($legacyAddress->is_default ?? false),
+                'is_shipping' => $legacyAddress->is_shipping ?? true,
+                'is_billing' => $legacyAddress->is_billing ?? true,
+                'type' => $legacyAddress->type ?? 'other',
+                'created_at' => $legacyAddress->created_at ?? now(),
+                'updated_at' => $legacyAddress->updated_at ?? now(),
+            ]);
         }
 
-        $this->line('  Mapped '.count($this->vendorMap).' vendors');
+        $this->vendorMap[$legacyVendorId] = $newVendor->id;
+        $addressCount = $legacyAddresses->count();
+        $this->line("  Created vendor: {$name} (legacy ID {$legacyVendorId} => new ID {$newVendor->id}) with {$addressCount} address(es)");
 
-        // Save vendor map for future runs
-        $basePath = storage_path('app/migrations');
-        if (! is_dir($basePath)) {
-            mkdir($basePath, 0755, true);
-        }
-        $vendorMapFile = "{$basePath}/vendor_map_{$legacyStoreId}.json";
-        file_put_contents($vendorMapFile, json_encode($this->vendorMap, JSON_PRETTY_PRINT));
-        $this->line("  Saved vendor map to {$vendorMapFile}");
+        return $newVendor->id;
     }
 
     /**
@@ -697,12 +773,11 @@ class MigrateLegacyProducts extends Command
                 $templateId = $this->templateMap[$legacyProduct->template_id];
             }
 
-            // Map vendor
+            // Find or create vendor
             $vendorId = null;
             if ($legacyProduct->vendor_id) {
-                if (isset($this->vendorMap[$legacyProduct->vendor_id])) {
-                    $vendorId = $this->vendorMap[$legacyProduct->vendor_id];
-                } else {
+                $vendorId = $this->findOrCreateVendor($legacyProduct->vendor_id, $newStore);
+                if (! $vendorId) {
                     $this->unmappedVendors[$legacyProduct->vendor_id] = ($this->unmappedVendors[$legacyProduct->vendor_id] ?? 0) + 1;
                 }
             }

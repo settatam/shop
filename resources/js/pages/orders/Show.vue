@@ -32,6 +32,11 @@ import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
 import CustomerSearch from '@/components/customers/CustomerSearch.vue';
 
+interface LeadSource {
+    id: number;
+    name: string;
+}
+
 interface Customer {
     id: number;
     first_name: string;
@@ -39,6 +44,7 @@ interface Customer {
     full_name: string;
     email?: string;
     phone?: string;
+    lead_source?: LeadSource;
 }
 
 interface User {
@@ -1208,6 +1214,11 @@ function cancelAddingCustomer() {
                                     </Link>
                                     <p v-if="order.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ order.customer.email }}</p>
                                     <p v-if="order.customer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ order.customer.phone }}</p>
+                                    <div v-if="order.customer.lead_source" class="mt-1">
+                                        <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                            {{ order.customer.lead_source.name }}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 

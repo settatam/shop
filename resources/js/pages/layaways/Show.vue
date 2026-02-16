@@ -19,6 +19,11 @@ import {
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 
+interface LeadSource {
+    id: number;
+    name: string;
+}
+
 interface Customer {
     id: number;
     first_name: string;
@@ -26,6 +31,7 @@ interface Customer {
     full_name: string;
     email?: string;
     phone?: string;
+    lead_source?: LeadSource;
 }
 
 interface User {
@@ -577,6 +583,11 @@ const paymentModel = computed(() => ({
                             <p v-if="layaway.customer.phone" class="text-sm text-gray-600 dark:text-gray-300">
                                 {{ layaway.customer.phone }}
                             </p>
+                            <div v-if="layaway.customer.lead_source">
+                                <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                    {{ layaway.customer.lead_source.name }}
+                                </span>
+                            </div>
                         </div>
                         <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic">No customer assigned</p>
                     </div>

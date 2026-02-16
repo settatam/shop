@@ -60,7 +60,7 @@ class RepairController extends Controller
         }
 
         $repair->load([
-            'customer',
+            'customer.leadSource',
             'vendor',
             'user',
             'items.product',

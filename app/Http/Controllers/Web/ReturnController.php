@@ -51,8 +51,8 @@ class ReturnController extends Controller
         }
 
         $return->load([
-            'order.customer',
-            'customer',
+            'order.customer.leadSource',
+            'customer.leadSource',
             'returnPolicy',
             'processedByUser',
             'items.productVariant.product.images',

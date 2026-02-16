@@ -18,6 +18,11 @@ import {
     BanknotesIcon,
 } from '@heroicons/vue/24/outline';
 
+interface LeadSource {
+    id: number;
+    name: string;
+}
+
 interface Customer {
     id: number;
     first_name: string;
@@ -25,6 +30,7 @@ interface Customer {
     full_name: string;
     email?: string;
     phone?: string;
+    lead_source?: LeadSource;
 }
 
 interface User {
@@ -590,6 +596,13 @@ const pendingRestockItems = computed(() => {
                                     <p v-if="productReturn.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ productReturn.customer.email }}</p>
                                     <p v-if="productReturn.customer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ productReturn.customer.phone }}</p>
                                 </div>
+                            </div>
+                            <!-- Lead Source -->
+                            <div v-if="productReturn.customer.lead_source" class="mt-3 flex items-center gap-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
+                                <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                    {{ productReturn.customer.lead_source.name }}
+                                </span>
                             </div>
                         </div>
 

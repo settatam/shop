@@ -30,6 +30,11 @@ import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 import VendorEditModal from '@/components/vendors/VendorEditModal.vue';
 import { PencilIcon } from '@heroicons/vue/20/solid';
 
+interface LeadSource {
+    id: number;
+    name: string;
+}
+
 interface Customer {
     id: number;
     first_name: string;
@@ -38,6 +43,7 @@ interface Customer {
     email?: string;
     phone_number?: string;
     company_name?: string;
+    lead_source?: LeadSource;
 }
 
 interface Vendor {
@@ -725,6 +731,11 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                                     <p v-if="repair.customer.company_name" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.company_name }}</p>
                                     <p v-if="repair.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.email }}</p>
                                     <p v-if="repair.customer.phone_number" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.phone_number }}</p>
+                                    <div v-if="repair.customer.lead_source" class="mt-1">
+                                        <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                            {{ repair.customer.lead_source.name }}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -113,6 +113,7 @@ class TransactionController extends Controller
 
         $transaction->load([
             'customer.addresses',
+            'customer.leadSource',
             'shippingAddress',
             'user',
             'assignedUser',

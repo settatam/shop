@@ -2123,6 +2123,13 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                 v-model="selectedCustomer"
                                 placeholder="Search or add customer..."
                             />
+                            <!-- Lead Source -->
+                            <div v-if="selectedCustomer?.lead_source" class="mt-3 flex items-center gap-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
+                                <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                    {{ selectedCustomer.lead_source.name }}
+                                </span>
+                            </div>
                             <div v-if="selectedCustomer" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
                                 <Link
                                     :href="`/customers/${selectedCustomer.id}`"

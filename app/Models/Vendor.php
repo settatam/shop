@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\BelongsToStore;
+use App\Traits\HasAddresses;
 use App\Traits\HasNotes;
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Vendor extends Model
 {
-    use BelongsToStore, HasFactory, HasNotes, LogsActivity, SoftDeletes;
+    use BelongsToStore, HasAddresses, HasFactory, HasNotes, LogsActivity, SoftDeletes;
 
     public const PAYMENT_TERMS_NET_15 = 'net_15';
 
