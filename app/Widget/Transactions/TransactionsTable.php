@@ -109,21 +109,21 @@ class TransactionsTable extends Table
         }
 
         // Apply status filter (supports both status slug and status_id)
-        if ($status = data_get($filter, 'status')) {
-            // First try to find by slug
-            $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
-            $statusModel = Status::where('store_id', $storeId)
-                ->where('entity_type', 'transaction')
-                ->where('slug', $status)
-                ->first();
-
-            if ($statusModel) {
-                $query->where('status_id', $statusModel->id);
-            } else {
-                // Fallback to legacy status column
-                $query->where('status', $status);
-            }
-        }
+//        if ($status = data_get($filter, 'status')) {
+//            // First try to find by slug
+//            $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
+//            $statusModel = Status::where('store_id', $storeId)
+//                ->where('entity_type', 'transaction')
+//                ->where('slug', $status)
+//                ->first();
+//
+//            if ($statusModel) {
+//                $query->where('status_id', $statusModel->id);
+//            } else {
+//                // Fallback to legacy status column
+//                $query->where('status', $status);
+//            }
+//        }
 
         // Apply type filter
         //        if ($type = data_get($filter, 'type')) {
