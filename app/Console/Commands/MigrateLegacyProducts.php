@@ -51,6 +51,31 @@ class MigrateLegacyProducts extends Command
     protected array $legacyVendorCache = [];
 
     /**
+     * Cache of legacy category ID => legacy category data
+     */
+    protected array $legacyCategoryCache = [];
+
+    /**
+     * Cache of legacy template ID => legacy template data
+     */
+    protected array $legacyTemplateCache = [];
+
+    /**
+     * Cache of legacy template ID => legacy template fields
+     */
+    protected array $legacyTemplateFieldsCache = [];
+
+    /**
+     * Counter for created categories
+     */
+    protected int $createdCategoryCount = 0;
+
+    /**
+     * Counter for created templates
+     */
+    protected int $createdTemplateCount = 0;
+
+    /**
      * Maps legacy html_form_field.id => new product_template_field.id
      */
     protected array $templateFieldMap = [];
@@ -145,19 +170,8 @@ class MigrateLegacyProducts extends Command
         try {
             DB::beginTransaction();
 
-            // Build category mapping from existing categories
-            if (! $this->option('skip-categories')) {
-                $this->buildCategoryMapping($legacyStoreId, $newStore);
-            } else {
-                $this->info('Skipping category mapping (--skip-categories)');
-            }
-
-            // Build template mapping
-            if (! $this->option('skip-templates')) {
-                $this->buildTemplateMapping($legacyStoreId, $newStore);
-            } else {
-                $this->info('Skipping template mapping (--skip-templates)');
-            }
+            // Categories and templates are now created on-demand using findOrCreate
+            // No pre-mapping needed - they will be created as products are migrated
 
             // Build marketplace mapping for platform listings
             if (! $this->option('skip-listings')) {
@@ -236,172 +250,6 @@ class MigrateLegacyProducts extends Command
         $variantMapFile = "{$basePath}/variant_map_{$legacyStoreId}.json";
         file_put_contents($variantMapFile, json_encode($this->variantMap, JSON_PRETTY_PRINT));
         $this->line("  Variant map saved to: {$variantMapFile}");
-    }
-
-    protected function buildCategoryMapping(int $legacyStoreId, Store $newStore): void
-    {
-        if (! empty($this->categoryMap)) {
-            return;
-        }
-
-        $this->info('Building category mapping...');
-
-        // First, try to load saved mappings from migrate:legacy-categories
-        // This handles cases where IDs couldn't be preserved due to collisions
-        $mappings = MigrateLegacyCategories::loadMappings($legacyStoreId, $newStore->id);
-        if ($mappings && ! empty($mappings['categories'])) {
-            $this->categoryMap = $mappings['categories'];
-            $this->line('  Loaded '.count($this->categoryMap).' category mappings from saved file');
-
-            return;
-        }
-
-        // Fallback: try to find categories by ID (for stores that share categories)
-        // NOTE: Some legacy stores share categories (e.g., store 44 uses store 43's categories).
-        $this->info('  No saved mappings found, checking categories by ID...');
-
-        // Get all unique category IDs used by products in this legacy store
-        $usedCategoryIds = DB::connection('legacy')
-            ->table('products')
-            ->where('store_id', $legacyStoreId)
-            ->whereNotNull('store_category_id')
-            ->distinct()
-            ->pluck('store_category_id');
-
-        $mapped = 0;
-        $missing = 0;
-        $missingIds = [];
-
-        foreach ($usedCategoryIds as $legacyCategoryId) {
-            // Verify this category exists in the legacy system (regardless of which store it belongs to)
-            $legacyCategory = DB::connection('legacy')
-                ->table('store_categories')
-                ->where('id', $legacyCategoryId)
-                ->whereNull('deleted_at')
-                ->first();
-
-            if (! $legacyCategory) {
-                $missing++;
-                $missingIds[] = $legacyCategoryId;
-
-                continue;
-            }
-
-            // Check if category exists in the new system (might have different ID due to collision)
-            $category = Category::withoutGlobalScopes()->find($legacyCategoryId);
-
-            if ($category) {
-                $this->categoryMap[$legacyCategoryId] = $legacyCategoryId;
-                $mapped++;
-            } else {
-                $missing++;
-                $missingIds[] = $legacyCategoryId;
-            }
-        }
-
-        $this->line("  Mapped {$mapped} categories by ID, {$missing} not found");
-
-        if ($missing > 0 && count($missingIds) <= 10) {
-            $this->warn('  Missing category IDs: '.implode(', ', $missingIds));
-            $this->warn('  Run migrate:legacy-categories for the store that owns these categories');
-        } elseif ($missing > 0) {
-            $this->warn("  {$missing} categories not found. Run migrate:legacy-categories for the source store.");
-        }
-    }
-
-    protected function buildTemplateMapping(int $legacyStoreId, Store $newStore): void
-    {
-        if (! empty($this->templateMap)) {
-            return;
-        }
-
-        $this->info('Building template mapping...');
-
-        // Get legacy templates (html_forms) only from this store
-        $legacyTemplates = DB::connection('legacy')
-            ->table('html_forms')
-            ->where('store_id', $legacyStoreId)
-            ->get();
-
-        // Get new templates
-        $newTemplates = ProductTemplate::where('store_id', $newStore->id)->get();
-
-        // Map by name
-        $newTemplatesByName = $newTemplates->keyBy(fn ($t) => strtolower($t->name));
-
-        foreach ($legacyTemplates as $legacy) {
-            $name = strtolower($legacy->title);
-            if ($newTemplatesByName->has($name)) {
-                $this->templateMap[$legacy->id] = $newTemplatesByName->get($name)->id;
-            }
-        }
-
-        $this->line('  Mapped '.count($this->templateMap).' templates');
-
-        // Also build template field mapping
-        $this->buildTemplateFieldMapping($legacyStoreId, $newStore);
-    }
-
-    /**
-     * Build mapping from legacy html_form_fields to new product_template_fields.
-     * Maps by field name within each template.
-     */
-    protected function buildTemplateFieldMapping(int $legacyStoreId, Store $newStore): void
-    {
-        $this->info('Building template field mapping...');
-
-        $fieldCount = 0;
-
-        foreach ($this->templateMap as $legacyTemplateId => $newTemplateId) {
-            // Get legacy fields for this template
-            $legacyFields = DB::connection('legacy')
-                ->table('html_form_fields')
-                ->where('html_form_id', $legacyTemplateId)
-                ->get();
-
-            // Get new fields for this template
-            $newFields = ProductTemplateField::where('product_template_id', $newTemplateId)->get();
-
-            // Build a map by canonical_name (which stores the original legacy name)
-            $newFieldsByCanonicalName = $newFields->keyBy(fn ($f) => strtolower($f->canonical_name ?? $f->name));
-
-            // Also map by snake_case name for fallback
-            $newFieldsByName = $newFields->keyBy(fn ($f) => strtolower($f->name));
-
-            $this->templateFieldNameMap[$newTemplateId] = [];
-            $this->templateFieldTypeMap[$newTemplateId] = [];
-            $this->templateFieldOptionsMap[$newTemplateId] = [];
-
-            foreach ($legacyFields as $legacyField) {
-                $legacyName = strtolower($legacyField->name);
-
-                // Try canonical name first, then snake_case name
-                $newField = $newFieldsByCanonicalName->get($legacyName)
-                    ?? $newFieldsByName->get(Str::snake($legacyName))
-                    ?? $newFieldsByName->get(str_replace('-', '_', $legacyName));
-
-                if ($newField) {
-                    $this->templateFieldMap[$legacyField->id] = $newField->id;
-                    $this->templateFieldNameMap[$newTemplateId][$legacyName] = $newField->id;
-                    $this->templateFieldTypeMap[$newTemplateId][$legacyName] = $newField->type;
-
-                    // Store select options for value transformation
-                    if ($newField->type === 'select' && $newField->options) {
-                        $options = $newField->options;
-                        if (is_string($options)) {
-                            $options = json_decode($options, true);
-                        } elseif ($options instanceof \Illuminate\Support\Collection) {
-                            $options = $options->toArray();
-                        }
-                        $this->templateFieldOptionsMap[$newTemplateId][$legacyName] = $options ?? [];
-                    }
-
-                    $fieldCount++;
-                }
-            }
-        }
-
-        $this->line("  Mapped {$fieldCount} template fields");
     }
 
     /**
@@ -522,6 +370,392 @@ class MigrateLegacyProducts extends Command
         $this->line("  Created vendor: {$name} (legacy ID {$legacyVendorId} => new ID {$newVendor->id}) with {$addressCount} address(es)");
 
         return $newVendor->id;
+    }
+
+    /**
+     * Find or create a category and its template from legacy category ID.
+     * Returns array with 'category_id' and 'template_id'.
+     *
+     * Important: Categories are matched by name AND parent to handle cases like
+     * "Rings > Antique" vs "Bracelets > Antique" - both have "Antique" as name
+     * but are different categories.
+     */
+    protected function findOrCreateCategory(int $legacyCategoryId, Store $newStore): array
+    {
+        // Check cache first
+        if (isset($this->categoryMap[$legacyCategoryId])) {
+            $categoryId = $this->categoryMap[$legacyCategoryId];
+            $category = Category::find($categoryId);
+
+            return [
+                'category_id' => $categoryId,
+                'template_id' => $category?->template_id,
+            ];
+        }
+
+        // Fetch legacy category if not cached
+        if (! isset($this->legacyCategoryCache[$legacyCategoryId])) {
+            $legacyCategory = DB::connection('legacy')
+                ->table('store_categories')
+                ->where('id', $legacyCategoryId)
+                ->first();
+
+            $this->legacyCategoryCache[$legacyCategoryId] = $legacyCategory;
+        }
+
+        $legacyCategory = $this->legacyCategoryCache[$legacyCategoryId];
+
+        if (! $legacyCategory) {
+            return ['category_id' => null, 'template_id' => null];
+        }
+
+        $categoryName = $legacyCategory->name ?? "Category {$legacyCategoryId}";
+
+        // FIRST: Handle parent category if exists (we need parent_id for matching)
+        $parentId = null;
+        if ($legacyCategory->parent_id) {
+            $parentResult = $this->findOrCreateCategory($legacyCategory->parent_id, $newStore);
+            $parentId = $parentResult['category_id'];
+        }
+
+        // Try to find existing category by name AND parent_id
+        // This ensures "Rings > Antique" and "Bracelets > Antique" are treated as different categories
+        $existingCategoryQuery = Category::where('store_id', $newStore->id)
+            ->where('name', $categoryName);
+
+        if ($parentId) {
+            $existingCategoryQuery->where('parent_id', $parentId);
+        } else {
+            $existingCategoryQuery->whereNull('parent_id');
+        }
+
+        $existingCategory = $existingCategoryQuery->first();
+
+        if ($existingCategory) {
+            $this->categoryMap[$legacyCategoryId] = $existingCategory->id;
+
+            // Ensure template exists and is mapped from legacy category's html_form_id
+            if ($legacyCategory->html_form_id && ! $existingCategory->template_id) {
+                $templateId = $this->findOrCreateTemplate($legacyCategory->html_form_id, $newStore);
+                if ($templateId) {
+                    $existingCategory->update(['template_id' => $templateId]);
+                }
+            }
+
+            // Ensure field mappings are populated for this template
+            if ($existingCategory->template_id && $legacyCategory->html_form_id) {
+                $this->ensureTemplateFieldsMapped($legacyCategory->html_form_id, ProductTemplate::find($existingCategory->template_id));
+            }
+
+            return [
+                'category_id' => $existingCategory->id,
+                'template_id' => $existingCategory->template_id,
+            ];
+        }
+
+        // Create the template if it exists on the legacy category
+        $templateId = null;
+        if ($legacyCategory->html_form_id) {
+            $templateId = $this->findOrCreateTemplate($legacyCategory->html_form_id, $newStore);
+        }
+
+        // Create new category with the correct parent
+        $newCategory = Category::create([
+            'store_id' => $newStore->id,
+            'name' => $categoryName,
+            'slug' => Str::slug($categoryName).'-'.$legacyCategoryId,
+            'description' => $legacyCategory->description ?? null,
+            'parent_id' => $parentId,
+            'template_id' => $templateId,
+            'sort_order' => $legacyCategory->sort_order ?? 0,
+            'ebay_category_id' => $legacyCategory->ebay_category_id ?? null,
+        ]);
+
+        $this->categoryMap[$legacyCategoryId] = $newCategory->id;
+        $this->createdCategoryCount++;
+
+        // Build full path for logging
+        $fullPath = $this->buildCategoryPath($newCategory);
+        $this->line("  Created category: {$fullPath} (legacy ID {$legacyCategoryId} => new ID {$newCategory->id})");
+
+        return [
+            'category_id' => $newCategory->id,
+            'template_id' => $templateId,
+        ];
+    }
+
+    /**
+     * Build the full path string for a category (e.g., "Jewelry > Rings > Antique").
+     */
+    protected function buildCategoryPath(Category $category): string
+    {
+        $path = [$category->name];
+        $parent = $category->parent;
+
+        while ($parent) {
+            array_unshift($path, $parent->name);
+            $parent = $parent->parent;
+        }
+
+        return implode(' > ', $path);
+    }
+
+    /**
+     * Find or create a template and its fields from legacy template ID.
+     * Returns the new template ID.
+     */
+    protected function findOrCreateTemplate(int $legacyTemplateId, Store $newStore): ?int
+    {
+        // Check cache first
+        if (isset($this->templateMap[$legacyTemplateId])) {
+            return $this->templateMap[$legacyTemplateId];
+        }
+
+        // Fetch legacy template if not cached
+        if (! isset($this->legacyTemplateCache[$legacyTemplateId])) {
+            $legacyTemplate = DB::connection('legacy')
+                ->table('html_forms')
+                ->where('id', $legacyTemplateId)
+                ->first();
+
+            $this->legacyTemplateCache[$legacyTemplateId] = $legacyTemplate;
+        }
+
+        $legacyTemplate = $this->legacyTemplateCache[$legacyTemplateId];
+
+        if (! $legacyTemplate) {
+            return null;
+        }
+
+        $templateName = $legacyTemplate->title ?? "Template {$legacyTemplateId}";
+
+        // Try to find existing template by name
+        $existingTemplate = ProductTemplate::where('store_id', $newStore->id)
+            ->where('name', $templateName)
+            ->first();
+
+        if ($existingTemplate) {
+            $this->templateMap[$legacyTemplateId] = $existingTemplate->id;
+
+            // Ensure fields are mapped
+            $this->ensureTemplateFieldsMapped($legacyTemplateId, $existingTemplate);
+
+            return $existingTemplate->id;
+        }
+
+        // Create new template
+        $newTemplate = ProductTemplate::create([
+            'store_id' => $newStore->id,
+            'name' => $templateName,
+            'description' => $legacyTemplate->description ?? null,
+            'is_active' => true,
+        ]);
+
+        $this->templateMap[$legacyTemplateId] = $newTemplate->id;
+        $this->createdTemplateCount++;
+
+        // Create template fields
+        $this->createTemplateFields($legacyTemplateId, $newTemplate);
+
+        $this->line("  Created template: {$templateName} (legacy ID {$legacyTemplateId} => new ID {$newTemplate->id})");
+
+        return $newTemplate->id;
+    }
+
+    /**
+     * Create template fields from legacy html_form_fields.
+     */
+    protected function createTemplateFields(int $legacyTemplateId, ProductTemplate $newTemplate): void
+    {
+        // Fetch legacy fields if not cached
+        if (! isset($this->legacyTemplateFieldsCache[$legacyTemplateId])) {
+            $legacyFields = DB::connection('legacy')
+                ->table('html_form_fields')
+                ->where('html_form_id', $legacyTemplateId)
+                ->orderBy('sort_order')
+                ->get();
+
+            $this->legacyTemplateFieldsCache[$legacyTemplateId] = $legacyFields;
+        }
+
+        $legacyFields = $this->legacyTemplateFieldsCache[$legacyTemplateId];
+
+        $this->templateFieldNameMap[$newTemplate->id] = [];
+        $this->templateFieldTypeMap[$newTemplate->id] = [];
+        $this->templateFieldOptionsMap[$newTemplate->id] = [];
+
+        foreach ($legacyFields as $legacyField) {
+            $fieldName = Str::snake($legacyField->name);
+            $fieldType = $this->mapFieldType($legacyField->type ?? 'text');
+
+            // Create the field
+            $newField = ProductTemplateField::create([
+                'product_template_id' => $newTemplate->id,
+                'name' => $fieldName,
+                'canonical_name' => $legacyField->name, // Store original name for matching
+                'label' => $legacyField->label ?? Str::title(str_replace('_', ' ', $fieldName)),
+                'type' => $fieldType,
+                'placeholder' => $legacyField->placeholder ?? null,
+                'help_text' => $legacyField->help_text ?? null,
+                'default_value' => $legacyField->default_value ?? null,
+                'is_required' => (bool) ($legacyField->is_required ?? false),
+                'is_searchable' => (bool) ($legacyField->is_searchable ?? true),
+                'is_filterable' => (bool) ($legacyField->is_filterable ?? false),
+                'show_in_listing' => (bool) ($legacyField->show_in_listing ?? true),
+                'sort_order' => $legacyField->sort_order ?? 0,
+                'group_name' => $legacyField->group_name ?? null,
+            ]);
+
+            // Store mappings
+            $this->templateFieldMap[$legacyField->id] = $newField->id;
+            $canonicalName = strtolower($legacyField->name);
+            $this->templateFieldNameMap[$newTemplate->id][$canonicalName] = $newField->id;
+            $this->templateFieldTypeMap[$newTemplate->id][$canonicalName] = $fieldType;
+
+            // Create field options for select/radio/checkbox fields
+            if (in_array($fieldType, ['select', 'radio', 'checkbox'])) {
+                $this->createFieldOptions($legacyField, $newField);
+            }
+        }
+    }
+
+    /**
+     * Ensure template fields are mapped for an existing template.
+     */
+    protected function ensureTemplateFieldsMapped(int $legacyTemplateId, ProductTemplate $existingTemplate): void
+    {
+        // If already mapped, skip
+        if (isset($this->templateFieldNameMap[$existingTemplate->id]) && ! empty($this->templateFieldNameMap[$existingTemplate->id])) {
+            return;
+        }
+
+        // Fetch legacy fields
+        if (! isset($this->legacyTemplateFieldsCache[$legacyTemplateId])) {
+            $legacyFields = DB::connection('legacy')
+                ->table('html_form_fields')
+                ->where('html_form_id', $legacyTemplateId)
+                ->orderBy('sort_order')
+                ->get();
+
+            $this->legacyTemplateFieldsCache[$legacyTemplateId] = $legacyFields;
+        }
+
+        $legacyFields = $this->legacyTemplateFieldsCache[$legacyTemplateId];
+
+        // Get existing new fields
+        $existingFields = ProductTemplateField::where('product_template_id', $existingTemplate->id)->get();
+        $existingFieldsByName = $existingFields->keyBy(fn ($f) => strtolower($f->canonical_name ?? $f->name));
+        $existingFieldsBySnakeName = $existingFields->keyBy(fn ($f) => strtolower($f->name));
+
+        $this->templateFieldNameMap[$existingTemplate->id] = [];
+        $this->templateFieldTypeMap[$existingTemplate->id] = [];
+        $this->templateFieldOptionsMap[$existingTemplate->id] = [];
+
+        foreach ($legacyFields as $legacyField) {
+            $canonicalName = strtolower($legacyField->name);
+            $snakeName = strtolower(Str::snake($legacyField->name));
+
+            // Try to find matching field
+            $matchedField = $existingFieldsByName->get($canonicalName)
+                ?? $existingFieldsBySnakeName->get($snakeName);
+
+            if ($matchedField) {
+                $this->templateFieldMap[$legacyField->id] = $matchedField->id;
+                $this->templateFieldNameMap[$existingTemplate->id][$canonicalName] = $matchedField->id;
+                $this->templateFieldTypeMap[$existingTemplate->id][$canonicalName] = $matchedField->type;
+
+                // Store select options
+                if ($matchedField->type === 'select') {
+                    $options = $matchedField->options()->get()->map(fn ($o) => [
+                        'value' => $o->value,
+                        'label' => $o->label,
+                    ])->toArray();
+                    $this->templateFieldOptionsMap[$existingTemplate->id][$canonicalName] = $options;
+                }
+            } else {
+                // Create missing field
+                $fieldName = Str::snake($legacyField->name);
+                $fieldType = $this->mapFieldType($legacyField->type ?? 'text');
+
+                $newField = ProductTemplateField::create([
+                    'product_template_id' => $existingTemplate->id,
+                    'name' => $fieldName,
+                    'canonical_name' => $legacyField->name,
+                    'label' => $legacyField->label ?? Str::title(str_replace('_', ' ', $fieldName)),
+                    'type' => $fieldType,
+                    'placeholder' => $legacyField->placeholder ?? null,
+                    'is_required' => (bool) ($legacyField->is_required ?? false),
+                    'is_searchable' => (bool) ($legacyField->is_searchable ?? true),
+                    'show_in_listing' => (bool) ($legacyField->show_in_listing ?? true),
+                    'sort_order' => $legacyField->sort_order ?? 0,
+                ]);
+
+                $this->templateFieldMap[$legacyField->id] = $newField->id;
+                $this->templateFieldNameMap[$existingTemplate->id][$canonicalName] = $newField->id;
+                $this->templateFieldTypeMap[$existingTemplate->id][$canonicalName] = $fieldType;
+
+                // Create field options
+                if (in_array($fieldType, ['select', 'radio', 'checkbox'])) {
+                    $this->createFieldOptions($legacyField, $newField);
+                }
+            }
+        }
+    }
+
+    /**
+     * Create field options for select/radio/checkbox fields.
+     */
+    protected function createFieldOptions(object $legacyField, ProductTemplateField $newField): void
+    {
+        // Fetch legacy options
+        $legacyOptions = DB::connection('legacy')
+            ->table('html_form_field_options')
+            ->where('html_form_field_id', $legacyField->id)
+            ->orderBy('sort_order')
+            ->get();
+
+        $options = [];
+
+        foreach ($legacyOptions as $index => $legacyOption) {
+            $value = $legacyOption->value ?? Str::slug($legacyOption->label ?? '');
+            $label = $legacyOption->label ?? $legacyOption->value ?? '';
+
+            DB::table('product_template_field_options')->insert([
+                'product_template_field_id' => $newField->id,
+                'value' => $value,
+                'label' => $label,
+                'sort_order' => $legacyOption->sort_order ?? $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $options[] = ['value' => $value, 'label' => $label];
+        }
+
+        // Store in options map
+        $canonicalName = strtolower($legacyField->name);
+        $this->templateFieldOptionsMap[$newField->product_template_id][$canonicalName] = $options;
+    }
+
+    /**
+     * Map legacy field type to new field type.
+     */
+    protected function mapFieldType(?string $legacyType): string
+    {
+        if (! $legacyType) {
+            return 'text';
+        }
+
+        return match (strtolower($legacyType)) {
+            'text', 'string' => 'text',
+            'textarea', 'text_area' => 'textarea',
+            'number', 'integer', 'float', 'decimal' => 'number',
+            'select', 'dropdown' => 'select',
+            'checkbox' => 'checkbox',
+            'radio' => 'radio',
+            'date', 'datetime' => 'date',
+            default => 'text',
+        };
     }
 
     /**
@@ -761,16 +995,13 @@ class MigrateLegacyProducts extends Command
                 continue;
             }
 
-            // Map category
+            // Find or create category (template is inherited from category)
             $categoryId = null;
-            if ($legacyProduct->store_category_id && isset($this->categoryMap[$legacyProduct->store_category_id])) {
-                $categoryId = $this->categoryMap[$legacyProduct->store_category_id];
-            }
-
-            // Map template
             $templateId = null;
-            if ($legacyProduct->template_id && isset($this->templateMap[$legacyProduct->template_id])) {
-                $templateId = $this->templateMap[$legacyProduct->template_id];
+            if ($legacyProduct->store_category_id) {
+                $categoryResult = $this->findOrCreateCategory($legacyProduct->store_category_id, $newStore);
+                $categoryId = $categoryResult['category_id'];
+                $templateId = $categoryResult['template_id'];
             }
 
             // Find or create vendor
@@ -1403,7 +1634,10 @@ class MigrateLegacyProducts extends Command
         $this->line('Store: '.$newStore->name.' (ID: '.$newStore->id.')');
         $this->line('Products mapped: '.count($this->productMap));
         $this->line('Variants mapped: '.count($this->variantMap));
+        $this->line('Categories created: '.$this->createdCategoryCount);
+        $this->line('Templates created: '.$this->createdTemplateCount);
         $this->line('Template fields mapped: '.count($this->templateFieldMap));
+        $this->line('Vendors created/mapped: '.count($this->vendorMap));
 
         $productIds = Product::where('store_id', $newStore->id)->pluck('id');
         $productCount = $productIds->count();
@@ -1414,6 +1648,12 @@ class MigrateLegacyProducts extends Command
             ->whereIn('imageable_id', $productIds)
             ->count();
 
+        $categoryCount = Category::where('store_id', $newStore->id)->count();
+        $templateCount = ProductTemplate::where('store_id', $newStore->id)->count();
+
+        $this->newLine();
+        $this->line("Total categories in store: {$categoryCount}");
+        $this->line("Total templates in store: {$templateCount}");
         $this->line("Total products in store: {$productCount}");
         $this->line("Total variants in store: {$variantCount}");
         $this->line("Total attribute values in store: {$attributeCount}");
@@ -1423,18 +1663,17 @@ class MigrateLegacyProducts extends Command
         $totalQuantity = Inventory::where('store_id', $newStore->id)->sum('quantity');
         $this->line("Total inventory records: {$inventoryCount} ({$totalQuantity} items)");
 
-        // Report unmapped vendors
+        // Report unmapped vendors (only if legacy vendor record doesn't exist)
         if (! empty($this->unmappedVendors)) {
             $this->newLine();
-            $this->warn('=== Unmapped Vendors ===');
-            $this->warn('The following legacy vendor IDs were not mapped (products will have no vendor):');
+            $this->warn('=== Missing Vendor Records ===');
+            $this->warn('The following legacy vendor IDs could not be found in legacy database:');
             $totalUnmappedProducts = 0;
             foreach ($this->unmappedVendors as $vendorId => $count) {
                 $this->line("  Legacy vendor ID {$vendorId}: {$count} products");
                 $totalUnmappedProducts += $count;
             }
             $this->warn("Total products without vendor: {$totalUnmappedProducts}");
-            $this->line('To fix: Create vendors in the new system and update the vendor_map JSON file');
         }
     }
 }
