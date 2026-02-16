@@ -44,6 +44,14 @@ class PlatformListing extends Model
         return $this->belongsTo(StoreMarketplace::class, 'store_marketplace_id');
     }
 
+    /**
+     * Alias for marketplace relationship.
+     */
+    public function storeMarketplace(): BelongsTo
+    {
+        return $this->marketplace();
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

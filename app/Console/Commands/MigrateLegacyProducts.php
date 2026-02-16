@@ -434,20 +434,25 @@ class MigrateLegacyProducts extends Command
         if ($existingCategory) {
             $this->categoryMap[$legacyCategoryId] = $existingCategory->id;
 
-            // Ensure template exists and is mapped from legacy category's html_form_id
-            if ($legacyCategory->html_form_id && ! $existingCategory->template_id) {
+            // Validate that the category's template actually exists
+            // It might have a stale template_id pointing to a non-existent template
+            $existingTemplate = null;
+            if ($existingCategory->template_id) {
+                $existingTemplate = ProductTemplate::find($existingCategory->template_id);
+            }
+
+            // If template doesn't exist or category has no template, create from legacy
+            if (! $existingTemplate && $legacyCategory->html_form_id) {
                 $templateId = $this->findOrCreateTemplate($legacyCategory->html_form_id, $newStore);
                 if ($templateId) {
                     $existingCategory->update(['template_id' => $templateId]);
+                    $existingTemplate = ProductTemplate::find($templateId);
                 }
             }
 
             // Ensure field mappings are populated for this template
-            if ($existingCategory->template_id && $legacyCategory->html_form_id) {
-                $template = ProductTemplate::find($existingCategory->template_id);
-                if ($template) {
-                    $this->ensureTemplateFieldsMapped($legacyCategory->html_form_id, $template);
-                }
+            if ($existingTemplate && $legacyCategory->html_form_id) {
+                $this->ensureTemplateFieldsMapped($legacyCategory->html_form_id, $existingTemplate);
             }
 
             return [
