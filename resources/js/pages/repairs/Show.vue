@@ -731,9 +731,16 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                                     <p v-if="repair.customer.company_name" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.company_name }}</p>
                                     <p v-if="repair.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.email }}</p>
                                     <p v-if="repair.customer.phone_number" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.phone_number }}</p>
-                                    <div v-if="repair.customer.lead_source" class="mt-1">
-                                        <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                    <div class="mt-2 flex items-center gap-2">
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
+                                        <span
+                                            v-if="repair.customer.lead_source"
+                                            class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30"
+                                        >
                                             {{ repair.customer.lead_source.name }}
+                                        </span>
+                                        <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
+                                            Unknown
                                         </span>
                                     </div>
                                 </div>

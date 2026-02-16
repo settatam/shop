@@ -287,6 +287,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::prefix('transactions/{transaction}/items/{item}')->name('web.transactions.items.')->middleware('permission:transactions.update')->group(function () {
         Route::get('/edit', [\App\Http\Controllers\Web\TransactionItemController::class, 'edit'])->name('edit');
         Route::put('/', [\App\Http\Controllers\Web\TransactionItemController::class, 'update'])->name('update');
+        Route::patch('/quick-update', [\App\Http\Controllers\Web\TransactionItemController::class, 'quickUpdate'])->name('quick-update');
         Route::post('/images', [\App\Http\Controllers\Web\TransactionItemController::class, 'uploadImages'])->name('upload-images');
         Route::delete('/images/{image}', [\App\Http\Controllers\Web\TransactionItemController::class, 'deleteImage'])->name('delete-image');
         Route::post('/move-to-inventory', [\App\Http\Controllers\Web\TransactionItemController::class, 'moveToInventory'])->name('move-to-inventory');

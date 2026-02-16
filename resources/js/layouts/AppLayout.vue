@@ -15,6 +15,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import AppSidebar from '@/components/layout/AppSidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
+import BugReportButton from '@/components/BugReportButton.vue';
 import { ChatPanel } from '@/components/chat';
 import { CommandPalette } from '@/components/search';
 import VoiceAssistant from '@/components/voice/VoiceAssistant.vue';
@@ -249,6 +250,9 @@ onUnmounted(() => {
 
         <!-- Voice Assistant -->
         <VoiceAssistant />
+
+        <!-- Bug Report Button -->
+        <BugReportButton />
 
         <!-- Global Search Command Palette -->
         <CommandPalette ref="commandPaletteRef" />

@@ -7,7 +7,6 @@ import {
     UsersIcon,
     CubeIcon,
     ShoppingCartIcon,
-    ArchiveBoxIcon,
     WrenchScrewdriverIcon,
     DocumentTextIcon,
     ChartBarIcon,
@@ -24,7 +23,6 @@ import {
 import { ChevronRightIcon } from '@heroicons/vue/20/solid';
 import type { NavGroup, NavChild } from '@/types';
 import AppLogo from '@/components/AppLogo.vue';
-import StoreSwitcher from '@/components/layout/StoreSwitcher.vue';
 import ProminentStoreSwitcher from '@/components/layout/ProminentStoreSwitcher.vue';
 import { useFeatures } from '@/composables/useFeatures';
 
@@ -150,8 +148,8 @@ function isChildActive(href: string): boolean {
             </Link>
         </div>
 
-        <!-- Prominent store switcher for multi-store clients -->
-        <ProminentStoreSwitcher v-if="hasFeature('prominent_store_switcher')" />
+        <!-- Store switcher/indicator - always at top, prominent for multi-store users -->
+        <ProminentStoreSwitcher />
 
         <nav class="flex flex-1 flex-col">
             <ul role="list" class="flex flex-1 flex-col gap-y-7">
@@ -229,11 +227,6 @@ function isChildActive(href: string): boolean {
                             </Disclosure>
                         </li>
                     </ul>
-                </li>
-
-                <!-- Store switcher (hidden when prominent switcher is shown) -->
-                <li v-if="!hasFeature('prominent_store_switcher')">
-                    <StoreSwitcher />
                 </li>
 
                 <!-- Settings at bottom -->

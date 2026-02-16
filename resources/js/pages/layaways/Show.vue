@@ -583,9 +583,16 @@ const paymentModel = computed(() => ({
                             <p v-if="layaway.customer.phone" class="text-sm text-gray-600 dark:text-gray-300">
                                 {{ layaway.customer.phone }}
                             </p>
-                            <div v-if="layaway.customer.lead_source">
-                                <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                            <div class="mt-2 flex items-center gap-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
+                                <span
+                                    v-if="layaway.customer.lead_source"
+                                    class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30"
+                                >
                                     {{ layaway.customer.lead_source.name }}
+                                </span>
+                                <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
+                                    Unknown
                                 </span>
                             </div>
                         </div>

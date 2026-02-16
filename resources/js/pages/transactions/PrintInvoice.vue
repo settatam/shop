@@ -340,6 +340,8 @@ const print = () => {
                                         <p v-if="transaction.customer.state || transaction.customer.zip">
                                             {{ transaction.customer.state }} {{ transaction.customer.zip }}
                                         </p>
+                                        <p v-if="transaction.customer.phone" class="mt-1">{{ transaction.customer.phone }}</p>
+                                        <p v-if="transaction.customer.email">{{ transaction.customer.email }}</p>
                                     </template>
                                     <p v-else class="italic">Walk-in customer</p>
                                 </div>

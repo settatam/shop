@@ -477,6 +477,77 @@ const editingItem = ref<EditableItem | null>(null);
 const editingItemImages = ref<{ id: number; url: string; thumbnail_url: string | null }[]>([]);
 const savingItem = ref(false);
 
+// Inline price editing state
+const inlineEditingPrices = ref<Record<number, { price: number | null; buy_price: number | null }>>({});
+const inlineUpdating = ref<Record<number, boolean>>({});
+let debounceTimers: Record<number, ReturnType<typeof setTimeout>> = {};
+
+function initializeInlinePrices() {
+    props.transaction.items.forEach(item => {
+        inlineEditingPrices.value[item.id] = {
+            price: item.price,
+            buy_price: item.buy_price,
+        };
+    });
+}
+
+// Initialize on mount
+initializeInlinePrices();
+
+// Watch for transaction changes (e.g., after item added/removed)
+watch(() => props.transaction.items, () => {
+    initializeInlinePrices();
+}, { deep: true });
+
+async function saveInlinePrice(itemId: number, field: 'price' | 'buy_price') {
+    // Clear any existing timer for this item
+    if (debounceTimers[itemId]) {
+        clearTimeout(debounceTimers[itemId]);
+    }
+
+    // Debounce the save
+    debounceTimers[itemId] = setTimeout(async () => {
+        const values = inlineEditingPrices.value[itemId];
+        if (!values) return;
+
+        inlineUpdating.value[itemId] = true;
+
+        try {
+            const response = await axios.patch(
+                `/transactions/${props.transaction.id}/items/${itemId}/quick-update`,
+                {
+                    [field]: values[field],
+                }
+            );
+
+            // Update local state with returned values
+            if (response.data.success) {
+                const item = props.transaction.items.find(i => i.id === itemId);
+                if (item) {
+                    item.price = response.data.item.price;
+                    item.buy_price = response.data.item.buy_price;
+                }
+                // Update transaction totals
+                if (response.data.transaction) {
+                    props.transaction.total_buy_price = response.data.transaction.total_buy_price;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to update price:', error);
+            // Revert to original value on error
+            const item = props.transaction.items.find(i => i.id === itemId);
+            if (item) {
+                inlineEditingPrices.value[itemId] = {
+                    price: item.price,
+                    buy_price: item.buy_price,
+                };
+            }
+        } finally {
+            inlineUpdating.value[itemId] = false;
+        }
+    }, 500);
+}
+
 // Image lightbox modal state
 const showImageModal = ref(false);
 const modalImages = ref<ItemImage[]>([]);
@@ -1718,8 +1789,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                         <tr>
                                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Image</th>
                                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Title</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Metal</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
@@ -1775,20 +1844,42 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     {{ item.description }}
                                                 </p>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                                {{ item.category?.name || '-' }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                                {{ item.metal_type || '-' }} {{ item.karat ? `(${item.karat})` : '' }}
-                                            </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
                                                 {{ formatWeight(item.dwt) }}
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
-                                                {{ formatCurrency(item.price) }}
+                                            <td class="whitespace-nowrap px-3 py-2 text-sm text-right">
+                                                <div class="relative inline-flex items-center">
+                                                    <span class="absolute left-2 text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        :value="inlineEditingPrices[item.id]?.price ?? ''"
+                                                        @input="(e) => { inlineEditingPrices[item.id].price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'price'); }"
+                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        :class="{ 'opacity-50': inlineUpdating[item.id] }"
+                                                    />
+                                                    <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
+                                                        <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
+                                                    </span>
+                                                </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900 dark:text-white text-right font-medium">
-                                                {{ formatCurrency(item.buy_price) }}
+                                            <td class="whitespace-nowrap px-3 py-2 text-sm text-right">
+                                                <div class="relative inline-flex items-center">
+                                                    <span class="absolute left-2 text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        :value="inlineEditingPrices[item.id]?.buy_price ?? ''"
+                                                        @input="(e) => { inlineEditingPrices[item.id].buy_price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'buy_price'); }"
+                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        :class="{ 'opacity-50': inlineUpdating[item.id] }"
+                                                    />
+                                                    <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
+                                                        <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
+                                                    </span>
+                                                </div>
                                             </td>
                                             <!-- Status Column -->
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-center">
@@ -1833,7 +1924,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     </tbody>
                                     <tfoot>
                                         <tr class="bg-gray-50 dark:bg-gray-700/50">
-                                            <td colspan="4" class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white">
+                                            <td colspan="2" class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white">
                                                 Totals
                                             </td>
                                             <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
@@ -1907,8 +1998,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                         <tr>
                                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Image</th>
                                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Title</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
-                                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Metal</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
@@ -1964,20 +2053,42 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     {{ item.description }}
                                                 </p>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                                {{ item.category?.name || '-' }}
-                                            </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-                                                {{ item.metal_type || '-' }} {{ item.karat ? `(${item.karat})` : '' }}
-                                            </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
                                                 {{ formatWeight(item.dwt) }}
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
-                                                {{ formatCurrency(item.price) }}
+                                            <td class="whitespace-nowrap px-3 py-2 text-sm text-right">
+                                                <div class="relative inline-flex items-center">
+                                                    <span class="absolute left-2 text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        :value="inlineEditingPrices[item.id]?.price ?? ''"
+                                                        @input="(e) => { inlineEditingPrices[item.id].price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'price'); }"
+                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        :class="{ 'opacity-50': inlineUpdating[item.id] }"
+                                                    />
+                                                    <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
+                                                        <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
+                                                    </span>
+                                                </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900 dark:text-white text-right">
-                                                {{ formatCurrency(item.buy_price) }}
+                                            <td class="whitespace-nowrap px-3 py-2 text-sm text-right">
+                                                <div class="relative inline-flex items-center">
+                                                    <span class="absolute left-2 text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        :value="inlineEditingPrices[item.id]?.buy_price ?? ''"
+                                                        @input="(e) => { inlineEditingPrices[item.id].buy_price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'buy_price'); }"
+                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        :class="{ 'opacity-50': inlineUpdating[item.id] }"
+                                                    />
+                                                    <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
+                                                        <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
+                                                    </span>
+                                                </div>
                                             </td>
                                             <!-- Status Column -->
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-center">
@@ -2022,7 +2133,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     </tbody>
                                     <tfoot>
                                         <tr class="bg-gray-50 dark:bg-gray-700/50">
-                                            <td colspan="4" class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white">
+                                            <td colspan="2" class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white">
                                                 Totals
                                             </td>
                                             <td class="px-3 py-3.5 text-sm font-semibold text-gray-900 dark:text-white text-right">
@@ -2133,10 +2244,16 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                 placeholder="Search or add customer..."
                             />
                             <!-- Lead Source -->
-                            <div v-if="selectedCustomer?.lead_source" class="mt-3 flex items-center gap-2">
+                            <div v-if="selectedCustomer" class="mt-3 flex items-center gap-2">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
-                                <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
+                                <span
+                                    v-if="selectedCustomer.lead_source"
+                                    class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30"
+                                >
                                     {{ selectedCustomer.lead_source.name }}
+                                </span>
+                                <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
+                                    Unknown
                                 </span>
                             </div>
                             <div v-if="selectedCustomer" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">

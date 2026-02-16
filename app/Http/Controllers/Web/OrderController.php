@@ -144,7 +144,8 @@ class OrderController extends Controller
         }
 
         $order->load([
-            'customer',
+            'customer.defaultAddress.state',
+            'customer.addresses.state',
             'user',
             'warehouse',
             'items.product.images',
@@ -181,18 +182,24 @@ class OrderController extends Controller
                 'created_at' => $order->created_at->toISOString(),
                 'shipping_address' => $order->shipping_address,
                 'billing_address' => $order->billing_address,
-                'customer' => $order->customer ? [
-                    'id' => $order->customer->id,
-                    'full_name' => $order->customer->full_name,
-                    'company_name' => $order->customer->company_name,
-                    'email' => $order->customer->email,
-                    'phone' => $order->customer->phone_number,
-                    'address' => $order->customer->address,
-                    'address2' => $order->customer->address2,
-                    'city' => $order->customer->city,
-                    'state' => $order->customer->state,
-                    'zip' => $order->customer->zip,
-                ] : null,
+                'customer' => $order->customer ? (function () use ($order) {
+                    // Try default address first, then fall back to any address
+                    $customerAddress = $order->customer->defaultAddress
+                        ?? $order->customer->addresses->first();
+
+                    return [
+                        'id' => $order->customer->id,
+                        'full_name' => $order->customer->full_name,
+                        'company_name' => $customerAddress?->company ?? $order->customer->company_name,
+                        'email' => $order->customer->email,
+                        'phone' => $customerAddress?->phone ?? $order->customer->phone_number,
+                        'address' => $customerAddress?->address ?? $order->customer->address,
+                        'address2' => $customerAddress?->address2 ?? $order->customer->address2,
+                        'city' => $customerAddress?->city ?? $order->customer->city,
+                        'state' => $customerAddress?->state_abbreviation ?? $customerAddress?->state?->name ?? $order->customer->state,
+                        'zip' => $customerAddress?->zip ?? $order->customer->zip,
+                    ];
+                })() : null,
                 'user' => $order->user ? [
                     'id' => $order->user->id,
                     'name' => $order->user->name,

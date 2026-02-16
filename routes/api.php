@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\BugReportController;
 use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ChatController;
@@ -42,6 +43,11 @@ Route::get('/user', function (Request $request) {
 Route::prefix('v1')->group(function () {
     // Metal Prices - public spot price calculation
     Route::get('metal-prices/calculate', [MetalPriceController::class, 'calculate']);
+});
+
+// Bug Reports (authenticated, no store required)
+Route::middleware(['auth:api'])->group(function () {
+    Route::post('bug-reports', [BugReportController::class, 'store']);
 });
 
 // Store management routes (no store middleware required)

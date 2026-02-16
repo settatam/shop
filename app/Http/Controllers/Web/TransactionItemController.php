@@ -175,6 +175,37 @@ class TransactionItemController extends Controller
             ->with('success', 'Item updated successfully.');
     }
 
+    /**
+     * Quick update for inline editing (returns JSON).
+     */
+    public function quickUpdate(Request $request, Transaction $transaction, TransactionItem $item): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizeItem($transaction, $item);
+
+        $validated = $request->validate([
+            'price' => ['nullable', 'numeric', 'min:0'],
+            'buy_price' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $this->transactionService->updateItem($item, $validated);
+
+        // Refresh the item and transaction to get updated totals
+        $item->refresh();
+        $transaction->refresh();
+
+        return response()->json([
+            'success' => true,
+            'item' => [
+                'id' => $item->id,
+                'price' => $item->price,
+                'buy_price' => $item->buy_price,
+            ],
+            'transaction' => [
+                'total_buy_price' => $transaction->total_buy_price,
+            ],
+        ]);
+    }
+
     public function uploadImages(Request $request, Transaction $transaction, TransactionItem $item): RedirectResponse
     {
         $this->authorizeItem($transaction, $item);

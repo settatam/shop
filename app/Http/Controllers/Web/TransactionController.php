@@ -1245,7 +1245,7 @@ class TransactionController extends Controller
             abort(404);
         }
 
-        $transaction->load(['customer', 'user', 'items.images', 'items.category', 'payouts']);
+        $transaction->load(['customer.defaultAddress.state', 'customer.addresses.state', 'user', 'items.images', 'items.category', 'payouts']);
 
         $formattedTransaction = $this->formatTransaction($transaction);
 
@@ -1264,15 +1264,21 @@ class TransactionController extends Controller
         }
 
         // Add customer address fields if customer exists
+        // Prefer address from the addresses table, fall back to direct customer fields
         if ($transaction->customer) {
+            // Try default address first, then fall back to any address
+            $customerAddress = $transaction->customer->defaultAddress
+                ?? $transaction->customer->addresses()->first();
+
             $formattedTransaction['customer'] = array_merge($formattedTransaction['customer'] ?? [], [
-                'company_name' => $transaction->customer->company_name,
-                'address' => $transaction->customer->address,
-                'address2' => $transaction->customer->address2,
-                'city' => $transaction->customer->city,
-                'state' => null, // state_id is a foreign key without a states table
-                'zip' => $transaction->customer->zip,
-                'phone' => $transaction->customer->phone_number,
+                'company_name' => $customerAddress?->company ?? $transaction->customer->company_name,
+                'address' => $customerAddress?->address ?? $transaction->customer->address,
+                'address2' => $customerAddress?->address2 ?? $transaction->customer->address2,
+                'city' => $customerAddress?->city ?? $transaction->customer->city,
+                'state' => $customerAddress?->state_abbreviation ?? $customerAddress?->state?->name ?? null,
+                'zip' => $customerAddress?->zip ?? $transaction->customer->zip,
+                'phone' => $customerAddress?->phone ?? $transaction->customer->phone_number,
+                'email' => $transaction->customer->email,
             ]);
         }
 

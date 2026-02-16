@@ -52,6 +52,10 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/terminals',
     },
     {
+        title: 'Warehouses',
+        href: '/settings/warehouses',
+    },
+    {
         title: 'Notifications',
         href: '/settings/notifications',
     },
