@@ -444,7 +444,10 @@ class MigrateLegacyProducts extends Command
 
             // Ensure field mappings are populated for this template
             if ($existingCategory->template_id && $legacyCategory->html_form_id) {
-                $this->ensureTemplateFieldsMapped($legacyCategory->html_form_id, ProductTemplate::find($existingCategory->template_id));
+                $template = ProductTemplate::find($existingCategory->template_id);
+                if ($template) {
+                    $this->ensureTemplateFieldsMapped($legacyCategory->html_form_id, $template);
+                }
             }
 
             return [
