@@ -67,14 +67,16 @@ class AmazonService extends BasePlatformService
 
         $data = $response->json();
 
+        // Use selling_partner_id as external_store_id to support multiple accounts
         return StoreMarketplace::updateOrCreate(
             [
                 'store_id' => $store->id,
                 'platform' => Platform::Amazon,
+                'external_store_id' => $sellingPartnerId,
             ],
             [
                 'name' => "Amazon ({$sellingPartnerId})",
-                'external_id' => $sellingPartnerId,
+                'external_store_id' => $sellingPartnerId,
                 'access_token' => $data['access_token'],
                 'refresh_token' => $data['refresh_token'],
                 'token_expires_at' => now()->addSeconds($data['expires_in'] ?? 3600),
@@ -84,6 +86,7 @@ class AmazonService extends BasePlatformService
                     'marketplace_ids' => $this->getMarketplaceIds($region),
                 ],
                 'status' => 'active',
+                'connected_successfully' => true,
             ]
         );
     }

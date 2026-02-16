@@ -28,6 +28,7 @@ class MigrateLegacyProducts extends Command
                             {--skip-deleted : Skip soft-deleted products}
                             {--skip-categories : Skip building category mappings}
                             {--skip-templates : Skip building template mappings}
+                            {--skip-listings : Skip migrating platform listings}
                             {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
 
     protected $description = 'Migrate products and variants from the legacy database';
@@ -70,6 +71,13 @@ class MigrateLegacyProducts extends Command
     protected int $imageCount = 0;
 
     protected int $inventoryCount = 0;
+
+    protected int $listingCount = 0;
+
+    /**
+     * Maps legacy store_market_place_id => new store_marketplace_id
+     */
+    protected array $marketplaceMap = [];
 
     protected ?Warehouse $defaultWarehouse = null;
 
@@ -148,6 +156,13 @@ class MigrateLegacyProducts extends Command
 
             // Build vendor mapping
             $this->buildVendorMapping($legacyStoreId, $newStore);
+
+            // Build marketplace mapping for platform listings
+            if (! $this->option('skip-listings')) {
+                $this->buildMarketplaceMapping($legacyStoreId, $newStore);
+            } else {
+                $this->info('Skipping platform listings (--skip-listings)');
+            }
 
             // Migrate products
             $this->migrateProducts($legacyStoreId, $newStore, $isDryRun, $limit, $skipDeleted, $syncDeletes);
@@ -433,6 +448,134 @@ class MigrateLegacyProducts extends Command
         $this->line("  Saved vendor map to {$vendorMapFile}");
     }
 
+    /**
+     * Build mapping from legacy store_market_places to new store_marketplaces.
+     * Maps by platform name (case-insensitive).
+     */
+    protected function buildMarketplaceMapping(int $legacyStoreId, Store $newStore): void
+    {
+        $this->info('Building marketplace mapping for platform listings...');
+
+        // Get legacy marketplaces for this store
+        $legacyMarketplaces = DB::connection('legacy')
+            ->table('store_market_places')
+            ->where('store_id', $legacyStoreId)
+            ->whereNull('deleted_at')
+            ->get();
+
+        // Get new marketplaces for the target store
+        $newMarketplaces = \App\Models\StoreMarketplace::where('store_id', $newStore->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        // Build a map by platform name (lowercase)
+        $newMarketplacesByPlatform = $newMarketplaces->keyBy(fn ($m) => strtolower($m->platform->value ?? $m->platform));
+
+        foreach ($legacyMarketplaces as $legacy) {
+            $platform = strtolower($legacy->marketplace);
+
+            if ($newMarketplacesByPlatform->has($platform)) {
+                $this->marketplaceMap[$legacy->id] = $newMarketplacesByPlatform->get($platform)->id;
+            }
+        }
+
+        $this->line('  Mapped '.count($this->marketplaceMap).' marketplaces');
+
+        if (empty($this->marketplaceMap)) {
+            $this->warn('  No marketplace mappings found. Platform listings will not be migrated.');
+            $this->warn('  Ensure marketplaces are set up in the new store first.');
+        }
+    }
+
+    /**
+     * Migrate platform listings (store_marketplace_products) for a product.
+     * These represent products published to external platforms like Shopify, eBay, etc.
+     */
+    protected function migrateProductListings(object $legacyProduct, Product $newProduct): void
+    {
+        // Get legacy store_marketplace_products for this product
+        $legacyListings = DB::connection('legacy')
+            ->table('store_marketplace_products')
+            ->where('product_id', $legacyProduct->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($legacyListings->isEmpty()) {
+            return;
+        }
+
+        foreach ($legacyListings as $legacyListing) {
+            // Skip if no marketplace mapping
+            if (! isset($this->marketplaceMap[$legacyListing->store_market_place_id])) {
+                continue;
+            }
+
+            $newMarketplaceId = $this->marketplaceMap[$legacyListing->store_market_place_id];
+
+            // Check if listing already exists
+            $existingListing = DB::table('platform_listings')
+                ->where('store_marketplace_id', $newMarketplaceId)
+                ->where('product_id', $newProduct->id)
+                ->first();
+
+            if ($existingListing) {
+                continue;
+            }
+
+            // Map listing status
+            $status = $this->mapListingStatus($legacyListing->listing_status);
+
+            // Get the default variant for this product
+            $defaultVariant = \App\Models\ProductVariant::where('product_id', $newProduct->id)->first();
+
+            // Create the platform listing
+            DB::table('platform_listings')->insert([
+                'store_marketplace_id' => $newMarketplaceId,
+                'product_id' => $newProduct->id,
+                'product_variant_id' => $defaultVariant?->id,
+                'external_listing_id' => $legacyListing->external_marketplace_id,
+                'external_variant_id' => null,
+                'status' => $status,
+                'listing_url' => $legacyListing->external_marketplace_url,
+                'platform_price' => null, // Will be set from variant price
+                'platform_quantity' => null,
+                'platform_data' => $legacyListing->marketplace_response ? json_encode([
+                    'legacy_response' => $legacyListing->marketplace_response,
+                    'legacy_channelable_type' => $legacyListing->channelable_type,
+                    'legacy_channelable_id' => $legacyListing->channelable_id,
+                ]) : null,
+                'category_mapping' => null,
+                'last_error' => null,
+                'last_synced_at' => $legacyListing->updated_at,
+                'published_at' => $status === 'active' ? $legacyListing->listing_start_date : null,
+                'created_at' => $legacyListing->created_at,
+                'updated_at' => $legacyListing->updated_at,
+            ]);
+
+            $this->listingCount++;
+        }
+    }
+
+    /**
+     * Map legacy listing_status to new status.
+     */
+    protected function mapListingStatus(?string $legacyStatus): string
+    {
+        if (! $legacyStatus) {
+            return 'draft';
+        }
+
+        return match (strtolower($legacyStatus)) {
+            'listed' => 'active',
+            'not_listed' => 'draft',
+            'archived' => 'archived',
+            'listing_expired' => 'expired',
+            'listing_ended' => 'ended',
+            'listing_error' => 'error',
+            default => 'draft',
+        };
+    }
+
     protected function migrateProducts(int $legacyStoreId, Store $newStore, bool $isDryRun, int $limit, bool $skipDeleted, bool $syncDeletes = false): void
     {
         $this->info('Migrating products...');
@@ -498,14 +641,17 @@ class MigrateLegacyProducts extends Command
         $skipped = 0;
 
         foreach ($legacyProducts as $legacyProduct) {
-            // Check if product already exists by SKU
-            $existingProduct = null;
-            if ($legacyProduct->sku) {
+            // Check if product already exists by ID first (since we preserve legacy IDs)
+            $existingProduct = Product::withTrashed()->find($legacyProduct->id);
+
+            // If not found by ID, check by SKU
+            if (! $existingProduct && $legacyProduct->sku) {
                 $existingProduct = Product::where('store_id', $newStore->id)
                     ->whereHas('variants', fn ($q) => $q->where('sku', $legacyProduct->sku))
                     ->first();
             }
 
+            // If not found by SKU, check by handle
             if (! $existingProduct && $legacyProduct->handle) {
                 $existingProduct = Product::where('store_id', $newStore->id)
                     ->where('handle', $legacyProduct->handle)
@@ -678,13 +824,18 @@ class MigrateLegacyProducts extends Command
             // Migrate product images
             $this->migrateProductImages($legacyProduct, $newProduct);
 
+            // Migrate platform listings (store_marketplace_products)
+            if (! $this->option('skip-listings') && ! empty($this->marketplaceMap)) {
+                $this->migrateProductListings($legacyProduct, $newProduct);
+            }
+
             if ($productCount % 100 === 0) {
                 $this->line("  Processed {$productCount} products...");
             }
         }
 
         $this->line("  Created {$productCount} products with {$variantCount} variants, skipped {$skipped} existing");
-        $this->line("  Migrated {$this->attributeValueCount} attribute values and {$this->imageCount} images");
+        $this->line("  Migrated {$this->attributeValueCount} attribute values, {$this->imageCount} images, {$this->listingCount} platform listings");
         $this->line("  Created {$this->inventoryCount} inventory records");
     }
 

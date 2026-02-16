@@ -23,6 +23,8 @@ use App\Services\Chat\Tools\SalesReportTool;
 use App\Services\Chat\Tools\SalesSummaryTool;
 use App\Services\Chat\Tools\SpotPriceTool;
 use App\Services\Chat\Tools\TopProductsTool;
+use App\Services\Voice\Tools\VoiceCommitmentTool;
+use App\Services\Voice\Tools\VoiceMemoryTool;
 
 class ChatToolExecutor
 {
@@ -69,6 +71,10 @@ class ChatToolExecutor
 
         // Dynamic Query Tool (requires service container resolution)
         $this->register(app(DynamicQueryTool::class));
+
+        // Voice Memory & Commitment Tools
+        $this->register(app(VoiceMemoryTool::class));
+        $this->register(app(VoiceCommitmentTool::class));
     }
 
     public function register(ChatToolInterface $tool): void
@@ -156,6 +162,9 @@ class ChatToolExecutor
             'marketplace_sync' => 'Checking marketplace sync...',
             'channel_performance' => 'Analyzing channel performance...',
             'listing_management' => 'Managing listings...',
+            // Voice Memory & Commitments
+            'voice_memory' => 'Accessing memory...',
+            'voice_commitment' => 'Managing commitments...',
             default => 'Processing...',
         };
     }

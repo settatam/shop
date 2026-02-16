@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\VendorController;
 use App\Http\Controllers\Api\V1\WarehouseController;
 use App\Http\Controllers\Api\VoiceController;
+use App\Http\Controllers\Api\VoiceGatewayController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -237,6 +238,31 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     // Voice Assistant
     Route::post('voice/query', [VoiceController::class, 'query']);
     Route::post('voice/text-query', [VoiceController::class, 'textQuery']);
+
+    // Voice Gateway API (for Node.js gateway service)
+    Route::prefix('voice-gateway')->group(function () {
+        // Session management
+        Route::post('/sessions', [VoiceGatewayController::class, 'createSession']);
+        Route::get('/sessions/{session}', [VoiceGatewayController::class, 'getSession']);
+        Route::post('/sessions/{session}/end', [VoiceGatewayController::class, 'endSession']);
+
+        // Tool execution (called by Node.js gateway)
+        Route::post('/execute-tool', [VoiceGatewayController::class, 'executeTool']);
+
+        // Memory operations
+        Route::get('/memories', [VoiceGatewayController::class, 'getMemories']);
+        Route::post('/memories', [VoiceGatewayController::class, 'storeMemory']);
+        Route::post('/memories/search', [VoiceGatewayController::class, 'searchMemories']);
+        Route::get('/memories/context', [VoiceGatewayController::class, 'getContextMemories']);
+
+        // Commitments
+        Route::get('/commitments', [VoiceGatewayController::class, 'getCommitments']);
+        Route::post('/commitments', [VoiceGatewayController::class, 'createCommitment']);
+        Route::patch('/commitments/{commitment}', [VoiceGatewayController::class, 'updateCommitment']);
+
+        // Gateway authentication
+        Route::post('/token', [VoiceGatewayController::class, 'generateGatewayToken']);
+    });
 
     // Global Search
     Route::get('search', SearchController::class)->name('search');

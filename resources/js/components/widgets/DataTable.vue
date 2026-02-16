@@ -37,7 +37,7 @@ function closeLightbox() {
 
 // Types for typed cells
 interface TypedCell {
-    type?: 'text' | 'link' | 'image' | 'badge' | 'status-badge' | 'tags' | 'currency' | 'review_action';
+    type?: 'text' | 'link' | 'image' | 'badge' | 'status-badge' | 'tags' | 'currency' | 'review_action' | 'platforms';
     data: unknown;
     href?: string;
     alt?: string;
@@ -824,6 +824,30 @@ function exportToCsv() {
                                 >
                                     {{ reviewingItemId === getCellValue(item, key).item_id ? 'Reviewing...' : 'Review' }}
                                 </button>
+                            </template>
+
+                            <template v-else-if="getCellValue(item, key).type === 'platforms'">
+                                <div class="flex items-center gap-1">
+                                    <template v-if="(getCellValue(item, key).data as any[])?.length > 0">
+                                        <a
+                                            v-for="platform in (getCellValue(item, key).data as any[])"
+                                            :key="platform.id"
+                                            :href="platform.listing_url || '#'"
+                                            :target="platform.listing_url ? '_blank' : undefined"
+                                            :title="`${platform.name}${platform.listing_url ? ' - Click to view' : ''}`"
+                                            class="flex h-6 w-6 items-center justify-center rounded bg-gray-100 dark:bg-gray-700 hover:ring-2 hover:ring-indigo-400 transition-all"
+                                            :class="{ 'cursor-default': !platform.listing_url }"
+                                        >
+                                            <img
+                                                :src="`/images/platforms/${platform.platform}.svg`"
+                                                :alt="platform.name"
+                                                class="h-4 w-4"
+                                                @error="($event.target as HTMLImageElement).style.display = 'none'"
+                                            />
+                                        </a>
+                                    </template>
+                                    <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+                                </div>
                             </template>
 
                             <!-- HTML content -->

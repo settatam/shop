@@ -359,6 +359,47 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
     if (status === 'error') return 'destructive';
     return 'secondary';
 }
+
+// Platform connection functions
+const testingPlatform = ref<string | null>(null);
+
+function connectPlatform(platformKey: string) {
+    // Redirect to OAuth flow for the platform
+    window.location.href = `/settings/marketplaces/connect/${platformKey}`;
+}
+
+function testPlatform(platformKey: string) {
+    const connection = getPlatformConnection(platformKey);
+    if (!connection?.id) return;
+
+    testingPlatform.value = platformKey;
+    router.post(`/settings/marketplaces/${connection.id}/test`, {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Connection successful!');
+        },
+        onError: () => {
+            toast.error('Connection test failed');
+        },
+        onFinish: () => {
+            testingPlatform.value = null;
+        },
+    });
+}
+
+function disconnectPlatform(platformKey: string) {
+    const connection = getPlatformConnection(platformKey);
+    if (!connection?.id) return;
+
+    if (!confirm(`Are you sure you want to disconnect ${connection.name}?`)) return;
+
+    router.delete(`/settings/marketplaces/${connection.id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            toast.success('Platform disconnected');
+        },
+    });
+}
 </script>
 
 <template>
@@ -1133,21 +1174,64 @@ function getStatusBadgeVariant(status: string): 'default' | 'secondary' | 'destr
                         </CardContent>
                     </Card>
 
-                    <!-- Other platforms (coming soon) -->
+                    <!-- Other platforms -->
                     <Card v-for="platform in availablePlatforms.filter(p => p.key !== 'shopify')" :key="platform.key">
                         <CardHeader>
                             <div class="flex items-center justify-between">
                                 <CardTitle class="text-lg">{{ platform.name }}</CardTitle>
-                                <Badge variant="secondary">Coming Soon</Badge>
+                                <Badge v-if="isPlatformConnected(platform.key)" variant="default">
+                                    <Check class="mr-1 h-3 w-3" />
+                                    Connected
+                                </Badge>
                             </div>
                             <CardDescription>
                                 {{ platform.description }}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <Button class="w-full" variant="outline" disabled>
+                            <div v-if="getPlatformConnection(platform.key)" class="space-y-3">
+                                <div class="text-sm">
+                                    <span class="text-muted-foreground">Account:</span>
+                                    <span class="ml-2 font-medium">{{ getPlatformConnection(platform.key)?.name }}</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        @click="testPlatform(platform.key)"
+                                        :disabled="testingPlatform === platform.key"
+                                    >
+                                        <Plug class="mr-2 h-4 w-4" />
+                                        {{ testingPlatform === platform.key ? 'Testing...' : 'Test' }}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        @click="disconnectPlatform(platform.key)"
+                                    >
+                                        <Trash2 class="mr-2 h-4 w-4" />
+                                        Disconnect
+                                    </Button>
+                                </div>
+                                <!-- Add another account -->
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    class="w-full"
+                                    @click="connectPlatform(platform.key)"
+                                >
+                                    <Plug class="mr-2 h-4 w-4" />
+                                    Add Another Account
+                                </Button>
+                            </div>
+                            <Button
+                                v-else
+                                class="w-full"
+                                variant="outline"
+                                @click="connectPlatform(platform.key)"
+                            >
                                 <Plug class="mr-2 h-4 w-4" />
-                                Connect
+                                Connect {{ platform.name }}
                             </Button>
                         </CardContent>
                     </Card>

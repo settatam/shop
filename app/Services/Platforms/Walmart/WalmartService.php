@@ -38,6 +38,8 @@ class WalmartService extends BasePlatformService
     {
         $clientId = $credentials['client_id'];
         $clientSecret = $credentials['client_secret'];
+        $sellerId = $credentials['seller_id'] ?? null;
+        $name = $credentials['name'] ?? 'Walmart Marketplace';
 
         // Get access token
         $response = Http::withHeaders([
@@ -56,20 +58,29 @@ class WalmartService extends BasePlatformService
 
         $data = $response->json();
 
+        // Use seller_id as external_store_id to support multiple accounts
+        $uniqueKeys = [
+            'store_id' => $store->id,
+            'platform' => Platform::Walmart,
+        ];
+        if ($sellerId) {
+            $uniqueKeys['external_store_id'] = $sellerId;
+        }
+
         return StoreMarketplace::updateOrCreate(
+            $uniqueKeys,
             [
-                'store_id' => $store->id,
-                'platform' => Platform::Walmart,
-            ],
-            [
-                'name' => 'Walmart Marketplace',
+                'name' => $name,
+                'external_store_id' => $sellerId,
                 'access_token' => $data['access_token'],
                 'token_expires_at' => now()->addSeconds($data['expires_in'] ?? 900),
                 'credentials' => [
                     'client_id' => $clientId,
                     'client_secret' => encrypt($clientSecret),
+                    'seller_id' => $sellerId,
                 ],
                 'status' => 'active',
+                'connected_successfully' => true,
             ]
         );
     }

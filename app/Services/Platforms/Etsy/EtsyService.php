@@ -78,14 +78,18 @@ class EtsyService extends BasePlatformService
         // Get user/shop info
         $shopInfo = $this->getShopInfo($data['access_token']);
 
+        $shopId = (string) $shopInfo['shop_id'];
+
+        // Use shop_id as external_store_id to support multiple accounts
         return StoreMarketplace::updateOrCreate(
             [
                 'store_id' => $store->id,
                 'platform' => Platform::Etsy,
+                'external_store_id' => $shopId,
             ],
             [
                 'name' => $shopInfo['shop_name'] ?? 'Etsy Shop',
-                'external_id' => (string) $shopInfo['shop_id'],
+                'external_store_id' => $shopId,
                 'access_token' => $data['access_token'],
                 'refresh_token' => $data['refresh_token'],
                 'token_expires_at' => now()->addSeconds($data['expires_in'] ?? 3600),
@@ -94,6 +98,7 @@ class EtsyService extends BasePlatformService
                     'user_id' => $shopInfo['user_id'],
                 ],
                 'status' => 'active',
+                'connected_successfully' => true,
             ]
         );
     }

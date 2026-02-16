@@ -62,6 +62,7 @@ class ProductTemplateField extends Model
         'help_text',
         'default_value',
         'is_required',
+        'is_private',
         'is_searchable',
         'is_filterable',
         'show_in_listing',
@@ -77,6 +78,7 @@ class ProductTemplateField extends Model
     {
         return [
             'is_required' => 'boolean',
+            'is_private' => 'boolean',
             'is_searchable' => 'boolean',
             'is_filterable' => 'boolean',
             'show_in_listing' => 'boolean',

@@ -41,6 +41,19 @@ class ProductTemplate extends Model
         return $this->hasMany(Category::class, 'template_id');
     }
 
+    public function platformMappings(): HasMany
+    {
+        return $this->hasMany(TemplatePlatformMapping::class);
+    }
+
+    /**
+     * Get the platform mapping for a specific platform.
+     */
+    public function getMappingForPlatform(string $platform): ?TemplatePlatformMapping
+    {
+        return $this->platformMappings->firstWhere('platform', $platform);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

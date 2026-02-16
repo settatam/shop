@@ -117,4 +117,14 @@ return [
         'api_url' => env('METALS_API_URL', 'https://metals-api.com/api/latest'),
     ],
 
+    'voice_gateway' => [
+        'url' => env('VOICE_GATEWAY_URL', 'http://localhost:3001'),
+        'secret' => env('VOICE_GATEWAY_SECRET'),
+    ],
+
+    'elevenlabs' => [
+        'api_key' => env('ELEVENLABS_API_KEY'),
+        'voice_id' => env('ELEVENLABS_VOICE_ID'),
+    ],
+
 ];

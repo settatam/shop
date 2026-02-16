@@ -65,6 +65,11 @@ class ProductsTable extends Table
                 'sortable' => true,
             ],
             [
+                'key' => 'marketplaces',
+                'label' => 'Listed On',
+                'sortable' => true,
+            ],
+            [
                 'key' => 'status',
                 'label' => 'Status',
                 'sortable' => true,
@@ -100,17 +105,17 @@ class ProductsTable extends Table
             // If Scout search returns no results, return empty query
             if (empty($this->scoutProductIds)) {
                 return Product::query()
-                    ->with(['category', 'brand', 'images', 'variants', 'tags'])
+                    ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace'])
                     ->whereRaw('1 = 0'); // Return empty result set
             }
 
             $query = Product::query()
-                ->with(['category', 'brand', 'images', 'variants', 'tags'])
+                ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace'])
                 ->whereIn('id', $this->scoutProductIds)
                 ->where('store_id', $storeId);
         } else {
             $query = Product::query()
-                ->with(['category', 'brand', 'images', 'variants', 'tags'])
+                ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace'])
                 ->where('store_id', $storeId);
         }
 
@@ -275,6 +280,10 @@ class ProductsTable extends Table
                 ->select('products.*');
         } elseif ($sortBy === 'price') {
             $query->orderByRaw('(SELECT MIN(price) FROM product_variants WHERE product_variants.product_id = products.id) '.$sortDirection);
+        } elseif ($sortBy === 'marketplaces') {
+            // Sort by number of active platform listings
+            $query->withCount(['platformListings' => fn ($q) => $q->where('status', 'active')])
+                ->orderBy('platform_listings_count', $sortDirection);
         } else {
             $query->orderBy($sortBy, $sortDirection);
         }
@@ -342,6 +351,18 @@ class ProductsTable extends Table
             'quantity' => [
                 'data' => $product->total_quantity,
                 'class' => 'text-center',
+            ],
+            'marketplaces' => [
+                'type' => 'platforms',
+                'data' => $product->platformListings
+                    ->filter(fn ($listing) => $listing->status === 'active')
+                    ->map(fn ($listing) => [
+                        'id' => $listing->id,
+                        'platform' => $listing->marketplace->platform->value,
+                        'name' => $listing->marketplace->name ?: $listing->marketplace->platform->label(),
+                        'status' => $listing->status,
+                        'listing_url' => $listing->listing_url,
+                    ])->values()->toArray(),
             ],
             'status' => [
                 'type' => 'badge',

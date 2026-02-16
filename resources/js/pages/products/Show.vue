@@ -2,6 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { ImageLightbox } from '@/components/images';
+import { PlatformListingsTab } from '@/components/platforms';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -52,6 +53,29 @@ interface Template {
     name: string;
 }
 
+interface PlatformListing {
+    id: number;
+    marketplace_id: number;
+    marketplace_name: string;
+    platform: string;
+    platform_label: string;
+    status: string;
+    listing_url: string | null;
+    external_listing_id: string | null;
+    platform_price: number | null;
+    platform_quantity: number | null;
+    last_synced_at: string | null;
+    published_at: string | null;
+    last_error: string | null;
+}
+
+interface AvailableMarketplace {
+    id: number;
+    name: string;
+    platform: string;
+    platform_label: string;
+}
+
 interface TemplateFieldValue {
     id: number;
     label: string;
@@ -87,6 +111,8 @@ interface Props {
     template?: Template | null;
     templateFields?: TemplateFieldValue[];
     activityLogs?: ActivityDay[];
+    platformListings?: PlatformListing[];
+    availableMarketplaces?: AvailableMarketplace[];
 }
 
 const props = defineProps<Props>();
@@ -126,6 +152,10 @@ const deleteProduct = () => {
     if (confirm(`Are you sure you want to delete "${props.product.title}"?`)) {
         router.delete(`/products/${props.product.id}`);
     }
+};
+
+const refreshListings = () => {
+    router.reload({ only: ['platformListings', 'availableMarketplaces'] });
 };
 </script>
 
@@ -312,6 +342,15 @@ const deleteProduct = () => {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Platform Listings -->
+                    <PlatformListingsTab
+                        :product-id="product.id"
+                        :listings="platformListings || []"
+                        :available-marketplaces="availableMarketplaces || []"
+                        :product-updated-at="product.updated_at"
+                        @refresh="refreshListings"
+                    />
                 </div>
 
                 <!-- Sidebar -->

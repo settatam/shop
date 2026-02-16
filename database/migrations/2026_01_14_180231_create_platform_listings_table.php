@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('platform_listings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('store_marketplace_id')->constrained('store_marketplaces')->cascadeOnDelete();
-            $table->foreignId('product_id')->constrained('store_marketplaces')->cascadeOnDelete();
-            $table->foreignId('product_variant_id')->nullable()->constrained('store_marketplaces')->cascadeOnDelete();
+            $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
+            $table->foreignId('product_variant_id')->nullable()->constrained('product_variants')->cascadeOnDelete();
             $table->string('external_listing_id')->nullable(); // Platform's listing ID
             $table->string('external_variant_id')->nullable(); // Platform's variant ID
             $table->string('status')->default('draft'); // draft, active, inactive, error

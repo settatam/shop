@@ -47,6 +47,14 @@ class PlatformManager
         return $this->platforms[$key];
     }
 
+    /**
+     * Alias for driver() for convenience.
+     */
+    public function getService(string|Platform $platform): PlatformInterface
+    {
+        return $this->driver($platform);
+    }
+
     public function getAvailablePlatforms(): array
     {
         return Platform::cases();

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\MaintenanceController;
+use App\Http\Controllers\Settings\MarketplaceController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PaymentTerminalController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -121,5 +122,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [MaintenanceController::class, 'index'])->name('index');
         Route::post('/reindex-search', [MaintenanceController::class, 'reindexSearch'])->name('reindex-search');
         Route::post('/reindex-model/{model}', [MaintenanceController::class, 'reindexModel'])->name('reindex-model');
+    });
+
+    // Marketplace Integrations
+    Route::middleware(['store', 'onboarding'])->prefix('settings/marketplaces')->name('settings.marketplaces.')->group(function () {
+        Route::get('/', [MarketplaceController::class, 'index'])->name('index');
+        Route::post('/', [MarketplaceController::class, 'store'])->name('store');
+        Route::get('/connect/{platform}', [MarketplaceController::class, 'connect'])->name('connect');
+        Route::get('/callback/{platform}', [MarketplaceController::class, 'callback'])->name('callback');
+        Route::put('/{marketplace}', [MarketplaceController::class, 'update'])->name('update');
+        Route::delete('/{marketplace}', [MarketplaceController::class, 'destroy'])->name('destroy');
+        Route::post('/{marketplace}/test', [MarketplaceController::class, 'test'])->name('test');
+        Route::post('/{marketplace}/sync', [MarketplaceController::class, 'sync'])->name('sync');
     });
 });

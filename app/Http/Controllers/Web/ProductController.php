@@ -9,10 +9,12 @@ use App\Models\Category;
 use App\Models\Image;
 use App\Models\Inventory;
 use App\Models\InventoryAdjustment;
+use App\Models\PlatformListing;
 use App\Models\PrinterSetting;
 use App\Models\Product;
 use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
+use App\Models\StoreMarketplace;
 use App\Models\Tag;
 use App\Models\Vendor;
 use App\Models\Warehouse;
@@ -591,6 +593,35 @@ class ProductController extends Controller
             ] : null,
             'templateFields' => $templateFieldsWithValues,
             'activityLogs' => app(ActivityLogFormatter::class)->formatForSubject($product),
+            'platformListings' => PlatformListing::where('product_id', $product->id)
+                ->with('storeMarketplace')
+                ->get()
+                ->map(fn (PlatformListing $listing) => [
+                    'id' => $listing->id,
+                    'platform' => $listing->storeMarketplace->platform->value,
+                    'platform_label' => $listing->storeMarketplace->platform->label(),
+                    'platform_product_id' => $listing->external_listing_id,
+                    'status' => $listing->status,
+                    'listing_url' => $listing->listing_url,
+                    'price' => $listing->platform_price,
+                    'quantity' => $listing->platform_quantity,
+                    'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
+                    'error_message' => $listing->last_error,
+                    'marketplace' => [
+                        'id' => $listing->store_marketplace_id,
+                        'name' => $listing->storeMarketplace->name,
+                    ],
+                ]),
+            'availableMarketplaces' => StoreMarketplace::where('store_id', $store->id)
+                ->sellingPlatforms()
+                ->connected()
+                ->get()
+                ->map(fn (StoreMarketplace $marketplace) => [
+                    'id' => $marketplace->id,
+                    'name' => $marketplace->name,
+                    'platform' => $marketplace->platform->value,
+                    'platform_label' => $marketplace->platform->label(),
+                ]),
         ]);
     }
 

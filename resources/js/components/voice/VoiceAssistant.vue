@@ -1,7 +1,25 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { MicrophoneIcon, StopIcon, SpeakerWaveIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { MicrophoneIcon, StopIcon, SpeakerWaveIcon, XMarkIcon, SignalIcon, SignalSlashIcon } from '@heroicons/vue/24/outline';
 import axios from 'axios';
+import { useVoiceGateway } from '@/composables/useVoiceGateway';
+
+const props = defineProps<{
+    useGateway?: boolean;
+}>();
+
+// Gateway mode state
+const gateway = useVoiceGateway({
+    onTranscript: (text) => {
+        transcript.value = text;
+    },
+    onResponse: (text) => {
+        response.value = text;
+    },
+    onError: (err) => {
+        error.value = err;
+    },
+});
 
 const isOpen = ref(false);
 const isRecording = ref(false);
@@ -11,6 +29,7 @@ const transcript = ref('');
 const response = ref('');
 const error = ref('');
 
+// Legacy mode state
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 let audioElement: HTMLAudioElement | null = null;
@@ -18,10 +37,25 @@ let recordingStartTime: number = 0;
 let currentStream: MediaStream | null = null;
 
 const canRecord = ref(false);
-const MIN_RECORDING_MS = 800; // Minimum recording duration in milliseconds
+const MIN_RECORDING_MS = 800;
+
+// Use gateway mode if enabled and supported
+const useGatewayMode = computed(() => props.useGateway ?? false);
+
+// Sync gateway state with local state
+watch(() => gateway.state.value.isProcessing, (val) => {
+    if (useGatewayMode.value) {
+        isProcessing.value = val;
+    }
+});
+
+watch(() => gateway.state.value.isPlaying, (val) => {
+    if (useGatewayMode.value) {
+        isPlaying.value = val;
+    }
+});
 
 onMounted(async () => {
-    // Check if browser supports audio recording
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         canRecord.value = true;
     }
@@ -30,11 +64,12 @@ onMounted(async () => {
 onUnmounted(() => {
     cancelRecording();
     stopAudio();
+    if (useGatewayMode.value) {
+        gateway.disconnect();
+    }
 });
 
-// Get the best supported audio mime type for recording
 function getSupportedMimeType(): string {
-    // Prefer formats that work well with OpenAI Whisper
     const mimeTypes = [
         'audio/mp4',
         'audio/webm',
@@ -48,7 +83,7 @@ function getSupportedMimeType(): string {
         }
     }
 
-    return ''; // Let browser choose default
+    return '';
 }
 
 let currentMimeType = '';
@@ -63,6 +98,14 @@ async function startRecording() {
     transcript.value = '';
     response.value = '';
 
+    // Use gateway mode if enabled
+    if (useGatewayMode.value) {
+        isRecording.value = true;
+        await gateway.startRecording();
+        return;
+    }
+
+    // Legacy HTTP mode
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         currentStream = stream;
@@ -85,13 +128,11 @@ async function startRecording() {
         mediaRecorder.onstop = async () => {
             const recordingDuration = Date.now() - recordingStartTime;
 
-            // Stop all tracks
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
                 currentStream = null;
             }
 
-            // Check if recording was long enough
             if (recordingDuration < MIN_RECORDING_MS) {
                 error.value = 'Recording too short. Hold the button and speak for at least 1 second.';
                 return;
@@ -102,7 +143,6 @@ async function startRecording() {
             await processAudio(audioBlob);
         };
 
-        // Start recording with timeslice to collect data periodically
         mediaRecorder.start(100);
         recordingStartTime = Date.now();
         isRecording.value = true;
@@ -113,6 +153,13 @@ async function startRecording() {
 }
 
 function stopRecording() {
+    if (useGatewayMode.value) {
+        isRecording.value = false;
+        isProcessing.value = true;
+        gateway.stopRecording();
+        return;
+    }
+
     if (mediaRecorder && isRecording.value) {
         mediaRecorder.stop();
         isRecording.value = false;
@@ -120,13 +167,17 @@ function stopRecording() {
 }
 
 function cancelRecording() {
+    if (useGatewayMode.value) {
+        gateway.cancelRecording();
+        isRecording.value = false;
+        return;
+    }
+
     if (mediaRecorder && isRecording.value) {
-        // Remove the onstop handler to prevent processing
         mediaRecorder.onstop = null;
         mediaRecorder.stop();
         isRecording.value = false;
 
-        // Stop all tracks
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
             currentStream = null;
@@ -144,7 +195,6 @@ function getFileExtension(mimeType: string): string {
         'audio/wav': 'wav',
     };
 
-    // Handle mime types with codecs (e.g., 'audio/webm;codecs=opus')
     const baseMime = mimeType.split(';')[0];
     return mimeToExt[baseMime] || 'webm';
 }
@@ -170,16 +220,16 @@ async function processAudio(audioBlob: Blob) {
             transcript.value = data.transcript || '';
             response.value = data.response || '';
 
-            // Play audio response if available
             if (data.audio_url) {
                 playAudio(data.audio_url);
             }
         } else {
             error.value = data.error || 'Failed to process voice query';
         }
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error('Failed to process audio:', err);
-        error.value = err.response?.data?.error || 'Failed to process voice query';
+        const axiosError = err as { response?: { data?: { error?: string } } };
+        error.value = axiosError.response?.data?.error || 'Failed to process voice query';
     } finally {
         isProcessing.value = false;
     }
@@ -211,6 +261,11 @@ function playAudio(url: string) {
 }
 
 function stopAudio() {
+    if (useGatewayMode.value && isPlaying.value) {
+        gateway.bargeIn();
+        return;
+    }
+
     if (audioElement) {
         audioElement.pause();
         audioElement.currentTime = 0;
@@ -238,6 +293,11 @@ const statusText = computed(() => {
     if (isProcessing.value) return 'Processing...';
     if (isPlaying.value) return 'Speaking...';
     return 'Tap to speak';
+});
+
+const connectionStatus = computed(() => {
+    if (!useGatewayMode.value) return null;
+    return gateway.state.value.isConnected ? 'connected' : 'disconnected';
 });
 </script>
 
@@ -275,13 +335,24 @@ const statusText = computed(() => {
                         <span class="block text-xs text-gray-500 dark:text-gray-400">Voice Reports</span>
                     </div>
                 </div>
-                <button
-                    type="button"
-                    class="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                    @click="close"
-                >
-                    <XMarkIcon class="size-5" />
-                </button>
+                <div class="flex items-center gap-2">
+                    <!-- Connection status indicator -->
+                    <div
+                        v-if="useGatewayMode"
+                        class="flex items-center gap-1"
+                        :title="connectionStatus === 'connected' ? 'Connected to voice gateway' : 'Disconnected'"
+                    >
+                        <SignalIcon v-if="connectionStatus === 'connected'" class="size-4 text-green-500" />
+                        <SignalSlashIcon v-else class="size-4 text-gray-400" />
+                    </div>
+                    <button
+                        type="button"
+                        class="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                        @click="close"
+                    >
+                        <XMarkIcon class="size-5" />
+                    </button>
+                </div>
             </div>
 
             <!-- Content -->
@@ -349,6 +420,7 @@ const statusText = computed(() => {
                             type="button"
                             class="p-1 text-indigo-600 hover:text-indigo-500"
                             @click="stopAudio"
+                            title="Stop playback"
                         >
                             <StopIcon class="size-4" />
                         </button>
@@ -380,8 +452,12 @@ const statusText = computed(() => {
                             <span>"Help me price this gold chain"</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="w-16 text-gray-400">Customer:</span>
-                            <span>"Tell me about John Smith"</span>
+                            <span class="w-16 text-gray-400">Memory:</span>
+                            <span>"Remember that Mike prefers cash"</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-16 text-gray-400">Remind:</span>
+                            <span>"Remind me to call Mike tomorrow"</span>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="w-16 text-gray-400">Close:</span>

@@ -176,6 +176,19 @@ class Product extends Model
         return $this->hasMany(PlatformListing::class);
     }
 
+    public function platformOverrides(): HasMany
+    {
+        return $this->hasMany(ProductPlatformOverride::class);
+    }
+
+    /**
+     * Get the override for a specific marketplace.
+     */
+    public function getOverrideForMarketplace(int $storeMarketplaceId): ?ProductPlatformOverride
+    {
+        return $this->platformOverrides->firstWhere('store_marketplace_id', $storeMarketplaceId);
+    }
+
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);

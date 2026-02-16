@@ -71,21 +71,40 @@ class EbayService extends BasePlatformService
 
         $data = $response->json();
 
+        // Get eBay user info to uniquely identify this account
+        $userResponse = Http::withToken($data['access_token'])
+            ->get("{$this->apiBaseUrl}/commerce/identity/v1/user/");
+
+        $userId = null;
+        $username = null;
+        if ($userResponse->successful()) {
+            $userData = $userResponse->json();
+            $userId = $userData['userId'] ?? null;
+            $username = $userData['username'] ?? null;
+        }
+
+        // Use updateOrCreate with external_store_id to support multiple accounts
+        // If we have a userId, use it; otherwise create a new connection
+        $uniqueKeys = ['store_id' => $store->id, 'platform' => Platform::Ebay];
+        if ($userId) {
+            $uniqueKeys['external_store_id'] = $userId;
+        }
+
         return StoreMarketplace::updateOrCreate(
+            $uniqueKeys,
             [
-                'store_id' => $store->id,
-                'platform' => Platform::Ebay,
-            ],
-            [
-                'name' => 'eBay Store',
+                'name' => $username ? "eBay ({$username})" : 'eBay Store',
+                'external_store_id' => $userId,
                 'access_token' => $data['access_token'],
                 'refresh_token' => $data['refresh_token'] ?? null,
                 'token_expires_at' => now()->addSeconds($data['expires_in'] ?? 7200),
                 'credentials' => [
                     'scope' => $data['scope'] ?? null,
                     'refresh_token_expires_in' => $data['refresh_token_expires_in'] ?? null,
+                    'username' => $username,
                 ],
                 'status' => 'active',
+                'connected_successfully' => true,
             ]
         );
     }

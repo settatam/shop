@@ -574,6 +574,40 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::delete('integrations/platforms/{platform}', [IntegrationsController::class, 'destroyPlatform'])->name('integrations.platforms.destroy');
     });
 
+    // Platform Listings
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('listings', [\App\Http\Controllers\Web\PlatformListingController::class, 'overview'])->name('listings.index');
+        Route::get('products/{product}/listings', [\App\Http\Controllers\Web\PlatformListingController::class, 'index'])->name('products.listings.index');
+        Route::get('products/{product}/listings/{marketplace}/preview', [\App\Http\Controllers\Web\PlatformListingController::class, 'preview'])->name('products.listings.preview');
+        // Full platform listing page
+        Route::get('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'show'])->name('products.platforms.show');
+        Route::post('products/{product}/platforms/{marketplace}/preview', [\App\Http\Controllers\Web\ProductPlatformController::class, 'preview'])->name('products.platforms.preview');
+    });
+    Route::middleware('permission:products.update')->group(function () {
+        Route::post('products/{product}/listings/{marketplace}/publish', [\App\Http\Controllers\Web\PlatformListingController::class, 'publish'])->name('products.listings.publish');
+        Route::delete('products/{product}/listings/{marketplace}', [\App\Http\Controllers\Web\PlatformListingController::class, 'unpublish'])->name('products.listings.unpublish');
+        Route::put('products/{product}/listings/{marketplace}/override', [\App\Http\Controllers\Web\PlatformListingController::class, 'updateOverride'])->name('products.listings.override');
+        Route::post('products/{product}/listings/{marketplace}/sync', [\App\Http\Controllers\Web\PlatformListingController::class, 'sync'])->name('products.listings.sync');
+        // Full platform listing page updates
+        Route::put('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'update'])->name('products.platforms.update');
+        Route::post('products/{product}/platforms/{marketplace}/publish', [\App\Http\Controllers\Web\ProductPlatformController::class, 'publish'])->name('products.platforms.publish');
+        Route::delete('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'unpublish'])->name('products.platforms.unpublish');
+        Route::post('products/{product}/platforms/{marketplace}/sync', [\App\Http\Controllers\Web\ProductPlatformController::class, 'sync'])->name('products.platforms.sync');
+    });
+
+    // Template Platform Mappings
+    Route::middleware('permission:templates.view')->group(function () {
+        Route::get('settings/template-mappings', [\App\Http\Controllers\Web\TemplateMappingController::class, 'index'])->name('settings.template-mappings.index');
+        Route::get('settings/template-mappings/{template}/{platform}', [\App\Http\Controllers\Web\TemplateMappingController::class, 'show'])->name('settings.template-mappings.show');
+        Route::get('settings/template-mappings/{template}/{platform}/fields', [\App\Http\Controllers\Web\TemplateMappingController::class, 'templatePlatformFields'])->name('settings.template-mappings.fields');
+        Route::get('settings/platform-fields/{platform}', [\App\Http\Controllers\Web\TemplateMappingController::class, 'platformFields'])->name('settings.platform-fields');
+    });
+    Route::middleware('permission:templates.update')->group(function () {
+        Route::post('settings/template-mappings/{template}/{platform}/suggest', [\App\Http\Controllers\Web\TemplateMappingController::class, 'suggest'])->name('settings.template-mappings.suggest');
+        Route::put('settings/template-mappings/{template}/{platform}', [\App\Http\Controllers\Web\TemplateMappingController::class, 'update'])->name('settings.template-mappings.update');
+        Route::delete('settings/template-mappings/{template}/{platform}', [\App\Http\Controllers\Web\TemplateMappingController::class, 'destroy'])->name('settings.template-mappings.destroy');
+    });
+
     // Invoices - requires view permission for relevant categories
     Route::middleware('permission:orders.view,repairs.view,memos.view')->group(function () {
         Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
