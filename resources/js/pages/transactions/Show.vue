@@ -76,6 +76,7 @@ interface TransactionItem {
     notes: string | null;
     is_added_to_inventory: boolean;
     reviewed_at: string | null;
+    reviewed_by: { id: number; name: string } | null;
     images: ItemImage[];
 }
 
@@ -1792,7 +1793,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Review</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
@@ -1843,6 +1843,30 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                 >
                                                     {{ item.description }}
                                                 </p>
+                                                <!-- Review Status -->
+                                                <div class="mt-2">
+                                                    <span
+                                                        v-if="item.reviewed_at"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                    >
+                                                        <CheckBadgeIcon class="size-3.5" />
+                                                        Reviewed
+                                                        <span class="text-green-600 dark:text-green-500">
+                                                            · {{ formatReviewDate(item.reviewed_at) }}
+                                                            <template v-if="item.reviewed_by"> by {{ item.reviewed_by.name }}</template>
+                                                        </span>
+                                                    </span>
+                                                    <button
+                                                        v-else
+                                                        type="button"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-colors"
+                                                        title="Mark as reviewed"
+                                                        @click="handleReviewItem(item)"
+                                                    >
+                                                        <CheckBadgeIcon class="size-3.5" />
+                                                        Mark as Reviewed
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
                                                 {{ formatWeight(item.dwt) }}
@@ -1880,27 +1904,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
                                                     </span>
                                                 </div>
-                                            </td>
-                                            <!-- Status Column -->
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-center">
-                                                <span
-                                                    v-if="item.reviewed_at"
-                                                    class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                    :title="`Reviewed on ${formatReviewDate(item.reviewed_at)}`"
-                                                >
-                                                    <CheckBadgeIcon class="size-3.5" />
-                                                    Reviewed
-                                                </span>
-                                                <button
-                                                    v-else
-                                                    type="button"
-                                                    class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-colors"
-                                                    title="Mark as reviewed"
-                                                    @click="handleReviewItem(item)"
-                                                >
-                                                    <CheckBadgeIcon class="size-3.5" />
-                                                    Review
-                                                </button>
                                             </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
                                                 <button
@@ -2001,7 +2004,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 dark:text-white">Review</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
@@ -2052,6 +2054,30 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                 >
                                                     {{ item.description }}
                                                 </p>
+                                                <!-- Review Status -->
+                                                <div class="mt-2">
+                                                    <span
+                                                        v-if="item.reviewed_at"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                    >
+                                                        <CheckBadgeIcon class="size-3.5" />
+                                                        Reviewed
+                                                        <span class="text-green-600 dark:text-green-500">
+                                                            · {{ formatReviewDate(item.reviewed_at) }}
+                                                            <template v-if="item.reviewed_by"> by {{ item.reviewed_by.name }}</template>
+                                                        </span>
+                                                    </span>
+                                                    <button
+                                                        v-else
+                                                        type="button"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-colors"
+                                                        title="Mark as reviewed"
+                                                        @click="handleReviewItem(item)"
+                                                    >
+                                                        <CheckBadgeIcon class="size-3.5" />
+                                                        Mark as Reviewed
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300 text-right">
                                                 {{ formatWeight(item.dwt) }}
@@ -2089,27 +2115,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
                                                     </span>
                                                 </div>
-                                            </td>
-                                            <!-- Status Column -->
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-center">
-                                                <span
-                                                    v-if="item.reviewed_at"
-                                                    class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                    :title="`Reviewed on ${formatReviewDate(item.reviewed_at)}`"
-                                                >
-                                                    <CheckBadgeIcon class="size-3.5" />
-                                                    Reviewed
-                                                </span>
-                                                <button
-                                                    v-else
-                                                    type="button"
-                                                    class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400 transition-colors"
-                                                    title="Mark as reviewed"
-                                                    @click="handleReviewItem(item)"
-                                                >
-                                                    <CheckBadgeIcon class="size-3.5" />
-                                                    Review
-                                                </button>
                                             </td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
                                                 <button

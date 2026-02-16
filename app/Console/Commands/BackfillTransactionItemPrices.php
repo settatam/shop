@@ -125,13 +125,14 @@ class BackfillTransactionItemPrices extends Command
             $buyPrice = (float) ($item->buy_price ?? 0);
 
             if ($existingPrice > 0 || $buyPrice > 0) {
-                // Item has a price, use the higher of price or buy_price
-                $usePrice = max($existingPrice, $buyPrice);
+                // Item has a price - preserve existing values, only fill missing ones
+                // Use buy_price as reference for price if price is missing (est. value >= buy price)
+                // Do NOT fill buy_price from price - buy_price of 0 means it wasn't entered
                 $itemPrices[$index] = [
-                    'price' => $existingPrice > 0 ? $existingPrice : $usePrice,
-                    'buy_price' => $buyPrice > 0 ? $buyPrice : $usePrice,
+                    'price' => $existingPrice > 0 ? $existingPrice : $buyPrice,
+                    'buy_price' => $buyPrice, // Preserve original buy_price, don't override with price
                 ];
-                $totalExistingPrices += $usePrice;
+                $totalExistingPrices += max($existingPrice, $buyPrice);
             } else {
                 // Mark for distribution
                 $itemsWithoutPrice[$index] = $item;

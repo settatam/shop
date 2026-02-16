@@ -27,6 +27,7 @@ use App\Services\TradeIn\TradeInService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -239,7 +240,7 @@ class OrderController extends Controller
             ],
             'store' => [
                 'name' => $store->business_name ?? $store->name,
-                'logo' => $store->logo_url,
+                'logo' => $store->logo ? Storage::disk('do_spaces')->url($store->logo) : null,
                 'address' => $store->address,
                 'address2' => $store->address2,
                 'city' => $store->city,

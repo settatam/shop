@@ -119,6 +119,7 @@ class TransactionController extends Controller
             'assignedUser',
             'items.images',
             'items.category',
+            'items.reviewer',
             'statusHistories.user',
             'offers.user',
             'offers.respondedByUser',
@@ -1286,7 +1287,7 @@ class TransactionController extends Controller
             'transaction' => $formattedTransaction,
             'store' => [
                 'name' => $store->name,
-                'logo' => $store->logo,
+                'logo' => $store->logo ? \Illuminate\Support\Facades\Storage::disk('do_spaces')->url($store->logo) : null,
                 'address' => $store->address,
                 'address2' => $store->address2,
                 'city' => $store->city,
@@ -1387,6 +1388,10 @@ class TransactionController extends Controller
                 'notes' => $item->notes,
                 'is_added_to_inventory' => $item->is_added_to_inventory,
                 'reviewed_at' => $item->reviewed_at?->toISOString(),
+                'reviewed_by' => $item->reviewer ? [
+                    'id' => $item->reviewer->id,
+                    'name' => $item->reviewer->name,
+                ] : null,
                 'images' => $item->images->map(fn ($image) => [
                     'id' => $image->id,
                     'url' => $image->url,

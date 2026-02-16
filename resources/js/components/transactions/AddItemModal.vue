@@ -289,7 +289,8 @@ const metalAutoDetected = computed(() => {
 });
 
 // --- Spot price ---
-const spotPrice = ref<number | null>(null);
+const spotPrice = ref<number | null>(null);  // Market value
+const calculatedBuyPrice = ref<number | null>(null);  // Store's buy price (with markup)
 const loadingSpotPrice = ref(false);
 let spotPriceTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -360,13 +361,16 @@ function calculateSpotPrice() {
             });
             if (response.ok) {
                 const data = await response.json();
-                // Use buy_price (with store markup) if available, fallback to spot_price
-                spotPrice.value = data.buy_price ?? data.spot_price;
+                // Store market value (spot_price) and store's buy price separately
+                spotPrice.value = data.spot_price ?? null;
+                calculatedBuyPrice.value = data.buy_price ?? data.spot_price ?? null;
             } else {
                 spotPrice.value = null;
+                calculatedBuyPrice.value = null;
             }
         } catch {
             spotPrice.value = null;
+            calculatedBuyPrice.value = null;
         } finally {
             loadingSpotPrice.value = false;
         }
@@ -374,8 +378,13 @@ function calculateSpotPrice() {
 }
 
 function fillSpotPrice() {
+    // Fill Est. Value with market price
     if (spotPrice.value !== null) {
         form.value.price = spotPrice.value;
+    }
+    // Fill Buy Price with store's calculated buy price
+    if (calculatedBuyPrice.value !== null) {
+        form.value.buy_price = calculatedBuyPrice.value;
     }
 }
 
@@ -490,6 +499,7 @@ watch(() => props.open, (isOpen) => {
         imagePreviews.value = [];
         imagesToDelete.value = [];
         spotPrice.value = null;
+        calculatedBuyPrice.value = null;
     }
 });
 
@@ -976,17 +986,24 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                                 />
                                             </div>
                                             <!-- Spot price hint -->
-                                            <div v-if="spotPrice !== null" class="mt-1">
+                                            <div v-if="spotPrice !== null || calculatedBuyPrice !== null" class="mt-1">
                                                 <button
                                                     type="button"
                                                     class="text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
                                                     @click="fillSpotPrice"
                                                 >
-                                                    Spot value: ${{ spotPrice.toFixed(2) }} — click to fill
+                                                    <template v-if="spotPrice !== null">
+                                                        Market: ${{ spotPrice.toFixed(2) }}
+                                                    </template>
+                                                    <template v-if="spotPrice !== null && calculatedBuyPrice !== null"> | </template>
+                                                    <template v-if="calculatedBuyPrice !== null">
+                                                        Buy: ${{ calculatedBuyPrice.toFixed(2) }}
+                                                    </template>
+                                                    — click to fill both
                                                 </button>
                                             </div>
                                             <div v-else-if="loadingSpotPrice" class="mt-1 text-xs text-gray-400">
-                                                Calculating spot price...
+                                                Calculating prices...
                                             </div>
                                         </div>
                                     </div>
