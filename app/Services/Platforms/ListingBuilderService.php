@@ -314,6 +314,8 @@ class ListingBuilderService
 
     /**
      * Build metafields array using template configuration.
+     * By default, ALL non-private template fields are sent as metafields.
+     * Platform mappings can customize namespace/key or exclude specific fields.
      *
      * @param  array<string, mixed>  $attributes
      * @return array<array{namespace: string, key: string, value: mixed, type: string}>
@@ -328,31 +330,47 @@ class ListingBuilderService
             return $metafields;
         }
 
-        // Get the template's platform mapping
+        // Load template fields
+        $template->load('fields');
+
+        // Get the template's platform mapping (optional - for customization)
         $platformMapping = $template->platformMappings()
             ->where('platform', $platform)
             ->first();
 
-        if (! $platformMapping) {
-            // No mapping configured - don't send any metafields
-            return $metafields;
-        }
+        // Get custom metafield configs if mapping exists
+        $customMetafieldConfigs = $platformMapping?->getEnabledMetafields() ?? [];
+        $excludedFields = $platformMapping?->excluded_metafields ?? [];
 
-        // Get enabled metafield configurations
-        $enabledMetafields = $platformMapping->getEnabledMetafields();
-
-        // Build metafields only for configured fields
-        foreach ($enabledMetafields as $templateFieldName => $config) {
-            $value = $attributes[$templateFieldName] ?? $this->getProductAttributeValue($product, $templateFieldName);
-
-            if ($value !== null && $value !== '') {
-                $metafields[] = [
-                    'namespace' => $config['namespace'],
-                    'key' => $config['key'],
-                    'value' => $value,
-                    'type' => $this->getShopifyMetafieldType($value),
-                ];
+        // Build metafields for ALL non-private template fields
+        foreach ($template->fields as $field) {
+            // Skip private fields - these are internal only
+            if ($field->is_private) {
+                continue;
             }
+
+            // Skip explicitly excluded fields
+            if (in_array($field->name, $excludedFields)) {
+                continue;
+            }
+
+            // Get the value (from attributes array or product attribute values)
+            $value = $attributes[$field->name] ?? $this->getProductAttributeValue($product, $field->name);
+
+            // Skip empty values
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            // Check if there's a custom config for this field
+            $config = $customMetafieldConfigs[$field->name] ?? null;
+
+            $metafields[] = [
+                'namespace' => $config['namespace'] ?? 'custom',
+                'key' => $config['key'] ?? $field->name,
+                'value' => $value,
+                'type' => $this->getShopifyMetafieldType($value),
+            ];
         }
 
         return $metafields;

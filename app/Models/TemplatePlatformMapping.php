@@ -17,6 +17,7 @@ class TemplatePlatformMapping extends Model
         'field_mappings',
         'default_values',
         'metafield_mappings',
+        'excluded_metafields',
         'is_ai_generated',
     ];
 
@@ -27,6 +28,7 @@ class TemplatePlatformMapping extends Model
             'field_mappings' => 'array',
             'default_values' => 'array',
             'metafield_mappings' => 'array',
+            'excluded_metafields' => 'array',
             'is_ai_generated' => 'boolean',
         ];
     }
