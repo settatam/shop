@@ -186,6 +186,7 @@ class MigrateLegacyTransactions extends Command
         $query = DB::connection('legacy')
             ->table('transactions')
             ->where('store_id', $this->legacyStoreId)
+            ->whereNotNull('customer_id') // Skip transactions without customers
             ->orderBy('created_at', $order);
 
         // Only skip deleted if NOT syncing deletes

@@ -273,7 +273,7 @@ class MigrateLegacyRepairs extends Command
         $query = DB::connection('legacy')
             ->table('repairs')
             ->where('store_id', $legacyStoreId)
-
+            ->whereNotNull('customer_id') // Skip repairs without customers
             ->orderBy('id', 'asc');
 
         if ($limit > 0) {

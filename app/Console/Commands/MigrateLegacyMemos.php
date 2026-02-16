@@ -237,7 +237,7 @@ class MigrateLegacyMemos extends Command
         $query = DB::connection('legacy')
             ->table('memos')
             ->where('store_id', $legacyStoreId)
-
+            ->whereNotNull('vendor_id') // Skip memos without vendors
             ->orderBy('id', 'asc');
 
         if ($limit > 0) {
