@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
+import StoreSwitcherModal from '@/components/StoreSwitcherModal.vue';
 import {
     Sidebar,
     SidebarContent,
@@ -13,33 +15,15 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { type NavItem, type Store } from '@/types';
-import { Link, usePage } from '@inertiajs/vue3';
+import { usePage } from '@inertiajs/vue3';
 import { ArchiveIcon, Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, MessageSquare, Package, ShoppingCart, Plug, ChevronDown, Users, Store as StoreIcon } from 'lucide-vue-next';
-import AppLogo from './AppLogo.vue';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { router } from '@inertiajs/vue3';
 
 const page = usePage();
 
 const stores = computed(() => (page.props.stores as Store[] | undefined) || []);
 const currentStore = computed(() => page.props.currentStore as Store | undefined);
 
-function switchStore(store: Store) {
-    if (store.id === currentStore.value?.id) return;
-
-    router.post(`/stores/${store.id}/switch`, {}, {
-        preserveState: false,
-        preserveScroll: false,
-    });
-}
-
-import { computed } from 'vue';
+const showStoreSwitcher = ref(false);
 
 const mainNavItems: NavItem[] = [
     {
@@ -150,69 +134,36 @@ const footerNavItems: NavItem[] = [
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger as-child>
-                            <SidebarMenuButton
-                                size="lg"
-                                class="w-full justify-between data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    <SidebarMenuButton
+                        size="lg"
+                        class="w-full justify-between hover:bg-sidebar-accent"
+                        @click="showStoreSwitcher = true"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background"
                             >
-                                <div class="flex items-center gap-3">
-                                    <div
-                                        class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background"
-                                    >
-                                        <img
-                                            v-if="currentStore?.logo_url"
-                                            :src="currentStore.logo_url"
-                                            :alt="currentStore.name"
-                                            class="h-full w-full object-contain"
-                                        />
-                                        <span v-else class="text-sm font-semibold">
-                                            {{ currentStore?.initial || 'S' }}
-                                        </span>
-                                    </div>
-                                    <div class="flex flex-col items-start text-left">
-                                        <span class="truncate text-sm font-semibold">
-                                            {{ currentStore?.name || 'Select Store' }}
-                                        </span>
-                                        <span v-if="currentStore?.role" class="truncate text-xs text-muted-foreground">
-                                            {{ currentStore.role.name }}
-                                        </span>
-                                    </div>
-                                </div>
-                                <ChevronDown class="ml-auto size-4 opacity-50" />
-                            </SidebarMenuButton>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent class="w-56" align="start" side="bottom">
-                            <DropdownMenuItem
-                                v-for="store in stores"
-                                :key="store.id"
-                                :class="{ 'bg-accent': store.id === currentStore?.id }"
-                                @click="switchStore(store)"
-                            >
-                                <div class="flex items-center gap-3">
-                                    <div
-                                        class="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded border bg-background"
-                                    >
-                                        <img
-                                            v-if="store.logo_url"
-                                            :src="store.logo_url"
-                                            :alt="store.name"
-                                            class="h-full w-full object-contain"
-                                        />
-                                        <span v-else class="text-xs font-medium">{{ store.initial }}</span>
-                                    </div>
-                                    <span class="truncate">{{ store.name }}</span>
-                                </div>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator v-if="stores.length > 0" />
-                            <DropdownMenuItem as-child>
-                                <Link :href="dashboard()">
-                                    <AppLogo class="mr-2 size-4" />
-                                    Dashboard
-                                </Link>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                                <img
+                                    v-if="currentStore?.logo_url"
+                                    :src="currentStore.logo_url"
+                                    :alt="currentStore.name"
+                                    class="h-full w-full object-contain"
+                                />
+                                <span v-else class="text-sm font-semibold">
+                                    {{ currentStore?.initial || 'S' }}
+                                </span>
+                            </div>
+                            <div class="flex flex-col items-start text-left">
+                                <span class="truncate text-sm font-semibold">
+                                    {{ currentStore?.name || 'Select Store' }}
+                                </span>
+                                <span v-if="currentStore?.role" class="truncate text-xs text-muted-foreground">
+                                    {{ currentStore.role.name }}
+                                </span>
+                            </div>
+                        </div>
+                        <ChevronDown class="ml-auto size-4 opacity-50" />
+                    </SidebarMenuButton>
                 </SidebarMenuItem>
             </SidebarMenu>
         </SidebarHeader>
@@ -227,4 +178,11 @@ const footerNavItems: NavItem[] = [
         </SidebarFooter>
     </Sidebar>
     <slot />
+
+    <!-- Store Switcher Modal -->
+    <StoreSwitcherModal
+        v-model:open="showStoreSwitcher"
+        :stores="stores"
+        :current-store="currentStore"
+    />
 </template>
