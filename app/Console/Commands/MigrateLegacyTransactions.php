@@ -34,7 +34,7 @@ class MigrateLegacyTransactions extends Command
      *
      * @var array<int, string>
      */
-    protected array $statusMap = [
+    protected array $statusIdMap = [
         1 => Transaction::STATUS_KIT_SENT,
         2 => Transaction::STATUS_ITEMS_RECEIVED,
         3 => Transaction::STATUS_KIT_REQUEST_REJECTED,
@@ -48,19 +48,67 @@ class MigrateLegacyTransactions extends Command
         18 => Transaction::STATUS_ITEMS_RETURNED,
         19 => Transaction::STATUS_OFFER_DECLINED,
         20 => Transaction::STATUS_KIT_REQUEST_REJECTED,
+        21 => Transaction::STATUS_ITEMS_RETURNED,
         25 => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
         50 => Transaction::STATUS_ITEMS_REVIEWED,
-        53 => Transaction::STATUS_KIT_REQUEST_CONFIRMED,
-        54 => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
+        53 => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
+        54 => Transaction::STATUS_KIT_REQUEST_CONFIRMED,
         55 => Transaction::STATUS_ITEMS_REVIEWED,
+        57 => Transaction::STATUS_PENDING_KIT_REQUEST,
+        58 => Transaction::STATUS_KIT_REQUEST_REJECTED,
         60 => Transaction::STATUS_PENDING_KIT_REQUEST,
+        61 => Transaction::STATUS_PENDING_KIT_REQUEST,
         62 => Transaction::STATUS_PENDING_KIT_REQUEST,
-        66 => Transaction::STATUS_PAYMENT_PROCESSED,
+        64 => Transaction::STATUS_PENDING_KIT_REQUEST,
+        65 => Transaction::STATUS_OFFER_GIVEN,
+        66 => Transaction::STATUS_OFFER_ACCEPTED,
         67 => Transaction::STATUS_PAYMENT_PROCESSED,
-        68 => Transaction::STATUS_OFFER_DECLINED,
-        69 => Transaction::STATUS_OFFER_DECLINED,
-        71 => Transaction::STATUS_PAYMENT_PROCESSED,
+        68 => Transaction::STATUS_ITEMS_RETURNED,
+        69 => Transaction::STATUS_PAYMENT_PROCESSED,
+        70 => Transaction::STATUS_CANCELLED,
+        71 => Transaction::STATUS_ITEMS_REVIEWED,
         72 => Transaction::STATUS_PAYMENT_PROCESSED,
+    ];
+
+    /**
+     * Map legacy status names (case-insensitive) to new status strings.
+     * Used as a fallback when status_id is not in statusIdMap.
+     *
+     * @var array<string, string>
+     */
+    protected array $statusNameMap = [
+        'pending' => Transaction::STATUS_PENDING,
+        'pending kit request' => Transaction::STATUS_PENDING_KIT_REQUEST,
+        'pending kit requests' => Transaction::STATUS_PENDING_KIT_REQUEST,
+        'kit request confirmed' => Transaction::STATUS_KIT_REQUEST_CONFIRMED,
+        'kit request rejected' => Transaction::STATUS_KIT_REQUEST_REJECTED,
+        'kit request on hold' => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
+        'kit sent' => Transaction::STATUS_KIT_SENT,
+        'kit delivered' => Transaction::STATUS_KIT_DELIVERED,
+        'kits received' => Transaction::STATUS_ITEMS_RECEIVED,
+        'kit received' => Transaction::STATUS_ITEMS_RECEIVED,
+        'items received' => Transaction::STATUS_ITEMS_RECEIVED,
+        'items reviewed' => Transaction::STATUS_ITEMS_REVIEWED,
+        'reviewed' => Transaction::STATUS_ITEMS_REVIEWED,
+        'offer given' => Transaction::STATUS_OFFER_GIVEN,
+        'pending offer' => Transaction::STATUS_OFFER_GIVEN,
+        'offer accepted' => Transaction::STATUS_OFFER_ACCEPTED,
+        'offer declined' => Transaction::STATUS_OFFER_DECLINED,
+        'offers declined' => Transaction::STATUS_OFFER_DECLINED,
+        'payment pending' => Transaction::STATUS_PAYMENT_PENDING,
+        'payment processed' => Transaction::STATUS_PAYMENT_PROCESSED,
+        'paid' => Transaction::STATUS_PAYMENT_PROCESSED,
+        'moved to nwe' => Transaction::STATUS_PAYMENT_PROCESSED,
+        'sold' => Transaction::STATUS_PAYMENT_PROCESSED,
+        'refund payment processed' => Transaction::STATUS_PAYMENT_PROCESSED,
+        'return requested' => Transaction::STATUS_RETURN_REQUESTED,
+        'items returned' => Transaction::STATUS_ITEMS_RETURNED,
+        'returned by admin' => Transaction::STATUS_ITEMS_RETURNED,
+        'return received' => Transaction::STATUS_ITEMS_RETURNED,
+        'cancelled' => Transaction::STATUS_CANCELLED,
+        'archive' => Transaction::STATUS_CANCELLED,
+        'on hold' => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
+        '14 day - on hold' => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
     ];
 
     /**
@@ -232,15 +280,18 @@ class MigrateLegacyTransactions extends Command
             $customerId = $this->migrateCustomer($legacyTransaction->customer_id);
         }
 
-        // Get legacy status - use exact status name from legacy system
+        // Get legacy status and map to new system
         $legacyStatus = DB::connection('legacy')
             ->table('statuses')
             ->where('store_id', $this->legacyStoreId)
             ->where('status_id', $legacyTransaction->status_id)
             ->first();
 
-        // Use the exact legacy status name - no mapping
-        $statusName = $legacyStatus?->name ?? 'Pending';
+        // Map status: first try status_id, then status name, then default to pending
+        $statusName = $this->mapLegacyStatus(
+            $legacyTransaction->status_id,
+            $legacyStatus?->name
+        );
 
         // Determine type based on is_in_house flag
         $type = $legacyTransaction->is_in_house ? Transaction::TYPE_IN_STORE : Transaction::TYPE_MAIL_IN;
@@ -273,9 +324,8 @@ class MigrateLegacyTransactions extends Command
         }
 
         // Determine if this is a payment_processed status (for setting timestamps)
-        $isPaymentProcessed = $statusName === Transaction::STATUS_PAYMENT_PROCESSED
-            || str_contains(strtolower($statusName), 'payment processed')
-            || str_contains(strtolower($statusName), 'paid');
+        // Since we now map to constants, just compare directly
+        $isPaymentProcessed = $statusName === Transaction::STATUS_PAYMENT_PROCESSED;
 
         // Create the transaction using DB insert to preserve timestamps exactly
         $transactionData = [
@@ -771,6 +821,83 @@ class MigrateLegacyTransactions extends Command
             6 => Transaction::PAYMENT_CASH,
             default => null,
         };
+    }
+
+    /**
+     * Map legacy status to new system status constant.
+     *
+     * Priority:
+     * 1. Check statusIdMap for exact status_id match
+     * 2. Check statusNameMap for status name match (case-insensitive, with fuzzy matching)
+     * 3. Default to pending
+     */
+    protected function mapLegacyStatus(?int $statusId, ?string $statusName): string
+    {
+        // First try mapping by status_id
+        if ($statusId !== null && isset($this->statusIdMap[$statusId])) {
+            return $this->statusIdMap[$statusId];
+        }
+
+        // Then try mapping by status name
+        if ($statusName !== null) {
+            $normalizedName = strtolower(trim($statusName));
+
+            // Direct match
+            if (isset($this->statusNameMap[$normalizedName])) {
+                return $this->statusNameMap[$normalizedName];
+            }
+
+            // Fuzzy match - check if any key is contained in the status name
+            foreach ($this->statusNameMap as $key => $value) {
+                if (str_contains($normalizedName, $key)) {
+                    return $value;
+                }
+            }
+
+            // Check for common patterns
+            if (str_contains($normalizedName, 'payment processed') || str_contains($normalizedName, 'paid')) {
+                return Transaction::STATUS_PAYMENT_PROCESSED;
+            }
+            if (str_contains($normalizedName, 'offer accepted')) {
+                return Transaction::STATUS_OFFER_ACCEPTED;
+            }
+            if (str_contains($normalizedName, 'offer declined') || str_contains($normalizedName, 'declined')) {
+                return Transaction::STATUS_OFFER_DECLINED;
+            }
+            if (str_contains($normalizedName, 'offer given') || str_contains($normalizedName, 'pending offer')) {
+                return Transaction::STATUS_OFFER_GIVEN;
+            }
+            if (str_contains($normalizedName, 'kit sent')) {
+                return Transaction::STATUS_KIT_SENT;
+            }
+            if (str_contains($normalizedName, 'received') || str_contains($normalizedName, 'kits received')) {
+                return Transaction::STATUS_ITEMS_RECEIVED;
+            }
+            if (str_contains($normalizedName, 'reviewed') || str_contains($normalizedName, 'ready to buy')) {
+                return Transaction::STATUS_ITEMS_REVIEWED;
+            }
+            if (str_contains($normalizedName, 'returned') || str_contains($normalizedName, 'return')) {
+                return Transaction::STATUS_ITEMS_RETURNED;
+            }
+            if (str_contains($normalizedName, 'pending kit') || str_contains($normalizedName, 'kit request')) {
+                return Transaction::STATUS_PENDING_KIT_REQUEST;
+            }
+            if (str_contains($normalizedName, 'on hold') || str_contains($normalizedName, 'hold')) {
+                return Transaction::STATUS_KIT_REQUEST_ON_HOLD;
+            }
+            if (str_contains($normalizedName, 'rejected')) {
+                return Transaction::STATUS_KIT_REQUEST_REJECTED;
+            }
+            if (str_contains($normalizedName, 'confirmed')) {
+                return Transaction::STATUS_KIT_REQUEST_CONFIRMED;
+            }
+            if (str_contains($normalizedName, 'archive') || str_contains($normalizedName, 'cancelled')) {
+                return Transaction::STATUS_CANCELLED;
+            }
+        }
+
+        // Default to pending
+        return Transaction::STATUS_PENDING;
     }
 
     protected function mapActivitySlug(string $legacyActivity): string
