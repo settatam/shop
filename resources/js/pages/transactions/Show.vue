@@ -1275,13 +1275,22 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         Barcode
                     </Link>
 
-                    <!-- Print Invoice -->
+                    <!-- Customer Invoice -->
                     <Link
-                        :href="`/transactions/${transaction.id}/print-invoice`"
+                        :href="`/transactions/${transaction.id}/print-invoice?type=customer`"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
                     >
                         <DocumentTextIcon class="-ml-0.5 size-5" />
-                        Invoice
+                        Customer Invoice
+                    </Link>
+
+                    <!-- Buy/Store Invoice -->
+                    <Link
+                        :href="`/transactions/${transaction.id}/print-invoice?type=store`"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
+                    >
+                        <DocumentTextIcon class="-ml-0.5 size-5" />
+                        Buy Invoice
                     </Link>
 
                     <!-- Print Packing Slip -->

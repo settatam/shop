@@ -1755,7 +1755,7 @@ class TransactionController extends Controller
 
         return response()->json([
             'success' => true,
-            'attachments' => $images->map(fn ($image) => [
+            'attachments' => collect($images)->map(fn ($image) => [
                 'id' => $image->id,
                 'url' => $image->url,
                 'thumbnail_url' => $image->thumbnail_url,

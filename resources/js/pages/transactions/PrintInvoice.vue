@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/vue/20/solid';
 
 type InvoiceType = 'customer' | 'store';
@@ -192,7 +192,13 @@ const getPaymentAddress = () => {
 const paymentAddress = getPaymentAddress();
 
 // Invoice type toggle (customer vs store)
-const invoiceType = ref<InvoiceType>('customer');
+// Read initial type from URL query parameter
+const getInitialInvoiceType = (): InvoiceType => {
+    const params = new URLSearchParams(window.location.search);
+    const type = params.get('type');
+    return type === 'store' ? 'store' : 'customer';
+};
+const invoiceType = ref<InvoiceType>(getInitialInvoiceType());
 
 // Calculate total estimated value
 const totalEstimatedValue = computed(() => {
