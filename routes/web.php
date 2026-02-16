@@ -90,6 +90,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::patch('products/{product}', [ProductController::class, 'update']);
         Route::post('products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
+        Route::post('products/bulk-inline-update', [ProductController::class, 'bulkInlineUpdate'])->name('products.bulk-inline-update');
+        Route::post('products/get-for-inline-edit', [ProductController::class, 'getForInlineEdit'])->name('products.get-for-inline-edit');
     });
     Route::middleware('permission:products.delete')->group(function () {
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');

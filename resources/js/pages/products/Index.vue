@@ -50,6 +50,11 @@ interface Marketplace {
     name: string;
 }
 
+interface Vendor {
+    id: number;
+    name: string;
+}
+
 interface FilterOption {
     value: string;
     label: string;
@@ -60,6 +65,7 @@ interface Props {
     level2Categories: Level2Category[];
     level3ByParent: Record<number, Level3Category[]>;
     brands: Brand[];
+    vendors: Vendor[];
     warehouses: Warehouse[];
     tags: Tag[];
     marketplaces: Marketplace[];
@@ -75,6 +81,12 @@ interface SelectedProduct {
     category_name: string | null;
     brand_id: number | null;
     brand_name: string | null;
+    vendor_id: number | null;
+    vendor_name: string | null;
+    price: number | null;
+    wholesale_price: number | null;
+    cost: number | null;
+    status: string | null;
     is_published: boolean;
     template_name: string | null;
 }
@@ -272,41 +284,19 @@ async function handleBulkActionModal(action: string, ids: (number | string)[]) {
     if (action === 'mass_edit') {
         loadingProducts.value = true;
 
-        // Map IDs to product data from the current widget data
-        const products: SelectedProduct[] = [];
-        const items = data.value?.data?.items || [];
+        try {
+            // Fetch complete product data via API for inline editing
+            const response = await axios.post('/products/get-for-inline-edit', {
+                ids: ids.map(id => Number(id)),
+            });
 
-        for (const item of items) {
-            // Get the ID from the item (handle typed cell format)
-            const itemId = typeof item.id === 'object' && 'data' in item.id
-                ? (item.id as { data: number }).data
-                : item.id as number;
-
-            if (ids.includes(itemId)) {
-                // Extract data from typed cells
-                const getDataValue = <T>(field: unknown): T | null => {
-                    if (typeof field === 'object' && field !== null && 'data' in field) {
-                        return (field as { data: T }).data;
-                    }
-                    return field as T;
-                };
-
-                products.push({
-                    id: itemId,
-                    title: getDataValue<string>(item.title) || '',
-                    category_id: null, // Not available in table data
-                    category_name: getDataValue<string>(item.category) || null,
-                    brand_id: null, // Not available in table data
-                    brand_name: null,
-                    is_published: getDataValue<string>(item.status) === 'Published',
-                    template_name: null, // Would need to fetch from API
-                });
-            }
+            selectedProducts.value = response.data.products;
+            showMassEditSheet.value = true;
+        } catch (error) {
+            console.error('Failed to fetch products for inline edit:', error);
+        } finally {
+            loadingProducts.value = false;
         }
-
-        selectedProducts.value = products;
-        showMassEditSheet.value = true;
-        loadingProducts.value = false;
     }
 }
 
@@ -673,6 +663,7 @@ function handleGiaScanSuccess(productId: number) {
             :products="selectedProducts"
             :categories="categories"
             :brands="brands"
+            :vendors="vendors"
             @success="handleMassEditSuccess"
         />
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import {
     Sheet,
@@ -10,10 +10,6 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/vue/20/solid';
 
 interface Product {
     id: number;
@@ -22,6 +18,12 @@ interface Product {
     category_name: string | null;
     brand_id: number | null;
     brand_name: string | null;
+    vendor_id: number | null;
+    vendor_name: string | null;
+    price: number | null;
+    wholesale_price: number | null;
+    cost: number | null;
+    status: string | null;
     is_published: boolean;
     template_name: string | null;
 }
@@ -29,6 +31,7 @@ interface Product {
 interface Category {
     id: number;
     name: string;
+    parent_id: number | null;
 }
 
 interface Brand {
@@ -36,11 +39,29 @@ interface Brand {
     name: string;
 }
 
+interface Vendor {
+    id: number;
+    name: string;
+}
+
+interface EditableProduct {
+    id: number;
+    title: string;
+    price: number | null;
+    wholesale_price: number | null;
+    cost: number | null;
+    category_id: number | null;
+    vendor_id: number | null;
+    status: string | null;
+    isDirty: boolean;
+}
+
 interface Props {
     open: boolean;
     products: Product[];
     categories: Category[];
     brands: Brand[];
+    vendors: Vendor[];
 }
 
 const props = defineProps<Props>();
@@ -51,88 +72,119 @@ const emit = defineEmits<{
 }>();
 
 const processing = ref(false);
+const editableProducts = ref<EditableProduct[]>([]);
 
-// Track which fields to update
-const updateTitle = ref(false);
-const updateCategory = ref(false);
-const updateBrand = ref(false);
-const updateStatus = ref(false);
-
-// Form values
-const title = ref('');
-const categoryId = ref<number | null>(null);
-const brandId = ref<number | null>(null);
-const isPublished = ref<boolean | null>(null);
-
-// Group products by template
-const productsByTemplate = computed(() => {
-    const groups = new Map<string, Product[]>();
-    props.products.forEach(product => {
-        const key = product.template_name || 'No Template';
-        if (!groups.has(key)) {
-            groups.set(key, []);
-        }
-        groups.get(key)!.push(product);
-    });
-    return groups;
+// Initialize editable products when sheet opens
+watch(() => props.open, (isOpen) => {
+    if (isOpen && props.products.length > 0) {
+        editableProducts.value = props.products.map(p => ({
+            id: p.id,
+            title: p.title || '',
+            price: p.price ?? null,
+            wholesale_price: p.wholesale_price ?? null,
+            cost: p.cost ?? null,
+            category_id: p.category_id ?? null,
+            vendor_id: p.vendor_id ?? null,
+            status: p.status ?? 'draft',
+            isDirty: false,
+        }));
+    }
 });
 
-// Track expanded groups
-const expandedGroups = ref<Set<string>>(new Set());
-
-function toggleGroup(groupName: string) {
-    if (expandedGroups.value.has(groupName)) {
-        expandedGroups.value.delete(groupName);
-    } else {
-        expandedGroups.value.add(groupName);
-    }
+// Mark product as dirty when edited
+function markDirty(index: number) {
+    editableProducts.value[index].isDirty = true;
 }
 
-// Watch for open changes to reset form
-watch(() => props.open, (isOpen) => {
-    if (isOpen) {
-        // Reset form state
-        updateTitle.value = false;
-        updateCategory.value = false;
-        updateBrand.value = false;
-        updateStatus.value = false;
-        title.value = '';
-        categoryId.value = null;
-        brandId.value = null;
-        isPublished.value = null;
-        // Expand all groups by default
-        expandedGroups.value = new Set(productsByTemplate.value.keys());
-    }
+// Check if any products have been modified
+const hasChanges = computed(() => {
+    return editableProducts.value.some(p => p.isDirty);
 });
 
-// Check if any field is selected for update
-const hasFieldsToUpdate = computed(() => {
-    return updateTitle.value || updateCategory.value || updateBrand.value || updateStatus.value;
+// Count of modified products
+const dirtyCount = computed(() => {
+    return editableProducts.value.filter(p => p.isDirty).length;
+});
+
+// Build category tree structure
+interface CategoryNode {
+    id: number;
+    name: string;
+    parent_id: number | null;
+    depth: number;
+    isLeaf: boolean;
+}
+
+const categoryTree = computed((): CategoryNode[] => {
+    // Find all category IDs that are parents (have children)
+    const parentIds = new Set(
+        props.categories
+            .filter(c => c.parent_id !== null)
+            .map(c => c.parent_id as number)
+    );
+
+    // Build a map for quick lookup
+    const categoryMap = new Map(props.categories.map(c => [c.id, c]));
+
+    // Calculate depth for each category
+    const getDepth = (category: Category): number => {
+        let depth = 0;
+        let current = category;
+        while (current.parent_id !== null) {
+            depth++;
+            const parent = categoryMap.get(current.parent_id);
+            if (!parent) break;
+            current = parent;
+        }
+        return depth;
+    };
+
+    // Sort categories to show hierarchy (parents before children, alphabetically within levels)
+    const sortedCategories: CategoryNode[] = [];
+
+    const addCategoryWithChildren = (parentId: number | null, depth: number) => {
+        const children = props.categories
+            .filter(c => c.parent_id === parentId)
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        for (const category of children) {
+            sortedCategories.push({
+                id: category.id,
+                name: category.name,
+                parent_id: category.parent_id,
+                depth,
+                isLeaf: !parentIds.has(category.id),
+            });
+            addCategoryWithChildren(category.id, depth + 1);
+        }
+    };
+
+    addCategoryWithChildren(null, 0);
+    return sortedCategories;
 });
 
 function handleSubmit() {
-    if (!hasFieldsToUpdate.value) return;
+    if (!hasChanges.value) return;
 
-    const data: Record<string, unknown> = {
-        ids: props.products.map(p => p.id),
-    };
-
-    if (updateTitle.value && title.value) {
-        data.title = title.value;
-    }
-    if (updateCategory.value) {
-        data.category_id = categoryId.value;
-    }
-    if (updateBrand.value) {
-        data.brand_id = brandId.value;
-    }
-    if (updateStatus.value && isPublished.value !== null) {
-        data.is_published = isPublished.value;
-    }
+    // Only send products that were modified
+    const changedProducts = editableProducts.value
+        .filter(p => p.isDirty)
+        .map(p => ({
+            id: p.id,
+            title: p.title,
+            price: p.price,
+            wholesale_price: p.wholesale_price,
+            cost: p.cost,
+            category_id: p.category_id,
+            vendor_id: p.vendor_id,
+            status: p.status,
+        }));
 
     processing.value = true;
 
-    router.post('/products/bulk-update', data, {
+    router.post('/products/bulk-inline-update', {
+        products: changedProducts,
+    }, {
         preserveScroll: true,
         onSuccess: () => {
             emit('update:open', false);
@@ -151,148 +203,144 @@ function handleClose() {
 
 <template>
     <Sheet :open="open" @update:open="(val) => emit('update:open', val)">
-        <SheetContent side="right" class="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent side="right" class="w-full sm:w-[75vw] sm:max-w-none overflow-y-auto">
             <SheetHeader>
                 <SheetTitle>Edit {{ products.length }} Products</SheetTitle>
                 <SheetDescription>
-                    Update common fields for the selected products. Check a field to enable editing.
+                    Edit product details inline. Changes are highlighted and saved when you click Update.
                 </SheetDescription>
             </SheetHeader>
 
-            <div class="py-6 space-y-6">
-                <!-- Products grouped by template -->
-                <div class="space-y-2">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Selected Products</h4>
-                    <div class="border rounded-lg divide-y dark:border-gray-700 dark:divide-gray-700">
-                        <div
-                            v-for="[templateName, templateProducts] in productsByTemplate"
-                            :key="templateName"
-                            class="overflow-hidden"
-                        >
-                            <!-- Group header -->
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-2 text-sm font-medium text-gray-900 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
-                                @click="toggleGroup(templateName)"
+            <div class="py-4">
+                <!-- Inline editing table -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-64">
+                                    Title
+                                </th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                                    Price
+                                </th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                                    Wholesale
+                                </th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                                    Cost
+                                </th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-36">
+                                    Vendor
+                                </th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-36">
+                                    Category
+                                </th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-28">
+                                    Status
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
+                            <tr
+                                v-for="(product, index) in editableProducts"
+                                :key="product.id"
+                                :class="{ 'bg-yellow-50 dark:bg-yellow-900/20': product.isDirty }"
                             >
-                                <span>{{ templateName }} ({{ templateProducts.length }})</span>
-                                <ChevronDownIcon v-if="expandedGroups.has(templateName)" class="h-5 w-5" />
-                                <ChevronRightIcon v-else class="h-5 w-5" />
-                            </button>
-                            <!-- Group products -->
-                            <div v-if="expandedGroups.has(templateName)" class="px-4 py-2 space-y-1 bg-white dark:bg-gray-900">
-                                <div
-                                    v-for="product in templateProducts"
-                                    :key="product.id"
-                                    class="text-sm text-gray-600 dark:text-gray-400 truncate"
-                                >
-                                    {{ product.title }}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                <!-- Title -->
+                                <td class="px-2 py-1">
+                                    <input
+                                        v-model="product.title"
+                                        type="text"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @input="markDirty(index)"
+                                    />
+                                </td>
+                                <!-- Price -->
+                                <td class="px-2 py-1">
+                                    <input
+                                        v-model.number="product.price"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @input="markDirty(index)"
+                                    />
+                                </td>
+                                <!-- Wholesale Price -->
+                                <td class="px-2 py-1">
+                                    <input
+                                        v-model.number="product.wholesale_price"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @input="markDirty(index)"
+                                    />
+                                </td>
+                                <!-- Cost -->
+                                <td class="px-2 py-1">
+                                    <input
+                                        v-model.number="product.cost"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @input="markDirty(index)"
+                                    />
+                                </td>
+                                <!-- Vendor -->
+                                <td class="px-2 py-1">
+                                    <select
+                                        v-model="product.vendor_id"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @change="markDirty(index)"
+                                    >
+                                        <option :value="null">--</option>
+                                        <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
+                                            {{ vendor.name }}
+                                        </option>
+                                    </select>
+                                </td>
+                                <!-- Category -->
+                                <td class="px-2 py-1">
+                                    <select
+                                        v-model="product.category_id"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @change="markDirty(index)"
+                                    >
+                                        <option :value="null">--</option>
+                                        <option
+                                            v-for="category in categoryTree"
+                                            :key="category.id"
+                                            :value="category.id"
+                                            :disabled="!category.isLeaf"
+                                            :class="{ 'text-gray-400 dark:text-gray-500': !category.isLeaf }"
+                                        >
+                                            {{ '\u00A0\u00A0'.repeat(category.depth) }}{{ category.isLeaf ? '' : '📁 ' }}{{ category.name }}
+                                        </option>
+                                    </select>
+                                </td>
+                                <!-- Status -->
+                                <td class="px-2 py-1">
+                                    <select
+                                        v-model="product.status"
+                                        class="w-full rounded border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                                        @change="markDirty(index)"
+                                    >
+                                        <option value="draft">Draft</option>
+                                        <option value="active">Active</option>
+                                        <option value="archive">Archive</option>
+                                        <option value="sold">Sold</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
-                <!-- Edit fields -->
-                <div class="space-y-4">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Fields to Update</h4>
-
-                    <!-- Title -->
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <Checkbox
-                                id="update-title"
-                                :checked="updateTitle"
-                                @update:checked="updateTitle = $event"
-                            />
-                            <Label for="update-title" class="text-sm font-medium">Title</Label>
-                        </div>
-                        <Input
-                            v-if="updateTitle"
-                            v-model="title"
-                            placeholder="Enter new title for all selected products"
-                            class="mt-1"
-                        />
-                        <p v-if="updateTitle" class="text-xs text-gray-500">
-                            All selected products will have the same title.
-                        </p>
-                    </div>
-
-                    <!-- Category -->
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <Checkbox
-                                id="update-category"
-                                :checked="updateCategory"
-                                @update:checked="updateCategory = $event"
-                            />
-                            <Label for="update-category" class="text-sm font-medium">Category</Label>
-                        </div>
-                        <select
-                            v-if="updateCategory"
-                            v-model="categoryId"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        >
-                            <option :value="null">No category</option>
-                            <option v-for="category in categories" :key="category.id" :value="category.id">
-                                {{ category.name }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Brand -->
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <Checkbox
-                                id="update-brand"
-                                :checked="updateBrand"
-                                @update:checked="updateBrand = $event"
-                            />
-                            <Label for="update-brand" class="text-sm font-medium">Brand</Label>
-                        </div>
-                        <select
-                            v-if="updateBrand"
-                            v-model="brandId"
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        >
-                            <option :value="null">No brand</option>
-                            <option v-for="brand in brands" :key="brand.id" :value="brand.id">
-                                {{ brand.name }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Status -->
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-2">
-                            <Checkbox
-                                id="update-status"
-                                :checked="updateStatus"
-                                @update:checked="updateStatus = $event"
-                            />
-                            <Label for="update-status" class="text-sm font-medium">Status</Label>
-                        </div>
-                        <div v-if="updateStatus" class="mt-2 flex gap-4">
-                            <label class="inline-flex items-center">
-                                <input
-                                    type="radio"
-                                    :checked="isPublished === true"
-                                    class="rounded-full border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
-                                    @change="isPublished = true"
-                                />
-                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Published</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input
-                                    type="radio"
-                                    :checked="isPublished === false"
-                                    class="rounded-full border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
-                                    @change="isPublished = false"
-                                />
-                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Draft</span>
-                            </label>
-                        </div>
-                    </div>
+                <!-- Change indicator -->
+                <div v-if="hasChanges" class="mt-4 text-sm text-amber-600 dark:text-amber-400">
+                    {{ dirtyCount }} product(s) modified
                 </div>
             </div>
 
@@ -301,10 +349,10 @@ function handleClose() {
                     Cancel
                 </Button>
                 <Button
-                    :disabled="!hasFieldsToUpdate || processing"
+                    :disabled="!hasChanges || processing"
                     @click="handleSubmit"
                 >
-                    {{ processing ? 'Updating...' : 'Update Products' }}
+                    {{ processing ? 'Updating...' : `Update ${dirtyCount} Product(s)` }}
                 </Button>
             </SheetFooter>
         </SheetContent>

@@ -92,6 +92,11 @@ class ProductController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'color']);
 
+        // Get vendors for mass edit
+        $vendors = Vendor::where('store_id', $store->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         // Get marketplaces for "Listed In" filter
         $marketplaces = \App\Models\StoreMarketplace::where('store_id', $store->id)
             ->where('status', 'active')
@@ -125,6 +130,7 @@ class ProductController extends Controller
             'level2Categories' => $level2Categories,
             'level3ByParent' => $level3ByParent,
             'brands' => $brands,
+            'vendors' => $vendors,
             'warehouses' => $warehouses,
             'tags' => $tags,
             'marketplaces' => $marketplaces,
@@ -1289,6 +1295,7 @@ class ProductController extends Controller
         // Get only products that belong to this store
         $products = Product::where('store_id', $store->id)
             ->whereIn('id', $validated['ids'])
+            ->with('variants')
             ->get();
 
         if ($products->isEmpty()) {
@@ -1296,13 +1303,20 @@ class ProductController extends Controller
                 ->with('error', 'No valid products found to update.');
         }
 
-        // Build update data from provided fields (excluding ids)
-        $updateData = collect($validated)
-            ->except('ids')
+        // Separate variant fields from product fields
+        $variantFields = ['price', 'wholesale_price', 'cost'];
+        $variantData = collect($validated)
+            ->only($variantFields)
             ->filter(fn ($value) => $value !== null)
             ->toArray();
 
-        if (empty($updateData)) {
+        // Build update data from provided fields (excluding ids and variant fields)
+        $updateData = collect($validated)
+            ->except(['ids', ...$variantFields])
+            ->filter(fn ($value) => $value !== null)
+            ->toArray();
+
+        if (empty($updateData) && empty($variantData)) {
             return redirect()->route('products.index')
                 ->with('error', 'No fields provided to update.');
         }
@@ -1315,15 +1329,148 @@ class ProductController extends Controller
         // Update all products
         $count = 0;
         foreach ($products as $product) {
-            $product->update($updateData);
+            // Update product fields
+            if (! empty($updateData)) {
+                $product->update($updateData);
+            }
+
+            // Update variant fields (price, wholesale_price, cost)
+            if (! empty($variantData)) {
+                foreach ($product->variants as $variant) {
+                    $variant->update($variantData);
+                }
+            }
+
             $count++;
         }
 
-        $fieldCount = count($updateData);
-        $fieldLabel = $fieldCount === 1 ? 'field' : 'fields';
+        $totalFieldCount = count($updateData) + count($variantData);
+        $fieldLabel = $totalFieldCount === 1 ? 'field' : 'fields';
 
         return redirect()->route('products.index')
-            ->with('success', "{$count} product(s) updated ({$fieldCount} {$fieldLabel} changed).");
+            ->with('success', "{$count} product(s) updated ({$totalFieldCount} {$fieldLabel} changed).");
+    }
+
+    /**
+     * Bulk inline update - each product can have different values.
+     */
+    public function bulkInlineUpdate(Request $request): RedirectResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Please select a store first.');
+        }
+
+        $validated = $request->validate([
+            'products' => ['required', 'array', 'min:1'],
+            'products.*.id' => ['required', 'integer', 'exists:products,id'],
+            'products.*.title' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'products.*.price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'products.*.wholesale_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'products.*.cost' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'products.*.category_id' => ['sometimes', 'nullable', 'integer', "exists:categories,id,store_id,{$store->id}"],
+            'products.*.vendor_id' => ['sometimes', 'nullable', 'integer', "exists:vendors,id,store_id,{$store->id}"],
+            'products.*.status' => ['sometimes', 'nullable', 'string', 'in:draft,active,archive,sold'],
+        ]);
+
+        $productIds = collect($validated['products'])->pluck('id')->toArray();
+
+        // Get only products that belong to this store
+        $products = Product::where('store_id', $store->id)
+            ->whereIn('id', $productIds)
+            ->with('variants')
+            ->get()
+            ->keyBy('id');
+
+        if ($products->isEmpty()) {
+            return redirect()->route('products.index')
+                ->with('error', 'No valid products found to update.');
+        }
+
+        $count = 0;
+        foreach ($validated['products'] as $productData) {
+            $product = $products->get($productData['id']);
+            if (! $product) {
+                continue;
+            }
+
+            // Separate product fields from variant fields
+            $productFields = ['title', 'category_id', 'vendor_id', 'status'];
+            $variantFields = ['price', 'wholesale_price', 'cost'];
+
+            $productUpdate = [];
+            $variantUpdate = [];
+
+            foreach ($productData as $key => $value) {
+                if ($key === 'id') {
+                    continue;
+                }
+                if (in_array($key, $productFields)) {
+                    $productUpdate[$key] = $value;
+                } elseif (in_array($key, $variantFields)) {
+                    $variantUpdate[$key] = $value;
+                }
+            }
+
+            // Update product fields
+            if (! empty($productUpdate)) {
+                $product->update($productUpdate);
+            }
+
+            // Update variant fields
+            if (! empty($variantUpdate)) {
+                foreach ($product->variants as $variant) {
+                    $variant->update($variantUpdate);
+                }
+            }
+
+            $count++;
+        }
+
+        return redirect()->route('products.index')
+            ->with('success', "{$count} product(s) updated.");
+    }
+
+    /**
+     * Get products for inline editing.
+     */
+    public function getForInlineEdit(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json(['error' => 'Store not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $products = Product::where('store_id', $store->id)
+            ->whereIn('id', $validated['ids'])
+            ->with(['variants', 'category', 'brand', 'vendor', 'template'])
+            ->get()
+            ->map(fn ($product) => [
+                'id' => $product->id,
+                'title' => $product->title,
+                'category_id' => $product->category_id,
+                'category_name' => $product->category?->name,
+                'brand_id' => $product->brand_id,
+                'brand_name' => $product->brand?->name,
+                'vendor_id' => $product->vendor_id,
+                'vendor_name' => $product->vendor?->name,
+                'price' => $product->variants->first()?->price,
+                'wholesale_price' => $product->variants->first()?->wholesale_price,
+                'cost' => $product->variants->first()?->cost,
+                'status' => $product->status,
+                'is_published' => $product->is_published,
+                'template_name' => $product->template?->name,
+            ]);
+
+        return response()->json(['products' => $products]);
     }
 
     /**

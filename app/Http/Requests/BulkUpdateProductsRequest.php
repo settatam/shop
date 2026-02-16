@@ -25,8 +25,12 @@ class BulkUpdateProductsRequest extends FormRequest
             'title' => ['sometimes', 'nullable', 'string', 'max:255'],
             'category_id' => ['sometimes', 'nullable', 'integer', "exists:categories,id,store_id,{$storeId}"],
             'brand_id' => ['sometimes', 'nullable', 'integer', "exists:brands,id,store_id,{$storeId}"],
+            'vendor_id' => ['sometimes', 'nullable', 'integer', "exists:vendors,id,store_id,{$storeId}"],
+            'status' => ['sometimes', 'nullable', 'string', 'in:draft,active,archive,sold'],
             'is_published' => ['sometimes', 'nullable', 'boolean'],
-            'vendor' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'wholesale_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'cost' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ];
     }
 
@@ -40,6 +44,8 @@ class BulkUpdateProductsRequest extends FormRequest
             'ids.min' => 'Please select at least one product to update.',
             'category_id.exists' => 'The selected category does not exist.',
             'brand_id.exists' => 'The selected brand does not exist.',
+            'vendor_id.exists' => 'The selected vendor does not exist.',
+            'status.in' => 'The selected status is invalid.',
         ];
     }
 }
