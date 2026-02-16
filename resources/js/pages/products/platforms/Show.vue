@@ -227,6 +227,35 @@ function formatPrice(price: number | null): string {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
 }
 
+/**
+ * Get the display label for a field value.
+ * If the field has options, find the matching label. Otherwise, format the raw value.
+ */
+function getFieldDisplayValue(field: TemplateField): string {
+    if (!field.value) return '-';
+
+    // If field has options, find the label
+    if (field.options && field.options.length > 0) {
+        const option = field.options.find(opt => opt.value === field.value);
+        if (option) return option.label;
+    }
+
+    // Otherwise format the raw value (convert snake_case to Title Case)
+    return formatSlugValue(field.value);
+}
+
+/**
+ * Format a slug value to human-readable text.
+ * e.g., "very_good" -> "Very Good", "silver_tone" -> "Silver Tone"
+ */
+function formatSlugValue(value: string): string {
+    if (!value) return '-';
+    return value
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}
+
 function toggleImage(imageId: number) {
     const idx = form.value.excluded_image_ids.indexOf(imageId);
     if (idx === -1) {
@@ -447,31 +476,34 @@ async function unpublish() {
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
                                     <Label for="title">Title</Label>
-                                    <span v-if="!form.title" class="text-xs text-gray-500 dark:text-gray-400">
-                                        Using product title
+                                    <Badge v-if="form.title && form.title !== preview.listing.title" variant="outline" class="text-xs">
+                                        Overridden
+                                    </Badge>
+                                    <span v-else class="text-xs text-gray-500 dark:text-gray-400">
+                                        Inherited from product
                                     </span>
                                 </div>
                                 <Input
                                     id="title"
-                                    v-model="form.title"
-                                    :placeholder="preview.listing.title"
+                                    :model-value="form.title || preview.listing.title"
+                                    @update:model-value="form.title = $event !== preview.listing.title ? $event : ''"
                                 />
-                                <p v-if="form.title" class="text-xs text-gray-500 dark:text-gray-400">
-                                    Original: {{ preview.listing.title }}
-                                </p>
                             </div>
 
                             <!-- Description -->
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
                                     <Label for="description">Description</Label>
-                                    <span v-if="!form.description && preview.listing.description" class="text-xs text-gray-500 dark:text-gray-400">
-                                        Using product description
+                                    <Badge v-if="form.description && form.description !== preview.listing.description" variant="outline" class="text-xs">
+                                        Overridden
+                                    </Badge>
+                                    <span v-else-if="preview.listing.description" class="text-xs text-gray-500 dark:text-gray-400">
+                                        Inherited from product
                                     </span>
                                 </div>
                                 <RichTextEditor
-                                    v-model="form.description"
-                                    :placeholder="preview.listing.description || 'Enter description'"
+                                    :model-value="form.description || preview.listing.description || ''"
+                                    @update:model-value="form.description = $event !== preview.listing.description ? $event : ''"
                                 />
                             </div>
 
@@ -480,43 +512,57 @@ async function unpublish() {
                                 <div class="space-y-2">
                                     <div class="flex items-center justify-between">
                                         <Label for="price">Price</Label>
-                                        <span v-if="form.price === null && preview.listing.price" class="text-xs text-gray-500 dark:text-gray-400">
-                                            {{ formatPrice(preview.listing.price) }}
+                                        <Badge v-if="form.price !== null && form.price !== preview.listing.price" variant="outline" class="text-xs">
+                                            Overridden
+                                        </Badge>
+                                        <span v-else class="text-xs text-gray-500 dark:text-gray-400">
+                                            Inherited
                                         </span>
                                     </div>
                                     <Input
                                         id="price"
-                                        v-model.number="form.price"
                                         type="number"
                                         step="0.01"
                                         min="0"
-                                        :placeholder="preview.listing.price?.toString() || '0.00'"
+                                        :model-value="form.price ?? preview.listing.price ?? 0"
+                                        @update:model-value="form.price = Number($event) !== preview.listing.price ? Number($event) : null"
                                     />
                                 </div>
                                 <div class="space-y-2">
-                                    <Label for="compare_at_price">Compare at Price</Label>
+                                    <div class="flex items-center justify-between">
+                                        <Label for="compare_at_price">Compare at Price</Label>
+                                        <Badge v-if="form.compare_at_price !== null && form.compare_at_price !== preview.listing.compare_at_price" variant="outline" class="text-xs">
+                                            Overridden
+                                        </Badge>
+                                        <span v-else-if="preview.listing.compare_at_price" class="text-xs text-gray-500 dark:text-gray-400">
+                                            Inherited
+                                        </span>
+                                    </div>
                                     <Input
                                         id="compare_at_price"
-                                        v-model.number="form.compare_at_price"
                                         type="number"
                                         step="0.01"
                                         min="0"
-                                        :placeholder="preview.listing.compare_at_price?.toString() || '0.00'"
+                                        :model-value="form.compare_at_price ?? preview.listing.compare_at_price ?? ''"
+                                        @update:model-value="form.compare_at_price = $event !== '' && Number($event) !== preview.listing.compare_at_price ? Number($event) : null"
                                     />
                                 </div>
                                 <div class="space-y-2">
                                     <div class="flex items-center justify-between">
                                         <Label for="quantity">Quantity</Label>
-                                        <span v-if="form.quantity === null && preview.listing.quantity !== null" class="text-xs text-gray-500 dark:text-gray-400">
-                                            {{ preview.listing.quantity }}
+                                        <Badge v-if="form.quantity !== null && form.quantity !== preview.listing.quantity" variant="outline" class="text-xs">
+                                            Overridden
+                                        </Badge>
+                                        <span v-else class="text-xs text-gray-500 dark:text-gray-400">
+                                            Inherited
                                         </span>
                                     </div>
                                     <Input
                                         id="quantity"
-                                        v-model.number="form.quantity"
                                         type="number"
                                         min="0"
-                                        :placeholder="preview.listing.quantity?.toString() || '0'"
+                                        :model-value="form.quantity ?? preview.listing.quantity ?? 0"
+                                        @update:model-value="form.quantity = Number($event) !== preview.listing.quantity ? Number($event) : null"
                                     />
                                 </div>
                             </div>
@@ -632,7 +678,7 @@ async function unpublish() {
                                 <!-- Original value -->
                                 <div class="w-40 text-right">
                                     <span class="text-sm text-gray-500 dark:text-gray-400">
-                                        {{ field.value || '-' }}
+                                        {{ getFieldDisplayValue(field) }}
                                     </span>
                                 </div>
 
@@ -709,7 +755,7 @@ async function unpublish() {
                                         class="text-sm"
                                     />
                                     <span v-else class="text-sm text-gray-700 dark:text-gray-300">
-                                        {{ metafield.value }}
+                                        {{ formatSlugValue(String(metafield.value)) }}
                                     </span>
                                 </div>
 
@@ -773,7 +819,7 @@ async function unpublish() {
                                         :key="key"
                                         variant="secondary"
                                     >
-                                        {{ key }}: {{ value }}
+                                        {{ formatSlugValue(String(key)) }}: {{ formatSlugValue(String(value)) }}
                                     </Badge>
                                 </div>
                             </div>
@@ -787,7 +833,7 @@ async function unpublish() {
                                         :key="`${mf.namespace}.${mf.key}`"
                                         variant="outline"
                                     >
-                                        {{ mf.key }}: {{ mf.value }}
+                                        {{ formatSlugValue(mf.key) }}: {{ formatSlugValue(String(mf.value)) }}
                                     </Badge>
                                 </div>
                             </div>

@@ -10,6 +10,7 @@ use App\Http\Controllers\Settings\StatusesController;
 use App\Http\Controllers\Settings\StoreSettingsController;
 use App\Http\Controllers\Settings\TeamController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
+use App\Http\Controllers\Settings\WarehouseController;
 use App\Http\Controllers\Web\LeadSourceController;
 use App\Http\Controllers\Web\NotificationSettingsController;
 use App\Http\Controllers\Web\PrinterSettingsController;
@@ -134,5 +135,14 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{marketplace}', [MarketplaceController::class, 'destroy'])->name('destroy');
         Route::post('/{marketplace}/test', [MarketplaceController::class, 'test'])->name('test');
         Route::post('/{marketplace}/sync', [MarketplaceController::class, 'sync'])->name('sync');
+    });
+
+    // Warehouse Settings
+    Route::middleware(['store', 'onboarding'])->prefix('settings/warehouses')->name('settings.warehouses.')->group(function () {
+        Route::get('/', [WarehouseController::class, 'index'])->name('index');
+        Route::post('/', [WarehouseController::class, 'store'])->name('store');
+        Route::put('/{warehouse}', [WarehouseController::class, 'update'])->name('update');
+        Route::delete('/{warehouse}', [WarehouseController::class, 'destroy'])->name('destroy');
+        Route::post('/{warehouse}/make-default', [WarehouseController::class, 'makeDefault'])->name('make-default');
     });
 });

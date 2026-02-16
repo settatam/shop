@@ -175,7 +175,7 @@ class MigrateLegacyProducts extends Command
 
             // Build marketplace mapping for platform listings
             if (! $this->option('skip-listings')) {
-                $this->buildMarketplaceMapping($legacyStoreId, $newStore);
+                $this->buildMarketplaceMapping($legacyStoreId, $newStore, $isDryRun);
             } else {
                 $this->info('Skipping platform listings (--skip-listings)');
             }
@@ -768,41 +768,140 @@ class MigrateLegacyProducts extends Command
 
     /**
      * Build mapping from legacy store_market_places to new store_marketplaces.
-     * Maps by platform name (case-insensitive).
+     * Uses findOrCreate pattern - creates marketplaces if they don't exist.
      */
-    protected function buildMarketplaceMapping(int $legacyStoreId, Store $newStore): void
+    protected function buildMarketplaceMapping(int $legacyStoreId, Store $newStore, bool $isDryRun = false): void
     {
         $this->info('Building marketplace mapping for platform listings...');
 
-        // Get legacy marketplaces for this store
+        // Get legacy marketplaces for this store (only selling platforms, not apps)
         $legacyMarketplaces = DB::connection('legacy')
             ->table('store_market_places')
             ->where('store_id', $legacyStoreId)
             ->whereNull('deleted_at')
+            ->where('is_app', false)
             ->get();
 
-        // Get new marketplaces for the target store
-        $newMarketplaces = \App\Models\StoreMarketplace::where('store_id', $newStore->id)
-            ->whereNull('deleted_at')
-            ->get();
-
-        // Build a map by platform name (lowercase)
-        $newMarketplacesByPlatform = $newMarketplaces->keyBy(fn ($m) => strtolower($m->platform->value ?? $m->platform));
+        $created = 0;
+        $mapped = 0;
 
         foreach ($legacyMarketplaces as $legacy) {
-            $platform = strtolower($legacy->marketplace);
+            $platformName = strtolower($legacy->marketplace);
 
-            if ($newMarketplacesByPlatform->has($platform)) {
-                $this->marketplaceMap[$legacy->id] = $newMarketplacesByPlatform->get($platform)->id;
+            // Skip non-standard platforms that we don't support
+            $supportedPlatforms = ['shopify', 'ebay', 'amazon', 'etsy', 'walmart', 'woocommerce', 'bigcommerce'];
+            if (! in_array($platformName, $supportedPlatforms)) {
+                $this->line("  Skipping unsupported platform: {$legacy->marketplace}");
+
+                continue;
+            }
+
+            // Try to find existing marketplace by platform
+            $existingMarketplace = \App\Models\StoreMarketplace::where('store_id', $newStore->id)
+                ->where('platform', $platformName)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if ($existingMarketplace) {
+                $this->marketplaceMap[$legacy->id] = $existingMarketplace->id;
+                $mapped++;
+            } else {
+                // Create the marketplace using findOrCreate pattern
+                $newMarketplace = $this->findOrCreateMarketplace($legacy, $newStore, $isDryRun);
+                if ($newMarketplace) {
+                    $this->marketplaceMap[$legacy->id] = $newMarketplace->id;
+                    $created++;
+                }
             }
         }
 
-        $this->line('  Mapped '.count($this->marketplaceMap).' marketplaces');
+        $this->line("  Mapped {$mapped} existing marketplaces, created {$created} new marketplaces");
+    }
 
-        if (empty($this->marketplaceMap)) {
-            $this->warn('  No marketplace mappings found. Platform listings will not be migrated.');
-            $this->warn('  Ensure marketplaces are set up in the new store first.');
+    /**
+     * Find or create a marketplace from legacy data.
+     */
+    protected function findOrCreateMarketplace(object $legacyMarketplace, Store $newStore, bool $isDryRun = false): ?\App\Models\StoreMarketplace
+    {
+        $platformName = strtolower($legacyMarketplace->marketplace);
+
+        // Map legacy platform names to enum values
+        $platformMap = [
+            'shopify' => 'shopify',
+            'ebay' => 'ebay',
+            'amazon' => 'amazon',
+            'etsy' => 'etsy',
+            'walmart' => 'walmart',
+            'woocommerce' => 'woocommerce',
+            'bigcommerce' => 'bigcommerce',
+        ];
+
+        if (! isset($platformMap[$platformName])) {
+            return null;
         }
+
+        $platform = $platformMap[$platformName];
+
+        // Build the name - use legacy name or generate one
+        $name = $legacyMarketplace->name ?: ($legacyMarketplace->external_marketplace_name ?: ucfirst($platform));
+
+        // Extract shop domain from URL if available
+        $shopDomain = null;
+        if ($legacyMarketplace->url) {
+            $parsedUrl = parse_url($legacyMarketplace->url);
+            $shopDomain = $parsedUrl['host'] ?? null;
+        } elseif ($legacyMarketplace->api_url_prefix) {
+            $parsedUrl = parse_url($legacyMarketplace->api_url_prefix);
+            $shopDomain = $parsedUrl['host'] ?? null;
+        }
+
+        // Build credentials array (encrypted in the new system)
+        // Only include extra credentials that aren't stored in dedicated columns
+        $credentials = [];
+        if ($legacyMarketplace->secret) {
+            $credentials['secret'] = $legacyMarketplace->secret;
+        }
+        if ($legacyMarketplace->api_token) {
+            $credentials['api_token'] = $legacyMarketplace->api_token;
+        }
+        if ($legacyMarketplace->client_id) {
+            $credentials['client_id'] = $legacyMarketplace->client_id;
+        }
+
+        // Build settings array
+        $settings = [
+            'markup' => $legacyMarketplace->markup,
+            'default_listing_status' => $legacyMarketplace->default_listing_status,
+            'legacy_id' => $legacyMarketplace->id,
+        ];
+
+        if ($isDryRun) {
+            $this->line("    Would create marketplace: {$name} ({$platform})");
+
+            return null;
+        }
+
+        $marketplace = \App\Models\StoreMarketplace::create([
+            'store_id' => $newStore->id,
+            'platform' => $platform,
+            'name' => $name,
+            'shop_domain' => $shopDomain,
+            'external_store_id' => $legacyMarketplace->external_marketplace_id,
+            'access_token' => $legacyMarketplace->access_token,
+            'refresh_token' => $legacyMarketplace->refresh_token,
+            'token_expires_at' => $legacyMarketplace->access_token_expires_on,
+            'credentials' => ! empty($credentials) ? $credentials : null,
+            'settings' => $settings,
+            'status' => $legacyMarketplace->connected_successfully ? 'active' : 'inactive',
+            'is_app' => false,
+            'connected_successfully' => (bool) $legacyMarketplace->connected_successfully,
+            'last_error' => null,
+            'last_sync_at' => null,
+        ]);
+
+        $this->line("    Created marketplace: {$name} ({$platform})");
+
+        return $marketplace;
     }
 
     /**
@@ -988,6 +1087,11 @@ class MigrateLegacyProducts extends Command
                     } else {
                         $this->line("  Would soft-delete product #{$existingProduct->id} (legacy was deleted)");
                     }
+                }
+
+                // Migrate platform listings for existing products (if not skipped)
+                if (! $this->option('skip-listings') && ! empty($this->marketplaceMap) && ! $isDryRun) {
+                    $this->migrateProductListings($legacyProduct, $existingProduct);
                 }
 
                 $skipped++;
