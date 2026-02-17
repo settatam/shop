@@ -449,6 +449,33 @@ class Repair extends Model implements Payable
             'grand_total' => $summary['grand_total'],
             'balance_due' => $summary['grand_total'] - (float) $this->total_paid,
         ]);
+
+        // Sync invoice totals after updating
+        $this->syncInvoiceTotals();
+    }
+
+    /**
+     * Sync the invoice totals with the repair.
+     */
+    public function syncInvoiceTotals(): void
+    {
+        if (! $this->invoice) {
+            $this->load('invoice');
+        }
+
+        if ($this->invoice) {
+            $this->invoice->update([
+                'subtotal' => $this->subtotal ?? 0,
+                'tax' => $this->tax ?? 0,
+                'shipping' => $this->shipping_cost ?? 0,
+                'discount' => $this->discount ?? 0,
+                'service_fee' => $this->service_fee ?? 0,
+                'total' => $this->grand_total ?? $this->total ?? 0,
+            ]);
+
+            // Recalculate balance
+            $this->invoice->recalculateTotals();
+        }
     }
 
     public function recordPayment(float $amount): void

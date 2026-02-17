@@ -12,6 +12,7 @@
     $primaryPaymentMethod = $primaryPaymentMethod ?? 'N/A';
     $paymentModes = $paymentModes ?? [];
     $salesperson = $salesperson ?? null;
+    $serviceFee = $serviceFee ?? ['amount' => 0, 'reason' => null, 'value' => 0, 'unit' => 'fixed'];
 @endphp
     <style>
         * {
@@ -34,9 +35,9 @@
             background: #fff;
         }
 
-        /* Header */
+        /* Header - Logo and Barcode side by side */
         .header {
-            padding: 24px 36px;
+            padding: 12px 36px;
             display: table;
             width: 100%;
         }
@@ -59,6 +60,13 @@
             margin-bottom: 8px;
         }
 
+        .store-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #334155;
+            margin-bottom: 8px;
+        }
+
         .store-info {
             font-size: 10px;
             color: #64748b;
@@ -66,10 +74,10 @@
         }
 
         .barcode img {
-            height: 40px;
+            height: 50px;
         }
 
-        /* Invoice Meta */
+        /* Invoice Meta - 4 column grid */
         .invoice-meta {
             padding: 24px 36px;
         }
@@ -83,7 +91,7 @@
             display: table-cell;
             width: 25%;
             vertical-align: top;
-            padding-right: 16px;
+            padding-right: 24px;
         }
 
         .meta-label {
@@ -98,9 +106,15 @@
             color: #64748b;
         }
 
+        .meta-value-italic {
+            font-size: 10px;
+            color: #64748b;
+            font-style: italic;
+        }
+
         /* Content */
         .content {
-            padding: 12px 36px;
+            padding: 8px 36px;
         }
 
         /* Tables */
@@ -109,34 +123,20 @@
             border-collapse: collapse;
         }
 
-        /* Trade-ins Section */
-        .trade-ins-section {
-            margin-bottom: 16px;
-        }
-
-        .section-title {
-            font-size: 11px;
-            font-weight: 600;
-            color: #334155;
-            margin-bottom: 8px;
-        }
-
-        .trade-ins-table th,
+        /* Items Table */
         .items-table th {
-            padding: 10px 8px;
+            padding: 12px 8px;
             text-align: left;
             font-size: 10px;
             font-weight: 600;
             color: #334155;
-            border-bottom: 2px solid #64748b;
+            border-bottom: 1px solid #64748b;
         }
 
-        .trade-ins-table th.text-right,
         .items-table th.text-right {
             text-align: right;
         }
 
-        .trade-ins-table td,
         .items-table td {
             padding: 8px;
             font-size: 10px;
@@ -145,7 +145,6 @@
             vertical-align: top;
         }
 
-        .trade-ins-table td.text-right,
         .items-table td.text-right {
             text-align: right;
         }
@@ -156,12 +155,12 @@
         }
 
         .item-sku {
-            color: #94a3b8;
+            color: #64748b;
         }
 
         .item-image {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             object-fit: cover;
         }
 
@@ -193,6 +192,11 @@
             padding-top: 12px;
         }
 
+        .totals-footer tr.first-row th,
+        .totals-footer tr.first-row td {
+            padding-top: 24px;
+        }
+
         /* Payment Modes */
         .payment-modes-table {
             width: 100%;
@@ -214,7 +218,7 @@
 
         /* Footer */
         .footer {
-            margin-top: 48px;
+            margin-top: 96px;
             padding: 24px 36px;
             border-top: 1px solid #e2e8f0;
         }
@@ -233,14 +237,14 @@
             vertical-align: top;
         }
 
-        .signature-table .label {
+        .signature-table .label-row td {
             font-weight: 600;
             color: #334155;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 40px;
         }
 
-        .signature-table .value {
+        .signature-table .value-row td {
+            height: 100px;
+            vertical-align: top;
             padding-top: 8px;
         }
 
@@ -251,11 +255,11 @@
         }
 
         .disclaimer-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
             color: #334155;
             text-align: center;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
 
         .disclaimer p {
@@ -269,22 +273,23 @@
 </head>
 <body>
     <div class="container">
-        {{-- Header --}}
+        {{-- Header with Logo and Barcode --}}
         <div class="header">
             <div class="header-left">
                 @if(!empty($store['logo']))
                     <img src="{{ $store['logo'] }}" class="store-logo" alt="{{ $store['name'] }}">
                 @else
-                    <div style="font-size: 18px; font-weight: bold; color: #1e293b; margin-bottom: 8px;">
-                        {{ $store['name'] }}
-                    </div>
+                    <div class="store-name">{{ $store['name'] }}</div>
                 @endif
                 <div class="store-info">
                     @if(!empty($store['address']))
                         {{ $store['address'] }} {{ $store['address2'] ?? '' }}<br>
                     @endif
-                    @if(!empty($store['city']) || !empty($store['state']) || !empty($store['zip']))
-                        {{ $store['city'] ?? '' }}, {{ $store['state'] ?? '' }} {{ $store['zip'] ?? '' }}<br>
+                    @if(!empty($store['city']) || !empty($store['state']))
+                        {{ $store['city'] ?? '' }}{{ !empty($store['city']) && !empty($store['state']) ? ', ' : '' }}{{ $store['state'] ?? '' }}<br>
+                    @endif
+                    @if(!empty($store['zip']))
+                        {{ $store['zip'] }}<br>
                     @endif
                     @if(!empty($store['phone']))
                         {{ $store['phone'] }}<br>
@@ -305,9 +310,10 @@
             </div>
         </div>
 
-        {{-- Invoice Meta --}}
+        {{-- Invoice Meta - 4 column grid --}}
         <div class="invoice-meta">
             <div class="meta-grid">
+                {{-- Invoice Detail --}}
                 <div class="meta-col">
                     <div class="meta-label">Invoice Detail:</div>
                     <div class="meta-value">
@@ -324,6 +330,7 @@
                     </div>
                 </div>
 
+                {{-- Billed To --}}
                 <div class="meta-col">
                     <div class="meta-label">Billed To</div>
                     <div class="meta-value">
@@ -331,7 +338,11 @@
                             @if(!empty($customer['company_name']))
                                 {{ $customer['company_name'] }}<br>
                             @endif
-                            {{ $customer['first_name'] ?? '' }} {{ $customer['last_name'] ?? '' }}<br>
+                            @if(!empty($customer['name']))
+                                {{ $customer['name'] }}<br>
+                            @elseif(!empty($customer['first_name']) || !empty($customer['last_name']))
+                                {{ $customer['first_name'] ?? '' }} {{ $customer['last_name'] ?? '' }}<br>
+                            @endif
                             @if(!empty($customer['address']))
                                 {{ $customer['address'] }} {{ $customer['address2'] ?? '' }}<br>
                             @endif
@@ -342,197 +353,167 @@
                                 {{ $customer['state'] ?? '' }} {{ $customer['zip'] ?? '' }}
                             @endif
                         @else
-                            No customer information
+                            <span class="meta-value-italic">Walk-in customer</span>
                         @endif
                     </div>
                 </div>
 
+                {{-- Invoice Number & Date --}}
                 <div class="meta-col">
                     <div class="meta-label">Invoice Number</div>
                     <div class="meta-value">{{ $invoice->invoice_number }}</div>
                     <div class="meta-label" style="margin-top: 8px;">Date of Issue</div>
                     <div class="meta-value">
-                        {{ isset($dateOfPurchase) && $dateOfPurchase ? $dateOfPurchase->format('m-d-Y') : $invoice->created_at->format('m-d-Y') }}
+                        {{ isset($dateOfPurchase) && $dateOfPurchase ? $dateOfPurchase->format('m/d/Y') : $invoice->created_at->format('m/d/Y') }}
                     </div>
                 </div>
 
-                @if(($invoiceableType ?? '') === 'Order')
-                    <div class="meta-col">
-                        <div class="meta-label">Payment Method</div>
-                        <div class="meta-value">{{ $primaryPaymentMethod ?? 'N/A' }}</div>
-                    </div>
-                @endif
+                {{-- Payment Method --}}
+                <div class="meta-col">
+                    <div class="meta-label">Payment Method</div>
+                    <div class="meta-value">{{ $primaryPaymentMethod ?? '-' }}</div>
+                </div>
             </div>
         </div>
 
-        {{-- Content --}}
+        {{-- Content - Items Table --}}
         <div class="content">
-            {{-- Trade-Ins Section --}}
-            @if(count($tradeIns) > 0)
-                <div class="trade-ins-section">
-                    <div class="section-title">Trade-Ins</div>
-                    <table class="trade-ins-table">
-                        <thead>
-                            <tr>
-                                <th>Description</th>
-                                <th class="text-right">Unit Cost</th>
-                                <th class="text-right">Quantity</th>
-                                <th class="text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($tradeIns as $tradeIn)
-                                <tr>
-                                    <td>
-                                        <span class="item-title">{{ strip_tags($tradeIn['title']) }}</span>
-                                    </td>
-                                    <td class="text-right">${{ number_format($tradeIn['unit_cost'], 2) }}</td>
-                                    <td class="text-right">{{ $tradeIn['quantity'] }}</td>
-                                    <td class="text-right">${{ number_format($tradeIn['price'] * $tradeIn['quantity'], 2) }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
-
-            {{-- Items Table --}}
-            <div class="items-section">
-                <table class="items-table">
-                    <thead>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">&nbsp;</th>
+                        <th>Description</th>
+                        <th>Type</th>
+                        <th class="text-right">Quantity</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($lineItems as $item)
                         <tr>
-                            <th style="width: 40px;">&nbsp;</th>
-                            <th>Description</th>
-                            <th>Type</th>
-                            <th class="text-right">Quantity</th>
-                            <th class="text-right">Amount</th>
+                            <td>
+                                @if(!empty($item['image']))
+                                    <img src="{{ $item['image'] }}" class="item-image" alt="">
+                                @endif
+                            </td>
+                            <td>
+                                <span class="item-title">{{ strip_tags($item['description'] ?? 'Item') }}</span>
+                                @if(!empty($item['sku']))
+                                    <span class="item-sku"> - {{ $item['sku'] }}</span>
+                                @endif
+                            </td>
+                            <td>{{ $item['category'] ?? '-' }}</td>
+                            <td class="text-right">{{ $item['quantity'] ?? 1 }}</td>
+                            <td class="text-right">${{ number_format($item['total'] ?? 0, 2) }}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($lineItems as $item)
-                            <tr>
-                                <td>
-                                    @if(!empty($item['image']))
-                                        <img src="{{ $item['image'] }}" class="item-image" alt="">
-                                    @endif
-                                </td>
-                                <td>
-                                    <span class="item-title">{{ strip_tags($item['description'] ?? 'Item') }}</span>
-                                    @if(!empty($item['sku']))
-                                        <span class="item-sku"> - {{ $item['sku'] }}</span>
-                                    @endif
-                                </td>
-                                <td>{{ $item['category'] ?? '' }}</td>
-                                <td class="text-right">{{ $item['quantity'] ?? 1 }}</td>
-                                <td class="text-right">${{ number_format($item['total'] ?? 0, 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
-                                    No line items available
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                    <tfoot class="totals-footer">
+                    @empty
                         <tr>
-                            <th colspan="4">Subtotal</th>
-                            <td>${{ number_format($invoice->subtotal, 2) }}</td>
+                            <td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">
+                                No line items available
+                            </td>
                         </tr>
+                    @endforelse
+                </tbody>
+                <tfoot class="totals-footer">
+                    {{-- Subtotal --}}
+                    <tr class="first-row">
+                        <th colspan="4">Subtotal</th>
+                        <td>${{ number_format($invoice->subtotal, 2) }}</td>
+                    </tr>
 
-                        @if($invoice->discount > 0)
-                            <tr>
-                                <th colspan="4">Discount</th>
-                                <td>-${{ number_format($invoice->discount, 2) }}</td>
-                            </tr>
-                        @endif
-
-                        @if($invoice->shipping > 0)
-                            <tr>
-                                <th colspan="4">Delivery</th>
-                                <td>${{ number_format($invoice->shipping, 2) }}</td>
-                            </tr>
-                        @endif
-
-                        @if(isset($serviceFee) && $serviceFee['amount'] > 0)
-                            <tr>
-                                <th colspan="4">
-                                    @if($serviceFee['reason'])
-                                        {{ $serviceFee['reason'] }}
-                                    @else
-                                        Service Fee
-                                    @endif
-                                </th>
-                                <td>${{ number_format($serviceFee['amount'], 2) }}</td>
-                            </tr>
-                        @endif
-
-                        @if($invoice->tax > 0)
-                            <tr>
-                                <th colspan="4">Sales Tax</th>
-                                <td>${{ number_format($invoice->tax, 2) }}</td>
-                            </tr>
-                        @endif
-
-                        @if(count($paymentModes) > 1)
-                            <tr>
-                                <th colspan="4">Payment Modes</th>
-                                <td>
-                                    <table class="payment-modes-table">
-                                        @foreach($paymentModes as $mode)
-                                            <tr>
-                                                <td>{{ $mode['mode'] }}</td>
-                                                <td>${{ number_format($mode['total_paid'], 2) }}</td>
-                                            </tr>
-                                        @endforeach
-                                    </table>
-                                </td>
-                            </tr>
-                        @endif
-
-                        <tr class="total">
-                            <th colspan="4">Total</th>
-                            <td>${{ number_format($invoice->total, 2) }}</td>
+                    {{-- Discount --}}
+                    @if($invoice->discount > 0)
+                        <tr>
+                            <th colspan="4">Discount</th>
+                            <td>-${{ number_format($invoice->discount, 2) }}</td>
                         </tr>
+                    @endif
 
-                        @if($invoice->total_paid > 0 && $invoice->balance_due > 0)
-                            <tr>
-                                <th colspan="4">Amount Paid</th>
-                                <td>-${{ number_format($invoice->total_paid, 2) }}</td>
-                            </tr>
-                            <tr class="total">
-                                <th colspan="4">Balance Due</th>
-                                <td>${{ number_format($invoice->balance_due, 2) }}</td>
-                            </tr>
-                        @endif
-                    </tfoot>
-                </table>
-            </div>
+                    {{-- Delivery/Shipping --}}
+                    @if($invoice->shipping > 0)
+                        <tr>
+                            <th colspan="4">Delivery</th>
+                            <td>${{ number_format($invoice->shipping, 2) }}</td>
+                        </tr>
+                    @endif
+
+                    {{-- Service Fee (with percentage label if applicable) --}}
+                    @if(isset($serviceFee) && $serviceFee['amount'] > 0)
+                        <tr>
+                            <th colspan="4">
+                                @if(isset($serviceFee['unit']) && $serviceFee['unit'] === 'percent' && isset($serviceFee['value']))
+                                    {{ $serviceFee['value'] }}% CC Fee
+                                @elseif(!empty($serviceFee['reason']))
+                                    {{ $serviceFee['reason'] }}
+                                @else
+                                    Service Fee
+                                @endif
+                            </th>
+                            <td>${{ number_format($serviceFee['amount'], 2) }}</td>
+                        </tr>
+                    @endif
+
+                    {{-- Sales Tax --}}
+                    @if($invoice->tax > 0)
+                        <tr>
+                            <th colspan="4">Sales Tax</th>
+                            <td>${{ number_format($invoice->tax, 2) }}</td>
+                        </tr>
+                    @endif
+
+                    {{-- Payment Modes (if multiple payments) --}}
+                    @if(count($paymentModes) > 1)
+                        <tr>
+                            <th colspan="4">Payment Modes</th>
+                            <td>
+                                <table class="payment-modes-table">
+                                    @foreach($paymentModes as $mode)
+                                        <tr>
+                                            <td>{{ $mode['mode'] }}</td>
+                                            <td>
+                                                @if(strtolower($mode['mode']) === 'store credit')
+                                                    (${{ number_format($mode['total_paid'], 2) }})
+                                                @else
+                                                    ${{ number_format($mode['total_paid'], 2) }}
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </table>
+                            </td>
+                        </tr>
+                    @endif
+
+                    {{-- Total --}}
+                    <tr class="total">
+                        <th colspan="4">Total</th>
+                        <td>${{ number_format($invoice->total, 2) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
 
         {{-- Footer / Disclaimer --}}
         <div class="footer">
             <table class="signature-table">
-                <tr>
-                    <td class="label">Fingerprint</td>
-                    <td class="label">Signature</td>
-                    <td class="label">Date</td>
-                    <td class="label">Sales Person</td>
+                <tr class="label-row">
+                    <td>Fingerprint</td>
+                    <td>Signature</td>
+                    <td>Date</td>
+                    <td>Sales Person</td>
                 </tr>
-                <tr>
-                    <td class="value">&nbsp;</td>
-                    <td class="value">&nbsp;</td>
-                    <td class="value">
-                        {{ $dateOfPurchase ? $dateOfPurchase->format('m-d-Y') : $invoice->created_at->format('m-d-Y') }}
-                    </td>
-                    <td class="value">{{ $salesperson ?? 'N/A' }}</td>
+                <tr class="value-row">
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>{{ $dateOfPurchase ? $dateOfPurchase->format('m/d/Y') : $invoice->created_at->format('m/d/Y') }}</td>
+                    <td>{{ $salesperson ?? '-' }}</td>
                 </tr>
             </table>
 
             <div class="disclaimer">
                 <p class="disclaimer-title">Disclaimer</p>
                 <p>1. Sellers of Merchandise warrant that he or she is the legal owner of any and all items presented for sale. The seller agrees to transfer the full title of said items to {{ $store['name'] }} (hereafter referred to as "{{ $store['name'] }}") upon acceptance of any form of payment and upon execution of this agreement. Sellers further certifies that the presented goods are genuine and not misrepresented in any way, shape, or form.</p>
-                <p>2. You consent to the law and jurisdiction of any court within the State for action arising from this transaction. You agree to pay all costs, including attorney's fees and expenses and court costs, incurred by {{ $store['name'] }} or its assigns in enforcing any part of this contract.</p>
+                <p>2. You consent to the law and jurisdiction of any court within the State of Pennsylvania for action arising from this transaction. You agree to pay all costs, including attorney's fees and expenses and court costs, incurred by {{ $store['name'] }} or its assigns in enforcing any part of this contract.</p>
                 <p>3. The price for which each item is sold represents the price that {{ $store['name'] }} has offered, and you have paid, independent of any description by {{ $store['name'] }}. The condition, description or grade of any item sold represents the opinion of {{ $store['name'] }} and is not a warranty of any kind. {{ $store['name'] }} disclaims all warranties, expressed or implied, including warranties of merchantability.</p>
                 <p>4. {{ $store['name'] }}'s sole liability for any claim shall be no greater than the purchase price of the merchandise with respect to which a claim is made after such merchandise is returned to {{ $store['name'] }}. Such liability shall not include consequential damages.</p>
                 <p><strong>Consignment - Memo</strong></p>

@@ -1592,6 +1592,10 @@ class OrderController extends Controller
                 'full_name' => $order->customer->full_name,
                 'email' => $order->customer->email,
                 'phone' => $order->customer->phone_number,
+                'lead_source' => $order->customer->leadSource ? [
+                    'id' => $order->customer->leadSource->id,
+                    'name' => $order->customer->leadSource->name,
+                ] : null,
             ] : null,
             'user' => $order->user ? [
                 'id' => $order->user->id,

@@ -276,6 +276,33 @@ class Memo extends Model implements Payable
             'grand_total' => $summary['grand_total'],
             'balance_due' => $summary['balance_due'],
         ]);
+
+        // Sync invoice totals after updating
+        $this->syncInvoiceTotals();
+    }
+
+    /**
+     * Sync the invoice totals with the memo.
+     */
+    public function syncInvoiceTotals(): void
+    {
+        if (! $this->invoice) {
+            $this->load('invoice');
+        }
+
+        if ($this->invoice) {
+            $this->invoice->update([
+                'subtotal' => $this->total ?? 0,
+                'tax' => $this->tax_amount ?? 0,
+                'shipping' => $this->shipping_cost ?? 0,
+                'discount' => $this->discount_amount ?? 0,
+                'service_fee' => $this->service_fee_amount ?? 0,
+                'total' => $this->grand_total ?? $this->total ?? 0,
+            ]);
+
+            // Recalculate balance
+            $this->invoice->recalculateTotals();
+        }
     }
 
     // Status scopes

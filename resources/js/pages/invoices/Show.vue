@@ -63,6 +63,7 @@ interface Invoice {
     tax: number;
     shipping: number;
     discount: number;
+    service_fee: number;
     total: number;
     total_paid: number;
     balance_due: number;
@@ -324,6 +325,10 @@ const items = computed(() => {
                                 <div v-if="invoice.shipping > 0" class="flex justify-between text-sm">
                                     <dt class="text-gray-500 dark:text-gray-400">Shipping</dt>
                                     <dd class="text-gray-900 dark:text-white">{{ formatCurrency(invoice.shipping) }}</dd>
+                                </div>
+                                <div v-if="invoice.service_fee > 0" class="flex justify-between text-sm">
+                                    <dt class="text-gray-500 dark:text-gray-400">Service Fee</dt>
+                                    <dd class="text-gray-900 dark:text-white">{{ formatCurrency(invoice.service_fee) }}</dd>
                                 </div>
                                 <div class="flex justify-between border-t border-gray-200 pt-3 text-base font-medium dark:border-gray-700">
                                     <dt class="text-gray-900 dark:text-white">Total</dt>

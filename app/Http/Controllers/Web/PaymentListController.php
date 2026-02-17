@@ -20,7 +20,7 @@ class PaymentListController extends Controller
         $store = $this->storeContext->getCurrentStore();
 
         $query = Payment::where('store_id', $store->id)
-            ->with(['customer', 'user', 'payable', 'invoice']);
+            ->with(['customer', 'user', 'payable.customer', 'invoice']);
 
         // Sorting
         $sortField = $request->get('sort', 'created_at');
@@ -68,6 +68,15 @@ class PaymentListController extends Controller
 
         $payments = $query->paginate(20)->withQueryString();
 
+        // Transform payments to include customer from payable if not directly set
+        $payments->getCollection()->transform(function ($payment) {
+            if (! $payment->customer && $payment->payable && $payment->payable->customer) {
+                $payment->setRelation('customer', $payment->payable->customer);
+            }
+
+            return $payment;
+        });
+
         // Calculate totals for filtered results
         $totalsQuery = Payment::where('store_id', $store->id);
         if ($request->filled('payment_method')) {
@@ -100,7 +109,12 @@ class PaymentListController extends Controller
 
     public function show(Payment $payment): Response
     {
-        $payment->load(['customer', 'user', 'payable.items', 'invoice', 'terminalCheckout', 'notes.user']);
+        $payment->load(['customer', 'user', 'payable.customer', 'payable.items', 'invoice', 'terminalCheckout', 'notes.user']);
+
+        // Use payable's customer if payment doesn't have a direct customer
+        if (! $payment->customer && $payment->payable && $payment->payable->customer) {
+            $payment->setRelation('customer', $payment->payable->customer);
+        }
 
         $noteEntries = ($payment->notes ?? collect())->map(fn ($note) => [
             'id' => $note->id,

@@ -28,6 +28,15 @@ class InvoiceService
         }
 
         return DB::transaction(function () use ($order) {
+            // Calculate service fee amount
+            $serviceFeeAmount = 0;
+            if (($order->service_fee_value ?? 0) > 0) {
+                $subtotalAfterDiscount = ($order->sub_total ?? 0) - ($order->discount_cost ?? 0);
+                $serviceFeeAmount = ($order->service_fee_unit === 'percent')
+                    ? $subtotalAfterDiscount * $order->service_fee_value / 100
+                    : $order->service_fee_value;
+            }
+
             $invoice = Invoice::create([
                 'store_id' => $order->store_id,
                 'customer_id' => $order->customer_id,
@@ -38,6 +47,7 @@ class InvoiceService
                 'tax' => $order->sales_tax ?? 0,
                 'shipping' => $order->shipping_cost ?? 0,
                 'discount' => $order->discount_cost ?? 0,
+                'service_fee' => $serviceFeeAmount,
                 'total' => $order->total ?? 0,
                 'balance_due' => $order->total ?? 0,
                 'status' => Invoice::STATUS_PENDING,
@@ -55,6 +65,15 @@ class InvoiceService
         }
 
         return DB::transaction(function () use ($repair) {
+            // Use the stored service_fee field, or calculate from service_fee_value
+            $serviceFee = $repair->service_fee ?? 0;
+            if ($serviceFee <= 0 && ($repair->service_fee_value ?? 0) > 0) {
+                $subtotalAfterDiscount = ($repair->subtotal ?? 0) - ($repair->discount ?? 0);
+                $serviceFee = ($repair->service_fee_unit === 'percent')
+                    ? $subtotalAfterDiscount * $repair->service_fee_value / 100
+                    : $repair->service_fee_value;
+            }
+
             $invoice = Invoice::create([
                 'store_id' => $repair->store_id,
                 'customer_id' => $repair->customer_id,
@@ -65,6 +84,7 @@ class InvoiceService
                 'tax' => $repair->tax ?? 0,
                 'shipping' => $repair->shipping_cost ?? 0,
                 'discount' => $repair->discount ?? 0,
+                'service_fee' => $serviceFee,
                 'total' => $repair->total ?? 0,
                 'balance_due' => $repair->total ?? 0,
                 'status' => Invoice::STATUS_PENDING,
@@ -93,6 +113,7 @@ class InvoiceService
                 'tax' => $memo->tax ?? 0,
                 'shipping' => $memo->shipping_cost ?? 0,
                 'discount' => 0,
+                'service_fee' => $memo->service_fee_amount ?? 0,
                 'total' => $memo->total ?? 0,
                 'balance_due' => $memo->total ?? 0,
                 'status' => Invoice::STATUS_PENDING,
@@ -216,6 +237,7 @@ class InvoiceService
                 'tax' => $invoiceable->sales_tax ?? 0,
                 'shipping' => $invoiceable->shipping_cost ?? 0,
                 'discount' => $invoiceable->discount_cost ?? 0,
+                'service_fee' => $this->calculateServiceFee($invoiceable),
                 'total' => $invoiceable->total ?? 0,
             ],
             Repair::class => [
@@ -223,6 +245,7 @@ class InvoiceService
                 'tax' => $invoiceable->tax ?? 0,
                 'shipping' => $invoiceable->shipping_cost ?? 0,
                 'discount' => $invoiceable->discount ?? 0,
+                'service_fee' => $this->calculateServiceFee($invoiceable),
                 'total' => $invoiceable->total ?? 0,
             ],
             Memo::class => [
@@ -230,6 +253,7 @@ class InvoiceService
                 'tax' => $invoiceable->tax ?? 0,
                 'shipping' => $invoiceable->shipping_cost ?? 0,
                 'discount' => 0,
+                'service_fee' => $invoiceable->service_fee_amount ?? 0,
                 'total' => $invoiceable->total ?? 0,
             ],
             default => [],
@@ -244,5 +268,32 @@ class InvoiceService
         }
 
         return $invoice->fresh();
+    }
+
+    /**
+     * Calculate service fee amount from a payable model.
+     */
+    protected function calculateServiceFee(Order|Repair $model): float
+    {
+        $value = $model->service_fee_value ?? 0;
+        if ($value <= 0) {
+            return 0;
+        }
+
+        $subtotal = $model instanceof Order
+            ? ($model->sub_total ?? 0)
+            : ($model->subtotal ?? 0);
+
+        $discount = $model instanceof Order
+            ? ($model->discount_cost ?? 0)
+            : ($model->discount ?? 0);
+
+        $subtotalAfterDiscount = $subtotal - $discount;
+
+        if (($model->service_fee_unit ?? 'fixed') === 'percent') {
+            return $subtotalAfterDiscount * $value / 100;
+        }
+
+        return $value;
     }
 }

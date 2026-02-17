@@ -123,6 +123,18 @@ class PaymentService
             $payments = [];
             $totalAmount = 0;
 
+            // Extract service fee adjustments from the first payment (service fee applies to whole transaction)
+            $firstPayment = $paymentsData[0] ?? null;
+            if ($firstPayment && (($firstPayment['service_fee_value'] ?? 0) > 0)) {
+                $adjustments = [
+                    'service_fee_value' => $firstPayment['service_fee_value'],
+                    'service_fee_unit' => $firstPayment['service_fee_unit'] ?? 'fixed',
+                    'service_fee_reason' => $firstPayment['service_fee_reason'] ?? null,
+                ];
+                // Update payable with service fee adjustments and recalculate totals
+                $this->updateAdjustments($payable, $adjustments);
+            }
+
             foreach ($paymentsData as $paymentData) {
                 if (($paymentData['amount'] ?? 0) <= 0) {
                     continue;
@@ -130,7 +142,8 @@ class PaymentService
 
                 $payment = $this->createPayment($payable, $paymentData, $userId);
                 $payments[] = $payment;
-                $totalAmount += $paymentData['amount'];
+                // Include both the payment amount and service fee in total paid
+                $totalAmount += $paymentData['amount'] + ($payment->service_fee_amount ?? 0);
             }
 
             // Update payable totals

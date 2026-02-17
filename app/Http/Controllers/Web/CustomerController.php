@@ -9,6 +9,7 @@ use App\Models\Address;
 use App\Models\Customer;
 use App\Models\CustomerDocument;
 use App\Models\LeadSource;
+use App\Models\State;
 use App\Services\ActivityLogFormatter;
 use App\Services\StoreContext;
 use Illuminate\Http\RedirectResponse;
@@ -257,6 +258,12 @@ class CustomerController extends Controller
             $customer->addresses()->update(['is_default' => false]);
         }
 
+        // Look up state_id from abbreviation
+        $stateId = null;
+        if (! empty($validated['state'])) {
+            $stateId = State::findByAbbreviation($validated['state'])?->id;
+        }
+
         $customer->addresses()->create([
             'store_id' => $store->id,
             'nickname' => $validated['nickname'] ?? null,
@@ -266,7 +273,7 @@ class CustomerController extends Controller
             'address' => $validated['address'],
             'address2' => $validated['address2'] ?? null,
             'city' => $validated['city'],
-            'state_id' => $validated['state'] ?? null,
+            'state_id' => $stateId,
             'zip' => $validated['zip'],
             'phone' => $validated['phone'] ?? null,
             'type' => $validated['type'],
@@ -310,6 +317,12 @@ class CustomerController extends Controller
             $customer->addresses()->where('id', '!=', $address->id)->update(['is_default' => false]);
         }
 
+        // Look up state_id from abbreviation
+        $stateId = null;
+        if (! empty($validated['state'])) {
+            $stateId = State::findByAbbreviation($validated['state'])?->id;
+        }
+
         $address->update([
             'nickname' => $validated['nickname'] ?? null,
             'first_name' => $validated['first_name'] ?? null,
@@ -318,7 +331,7 @@ class CustomerController extends Controller
             'address' => $validated['address'],
             'address2' => $validated['address2'] ?? null,
             'city' => $validated['city'],
-            'state_id' => $validated['state'] ?? null,
+            'state_id' => $stateId,
             'zip' => $validated['zip'],
             'phone' => $validated['phone'] ?? null,
             'type' => $validated['type'],

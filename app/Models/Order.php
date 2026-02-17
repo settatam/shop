@@ -254,7 +254,8 @@ class Order extends Model implements Payable
     {
         return (float) $this->payments()
             ->where('status', Payment::STATUS_COMPLETED)
-            ->sum('amount');
+            ->selectRaw('COALESCE(SUM(amount), 0) + COALESCE(SUM(service_fee_amount), 0) as total')
+            ->value('total');
     }
 
     public function getBalanceDueAttribute(): float
@@ -571,6 +572,7 @@ class Order extends Model implements Payable
                 'tax' => $this->sales_tax ?? 0,
                 'shipping' => $this->shipping_cost ?? 0,
                 'discount' => $this->discount_cost ?? 0,
+                'service_fee' => $serviceFeeAmount,
                 'total' => $this->total ?? 0,
             ]);
 
