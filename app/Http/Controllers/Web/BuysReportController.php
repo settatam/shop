@@ -319,7 +319,10 @@ class BuysReportController extends Controller
                     $q->whereNull('source')
                         ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
                 })
-                ->where('source', '!=', Transaction::SOURCE_TRADE_IN);
+                ->where(function ($q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '!=', Transaction::SOURCE_TRADE_IN);
+                });
         });
     }
 
@@ -334,7 +337,10 @@ class BuysReportController extends Controller
                     $q->whereNull('source')
                         ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
                 })
-                ->where('source', '!=', Transaction::SOURCE_TRADE_IN);
+                ->where(function ($q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '!=', Transaction::SOURCE_TRADE_IN);
+                });
         });
     }
 
@@ -397,7 +403,10 @@ class BuysReportController extends Controller
                     $q->whereNull('source')
                         ->orWhere('source', '!=', Transaction::SOURCE_ONLINE);
                 })
-                ->where('source', '!=', Transaction::SOURCE_TRADE_IN);
+                ->where(function ($q) {
+                    $q->whereNull('source')
+                        ->orWhere('source', '!=', Transaction::SOURCE_TRADE_IN);
+                });
         });
     }
 
@@ -435,15 +444,16 @@ class BuysReportController extends Controller
         $query = Transaction::query()
             ->where('store_id', $storeId)
             ->where('status_id', $paymentProcessedStatusId)
-            ->whereBetween('updated_at', [$startDate, $endDate])
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
             ->with(['items']);
 
         $filter($query);
 
         $transactions = $query->get();
 
-        // Group by day (using updated_at as proxy for when payment was processed)
-        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->updated_at)->format('Y-m-d'));
+        // Group by day using payment_processed_at
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y-m-d'));
 
         // Generate all days in range
         $days = collect();
@@ -492,15 +502,16 @@ class BuysReportController extends Controller
         $query = Transaction::query()
             ->where('store_id', $storeId)
             ->where('status_id', $paymentProcessedStatusId)
-            ->whereBetween('updated_at', [$startDate, $endDate])
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
             ->with(['items']);
 
         $filter($query);
 
         $transactions = $query->get();
 
-        // Group by year (using updated_at as proxy for when payment was processed)
-        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->updated_at)->format('Y'));
+        // Group by year using payment_processed_at
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y'));
 
         // Generate all years in range
         $years = collect();
@@ -546,15 +557,16 @@ class BuysReportController extends Controller
         $query = Transaction::query()
             ->where('store_id', $storeId)
             ->where('status_id', $paymentProcessedStatusId)
-            ->whereBetween('updated_at', [$startDate, $endDate])
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
             ->with(['items']);
 
         $filter($query);
 
         $transactions = $query->get();
 
-        // Group by month (using updated_at as proxy for when payment was processed)
-        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->updated_at)->format('Y-m'));
+        // Group by month using payment_processed_at
+        $grouped = $transactions->groupBy(fn ($t) => Carbon::parse($t->payment_processed_at)->format('Y-m'));
 
         // Generate all months in range
         $months = collect();
