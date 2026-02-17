@@ -122,19 +122,9 @@ class PaymentService
         return DB::transaction(function () use ($payable, $paymentsData, $userId) {
             $payments = [];
             $totalAmount = 0;
+            $totalServiceFee = 0;
 
-            // Extract service fee adjustments from the first payment (service fee applies to whole transaction)
-            $firstPayment = $paymentsData[0] ?? null;
-            if ($firstPayment && (($firstPayment['service_fee_value'] ?? 0) > 0)) {
-                $adjustments = [
-                    'service_fee_value' => $firstPayment['service_fee_value'],
-                    'service_fee_unit' => $firstPayment['service_fee_unit'] ?? 'fixed',
-                    'service_fee_reason' => $firstPayment['service_fee_reason'] ?? null,
-                ];
-                // Update payable with service fee adjustments and recalculate totals
-                $this->updateAdjustments($payable, $adjustments);
-            }
-
+            // First pass: create all payments and calculate their individual service fees
             foreach ($paymentsData as $paymentData) {
                 if (($paymentData['amount'] ?? 0) <= 0) {
                     continue;
@@ -144,6 +134,25 @@ class PaymentService
                 $payments[] = $payment;
                 // Include both the payment amount and service fee in total paid
                 $totalAmount += $paymentData['amount'] + ($payment->service_fee_amount ?? 0);
+                $totalServiceFee += ($payment->service_fee_amount ?? 0);
+            }
+
+            // Update payable's total to include the actual service fee from payments
+            // (not recalculated, use the actual amounts from individual payments)
+            if ($totalServiceFee > 0) {
+                // Find the service fee details from the first payment that has one (for display purposes)
+                $serviceFeePayment = collect($paymentsData)->first(fn ($p) => ($p['service_fee_value'] ?? 0) > 0);
+
+                // Store the service fee as a FIXED amount (the actual calculated total)
+                $payable->updatePaymentAdjustments([
+                    'service_fee_value' => $totalServiceFee,
+                    'service_fee_unit' => 'fixed',
+                    'service_fee_reason' => $serviceFeePayment['service_fee_reason'] ?? null,
+                ]);
+
+                // Recalculate summary with the updated adjustments and update totals
+                $summary = $this->calculateSummary($payable);
+                $payable->updateCalculatedTotals($summary);
             }
 
             // Update payable totals

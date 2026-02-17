@@ -181,14 +181,13 @@ const items = computed(() => {
 
                     <!-- Action buttons -->
                     <div class="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            @click="printInvoice"
+                        <Link
+                            :href="`/invoices/${invoice.id}/print`"
                             class="inline-flex items-center gap-2 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                         >
                             <PrinterIcon class="size-4" />
                             Print
-                        </button>
+                        </Link>
 
                         <button
                             type="button"

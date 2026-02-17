@@ -531,7 +531,8 @@ function onPaymentSuccess() {
 const hasInvoice = computed(() => !!props.order.invoice);
 
 function printInvoice() {
-    window.open(`/orders/${props.order.id}/print-invoice`, '_blank');
+    if (!props.order.invoice) return;
+    window.open(`/invoices/${props.order.invoice.id}/print`, '_blank');
 }
 
 function downloadInvoice() {

@@ -2,7 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/vue/20/solid';
 
-interface OrderItem {
+interface InvoiceItem {
     id: number;
     sku: string | null;
     title: string;
@@ -29,32 +29,29 @@ interface Payment {
 }
 
 interface Props {
-    order: {
+    invoice: {
         id: number;
-        order_id: string | null;
         invoice_number: string | null;
+        type: string;
+        invoiceable_type: string;
+        invoiceable_id: number;
         status: string;
         sub_total: number;
         sales_tax: number;
         tax_rate: number;
         shipping_cost: number;
         discount_cost: number;
-        trade_in_credit: number;
-        service_fee_value: number | null;
-        service_fee_unit: string | null;
         total: number;
         total_paid: number | null;
         balance_due: number | null;
         notes: string | null;
         date_of_purchase: string | null;
         created_at: string;
-        shipping_address: Record<string, string> | null;
-        billing_address: Record<string, string> | null;
+        service_fee_value: number | null;
+        service_fee_unit: string | null;
         customer: {
             id: number;
             full_name: string;
-            first_name: string | null;
-            last_name: string | null;
             company_name: string | null;
             email: string | null;
             phone: string | null;
@@ -68,11 +65,7 @@ interface Props {
             id: number;
             name: string;
         } | null;
-        warehouse: {
-            id: number;
-            name: string;
-        } | null;
-        items: OrderItem[];
+        items: InvoiceItem[];
         payments: Payment[];
     };
     store: {
@@ -119,15 +112,15 @@ const formatDate = (date: string) => {
     });
 };
 
-const orderNumber = props.order.invoice_number || props.order.order_id || `#${props.order.id}`;
-const orderDate = props.order.date_of_purchase || props.order.created_at;
+const invoiceNumber = props.invoice.invoice_number || `#${props.invoice.id}`;
+const invoiceDate = props.invoice.date_of_purchase || props.invoice.created_at;
 
 // Calculate service fee
 const serviceFee = (() => {
-    const value = props.order.service_fee_value ?? 0;
+    const value = props.invoice.service_fee_value ?? 0;
     if (value <= 0) return 0;
-    if (props.order.service_fee_unit === 'percent') {
-        const subtotalAfterDiscount = props.order.sub_total - (props.order.discount_cost ?? 0);
+    if (props.invoice.service_fee_unit === 'percent') {
+        const subtotalAfterDiscount = props.invoice.sub_total - (props.invoice.discount_cost ?? 0);
         return subtotalAfterDiscount * value / 100;
     }
     return value;
@@ -135,10 +128,20 @@ const serviceFee = (() => {
 
 // Get all unique payment methods for display, comma separated
 const paymentMethodsDisplay = (() => {
-    const methods = props.order.payments?.map(p => p.payment_method).filter(Boolean) || [];
+    const methods = props.invoice.payments?.map(p => p.payment_method).filter(Boolean) || [];
     const uniqueMethods = [...new Set(methods)];
     if (uniqueMethods.length === 0) return '-';
     return uniqueMethods.map(method => paymentMethodLabels[method] || method).join(', ');
+})();
+
+// Get back URL based on invoiceable type
+const backUrl = (() => {
+    const type = props.invoice.invoiceable_type?.toLowerCase();
+    const id = props.invoice.invoiceable_id;
+    if (type === 'order') return `/orders/${id}`;
+    if (type === 'memo') return `/memos/${id}`;
+    if (type === 'repair') return `/repairs/${id}`;
+    return `/invoices/${props.invoice.id}`;
 })();
 
 const print = () => {
@@ -147,7 +150,7 @@ const print = () => {
 </script>
 
 <template>
-    <Head :title="`Invoice - ${orderNumber}`" />
+    <Head :title="`Invoice - ${invoiceNumber}`" />
 
     <div class="min-h-screen bg-gray-900">
         <!-- Header (hidden when printing) -->
@@ -156,7 +159,7 @@ const print = () => {
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-4">
                         <Link
-                            :href="`/orders/${order.id}`"
+                            :href="backUrl"
                             class="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500"
                         >
                             <ArrowLeftIcon class="size-5" />
@@ -224,12 +227,12 @@ const print = () => {
                                     <!-- Billed To -->
                                     <div class="text-xs font-light text-slate-500">
                                         <p class="text-xs font-normal text-slate-700">Billed To</p>
-                                        <template v-if="order.customer">
-                                            <p v-if="order.customer.company_name" class="text-xs">{{ order.customer.company_name }}</p>
-                                            <p class="text-xs">{{ order.customer.full_name }}</p>
-                                            <p v-if="order.customer.address" class="text-xs">{{ order.customer.address }} {{ order.customer.address2 }}</p>
-                                            <p v-if="order.customer.city" class="text-xs">{{ order.customer.city }}</p>
-                                            <p v-if="order.customer.state || order.customer.zip" class="text-xs">{{ order.customer.state }} {{ order.customer.zip }}</p>
+                                        <template v-if="invoice.customer">
+                                            <p v-if="invoice.customer.company_name" class="text-xs">{{ invoice.customer.company_name }}</p>
+                                            <p class="text-xs">{{ invoice.customer.full_name }}</p>
+                                            <p v-if="invoice.customer.address" class="text-xs">{{ invoice.customer.address }} {{ invoice.customer.address2 }}</p>
+                                            <p v-if="invoice.customer.city" class="text-xs">{{ invoice.customer.city }}</p>
+                                            <p v-if="invoice.customer.state || invoice.customer.zip" class="text-xs">{{ invoice.customer.state }} {{ invoice.customer.zip }}</p>
                                         </template>
                                         <p v-else class="text-xs italic">Walk-in customer</p>
                                     </div>
@@ -237,9 +240,9 @@ const print = () => {
                                     <!-- Invoice Number & Date -->
                                     <div class="text-xs font-light text-slate-500">
                                         <p class="text-xs font-normal text-slate-700">Invoice Number</p>
-                                        <p class="text-xs">{{ orderNumber }}</p>
+                                        <p class="text-xs">{{ invoiceNumber }}</p>
                                         <p class="mt-2 text-xs font-normal text-slate-700">Date of Issue</p>
-                                        <p class="text-xs">{{ formatDate(orderDate) }}</p>
+                                        <p class="text-xs">{{ formatDate(invoiceDate) }}</p>
                                     </div>
 
                                     <!-- Payment Method -->
@@ -277,7 +280,7 @@ const print = () => {
                                     </thead>
 
                                     <tbody>
-                                        <tr v-for="item in order.items" :key="item.id" class="border-b border-slate-200">
+                                        <tr v-for="item in invoice.items" :key="item.id" class="border-b border-slate-200">
                                             <td class="hidden sm:table-cell py-2 px-3">
                                                 <div>
                                                     <img
@@ -320,12 +323,12 @@ const print = () => {
                                                 Subtotal
                                             </th>
                                             <td class="pt-6 pl-3 pr-4 text-xs text-right text-slate-500 sm:pr-6 md:pr-0">
-                                                ${{ formatCurrency(order.sub_total) }}
+                                                ${{ formatCurrency(invoice.sub_total) }}
                                             </td>
                                         </tr>
 
                                         <!-- Discount -->
-                                        <tr v-if="order.discount_cost > 0">
+                                        <tr v-if="invoice.discount_cost > 0">
                                             <th scope="row" colspan="4" class="hidden pt-2 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
                                                 Discount
                                             </th>
@@ -333,12 +336,12 @@ const print = () => {
                                                 Discount
                                             </th>
                                             <td class="pt-2 pl-3 pr-4 text-xs text-right text-slate-500 sm:pr-6 md:pr-0">
-                                                -${{ formatCurrency(order.discount_cost) }}
+                                                -${{ formatCurrency(invoice.discount_cost) }}
                                             </td>
                                         </tr>
 
                                         <!-- Delivery/Shipping -->
-                                        <tr v-if="order.shipping_cost > 0">
+                                        <tr v-if="invoice.shipping_cost > 0">
                                             <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
                                                 Delivery
                                             </th>
@@ -346,14 +349,14 @@ const print = () => {
                                                 Delivery
                                             </th>
                                             <td class="pt-4 pl-3 pr-4 text-xs text-right text-slate-500 sm:pr-6 md:pr-0">
-                                                ${{ formatCurrency(order.shipping_cost) }}
+                                                ${{ formatCurrency(invoice.shipping_cost) }}
                                             </td>
                                         </tr>
 
                                         <!-- Service Fee (e.g., 3% CC Fee) -->
                                         <tr v-if="serviceFee > 0">
                                             <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
-                                                {{ order.service_fee_unit === 'percent' ? `${order.service_fee_value}% CC Fee` : 'Service Fee' }}
+                                                {{ invoice.service_fee_unit === 'percent' ? `${invoice.service_fee_value}% CC Fee` : 'Service Fee' }}
                                             </th>
                                             <th scope="row" class="pt-4 pl-4 pr-3 text-xs font-light text-left text-slate-500 sm:hidden">
                                                 Service Fee
@@ -364,7 +367,7 @@ const print = () => {
                                         </tr>
 
                                         <!-- Sales Tax -->
-                                        <tr v-if="order.sales_tax > 0">
+                                        <tr v-if="invoice.sales_tax > 0">
                                             <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
                                                 Sales Tax
                                             </th>
@@ -372,12 +375,12 @@ const print = () => {
                                                 Sales Tax
                                             </th>
                                             <td class="pt-4 pl-3 pr-4 text-xs text-right text-slate-500 sm:pr-6 md:pr-0">
-                                                ${{ formatCurrency(order.sales_tax) }}
+                                                ${{ formatCurrency(invoice.sales_tax) }}
                                             </td>
                                         </tr>
 
                                         <!-- Payment Modes (if multiple) -->
-                                        <tr v-if="order.payments && order.payments.length > 1">
+                                        <tr v-if="invoice.payments && invoice.payments.length > 1">
                                             <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
                                                 Payment Modes
                                             </th>
@@ -386,7 +389,7 @@ const print = () => {
                                             </th>
                                             <td class="pt-4 pl-3 pr-4 text-xs text-right text-slate-500 sm:pr-6 md:pr-0">
                                                 <table class="w-full">
-                                                    <tr v-for="payment in order.payments" :key="payment.id">
+                                                    <tr v-for="payment in invoice.payments" :key="payment.id">
                                                         <td class="text-xs text-left">{{ paymentMethodLabels[payment.payment_method] || payment.payment_method }}</td>
                                                         <td class="text-xs text-right">
                                                             <template v-if="payment.payment_method === 'store_credit'">
@@ -410,7 +413,7 @@ const print = () => {
                                                 Total
                                             </th>
                                             <td class="pt-4 pl-3 pr-4 text-sm font-normal text-right text-slate-700 sm:pr-6 md:pr-0">
-                                                ${{ formatCurrency(order.total) }}
+                                                ${{ formatCurrency(invoice.total) }}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -432,19 +435,19 @@ const print = () => {
                                         <tr>
                                             <td class="w-1/4 h-[200px]"></td>
                                             <td></td>
-                                            <td class="text-center p-[5px] align-top">{{ formatDate(orderDate) }}</td>
-                                            <td class="text-center p-[5px] align-top">{{ order.user?.name || '-' }}</td>
+                                            <td class="text-center p-[5px] align-top">{{ formatDate(invoiceDate) }}</td>
+                                            <td class="text-center p-[5px] align-top">{{ invoice.user?.name || '-' }}</td>
                                         </tr>
                                     </table>
 
                                     <p class="text-center text-xl font-bold mb-4">Disclaimer</p>
-                                    <p class="mb-4">1. Sellers of Merchandise warrant that he or she is the legal owner of any and all items presented for sale. The seller agrees to transfer the full title of said items to {{ store.name }} (hereafter referred to as "REB") upon acceptance of any form of payment and upon execution of this agreement. Sellers further certifies that the presented goods are genuine and not misrepresented in any way, shape, or form.</p>
-                                    <p class="mb-4">2. You consent to the law and jurisdiction of any court within the State of Pennsylvania for action arising from this transaction. You agree to pay all costs, including attorney's fees and expenses and court costs, incurred by REB or its assigns in enforcing any part of this contract.</p>
-                                    <p class="mb-4">3. The price for which each item is sold represents the price that REB has offered, and you have paid, independent of any description by REB. The condition, description or grade of any item sold represents the opinion of REB and is not a warranty of any kind. REB disclaims all warranties, expressed or implied, including warranties of merchantability.</p>
-                                    <p class="mb-4">4. REB's sole liability for any claim shall be no greater than the purchase price of the merchandise with respect to which a claim is made after such merchandise is returned to REB. Such liability shall not include consequential damages.</p>
+                                    <p class="mb-4">1. Sellers of Merchandise warrant that he or she is the legal owner of any and all items presented for sale. The seller agrees to transfer the full title of said items to {{ store.name }} (hereafter referred to as "{{ store.name }}") upon acceptance of any form of payment and upon execution of this agreement. Sellers further certifies that the presented goods are genuine and not misrepresented in any way, shape, or form.</p>
+                                    <p class="mb-4">2. You consent to the law and jurisdiction of any court within the State of Pennsylvania for action arising from this transaction. You agree to pay all costs, including attorney's fees and expenses and court costs, incurred by {{ store.name }} or its assigns in enforcing any part of this contract.</p>
+                                    <p class="mb-4">3. The price for which each item is sold represents the price that {{ store.name }} has offered, and you have paid, independent of any description by {{ store.name }}. The condition, description or grade of any item sold represents the opinion of {{ store.name }} and is not a warranty of any kind. {{ store.name }} disclaims all warranties, expressed or implied, including warranties of merchantability.</p>
+                                    <p class="mb-4">4. {{ store.name }}'s sole liability for any claim shall be no greater than the purchase price of the merchandise with respect to which a claim is made after such merchandise is returned to {{ store.name }}. Such liability shall not include consequential damages.</p>
                                     <p class="mb-4">Consignment - Memo</p>
-                                    <p class="mb-4">5. The merchandise described on the front side of this invoice remains property of REB and shall be returned to us on demand until payment is made in full and is received by REB. No power is given to you to sell, pledge, hypothecate or otherwise dispose of this merchandise until paid in full.</p>
-                                    <p class="mb-4">6. For Consignment and Memos, you will bear all risk of loss from all hazards for this merchandise from its delivery to you until its returned to REB or paid in full. A finance charge of 3% per month (36% annually) will be applied to any balance remaining unpaid 30 days after the date of this sale order.</p>
+                                    <p class="mb-4">5. The merchandise described on the front side of this invoice remains property of {{ store.name }} and shall be returned to us on demand until payment is made in full and is received by {{ store.name }}. No power is given to you to sell, pledge, hypothecate or otherwise dispose of this merchandise until paid in full.</p>
+                                    <p class="mb-4">6. For Consignment and Memos, you will bear all risk of loss from all hazards for this merchandise from its delivery to you until its returned to {{ store.name }} or paid in full. A finance charge of 3% per month (36% annually) will be applied to any balance remaining unpaid 30 days after the date of this sale order.</p>
                                 </div>
                             </div>
                         </div>

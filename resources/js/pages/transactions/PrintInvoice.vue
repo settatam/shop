@@ -142,6 +142,17 @@ const primaryPayment = props.transaction.payments?.[0];
 const primaryPaymentMethod = primaryPayment?.payment_method || props.transaction.payment_method;
 const primaryPaymentDetails = primaryPayment?.details;
 
+// Get all unique payment methods for display, comma separated
+const paymentMethodsDisplay = (() => {
+    const methods = props.transaction.payments?.map(p => p.payment_method).filter(Boolean) || [];
+    if (methods.length === 0 && props.transaction.payment_method) {
+        methods.push(props.transaction.payment_method);
+    }
+    const uniqueMethods = [...new Set(methods)];
+    if (uniqueMethods.length === 0) return '-';
+    return uniqueMethods.map(method => paymentMethodLabels[method] || method).join(', ');
+})();
+
 // Format payment address for display
 const getPaymentAddress = () => {
     if (!primaryPaymentDetails) return null;
@@ -357,7 +368,7 @@ const print = () => {
                                 <!-- Payment Method -->
                                 <div class="text-sm font-light text-slate-500">
                                     <p class="text-sm font-normal text-slate-700">Payment Method</p>
-                                    <p>{{ paymentMethodLabels[primaryPaymentMethod] || primaryPaymentMethod || '-' }}</p>
+                                    <p>{{ paymentMethodsDisplay }}</p>
                                     <template v-if="paymentAddress">
                                         <p v-for="(line, index) in paymentAddress" :key="index" class="text-xs">
                                             {{ line }}

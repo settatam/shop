@@ -380,8 +380,7 @@ function viewInvoice() {
 
 function printInvoice() {
     if (!props.memo.invoice) return;
-    // Open PDF in new window for printing
-    window.open(`/invoices/${props.memo.invoice.id}/pdf/stream`, '_blank');
+    window.open(`/invoices/${props.memo.invoice.id}/print`, '_blank');
 }
 
 function downloadInvoice() {

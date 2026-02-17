@@ -419,7 +419,7 @@ function viewInvoice() {
 
 function printInvoice() {
     if (!props.repair.invoice) return;
-    window.open(`/invoices/${props.repair.invoice.id}/pdf/stream`, '_blank');
+    window.open(`/invoices/${props.repair.invoice.id}/print`, '_blank');
 }
 
 function downloadInvoice() {
