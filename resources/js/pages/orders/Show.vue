@@ -30,7 +30,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
-import CustomerSearch from '@/components/customers/CustomerSearch.vue';
+import { CustomerCard, CustomerSearch } from '@/components/customers';
 
 interface LeadSource {
     id: number;
@@ -1205,30 +1205,7 @@ function cancelAddingCustomer() {
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
 
                             <!-- Existing customer -->
-                            <div v-if="order.customer" class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
-                                    <UserIcon class="size-6 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div>
-                                    <Link :href="`/customers/${order.customer.id}`" class="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
-                                        {{ order.customer.full_name }}
-                                    </Link>
-                                    <p v-if="order.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ order.customer.email }}</p>
-                                    <p v-if="order.customer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ order.customer.phone }}</p>
-                                    <div class="mt-2 flex items-center gap-2">
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
-                                        <span
-                                            v-if="order.customer.lead_source"
-                                            class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30"
-                                        >
-                                            {{ order.customer.lead_source.name }}
-                                        </span>
-                                        <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
-                                            Unknown
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
+                            <CustomerCard v-if="order.customer" :customer="order.customer" />
 
                             <!-- No customer - Add customer form -->
                             <div v-else>

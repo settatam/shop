@@ -56,8 +56,11 @@
         }
 
         .store-logo {
-            max-height: 48px;
+            max-height: 80px;
+            width: auto;
             margin-bottom: 8px;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
         }
 
         .store-name {

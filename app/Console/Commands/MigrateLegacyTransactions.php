@@ -21,6 +21,7 @@ class MigrateLegacyTransactions extends Command
                             {--limit= : Limit the number of transactions to migrate}
                             {--latest : Get the most recent transactions instead of oldest (use with --limit)}
                             {--dry-run : Run without making any changes}
+                            {--fresh : Delete all existing transactions and related data for this store before migrating}
                             {--skip-customers : Skip migrating customers}
                             {--skip-images : Skip migrating images}
                             {--skip-activities : Skip migrating activities}
@@ -161,6 +162,20 @@ class MigrateLegacyTransactions extends Command
             return self::FAILURE;
         }
 
+        // Handle fresh option - delete all existing transaction data for this store
+        if ($this->option('fresh')) {
+            if (! $this->dryRun) {
+                if (! $this->confirm("This will DELETE all transactions, transaction items, related images, addresses, and activity logs for store {$this->newStoreId}. Are you sure?")) {
+                    $this->info('Operation cancelled.');
+
+                    return self::SUCCESS;
+                }
+                $this->deleteExistingTransactionData();
+            } else {
+                $this->warn('Fresh mode: Would delete all transaction data for store '.$this->newStoreId);
+            }
+        }
+
         // Load category mappings if available
         if (! $this->option('skip-category-mapping')) {
             // Allow using category mappings from a different legacy store (e.g., store 44 uses store 43's categories)
@@ -255,6 +270,82 @@ class MigrateLegacyTransactions extends Command
         );
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Delete all existing transaction data for the store.
+     * This includes transactions, transaction items, images, addresses, and activity logs.
+     */
+    protected function deleteExistingTransactionData(): void
+    {
+        $this->info('Deleting existing transaction data for store '.$this->newStoreId.'...');
+
+        // Get all transaction IDs for this store (including soft-deleted)
+        $transactionIds = Transaction::withTrashed()
+            ->where('store_id', $this->newStoreId)
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($transactionIds)) {
+            $this->info('No existing transactions found.');
+
+            return;
+        }
+
+        $this->info('Found '.count($transactionIds).' transactions to delete.');
+
+        // Get all transaction item IDs
+        $transactionItemIds = TransactionItem::whereIn('transaction_id', $transactionIds)
+            ->pluck('id')
+            ->toArray();
+
+        $this->info('Found '.count($transactionItemIds).' transaction items to delete.');
+
+        // Delete images for transaction items (polymorphic)
+        $deletedItemImages = DB::table('images')
+            ->where('imageable_type', TransactionItem::class)
+            ->whereIn('imageable_id', $transactionItemIds)
+            ->delete();
+        $this->info("Deleted {$deletedItemImages} transaction item images.");
+
+        // Delete images for transactions (polymorphic)
+        $deletedTransactionImages = DB::table('images')
+            ->where('imageable_type', Transaction::class)
+            ->whereIn('imageable_id', $transactionIds)
+            ->delete();
+        $this->info("Deleted {$deletedTransactionImages} transaction images.");
+
+        // Delete addresses for transactions (polymorphic)
+        $deletedAddresses = DB::table('addresses')
+            ->where('addressable_type', Transaction::class)
+            ->whereIn('addressable_id', $transactionIds)
+            ->delete();
+        $this->info("Deleted {$deletedAddresses} transaction addresses.");
+
+        // Delete activity logs for transactions
+        $deletedActivities = DB::table('activity_logs')
+            ->where('subject_type', Transaction::class)
+            ->whereIn('subject_id', $transactionIds)
+            ->delete();
+        $this->info("Deleted {$deletedActivities} activity logs.");
+
+        // Delete transaction items (use DB to bypass soft deletes)
+        $deletedItems = DB::table('transaction_items')
+            ->whereIn('transaction_id', $transactionIds)
+            ->delete();
+        $this->info("Deleted {$deletedItems} transaction items.");
+
+        // Delete transactions (use DB to bypass soft deletes)
+        $deletedTransactions = DB::table('transactions')
+            ->where('store_id', $this->newStoreId)
+            ->delete();
+        $this->info("Deleted {$deletedTransactions} transactions.");
+
+        // Clear the customer map cache since we may need to re-match customers
+        $this->customerMap = [];
+
+        $this->info('Existing transaction data deleted successfully.');
+        $this->newLine();
     }
 
     protected function migrateTransaction(object $legacyTransaction, bool $syncDeletes = false): string

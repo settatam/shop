@@ -86,6 +86,14 @@ interface Filters {
     customer_id?: string;
     sort?: string;
     direction?: 'asc' | 'desc';
+    min_amount?: string;
+    max_amount?: string;
+    platform?: string;
+}
+
+interface PlatformOption {
+    value: string;
+    label: string;
 }
 
 interface PaginatedPayments {
@@ -103,6 +111,7 @@ interface Props {
     filters: Filters;
     paymentMethods: PaymentMethod[];
     statuses: Status[];
+    platforms: PlatformOption[];
 }
 
 const props = defineProps<Props>();
@@ -117,12 +126,16 @@ const paymentMethod = ref(props.filters.payment_method || '');
 const status = ref(props.filters.status || '');
 const fromDate = ref(props.filters.from_date || '');
 const toDate = ref(props.filters.to_date || '');
+const minAmount = ref(props.filters.min_amount || '');
+const maxAmount = ref(props.filters.max_amount || '');
+const platform = ref(props.filters.platform || '');
 const showFilters = ref(false);
+const showSummary = ref(false);
 const sortField = ref(props.filters.sort || 'created_at');
 const sortDirection = ref<'asc' | 'desc'>(props.filters.direction || 'desc');
 
 const hasActiveFilters = computed(() => {
-    return paymentMethod.value || status.value || fromDate.value || toDate.value;
+    return paymentMethod.value || status.value || fromDate.value || toDate.value || minAmount.value || maxAmount.value || platform.value;
 });
 
 function applyFilters() {
@@ -132,6 +145,9 @@ function applyFilters() {
         status: status.value || undefined,
         from_date: fromDate.value || undefined,
         to_date: toDate.value || undefined,
+        min_amount: minAmount.value || undefined,
+        max_amount: maxAmount.value || undefined,
+        platform: platform.value || undefined,
         sort: sortField.value !== 'created_at' ? sortField.value : undefined,
         direction: sortDirection.value !== 'desc' ? sortDirection.value : undefined,
     }, {
@@ -161,6 +177,9 @@ function clearFilters() {
     status.value = '';
     fromDate.value = '';
     toDate.value = '';
+    minAmount.value = '';
+    maxAmount.value = '';
+    platform.value = '';
     sortField.value = 'created_at';
     sortDirection.value = 'desc';
     router.get('/payments', {}, { preserveState: true });
@@ -256,8 +275,20 @@ function getPayableLabel(payment: Payment): string {
                 </div>
             </div>
 
+            <!-- Summary Toggle -->
+            <div class="flex items-center">
+                <button
+                    type="button"
+                    @click="showSummary = !showSummary"
+                    class="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                    <component :is="showSummary ? ChevronUpIcon : ChevronDownIcon" class="size-4" />
+                    {{ showSummary ? 'Hide Summary' : 'Show Summary' }}
+                </button>
+            </div>
+
             <!-- Summary Cards -->
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div v-if="showSummary" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
                     <p class="text-sm text-gray-500 dark:text-gray-400">Total Payments</p>
                     <p class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{{ totals.count.toLocaleString() }}</p>
@@ -308,6 +339,28 @@ function getPayableLabel(payment: Payment): string {
                 <!-- Filter Panel -->
                 <div v-if="showFilters" class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <!-- Date Range -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date Range</label>
+                            <div class="mt-1 flex gap-2">
+                                <input
+                                    v-model="fromDate"
+                                    type="date"
+                                    @change="applyFilters"
+                                    placeholder="From"
+                                    class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                                <span class="flex items-center text-gray-400">to</span>
+                                <input
+                                    v-model="toDate"
+                                    type="date"
+                                    @change="applyFilters"
+                                    placeholder="To"
+                                    class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                        </div>
+
                         <!-- Payment Method -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Method</label>
@@ -323,6 +376,53 @@ function getPayableLabel(payment: Payment): string {
                             </select>
                         </div>
 
+                        <!-- Platform -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Platform</label>
+                            <select
+                                v-model="platform"
+                                @change="applyFilters"
+                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option value="">All Platforms</option>
+                                <option v-for="p in platforms" :key="p.value" :value="p.value">
+                                    {{ p.label }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Amount Range -->
+                        <div class="lg:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount Range</label>
+                            <div class="mt-1 flex gap-2">
+                                <div class="relative flex-1">
+                                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">$</span>
+                                    <input
+                                        v-model="minAmount"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        @change="applyFilters"
+                                        placeholder="Min"
+                                        class="block w-full rounded-md border-gray-300 pl-7 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                                <span class="flex items-center text-gray-400">to</span>
+                                <div class="relative flex-1">
+                                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">$</span>
+                                    <input
+                                        v-model="maxAmount"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        @change="applyFilters"
+                                        placeholder="Max"
+                                        class="block w-full rounded-md border-gray-300 pl-7 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Status -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
@@ -336,28 +436,6 @@ function getPayableLabel(payment: Payment): string {
                                     {{ s.label }}
                                 </option>
                             </select>
-                        </div>
-
-                        <!-- From Date -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">From Date</label>
-                            <input
-                                v-model="fromDate"
-                                type="date"
-                                @change="applyFilters"
-                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                            />
-                        </div>
-
-                        <!-- To Date -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">To Date</label>
-                            <input
-                                v-model="toDate"
-                                type="date"
-                                @change="applyFilters"
-                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                            />
                         </div>
                     </div>
 

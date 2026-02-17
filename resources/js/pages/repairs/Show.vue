@@ -26,6 +26,7 @@ import {
     PlusIcon,
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
+import { CustomerCard } from '@/components/customers';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 import VendorEditModal from '@/components/vendors/VendorEditModal.vue';
 import { PencilIcon } from '@heroicons/vue/20/solid';
@@ -709,42 +710,12 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
 
                         <!-- Customer -->
                         <div v-if="repair.customer" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <div class="flex items-center justify-between mb-4">
-                                <h2 class="text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
-                                <button
-                                    type="button"
-                                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                                    title="Edit customer"
-                                    @click="showCustomerEditModal = true"
-                                >
-                                    <PencilIcon class="size-4" />
-                                </button>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                                    <UserIcon class="size-6 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div class="flex-1">
-                                    <Link :href="`/customers/${repair.customer.id}`" class="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
-                                        {{ repair.customer.full_name }}
-                                    </Link>
-                                    <p v-if="repair.customer.company_name" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.company_name }}</p>
-                                    <p v-if="repair.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.email }}</p>
-                                    <p v-if="repair.customer.phone_number" class="text-sm text-gray-500 dark:text-gray-400">{{ repair.customer.phone_number }}</p>
-                                    <div class="mt-2 flex items-center gap-2">
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
-                                        <span
-                                            v-if="repair.customer.lead_source"
-                                            class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30"
-                                        >
-                                            {{ repair.customer.lead_source.name }}
-                                        </span>
-                                        <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
-                                            Unknown
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
+                            <CustomerCard
+                                :customer="repair.customer"
+                                :show-edit-button="true"
+                                @edit="showCustomerEditModal = true"
+                            />
                         </div>
 
                         <!-- Vendor -->

@@ -17,6 +17,7 @@ import {
     TruckIcon,
     BanknotesIcon,
 } from '@heroicons/vue/24/outline';
+import { CustomerCard } from '@/components/customers';
 
 interface LeadSource {
     id: number;
@@ -585,25 +586,7 @@ const pendingRestockItems = computed(() => {
                         <!-- Customer -->
                         <div v-if="productReturn.customer" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
-                                    <UserIcon class="size-6 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div>
-                                    <Link :href="`/customers/${productReturn.customer.id}`" class="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
-                                        {{ productReturn.customer.full_name }}
-                                    </Link>
-                                    <p v-if="productReturn.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ productReturn.customer.email }}</p>
-                                    <p v-if="productReturn.customer.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ productReturn.customer.phone }}</p>
-                                </div>
-                            </div>
-                            <!-- Lead Source -->
-                            <div v-if="productReturn.customer.lead_source" class="mt-3 flex items-center gap-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
-                                <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30">
-                                    {{ productReturn.customer.lead_source.name }}
-                                </span>
-                            </div>
+                            <CustomerCard :customer="productReturn.customer" />
                         </div>
 
                         <!-- Return Policy -->

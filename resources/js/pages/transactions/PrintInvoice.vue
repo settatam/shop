@@ -305,7 +305,7 @@ const print = () => {
                         <div class="text-slate-700 mb-2 flex flex-col">
                             <img
                                 v-if="store.logo"
-                                class="object-cover h-12 mb-2"
+                                class="object-contain h-20 w-auto mb-2"
                                 :src="store.logo"
                                 :alt="store.name"
                             />

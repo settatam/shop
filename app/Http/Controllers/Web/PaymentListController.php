@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Services\StoreContext;
@@ -66,6 +67,30 @@ class PaymentListController extends Controller
             });
         }
 
+        // Filter by amount range
+        if ($request->filled('min_amount')) {
+            $query->where('amount', '>=', $request->min_amount);
+        }
+        if ($request->filled('max_amount')) {
+            $query->where('amount', '<=', $request->max_amount);
+        }
+
+        // Filter by platform (through payable order relationship)
+        if ($request->filled('platform')) {
+            $platform = $request->platform;
+            $query->where(function ($q) use ($platform) {
+                // Filter orders by source_platform
+                $q->where(function ($q2) use ($platform) {
+                    $q2->where('payable_type', 'App\\Models\\Order')
+                        ->whereHas('payable', function ($orderQuery) use ($platform) {
+                            $orderQuery->where('source_platform', $platform);
+                        });
+                })
+                // Also check for payments with gateway that matches platform
+                    ->orWhere('gateway', $platform);
+            });
+        }
+
         $payments = $query->paginate(20)->withQueryString();
 
         // Transform payments to include customer from payable if not directly set
@@ -91,6 +116,24 @@ class PaymentListController extends Controller
         if ($request->filled('to_date')) {
             $totalsQuery->whereDate('paid_at', '<=', $request->to_date);
         }
+        if ($request->filled('min_amount')) {
+            $totalsQuery->where('amount', '>=', $request->min_amount);
+        }
+        if ($request->filled('max_amount')) {
+            $totalsQuery->where('amount', '<=', $request->max_amount);
+        }
+        if ($request->filled('platform')) {
+            $platform = $request->platform;
+            $totalsQuery->where(function ($q) use ($platform) {
+                $q->where(function ($q2) use ($platform) {
+                    $q2->where('payable_type', 'App\\Models\\Order')
+                        ->whereHas('payable', function ($orderQuery) use ($platform) {
+                            $orderQuery->where('source_platform', $platform);
+                        });
+                })
+                    ->orWhere('gateway', $platform);
+            });
+        }
 
         $totals = [
             'count' => $totalsQuery->count(),
@@ -101,9 +144,10 @@ class PaymentListController extends Controller
         return Inertia::render('payments/Index', [
             'payments' => $payments,
             'totals' => $totals,
-            'filters' => $request->only(['payment_method', 'status', 'from_date', 'to_date', 'search', 'customer_id', 'sort', 'direction']),
+            'filters' => $request->only(['payment_method', 'status', 'from_date', 'to_date', 'search', 'customer_id', 'sort', 'direction', 'min_amount', 'max_amount', 'platform']),
             'paymentMethods' => $this->getPaymentMethods(),
             'statuses' => $this->getStatuses(),
+            'platforms' => $this->getPlatforms(),
         ]);
     }
 
@@ -155,5 +199,16 @@ class PaymentListController extends Controller
             ['value' => Payment::STATUS_REFUNDED, 'label' => 'Refunded'],
             ['value' => Payment::STATUS_PARTIALLY_REFUNDED, 'label' => 'Partially Refunded'],
         ];
+    }
+
+    protected function getPlatforms(): array
+    {
+        return array_map(
+            fn (Platform $platform) => [
+                'value' => $platform->value,
+                'label' => $platform->label(),
+            ],
+            Platform::cases()
+        );
     }
 }

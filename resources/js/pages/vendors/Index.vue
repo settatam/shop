@@ -190,14 +190,29 @@ function openCreateModal() {
 
 function openEditModal(vendor: Vendor) {
     editingVendor.value = vendor;
+    form.reset();
+
     // Load full vendor data
     fetch(`/api/v1/vendors/${vendor.id}`, {
         headers: {
             'Accept': 'application/json',
+            'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+            'X-XSRF-TOKEN': decodeURIComponent(
+                document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('XSRF-TOKEN='))
+                    ?.split('=')[1] || ''
+            ),
         },
+        credentials: 'include',
     })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                throw new Error('Failed to load vendor');
+            }
+            return res.json();
+        })
         .then(data => {
             form.name = data.name || '';
             form.code = data.code || '';
@@ -221,6 +236,9 @@ function openEditModal(vendor: Vendor) {
             form.is_active = data.is_active ?? true;
             form.notes = data.notes || '';
             showVendorModal.value = true;
+        })
+        .catch(err => {
+            console.error('Error loading vendor:', err);
         });
 }
 

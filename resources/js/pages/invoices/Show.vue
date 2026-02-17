@@ -8,10 +8,10 @@ import {
     PrinterIcon,
     ArrowDownTrayIcon,
     DocumentTextIcon,
-    UserIcon,
     CalendarIcon,
     BanknotesIcon,
 } from '@heroicons/vue/24/outline';
+import { CustomerCard } from '@/components/customers';
 
 interface Customer {
     id: number;
@@ -349,18 +349,7 @@ const items = computed(() => {
                         <!-- Customer -->
                         <div v-if="invoice.customer" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900">
-                                    <UserIcon class="size-6 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <div>
-                                    <Link :href="`/customers/${invoice.customer.id}`" class="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
-                                        {{ invoice.customer.full_name }}
-                                    </Link>
-                                    <p v-if="invoice.customer.email" class="text-sm text-gray-500 dark:text-gray-400">{{ invoice.customer.email }}</p>
-                                    <p v-if="invoice.customer.phone_number" class="text-sm text-gray-500 dark:text-gray-400">{{ invoice.customer.phone_number }}</p>
-                                </div>
-                            </div>
+                            <CustomerCard :customer="invoice.customer" />
                         </div>
 
                         <!-- Dates -->

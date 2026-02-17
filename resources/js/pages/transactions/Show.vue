@@ -51,7 +51,7 @@ import {
     ChevronRightIcon,
     CheckBadgeIcon,
 } from '@heroicons/vue/24/outline';
-import { CustomerSearch } from '@/components/customers';
+import { CustomerCard, CustomerSearch } from '@/components/customers';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 import axios from 'axios';
 
@@ -2248,33 +2248,13 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                 v-model="selectedCustomer"
                                 placeholder="Search or add customer..."
                             />
-                            <!-- Lead Source -->
-                            <div v-if="selectedCustomer" class="mt-3 flex items-center gap-2">
-                                <span class="text-xs text-gray-500 dark:text-gray-400">Lead Source:</span>
-                                <span
-                                    v-if="selectedCustomer.lead_source"
-                                    class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30"
-                                >
-                                    {{ selectedCustomer.lead_source.name }}
-                                </span>
-                                <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
-                                    Unknown
-                                </span>
-                            </div>
-                            <div v-if="selectedCustomer" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                <Link
-                                    :href="`/customers/${selectedCustomer.id}`"
-                                    class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                >
-                                    View customer details
-                                </Link>
-                                <button
-                                    type="button"
-                                    class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                    @click="showCustomerEditModal = true"
-                                >
-                                    Edit
-                                </button>
+                            <!-- Customer Card with Lead Source -->
+                            <div v-if="selectedCustomer" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <CustomerCard
+                                    :customer="selectedCustomer"
+                                    :show-edit-button="true"
+                                    @edit="showCustomerEditModal = true"
+                                />
                             </div>
                         </div>
                     </div>
