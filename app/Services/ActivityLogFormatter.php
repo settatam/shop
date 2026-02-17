@@ -35,22 +35,24 @@ class ActivityLogFormatter
                         });
                     }
 
-                    // Payment activities
-                    $paymentIds = $subject->payments()->pluck('id');
-                    if ($paymentIds->isNotEmpty()) {
-                        $query->orWhere(function ($q) use ($paymentIds) {
-                            $q->where('subject_type', \App\Models\Payment::class)
-                                ->whereIn('subject_id', $paymentIds);
+                    // Payout activities (transactions use payouts, not payments)
+                    $payoutIds = $subject->payouts()->pluck('id');
+                    if ($payoutIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($payoutIds) {
+                            $q->where('subject_type', \App\Models\TransactionPayout::class)
+                                ->whereIn('subject_id', $payoutIds);
                         });
                     }
 
                     // Note activities
-                    $noteIds = $subject->notes()->pluck('id');
-                    if ($noteIds->isNotEmpty()) {
-                        $query->orWhere(function ($q) use ($noteIds) {
-                            $q->where('subject_type', \App\Models\Note::class)
-                                ->whereIn('subject_id', $noteIds);
-                        });
+                    if (method_exists($subject, 'notes')) {
+                        $noteIds = $subject->notes()->pluck('id');
+                        if ($noteIds->isNotEmpty()) {
+                            $query->orWhere(function ($q) use ($noteIds) {
+                                $q->where('subject_type', \App\Models\Note::class)
+                                    ->whereIn('subject_id', $noteIds);
+                            });
+                        }
                     }
 
                     // Also include activities logged with transaction_id in properties
