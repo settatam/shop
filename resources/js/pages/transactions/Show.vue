@@ -2247,6 +2247,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                             <CustomerSearch
                                 v-model="selectedCustomer"
                                 placeholder="Search or add customer..."
+                                :hide-selected-display="!!selectedCustomer"
                             />
                             <!-- Customer Card with Lead Source -->
                             <div v-if="selectedCustomer" class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">

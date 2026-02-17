@@ -32,12 +32,14 @@ interface Props {
     modelValue: Customer | null;
     placeholder?: string;
     disabled?: boolean;
+    hideSelectedDisplay?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     modelValue: null,
     placeholder: 'Search customers...',
     disabled: false,
+    hideSelectedDisplay: false,
 });
 
 const emit = defineEmits<{
@@ -158,9 +160,9 @@ const filteredOptions = computed(() => {
 
 <template>
     <div class="relative">
-        <!-- Selected customer display -->
+        <!-- Selected customer display (can be hidden when CustomerCard is used instead) -->
         <div
-            v-if="selectedCustomer && !('isCreateOption' in selectedCustomer)"
+            v-if="selectedCustomer && !('isCreateOption' in selectedCustomer) && !hideSelectedDisplay"
             class="flex items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
         >
             <div class="flex items-center gap-2">
@@ -182,6 +184,21 @@ const filteredOptions = computed(() => {
                 @click="clearSelection"
             >
                 <XMarkIcon class="size-4" />
+            </button>
+        </div>
+
+        <!-- Compact clear button when hideSelectedDisplay is true but customer is selected -->
+        <div
+            v-else-if="selectedCustomer && !('isCreateOption' in selectedCustomer) && hideSelectedDisplay"
+            class="flex items-center justify-end"
+        >
+            <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                @click="clearSelection"
+            >
+                <XMarkIcon class="size-4" />
+                <span>Change customer</span>
             </button>
         </div>
 

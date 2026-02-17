@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
+use App\Models\StoreMarketplace;
 use App\Services\StoreContext;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -203,12 +204,24 @@ class PaymentListController extends Controller
 
     protected function getPlatforms(): array
     {
-        return array_map(
-            fn (Platform $platform) => [
+        $store = $this->storeContext->getCurrentStore();
+
+        // Get enabled platforms from store_marketplaces for this store
+        $enabledPlatforms = StoreMarketplace::where('store_id', $store->id)
+            ->whereNotNull('platform')
+            ->where('status', 'active')
+            ->pluck('platform')
+            ->unique()
+            ->toArray();
+
+        // Map to platform options
+        return collect(Platform::cases())
+            ->filter(fn (Platform $platform) => in_array($platform->value, $enabledPlatforms))
+            ->map(fn (Platform $platform) => [
                 'value' => $platform->value,
                 'label' => $platform->label(),
-            ],
-            Platform::cases()
-        );
+            ])
+            ->values()
+            ->toArray();
     }
 }

@@ -14,9 +14,70 @@ class ActivityLogFormatter
      *
      * @return array<int, array{date: string, dateTime: string, items: array}>
      */
-    public function formatForSubject(Model $subject, int $limit = 20): array
+    public function formatForSubject(Model $subject, int $limit = 50): array
     {
-        $logs = ActivityLog::forSubject($subject)
+        $logs = ActivityLog::query()
+            ->where(function ($query) use ($subject) {
+                // Include logs for the subject itself
+                $query->where(function ($q) use ($subject) {
+                    $q->where('subject_type', $subject->getMorphClass())
+                        ->where('subject_id', $subject->getKey());
+                });
+
+                // For transactions, include all related activities
+                if ($subject instanceof \App\Models\Transaction) {
+                    // Item-level activities
+                    $itemIds = $subject->items()->pluck('id');
+                    if ($itemIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($itemIds) {
+                            $q->where('subject_type', \App\Models\TransactionItem::class)
+                                ->whereIn('subject_id', $itemIds);
+                        });
+                    }
+
+                    // Payment activities
+                    $paymentIds = $subject->payments()->pluck('id');
+                    if ($paymentIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($paymentIds) {
+                            $q->where('subject_type', \App\Models\Payment::class)
+                                ->whereIn('subject_id', $paymentIds);
+                        });
+                    }
+
+                    // Note activities
+                    $noteIds = $subject->notes()->pluck('id');
+                    if ($noteIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($noteIds) {
+                            $q->where('subject_type', \App\Models\Note::class)
+                                ->whereIn('subject_id', $noteIds);
+                        });
+                    }
+
+                    // Also include activities logged with transaction_id in properties
+                    $query->orWhere(function ($q) use ($subject) {
+                        $q->whereJsonContains('properties->transaction_id', $subject->getKey());
+                    });
+                }
+
+                // For orders, include related activities
+                if ($subject instanceof \App\Models\Order) {
+                    $paymentIds = $subject->payments()->pluck('id');
+                    if ($paymentIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($paymentIds) {
+                            $q->where('subject_type', \App\Models\Payment::class)
+                                ->whereIn('subject_id', $paymentIds);
+                        });
+                    }
+
+                    $noteIds = $subject->notes()->pluck('id');
+                    if ($noteIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($noteIds) {
+                            $q->where('subject_type', \App\Models\Note::class)
+                                ->whereIn('subject_id', $noteIds);
+                        });
+                    }
+                }
+            })
             ->with('user')
             ->orderByDesc('created_at')
             ->limit($limit)
@@ -182,25 +243,34 @@ class ActivityLogFormatter
     protected function getIconForActivity(string $activitySlug): string
     {
         // Notes get a chat bubble icon
-        if (str_starts_with($activitySlug, 'notes.')) {
+        if (str_starts_with($activitySlug, 'notes.') || str_contains($activitySlug, 'note')) {
             return 'chat-bubble';
         }
-        if (str_contains($activitySlug, '.create')) {
+        if (str_contains($activitySlug, 'sms') || str_contains($activitySlug, 'message')) {
+            return 'envelope';
+        }
+        if (str_contains($activitySlug, 'reviewed') || str_contains($activitySlug, 'review')) {
+            return 'check-circle';
+        }
+        if (str_contains($activitySlug, 'offer') || str_contains($activitySlug, 'quote')) {
+            return 'currency-dollar';
+        }
+        if (str_contains($activitySlug, '.create') || str_contains($activitySlug, 'added')) {
             return 'plus';
         }
-        if (str_contains($activitySlug, '.update')) {
+        if (str_contains($activitySlug, '.update') || str_contains($activitySlug, 'changed')) {
             return 'pencil';
         }
-        if (str_contains($activitySlug, '.delete')) {
+        if (str_contains($activitySlug, '.delete') || str_contains($activitySlug, 'removed')) {
             return 'trash';
         }
         if (str_contains($activitySlug, '.cancel')) {
             return 'x-circle';
         }
-        if (str_contains($activitySlug, 'payment')) {
+        if (str_contains($activitySlug, 'payment') || str_contains($activitySlug, 'paid')) {
             return 'banknotes';
         }
-        if (str_contains($activitySlug, '.complete')) {
+        if (str_contains($activitySlug, '.complete') || str_contains($activitySlug, 'completed')) {
             return 'check-circle';
         }
         if (str_contains($activitySlug, 'send_to_vendor') || str_contains($activitySlug, 'ship')) {
@@ -208,6 +278,9 @@ class ActivityLogFormatter
         }
         if (str_contains($activitySlug, 'receive') || str_contains($activitySlug, 'mark_received')) {
             return 'inbox';
+        }
+        if (str_contains($activitySlug, 'status')) {
+            return 'arrow-path';
         }
 
         return 'document';
@@ -218,23 +291,38 @@ class ActivityLogFormatter
      */
     protected function getColorForActivity(string $activitySlug): string
     {
-        if (str_contains($activitySlug, '.create')) {
-            return 'green';
-        }
-        if (str_contains($activitySlug, '.update')) {
+        if (str_contains($activitySlug, 'reviewed') || str_contains($activitySlug, 'review')) {
             return 'blue';
         }
-        if (str_contains($activitySlug, '.delete')) {
+        if (str_contains($activitySlug, 'sms') || str_contains($activitySlug, 'message')) {
+            return 'purple';
+        }
+        if (str_contains($activitySlug, 'note')) {
+            return 'indigo';
+        }
+        if (str_contains($activitySlug, 'offer') || str_contains($activitySlug, 'quote')) {
+            return 'amber';
+        }
+        if (str_contains($activitySlug, '.create') || str_contains($activitySlug, 'added')) {
+            return 'green';
+        }
+        if (str_contains($activitySlug, '.update') || str_contains($activitySlug, 'changed')) {
+            return 'blue';
+        }
+        if (str_contains($activitySlug, '.delete') || str_contains($activitySlug, 'removed')) {
             return 'red';
         }
         if (str_contains($activitySlug, '.cancel')) {
             return 'yellow';
         }
-        if (str_contains($activitySlug, 'payment')) {
+        if (str_contains($activitySlug, 'payment') || str_contains($activitySlug, 'paid')) {
             return 'green';
         }
-        if (str_contains($activitySlug, '.complete')) {
+        if (str_contains($activitySlug, '.complete') || str_contains($activitySlug, 'completed')) {
             return 'green';
+        }
+        if (str_contains($activitySlug, 'status')) {
+            return 'blue';
         }
 
         return 'gray';

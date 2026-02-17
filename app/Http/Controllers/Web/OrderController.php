@@ -27,7 +27,6 @@ use App\Services\TradeIn\TradeInService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -136,7 +135,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function printInvoice(Order $order): Response|RedirectResponse
+    public function printInvoice(Order $order): RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
@@ -144,113 +143,27 @@ class OrderController extends Controller
             abort(404);
         }
 
-        $order->load([
-            'customer.defaultAddress.state',
-            'customer.addresses.state',
-            'user',
-            'warehouse',
-            'items.product.images',
-            'items.product.category',
-            'items.variant',
-            'payments.user',
-        ]);
+        // Ensure the order has an invoice, create one if not
+        $invoice = $order->invoice;
 
-        // Generate barcode
-        $barcode = null;
-        if ($order->invoice_number || $order->order_id) {
-            $barcodeNumber = $order->invoice_number ?? $order->order_id;
-            $generator = new \Picqer\Barcode\BarcodeGeneratorPNG;
-            $barcode = 'data:image/png;base64,'.base64_encode($generator->getBarcode($barcodeNumber, $generator::TYPE_CODE_128));
-        }
-
-        return Inertia::render('orders/PrintInvoice', [
-            'order' => [
-                'id' => $order->id,
-                'order_id' => $order->order_id,
-                'invoice_number' => $order->invoice_number,
-                'status' => $order->status,
-                'sub_total' => $order->sub_total,
-                'sales_tax' => $order->sales_tax,
-                'tax_rate' => $order->tax_rate,
-                'shipping_cost' => $order->shipping_cost,
-                'discount_cost' => $order->discount_cost,
-                'trade_in_credit' => $order->trade_in_credit ?? 0,
+        if (! $invoice) {
+            $invoice = $order->invoice()->create([
+                'store_id' => $order->store_id,
+                'customer_id' => $order->customer_id,
+                'invoice_number' => $order->invoice_number ?? 'INV-'.$order->id,
+                'status' => $order->status === Order::STATUS_COMPLETED ? 'paid' : 'pending',
+                'subtotal' => $order->sub_total,
+                'discount' => $order->discount_cost,
+                'tax' => $order->sales_tax,
+                'shipping' => $order->shipping_cost,
                 'total' => $order->total,
                 'total_paid' => $order->total_paid,
                 'balance_due' => $order->balance_due,
-                'notes' => $order->notes,
-                'date_of_purchase' => $order->date_of_purchase?->toISOString(),
-                'created_at' => $order->created_at->toISOString(),
-                'shipping_address' => $order->shipping_address,
-                'billing_address' => $order->billing_address,
-                'customer' => $order->customer ? (function () use ($order) {
-                    // Try default address first, then fall back to any address
-                    $customerAddress = $order->customer->defaultAddress
-                        ?? $order->customer->addresses->first();
+            ]);
+        }
 
-                    return [
-                        'id' => $order->customer->id,
-                        'full_name' => $order->customer->full_name,
-                        'company_name' => $customerAddress?->company ?? $order->customer->company_name,
-                        'email' => $order->customer->email,
-                        'phone' => $customerAddress?->phone ?? $order->customer->phone_number,
-                        'address' => $customerAddress?->address ?? $order->customer->address,
-                        'address2' => $customerAddress?->address2 ?? $order->customer->address2,
-                        'city' => $customerAddress?->city ?? $order->customer->city,
-                        'state' => $customerAddress?->state_abbreviation ?? $customerAddress?->state?->name ?? $order->customer->state,
-                        'zip' => $customerAddress?->zip ?? $order->customer->zip,
-                    ];
-                })() : null,
-                'user' => $order->user ? [
-                    'id' => $order->user->id,
-                    'name' => $order->user->name,
-                ] : null,
-                'warehouse' => $order->warehouse ? [
-                    'id' => $order->warehouse->id,
-                    'name' => $order->warehouse->name,
-                ] : null,
-                'service_fee_value' => $order->service_fee_value,
-                'service_fee_unit' => $order->service_fee_unit,
-                'items' => $order->items->map(fn ($item) => [
-                    'id' => $item->id,
-                    'sku' => $item->sku,
-                    'title' => $item->title,
-                    'quantity' => $item->quantity,
-                    'price' => $item->price,
-                    'discount' => $item->discount,
-                    'tax' => $item->tax,
-                    'line_total' => $item->line_total,
-                    'category' => $item->product?->category?->name,
-                    'product' => $item->product ? [
-                        'id' => $item->product->id,
-                        'title' => $item->product->title,
-                        'images' => $item->product->images->map(fn ($image) => [
-                            'url' => $image->url,
-                        ]),
-                    ] : null,
-                ]),
-                'payments' => $order->payments->map(fn ($payment) => [
-                    'id' => $payment->id,
-                    'amount' => $payment->amount,
-                    'payment_method' => $payment->payment_method,
-                    'status' => $payment->status,
-                    'reference' => $payment->reference,
-                    'paid_at' => $payment->paid_at?->toISOString(),
-                ]),
-            ],
-            'store' => [
-                'name' => $store->business_name ?? $store->name,
-                'logo' => $store->logo ? Storage::disk('do_spaces')->url($store->logo) : null,
-                'address' => $store->address,
-                'address2' => $store->address2,
-                'city' => $store->city,
-                'state' => $store->state,
-                'zip' => $store->zip,
-                'phone' => $store->phone,
-                'email' => $store->email,
-            ],
-            'barcode' => $barcode,
-        ]);
+        // Redirect to the unified invoice print route
+        return redirect()->route('invoices.print', $invoice);
     }
 
     public function createWizard(): Response|RedirectResponse
