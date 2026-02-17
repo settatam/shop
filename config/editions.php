@@ -102,6 +102,54 @@ return [
             ],
         ],
 
+        // Legacy edition for stores migrated from Evotally (stores 43, 44, etc.)
+        // Includes transaction reports and trade-in buys reports
+        'legacy' => [
+            'name' => 'Legacy (Evotally)',
+            'description' => 'Edition for stores migrated from Evotally with transaction reports',
+            'features' => [
+                // UI Features
+                'dashboard',
+                'customers',
+                'leads',
+                'products',
+                'gia',
+                'categories',
+                'product_types',
+                'templates',
+                'orders',
+                'layaways',
+                'shipments',
+                'returns',
+                'transactions',
+                'buys',
+                'vendors',
+                'repairs',
+                'memos',
+                'invoices',
+                'payments',
+                'labels',
+                'buckets',
+                'reports',
+                'tags',
+                'integrations',
+                'settings',
+                'quickbooks',
+                'xoom',
+                'agents',
+                'marketplaces',
+
+                // Legacy-specific features
+                'transactions_reports', // Transaction daily/weekly/monthly/yearly reports
+                'buys_trade_in', // Trade-in buys reports
+                'product_status_in_memo',
+                'product_status_in_repair',
+                'product_status_in_bucket',
+                'product_status_awaiting_confirmation',
+                'single_item_inventory',
+            ],
+        ],
+
         // Example client-specific edition
         // Customize this for your client's needs
         'client_x' => [

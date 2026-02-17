@@ -6,49 +6,44 @@ import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
-interface OrderRow {
+interface ItemRow {
     id: number;
+    order_id: number;
+    order_number: string;
     date: string;
-    order_id: string;
     customer: string;
     lead: string;
-    status: string;
-    marketplace: string;
-    num_items: number;
-    categories: string;
-    cost: number;
+    sku: string;
+    product_name: string;
+    category: string;
+    quantity: number;
+    unit_price: number;
     wholesale_value: number;
-    sub_total: number;
-    service_fee: number;
-    profit: number;
-    tax: number;
-    shipping_cost: number;
+    cost: number;
     total: number;
+    profit: number;
+    marketplace: string;
     payment_type: string;
     vendor: string;
 }
 
 interface Totals {
-    num_items: number;
-    cost: number;
+    quantity: number;
     wholesale_value: number;
-    sub_total: number;
-    service_fee: number;
-    profit: number;
-    tax: number;
-    shipping_cost: number;
+    cost: number;
     total: number;
+    profit: number;
 }
 
 const props = defineProps<{
-    orders: OrderRow[];
+    items: ItemRow[];
     totals: Totals;
     date: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
-    { title: 'Sales (Daily)', href: '/reports/sales/daily' },
+    { title: 'Sales (Daily Items)', href: '/reports/sales/daily-items' },
 ];
 
 const selectedDate = ref(props.date);
@@ -56,7 +51,7 @@ const selectedDate = ref(props.date);
 function handleDateChange(newDate: string) {
     if (newDate && newDate !== props.date) {
         router.get(
-            '/reports/sales/daily',
+            '/reports/sales/daily-items',
             { date: newDate },
             {
                 preserveState: true,
@@ -67,7 +62,7 @@ function handleDateChange(newDate: string) {
 }
 
 const exportUrl = computed(
-    () => `/reports/sales/daily/export?date=${selectedDate.value}`,
+    () => `/reports/sales/daily-items/export?date=${selectedDate.value}`,
 );
 
 function formatCurrency(value: number): string {
@@ -86,7 +81,7 @@ function formatCostValue(value: number): string {
 </script>
 
 <template>
-    <Head title="Daily Sales Report" />
+    <Head title="Daily Sales Report (Items)" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-4">
@@ -96,18 +91,18 @@ function formatCostValue(value: number): string {
                     <h1
                         class="text-2xl font-semibold text-gray-900 dark:text-white"
                     >
-                        Daily Sales Report
+                        Daily Sales Report (Items)
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Individual sales for the selected day
+                        Individual items sold for the selected day
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
                     <Link
-                        :href="`/reports/sales/daily-items?date=${selectedDate}`"
+                        href="/reports/sales/daily"
                         class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                     >
-                        View by Items
+                        View by Orders
                     </Link>
                     <a
                         :href="exportUrl"
@@ -153,7 +148,7 @@ function formatCostValue(value: number): string {
                                 <th
                                     class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Order ID
+                                    Order #
                                 </th>
                                 <th
                                     class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
@@ -168,27 +163,27 @@ function formatCostValue(value: number): string {
                                 <th
                                     class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Status
+                                    SKU
                                 </th>
                                 <th
                                     class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Marketplace
-                                </th>
-                                <th
-                                    class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    # Items
+                                    Product
                                 </th>
                                 <th
                                     class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Categories
+                                    Category
                                 </th>
                                 <th
                                     class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Cost
+                                    Qty
+                                </th>
+                                <th
+                                    class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Unit Price
                                 </th>
                                 <th
                                     class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
@@ -198,12 +193,12 @@ function formatCostValue(value: number): string {
                                 <th
                                     class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Sub Total
+                                    Cost
                                 </th>
                                 <th
                                     class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Service Fee
+                                    Total
                                 </th>
                                 <th
                                     class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
@@ -211,19 +206,9 @@ function formatCostValue(value: number): string {
                                     Profit
                                 </th>
                                 <th
-                                    class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                    class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                                 >
-                                    Tax
-                                </th>
-                                <th
-                                    class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Shipping
-                                </th>
-                                <th
-                                    class="px-3 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Total
+                                    Marketplace
                                 </th>
                                 <th
                                     class="px-3 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
@@ -241,147 +226,119 @@ function formatCostValue(value: number): string {
                             class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
                         >
                             <tr
-                                v-for="order in orders"
-                                :key="order.id"
+                                v-for="item in items"
+                                :key="item.id"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-700"
                             >
                                 <td
                                     class="px-3 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ order.date }}
+                                    {{ item.date }}
                                 </td>
                                 <td class="px-3 py-4 text-sm whitespace-nowrap">
                                     <Link
-                                        :href="`/orders/${order.id}`"
+                                        :href="`/orders/${item.order_id}`"
                                         class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
                                     >
-                                        {{ order.order_id }}
+                                        {{ item.order_number }}
                                     </Link>
                                 </td>
                                 <td
                                     class="px-3 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ order.customer }}
+                                    {{ item.customer }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400"
                                 >
-                                    {{ order.lead }}
-                                </td>
-                                <td class="px-3 py-4 text-sm whitespace-nowrap">
-                                    <span
-                                        class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset"
-                                        :class="{
-                                            'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20':
-                                                order.status === 'completed' ||
-                                                order.status === 'paid',
-                                            'bg-yellow-50 text-yellow-700 ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20':
-                                                order.status === 'pending',
-                                            'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/20':
-                                                order.status === 'processing',
-                                            'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20':
-                                                ![
-                                                    'completed',
-                                                    'paid',
-                                                    'pending',
-                                                    'processing',
-                                                ].includes(order.status),
-                                        }"
-                                    >
-                                        {{ order.status }}
-                                    </span>
+                                    {{ item.lead }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400"
                                 >
-                                    {{ order.marketplace }}
+                                    {{ item.sku }}
+                                </td>
+                                <td
+                                    class="max-w-[200px] truncate px-3 py-4 text-sm text-gray-900 dark:text-white"
+                                    :title="item.product_name"
+                                >
+                                    {{ item.product_name }}
+                                </td>
+                                <td
+                                    class="px-3 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400"
+                                >
+                                    {{ item.category }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ order.num_items }}
-                                </td>
-                                <td
-                                    class="max-w-[200px] truncate px-3 py-4 text-sm text-gray-500 dark:text-gray-400"
-                                    :title="order.categories"
-                                >
-                                    {{ order.categories }}
+                                    {{ item.quantity }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ formatCostValue(order.cost) }}
+                                    {{ formatCurrency(item.unit_price) }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ formatCostValue(order.wholesale_value) }}
+                                    {{ formatCostValue(item.wholesale_value) }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ formatCurrency(order.sub_total) }}
-                                </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(order.service_fee) }}
-                                </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap"
-                                    :class="
-                                        order.profit >= 0
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                    "
-                                >
-                                    {{ formatCurrency(order.profit) }}
-                                </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(order.tax) }}
-                                </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(order.shipping_cost) }}
+                                    {{ formatCostValue(item.cost) }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ formatCurrency(order.total) }}
+                                    {{ formatCurrency(item.total) }}
+                                </td>
+                                <td
+                                    class="px-3 py-4 text-right text-sm whitespace-nowrap"
+                                    :class="
+                                        item.profit >= 0
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                    "
+                                >
+                                    {{ formatCurrency(item.profit) }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400"
                                 >
-                                    {{ order.payment_type }}
+                                    {{ item.marketplace }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400"
                                 >
-                                    {{ order.vendor }}
+                                    {{ item.payment_type }}
+                                </td>
+                                <td
+                                    class="px-3 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400"
+                                >
+                                    {{ item.vendor }}
                                 </td>
                             </tr>
 
                             <!-- Empty state -->
-                            <tr v-if="orders.length === 0">
+                            <tr v-if="items.length === 0">
                                 <td
-                                    colspan="18"
+                                    colspan="16"
                                     class="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
                                 >
-                                    No sales found for the selected date.
+                                    No items found for the selected date.
                                 </td>
                             </tr>
                         </tbody>
                         <!-- Totals row -->
                         <tfoot
-                            v-if="orders.length > 0"
+                            v-if="items.length > 0"
                             class="bg-gray-100 dark:bg-gray-700"
                         >
                             <tr class="font-semibold">
                                 <td
-                                    colspan="6"
+                                    colspan="7"
                                     class="px-3 py-4 text-sm text-gray-900 dark:text-white"
                                 >
                                     TOTALS
@@ -389,14 +346,9 @@ function formatCostValue(value: number): string {
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ totals.num_items }}
+                                    {{ totals.quantity }}
                                 </td>
                                 <td class="px-3 py-4"></td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCostValue(totals.cost) }}
-                                </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
@@ -405,12 +357,12 @@ function formatCostValue(value: number): string {
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ formatCurrency(totals.sub_total) }}
+                                    {{ formatCostValue(totals.cost) }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
                                 >
-                                    {{ formatCurrency(totals.service_fee) }}
+                                    {{ formatCurrency(totals.total) }}
                                 </td>
                                 <td
                                     class="px-3 py-4 text-right text-sm whitespace-nowrap"
@@ -422,22 +374,7 @@ function formatCostValue(value: number): string {
                                 >
                                     {{ formatCurrency(totals.profit) }}
                                 </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(totals.tax) }}
-                                </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(totals.shipping_cost) }}
-                                </td>
-                                <td
-                                    class="px-3 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(totals.total) }}
-                                </td>
-                                <td colspan="2" class="px-3 py-4"></td>
+                                <td colspan="3" class="px-3 py-4"></td>
                             </tr>
                         </tfoot>
                     </table>

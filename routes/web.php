@@ -680,6 +680,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::prefix('reports/sales')->name('reports.sales.')->middleware('permission:reports.view_sales')->group(function () {
         Route::get('daily', [SalesReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [SalesReportController::class, 'exportDaily'])->name('daily.export');
+        Route::get('daily-items', [SalesReportController::class, 'dailyItems'])->name('daily-items');
+        Route::get('daily-items/export', [SalesReportController::class, 'exportDailyItems'])->name('daily-items.export');
         Route::get('monthly', [SalesReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [SalesReportController::class, 'exportMonthly'])->name('monthly.export');
         Route::get('mtd', [SalesReportController::class, 'monthToDate'])->name('mtd');

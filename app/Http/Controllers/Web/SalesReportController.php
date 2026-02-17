@@ -16,9 +16,57 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SalesReportController extends Controller
 {
+    /**
+     * Payment method labels for display.
+     */
+    protected const PAYMENT_METHOD_LABELS = [
+        'cash' => 'Cash',
+        'card' => 'Card',
+        'store_credit' => 'Store Credit',
+        'layaway' => 'Layaway',
+        'external' => 'External',
+        'check' => 'Check',
+        'bank_transfer' => 'Bank Transfer',
+        'paypal' => 'PayPal',
+        'venmo' => 'Venmo',
+        'zelle' => 'Zelle',
+        'wire' => 'Wire Transfer',
+        'crypto' => 'Crypto',
+    ];
+
     public function __construct(
         protected StoreContext $storeContext,
     ) {}
+
+    /**
+     * Format payment method for display (capitalized).
+     */
+    protected function formatPaymentMethod(string $method): string
+    {
+        return self::PAYMENT_METHOD_LABELS[$method] ?? ucwords(str_replace('_', ' ', $method));
+    }
+
+    /**
+     * Format payment methods from a collection.
+     */
+    protected function formatPaymentMethods(Collection $payments): string
+    {
+        $methods = $payments
+            ->pluck('payment_method')
+            ->unique()
+            ->map(fn ($method) => $this->formatPaymentMethod($method))
+            ->implode(', ');
+
+        return $methods ?: '-';
+    }
+
+    /**
+     * Format wholesale value for display (use '-' for zero values).
+     */
+    protected function formatWholesaleValue(float $value): string|float
+    {
+        return $value > 0 ? $value : '-';
+    }
 
     /**
      * Daily sales report - shows individual orders for a specific day.
@@ -69,11 +117,8 @@ class SalesReportController extends Controller
                     return $effectiveCost * $item->quantity;
                 });
 
-                // Get payment methods
-                $paymentMethods = $order->payments
-                    ->pluck('payment_method')
-                    ->unique()
-                    ->implode(', ');
+                // Get payment methods (capitalized)
+                $paymentMethods = $this->formatPaymentMethods($order->payments);
 
                 // Calculate profit: subtotal + service_fee - (wholesale_price if exists, else cost_of_item)
                 $serviceFee = (float) ($order->service_fee_value ?? 0);
@@ -100,7 +145,7 @@ class SalesReportController extends Controller
                     'tax' => $order->sales_tax ?? 0,
                     'shipping_cost' => $order->shipping_cost ?? 0,
                     'total' => $order->total ?? 0,
-                    'payment_type' => $paymentMethods ?: '-',
+                    'payment_type' => $paymentMethods,
                     'vendor' => '-',
                 ];
             });
@@ -122,6 +167,205 @@ class SalesReportController extends Controller
             'orders' => $orders,
             'totals' => $totals,
             'date' => $date,
+        ]);
+    }
+
+    /**
+     * Daily items report - shows individual items sold for a specific day.
+     */
+    public function dailyItems(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $date = $request->get('date', now()->format('Y-m-d'));
+
+        $orders = Order::query()
+            ->where('store_id', $store->id)
+            ->whereIn('status', Order::PAID_STATUSES)
+            ->whereDate('created_at', $date)
+            ->with([
+                'customer.leadSource',
+                'items.product.category',
+                'items.variant',
+                'salesChannel',
+                'platformOrder',
+                'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Flatten orders to items
+        $items = $orders->flatMap(function ($order) {
+            $paymentMethods = $this->formatPaymentMethods($order->payments);
+            $channelName = $order->salesChannel?->name ?? $order->source_platform ?? 'In Store';
+
+            return $order->items->map(function ($item) use ($order, $paymentMethods, $channelName) {
+                $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
+                $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
+                $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+
+                $itemTotal = ($item->unit_price ?? 0) * $item->quantity;
+                $itemCost = $effectiveCost * $item->quantity;
+                $profit = $itemTotal - $itemCost;
+
+                return [
+                    'id' => $item->id,
+                    'order_id' => $order->id,
+                    'order_number' => $order->invoice_number ?? "#{$order->id}",
+                    'date' => $order->created_at->format('Y-m-d H:i'),
+                    'customer' => $order->customer?->full_name ?? 'Walk-in',
+                    'lead' => $order->customer?->leadSource?->name ?? '-',
+                    'sku' => $item->variant?->sku ?? $item->product?->sku ?? '-',
+                    'product_name' => $item->variant?->title ?? $item->product?->title ?? $item->name ?? '-',
+                    'category' => $item->product?->category?->name ?? '-',
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price ?? 0,
+                    'wholesale_value' => $wholesalePrice * $item->quantity,
+                    'cost' => $itemCost,
+                    'total' => $itemTotal,
+                    'profit' => $profit,
+                    'marketplace' => $channelName,
+                    'payment_type' => $paymentMethods,
+                    'vendor' => '-',
+                ];
+            });
+        })->values();
+
+        // Calculate totals
+        $totals = [
+            'quantity' => $items->sum('quantity'),
+            'wholesale_value' => $items->sum('wholesale_value'),
+            'cost' => $items->sum('cost'),
+            'total' => $items->sum('total'),
+            'profit' => $items->sum('profit'),
+        ];
+
+        return Inertia::render('reports/sales/DailyItems', [
+            'items' => $items,
+            'totals' => $totals,
+            'date' => $date,
+        ]);
+    }
+
+    /**
+     * Export daily items report to CSV.
+     */
+    public function exportDailyItems(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $date = $request->get('date', now()->format('Y-m-d'));
+
+        $orders = Order::query()
+            ->where('store_id', $store->id)
+            ->whereIn('status', Order::PAID_STATUSES)
+            ->whereDate('created_at', $date)
+            ->with([
+                'customer.leadSource',
+                'items.product.category',
+                'items.variant',
+                'salesChannel',
+                'platformOrder',
+                'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $filename = "sales-report-daily-items-{$date}.csv";
+
+        return response()->streamDownload(function () use ($orders) {
+            $handle = fopen('php://output', 'w');
+
+            // Header row
+            fputcsv($handle, [
+                'Date',
+                'Order #',
+                'Customer',
+                'Lead',
+                'SKU',
+                'Product Name',
+                'Category',
+                'Qty',
+                'Unit Price',
+                'Wholesale',
+                'Cost',
+                'Total',
+                'Profit',
+                'Channel',
+                'Payment Type',
+                'Vendor',
+            ]);
+
+            $totalQty = 0;
+            $totalWholesale = 0;
+            $totalCost = 0;
+            $totalTotal = 0;
+            $totalProfit = 0;
+
+            foreach ($orders as $order) {
+                $paymentMethods = $this->formatPaymentMethods($order->payments);
+                $channelName = $order->salesChannel?->name ?? $order->source_platform ?? 'In Store';
+
+                foreach ($order->items as $item) {
+                    $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
+                    $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
+                    $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+
+                    $itemTotal = ($item->unit_price ?? 0) * $item->quantity;
+                    $itemCost = $effectiveCost * $item->quantity;
+                    $profit = $itemTotal - $itemCost;
+
+                    $wholesaleDisplay = $wholesalePrice > 0 ? number_format($wholesalePrice * $item->quantity, 2) : '-';
+                    $costDisplay = $itemCost > 0 ? number_format($itemCost, 2) : '-';
+
+                    fputcsv($handle, [
+                        $order->created_at->format('Y-m-d H:i'),
+                        $order->invoice_number ?? "#{$order->id}",
+                        $order->customer?->full_name ?? 'Walk-in',
+                        $order->customer?->leadSource?->name ?? '-',
+                        $item->variant?->sku ?? $item->product?->sku ?? '-',
+                        $item->variant?->title ?? $item->product?->title ?? $item->name ?? '-',
+                        $item->product?->category?->name ?? '-',
+                        $item->quantity,
+                        number_format($item->unit_price ?? 0, 2),
+                        $wholesaleDisplay,
+                        $costDisplay,
+                        number_format($itemTotal, 2),
+                        number_format($profit, 2),
+                        $channelName,
+                        $paymentMethods,
+                        '-',
+                    ]);
+
+                    $totalQty += $item->quantity;
+                    $totalWholesale += $wholesalePrice > 0 ? $wholesalePrice * $item->quantity : 0;
+                    $totalCost += $itemCost;
+                    $totalTotal += $itemTotal;
+                    $totalProfit += $profit;
+                }
+            }
+
+            // Totals row
+            fputcsv($handle, [
+                'TOTALS',
+                '',
+                '',
+                '',
+                '',
+                '',
+                '',
+                $totalQty,
+                '',
+                $totalWholesale > 0 ? number_format($totalWholesale, 2) : '-',
+                $totalCost > 0 ? number_format($totalCost, 2) : '-',
+                number_format($totalTotal, 2),
+                number_format($totalProfit, 2),
+                '',
+                '',
+                '',
+            ]);
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
         ]);
     }
 
@@ -304,10 +548,8 @@ class SalesReportController extends Controller
                     return $effectiveCost * $item->quantity;
                 });
 
-                $paymentMethods = $order->payments
-                    ->pluck('payment_method')
-                    ->unique()
-                    ->implode(', ');
+                // Get payment methods (capitalized)
+                $paymentMethods = $this->formatPaymentMethods($order->payments);
 
                 // Calculate profit: subtotal + service_fee - (wholesale_price if exists, else cost_of_item)
                 $serviceFee = (float) ($order->service_fee_value ?? 0);
@@ -326,15 +568,15 @@ class SalesReportController extends Controller
                     $channelName,
                     $numItems,
                     $categories ?: '-',
-                    number_format($cost, 2),
-                    number_format($wholesaleValue, 2),
+                    $cost > 0 ? number_format($cost, 2) : '-',
+                    $wholesaleValue > 0 ? number_format($wholesaleValue, 2) : '-',
                     number_format($order->sub_total ?? 0, 2),
                     number_format($serviceFee, 2),
                     number_format($profit, 2),
                     number_format($order->sales_tax ?? 0, 2),
                     number_format($order->shipping_cost ?? 0, 2),
                     number_format($order->total ?? 0, 2),
-                    $paymentMethods ?: '-',
+                    $paymentMethods,
                     '-',
                 ]);
 

@@ -81,6 +81,53 @@ class SalesReportTest extends TestCase
         );
     }
 
+    public function test_can_view_daily_items_sales_report(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'status' => Order::STATUS_COMPLETED,
+            'sub_total' => 100,
+            'total' => 107,
+            'sales_tax' => 7,
+        ]);
+
+        OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'quantity' => 1,
+            'price' => 100,
+        ]);
+
+        Payment::factory()->create([
+            'payable_type' => Order::class,
+            'payable_id' => $order->id,
+            'store_id' => $this->store->id,
+            'amount' => 107,
+            'status' => Payment::STATUS_COMPLETED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/sales/daily-items?date='.now()->format('Y-m-d'));
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/sales/DailyItems')
+            ->has('items')
+            ->has('totals')
+            ->has('date')
+        );
+    }
+
+    public function test_can_export_daily_items_sales_report_csv(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/sales/daily-items/export?date='.now()->format('Y-m-d'));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=utf-8');
+    }
+
     public function test_can_view_monthly_sales_report(): void
     {
         $response = $this->actingAs($this->user)
