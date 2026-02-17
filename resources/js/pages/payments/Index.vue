@@ -249,6 +249,7 @@ function getPayableLabel(payment: Payment): string {
     if (!payment.payable) return '-';
     return payment.payable.memo_number || payment.payable.repair_number || payment.payable.order_number || `#${payment.payable_id}`;
 }
+
 </script>
 
 <template>
@@ -459,27 +460,17 @@ function getPayableLabel(payment: Payment): string {
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                    <button
-                                        type="button"
-                                        @click="toggleSort('id')"
-                                        class="group inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200"
-                                    >
-                                        Payment
-                                        <component :is="getSortIcon('id')" class="size-4" />
-                                    </button>
+                                    Order Number
                                 </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                                     <button
                                         type="button"
-                                        @click="toggleSort('payment_method')"
+                                        @click="toggleSort('status')"
                                         class="group inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200"
                                     >
-                                        Method
-                                        <component :is="getSortIcon('payment_method')" class="size-4" />
+                                        Status
+                                        <component :is="getSortIcon('status')" class="size-4" />
                                     </button>
-                                </th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                    Source
                                 </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                                     Customer
@@ -494,14 +485,14 @@ function getPayableLabel(payment: Payment): string {
                                         <component :is="getSortIcon('amount')" class="size-4" />
                                     </button>
                                 </th>
-                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                                     <button
                                         type="button"
-                                        @click="toggleSort('status')"
+                                        @click="toggleSort('payment_method')"
                                         class="group inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200"
                                     >
-                                        Status
-                                        <component :is="getSortIcon('status')" class="size-4" />
+                                        Method
+                                        <component :is="getSortIcon('payment_method')" class="size-4" />
                                     </button>
                                 </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -522,14 +513,34 @@ function getPayableLabel(payment: Payment): string {
                                 :key="payment.id"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-700/50"
                             >
+                                <!-- Order Number -->
                                 <td class="whitespace-nowrap px-6 py-4">
-                                    <Link :href="`/payments/${payment.id}`" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                                        #{{ payment.id }}
+                                    <Link v-if="payment.payable" :href="getPayableLink(payment)" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                        {{ getPayableLabel(payment) }}
                                     </Link>
-                                    <p v-if="payment.reference" class="text-sm text-gray-500 dark:text-gray-400">
-                                        Ref: {{ payment.reference }}
-                                    </p>
+                                    <Link v-else-if="payment.invoice" :href="`/invoices/${payment.invoice.id}`" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                        {{ payment.invoice.invoice_number }}
+                                    </Link>
+                                    <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
                                 </td>
+                                <!-- Status -->
+                                <td class="whitespace-nowrap px-6 py-4">
+                                    <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', statusColors[payment.status]]">
+                                        {{ payment.status.replace('_', ' ') }}
+                                    </span>
+                                </td>
+                                <!-- Customer -->
+                                <td class="whitespace-nowrap px-6 py-4">
+                                    <Link v-if="payment.customer" :href="`/customers/${payment.customer.id}`" class="text-sm text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
+                                        {{ payment.customer.full_name }}
+                                    </Link>
+                                    <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+                                </td>
+                                <!-- Amount -->
+                                <td class="whitespace-nowrap px-6 py-4 text-right">
+                                    <span class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(Number(payment.amount || 0) + Number(payment.service_fee_amount || 0)) }}</span>
+                                </td>
+                                <!-- Payment Method -->
                                 <td class="whitespace-nowrap px-6 py-4">
                                     <div class="flex items-center gap-2">
                                         <component :is="methodIcons[payment.payment_method] || BanknotesIcon" class="size-5 text-gray-400" />
@@ -537,42 +548,14 @@ function getPayableLabel(payment: Payment): string {
                                             {{ methodLabels[payment.payment_method] || payment.payment_method }}
                                         </span>
                                     </div>
-                                    <p v-if="payment.gateway" class="text-xs text-gray-500 dark:text-gray-400">
-                                        via {{ payment.gateway }}
-                                    </p>
                                 </td>
-                                <td class="whitespace-nowrap px-6 py-4">
-                                    <Link v-if="payment.payable" :href="getPayableLink(payment)" class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                                        {{ getPayableLabel(payment) }}
-                                    </Link>
-                                    <Link v-else-if="payment.invoice" :href="`/invoices/${payment.invoice.id}`" class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                                        {{ payment.invoice.invoice_number }}
-                                    </Link>
-                                    <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
-                                </td>
-                                <td class="whitespace-nowrap px-6 py-4">
-                                    <Link v-if="payment.customer" :href="`/customers/${payment.customer.id}`" class="text-sm text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
-                                        {{ payment.customer.full_name }}
-                                    </Link>
-                                    <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
-                                </td>
-                                <td class="whitespace-nowrap px-6 py-4 text-right">
-                                    <span class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(payment.amount) }}</span>
-                                    <p v-if="payment.service_fee_amount" class="text-xs text-gray-500 dark:text-gray-400">
-                                        +{{ formatCurrency(payment.service_fee_amount) }} fee
-                                    </p>
-                                </td>
-                                <td class="whitespace-nowrap px-6 py-4 text-center">
-                                    <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', statusColors[payment.status]]">
-                                        {{ payment.status.replace('_', ' ') }}
-                                    </span>
-                                </td>
+                                <!-- Date -->
                                 <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                                     {{ payment.paid_at ? formatDate(payment.paid_at) : formatDate(payment.created_at) }}
                                 </td>
                             </tr>
                             <tr v-if="payments.data.length === 0">
-                                <td colspan="7" class="px-6 py-12 text-center">
+                                <td colspan="6" class="px-6 py-12 text-center">
                                     <BanknotesIcon class="mx-auto size-12 text-gray-400" />
                                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No payments found</p>
                                     <p v-if="hasActiveFilters" class="mt-1 text-sm text-gray-400 dark:text-gray-500">
@@ -581,6 +564,17 @@ function getPayableLabel(payment: Payment): string {
                                 </td>
                             </tr>
                         </tbody>
+                        <tfoot v-if="payments.data.length > 0" class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <td colspan="3" class="px-6 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">
+                                    Total
+                                </td>
+                                <td class="whitespace-nowrap px-6 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                    {{ formatCurrency(Number(totals.total_amount || 0) + Number(totals.total_fees || 0)) }}
+                                </td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
 
