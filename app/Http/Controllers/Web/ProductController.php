@@ -552,6 +552,7 @@ class ProductController extends Controller
                 'title' => $product->title,
                 'description' => $product->description,
                 'handle' => $product->handle,
+                'status' => $product->status,
                 'is_published' => $product->is_published,
                 'is_draft' => $product->is_draft,
                 'has_variants' => $product->has_variants,

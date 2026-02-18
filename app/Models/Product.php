@@ -108,9 +108,14 @@ class Product extends Model
     protected static function booted(): void
     {
         static::updated(function (Product $product) {
-            // When product becomes active, auto-list on "In Store" channel only
-            if ($product->wasChanged('status') && $product->status === self::STATUS_ACTIVE) {
-                $product->listOnInStore();
+            if ($product->wasChanged('status')) {
+                if ($product->status === self::STATUS_ACTIVE) {
+                    // When product becomes active, auto-list on "In Store" channel only
+                    $product->listOnInStore();
+                } else {
+                    // When product moves away from active, unlist from ALL platforms
+                    $product->unlistFromAllPlatforms();
+                }
             }
         });
     }
@@ -194,6 +199,17 @@ class Product extends Model
         return $this->platformListings()
             ->where('sales_channel_id', $channel->id)
             ->update(['status' => 'unlisted']) > 0;
+    }
+
+    /**
+     * Unlist product from ALL platforms/channels.
+     * Called when product status changes away from active.
+     */
+    public function unlistFromAllPlatforms(): int
+    {
+        return $this->platformListings()
+            ->whereIn('status', ['active', 'pending'])
+            ->update(['status' => 'unlisted']);
     }
 
     /**

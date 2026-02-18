@@ -89,6 +89,7 @@ interface Product {
     title: string;
     description: string | null;
     handle: string;
+    status: string;
     is_published: boolean;
     is_draft: boolean;
     has_variants: boolean;
@@ -346,6 +347,7 @@ const refreshListings = () => {
                     <!-- Platform Listings -->
                     <PlatformListingsTab
                         :product-id="product.id"
+                        :product-status="product.status"
                         :listings="platformListings || []"
                         :available-marketplaces="availableMarketplaces || []"
                         :product-updated-at="product.updated_at"

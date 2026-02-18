@@ -64,6 +64,7 @@ interface AvailableMarketplace {
 
 interface Props {
     productId: number;
+    productStatus?: string;
     listings?: PlatformListing[];
     overrides?: Record<number, Override>;
     availableMarketplaces?: AvailableMarketplace[];
@@ -72,12 +73,16 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+    productStatus: 'active',
     listings: () => [],
     overrides: () => ({}),
     availableMarketplaces: () => [],
     loading: false,
     productUpdatedAt: undefined,
 });
+
+// Product must be active to list on platforms
+const canListOnPlatforms = computed(() => props.productStatus === 'active');
 
 const emit = defineEmits<{
     (e: 'refresh'): void;
@@ -237,6 +242,27 @@ function getListingEditUrl(listing: PlatformListing): string {
 <template>
     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
         <div class="px-4 py-5 sm:p-6">
+            <!-- Warning: Product not active -->
+            <div
+                v-if="!canListOnPlatforms"
+                class="mb-4 rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/20"
+            >
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <ExclamationTriangleIcon class="h-5 w-5 text-yellow-400" aria-hidden="true" />
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            Product is {{ productStatus }}
+                        </h3>
+                        <p class="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                            This product must be set to "Active" status before it can be listed on platforms.
+                            Any existing listings will be unlisted when the product status changes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
                     <h3 class="text-base font-semibold text-gray-900 dark:text-white">Platform Listings</h3>

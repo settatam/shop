@@ -117,7 +117,7 @@ function getUrlParams(): WidgetFilter {
 const initialParams = getUrlParams();
 
 // Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget('Products\\ProductsTable', initialParams);
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Products\\ProductsTable', initialParams);
 
 // Show/hide advanced filters
 const showAdvancedFilters = ref(false);
@@ -269,6 +269,10 @@ function toggleTag(tagId: string) {
 
 function handlePageChange(page: number) {
     setPage(page);
+}
+
+function handlePerPageChange(perPage: number) {
+    setPerPage(perPage);
 }
 
 function handleSortChange(field: string, desc: boolean) {
@@ -652,6 +656,7 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
                     { key: 'cost', format: 'currency' },
                 ]"
                 @page-change="handlePageChange"
+                @per-page-change="handlePerPageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
                 @bulk-action-modal="handleBulkActionModal"
