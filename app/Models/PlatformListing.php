@@ -11,8 +11,22 @@ class PlatformListing extends Model
 {
     use HasFactory, SoftDeletes;
 
+    // Listing statuses
+    public const STATUS_DRAFT = 'draft';           // Not yet listed, in preparation
+
+    public const STATUS_ACTIVE = 'active';          // Listed and for sale
+
+    public const STATUS_UNLISTED = 'unlisted';      // Temporarily removed from sale
+
+    public const STATUS_NOT_FOR_SALE = 'not_for_sale'; // Marked as not for sale on this platform
+
+    public const STATUS_ERROR = 'error';            // Sync error
+
+    public const STATUS_PENDING = 'pending';        // Waiting for platform sync
+
     protected $fillable = [
         'store_marketplace_id',
+        'sales_channel_id',
         'product_id',
         'product_variant_id',
         'external_listing_id',
@@ -52,6 +66,19 @@ class PlatformListing extends Model
         return $this->marketplace();
     }
 
+    public function salesChannel(): BelongsTo
+    {
+        return $this->belongsTo(SalesChannel::class);
+    }
+
+    /**
+     * Check if this is a local listing (In Store) vs external platform.
+     */
+    public function isLocal(): bool
+    {
+        return $this->salesChannel?->is_local ?? false;
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
@@ -79,8 +106,76 @@ class PlatformListing extends Model
     public function markAsError(string $error): void
     {
         $this->update([
-            'status' => 'error',
+            'status' => self::STATUS_ERROR,
             'last_error' => $error,
         ]);
+    }
+
+    /**
+     * Mark as not for sale on this platform.
+     */
+    public function markAsNotForSale(): void
+    {
+        $this->update([
+            'status' => self::STATUS_NOT_FOR_SALE,
+        ]);
+    }
+
+    /**
+     * Re-enable for sale on this platform.
+     */
+    public function enableForSale(): void
+    {
+        $this->update([
+            'status' => self::STATUS_ACTIVE,
+        ]);
+    }
+
+    /**
+     * Check if product is available for sale on this platform.
+     */
+    public function isForSale(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    /**
+     * Check if product is marked as not for sale on this platform.
+     */
+    public function isNotForSale(): bool
+    {
+        return $this->status === self::STATUS_NOT_FOR_SALE;
+    }
+
+    /**
+     * Check if listing is in draft/preparation mode.
+     */
+    public function isDraft(): bool
+    {
+        return $this->status === self::STATUS_DRAFT;
+    }
+
+    /**
+     * Check if listing has an error.
+     */
+    public function hasError(): bool
+    {
+        return $this->status === self::STATUS_ERROR;
+    }
+
+    /**
+     * Get human-readable status label.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            self::STATUS_DRAFT => 'Draft',
+            self::STATUS_ACTIVE => 'Listed',
+            self::STATUS_UNLISTED => 'Unlisted',
+            self::STATUS_NOT_FOR_SALE => 'Not For Sale',
+            self::STATUS_ERROR => 'Error',
+            self::STATUS_PENDING => 'Pending',
+            default => ucfirst($this->status ?? 'Unknown'),
+        };
     }
 }

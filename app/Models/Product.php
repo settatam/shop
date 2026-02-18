@@ -105,6 +105,118 @@ class Product extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updated(function (Product $product) {
+            // When product becomes active, auto-list on "In Store" channel only
+            if ($product->wasChanged('status') && $product->status === self::STATUS_ACTIVE) {
+                $product->listOnInStore();
+            }
+        });
+    }
+
+    /**
+     * List product on the "In Store" channel.
+     * Called automatically when product becomes active.
+     */
+    public function listOnInStore(): ?PlatformListing
+    {
+        $inStoreChannel = SalesChannel::where('store_id', $this->store_id)
+            ->where('is_local', true)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $inStoreChannel) {
+            return null;
+        }
+
+        return $this->listOnChannel($inStoreChannel);
+    }
+
+    /**
+     * List product on a specific sales channel.
+     */
+    public function listOnChannel(SalesChannel $channel, string $status = 'active'): PlatformListing
+    {
+        $existingListing = $this->platformListings()
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+
+        if ($existingListing) {
+            // Update status if listing exists
+            if ($existingListing->status !== $status) {
+                $existingListing->update(['status' => $status]);
+            }
+
+            return $existingListing;
+        }
+
+        $defaultVariant = $this->variants()->first();
+
+        return PlatformListing::create([
+            'sales_channel_id' => $channel->id,
+            'store_marketplace_id' => $channel->store_marketplace_id,
+            'product_id' => $this->id,
+            'status' => $status,
+            'platform_price' => $defaultVariant?->price ?? 0,
+            'platform_quantity' => $defaultVariant?->quantity ?? 0,
+            'platform_data' => [
+                'title' => $this->title,
+                'description' => $this->description,
+            ],
+        ]);
+    }
+
+    /**
+     * List product on all active external platforms.
+     * Called when user clicks "List on All Platforms".
+     */
+    public function listOnAllPlatforms(): array
+    {
+        $channels = SalesChannel::where('store_id', $this->store_id)
+            ->where('is_active', true)
+            ->where('is_local', false) // External platforms only
+            ->get();
+
+        $listings = [];
+        foreach ($channels as $channel) {
+            $listings[] = $this->listOnChannel($channel);
+        }
+
+        return $listings;
+    }
+
+    /**
+     * Unlist product from a specific channel.
+     */
+    public function unlistFromChannel(SalesChannel $channel): bool
+    {
+        return $this->platformListings()
+            ->where('sales_channel_id', $channel->id)
+            ->update(['status' => 'unlisted']) > 0;
+    }
+
+    /**
+     * Get listing for a specific channel.
+     */
+    public function getListingForChannel(SalesChannel $channel): ?PlatformListing
+    {
+        return $this->platformListings()
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+    }
+
+    /**
+     * Check if product is listed on a specific channel.
+     */
+    public function isListedOn(SalesChannel $channel): bool
+    {
+        return $this->platformListings()
+            ->where('sales_channel_id', $channel->id)
+            ->where('status', 'active')
+            ->exists();
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);

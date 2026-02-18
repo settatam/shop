@@ -14,6 +14,23 @@ class Store extends Model
 {
     use HasAddresses, HasFactory, SoftDeletes;
 
+    protected static function booted(): void
+    {
+        static::created(function (Store $store) {
+            // Create default "In Store" sales channel for every new store
+            SalesChannel::create([
+                'store_id' => $store->id,
+                'name' => 'In Store',
+                'code' => 'in_store',
+                'type' => SalesChannel::TYPE_LOCAL,
+                'is_local' => true,
+                'is_active' => true,
+                'is_default' => true,
+                'sort_order' => 0,
+            ]);
+        });
+    }
+
     protected $fillable = [
         'user_id',
         'slug',
@@ -165,6 +182,11 @@ class Store extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function salesChannels(): HasMany
+    {
+        return $this->hasMany(SalesChannel::class);
     }
 
     public function binLocations(): HasMany

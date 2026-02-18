@@ -599,6 +599,22 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('products/{product}/platforms/{marketplace}/sync', [\App\Http\Controllers\Web\ProductPlatformController::class, 'sync'])->name('products.platforms.sync');
     });
 
+    // Sales Channel Listings (for In Store and other local channels)
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('products/{product}/channels/{channel}', [\App\Http\Controllers\Web\ProductChannelController::class, 'show'])->name('products.channels.show');
+        Route::get('products/{product}/channel-listings', [\App\Http\Controllers\Web\ProductChannelController::class, 'listings'])->name('products.channel-listings');
+    });
+    Route::middleware('permission:products.update')->group(function () {
+        Route::put('products/{product}/channels/{channel}', [\App\Http\Controllers\Web\ProductChannelController::class, 'update'])->name('products.channels.update');
+        Route::post('products/{product}/channels/{channel}/publish', [\App\Http\Controllers\Web\ProductChannelController::class, 'publish'])->name('products.channels.publish');
+        Route::delete('products/{product}/channels/{channel}', [\App\Http\Controllers\Web\ProductChannelController::class, 'unpublish'])->name('products.channels.unpublish');
+        Route::post('products/{product}/channels/{channel}/toggle-not-for-sale', [\App\Http\Controllers\Web\ProductChannelController::class, 'toggleNotForSale'])->name('products.channels.toggle-not-for-sale');
+        Route::post('products/{product}/channels/{channel}/sync', [\App\Http\Controllers\Web\ProductChannelController::class, 'sync'])->name('products.channels.sync');
+        // Bulk actions
+        Route::post('products/{product}/list-all-platforms', [\App\Http\Controllers\Web\ProductChannelController::class, 'listOnAllPlatforms'])->name('products.list-all-platforms');
+        Route::post('products/{product}/sync-all-listings', [\App\Http\Controllers\Web\ProductChannelController::class, 'syncAll'])->name('products.sync-all-listings');
+    });
+
     // Template Platform Mappings
     Route::middleware('permission:templates.view')->group(function () {
         Route::get('settings/template-mappings', [\App\Http\Controllers\Web\TemplateMappingController::class, 'index'])->name('settings.template-mappings.index');

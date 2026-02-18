@@ -99,6 +99,42 @@ class SalesChannel extends Model
                     ->update(['is_default' => false]);
             }
         });
+
+        static::updated(function (SalesChannel $channel) {
+            // When a channel is activated, create listings for all products
+            if ($channel->wasChanged('is_active') && $channel->is_active) {
+                $channel->createListingsForAllProducts();
+            }
+        });
+
+        static::created(function (SalesChannel $channel) {
+            // Only auto-list active products for "In Store" (local) channels
+            if ($channel->is_active && $channel->is_local) {
+                $channel->listActiveProducts();
+            }
+        });
+
+        static::updated(function (SalesChannel $channel) {
+            // When "In Store" channel is activated, list all active products
+            if ($channel->wasChanged('is_active') && $channel->is_active && $channel->is_local) {
+                $channel->listActiveProducts();
+            }
+        });
+    }
+
+    /**
+     * List all active products on this channel.
+     * Only used for local (In Store) channels.
+     */
+    public function listActiveProducts(): void
+    {
+        $products = Product::where('store_id', $this->store_id)
+            ->where('status', Product::STATUS_ACTIVE)
+            ->get();
+
+        foreach ($products as $product) {
+            $product->listOnChannel($this);
+        }
     }
 
     public function warehouse(): BelongsTo
@@ -114,6 +150,11 @@ class SalesChannel extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function platformListings(): HasMany
+    {
+        return $this->hasMany(PlatformListing::class);
     }
 
     public function isLocal(): bool
@@ -167,7 +208,8 @@ class SalesChannel extends Model
 
     /**
      * Get the default local sales channel for a store.
-     * Returns the channel marked as default, or the first local channel, or creates one.
+     * The "In Store" channel is created automatically when a store is created.
+     * Returns the default local channel, or falls back to any active local channel.
      */
     public static function getDefaultLocalChannel(int $storeId): self
     {
@@ -193,16 +235,22 @@ class SalesChannel extends Model
             return $channel;
         }
 
-        // Create a default local channel if none exists
-        return static::create([
-            'store_id' => $storeId,
-            'name' => 'In Store',
-            'code' => 'in_store',
-            'type' => self::TYPE_LOCAL,
-            'is_local' => true,
-            'is_active' => true,
-            'is_default' => true,
-        ]);
+        // Fallback for legacy stores: get or create "In Store" channel
+        // New stores have this created automatically via Store::booted()
+        return static::firstOrCreate(
+            [
+                'store_id' => $storeId,
+                'code' => 'in_store',
+            ],
+            [
+                'name' => 'In Store',
+                'type' => self::TYPE_LOCAL,
+                'is_local' => true,
+                'is_active' => true,
+                'is_default' => true,
+                'sort_order' => 0,
+            ]
+        );
     }
 
     /**
