@@ -69,9 +69,9 @@ const allNavigation: NavGroup[] = [
         icon: ShoppingBagIcon,
         feature: 'transactions',
         children: [
-            { name: 'All Transactions', href: '/transactions' },
+            { name: 'All Transactions', href: '/transactions', feature: 'all_transactions' },
             { name: 'Buys', href: '/buys', feature: 'buys' },
-            { name: 'Buys by Item', href: '/buys/items', feature: 'buys' },
+            { name: 'Purchased Items', href: '/buys/items', feature: 'buys' },
         ],
     },
     { name: 'Vendors', href: '/vendors', icon: BuildingStorefrontIcon, feature: 'vendors' },

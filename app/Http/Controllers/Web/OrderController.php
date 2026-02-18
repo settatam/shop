@@ -49,14 +49,14 @@ class OrderController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get distinct marketplaces from orders
-        $marketplaces = Order::where('store_id', $store->id)
-            ->whereNotNull('source_platform')
-            ->distinct()
-            ->pluck('source_platform')
-            ->map(fn ($platform) => [
-                'value' => $platform,
-                'label' => $this->formatMarketplaceLabel($platform),
+        // Get sales channels that have orders
+        $marketplaces = \App\Models\SalesChannel::where('store_id', $store->id)
+            ->whereHas('orders')
+            ->orderBy('sort_order')
+            ->get(['id', 'name', 'code'])
+            ->map(fn ($channel) => [
+                'value' => $channel->code,
+                'label' => $channel->name,
             ])
             ->values()
             ->toArray();
@@ -80,19 +80,25 @@ class OrderController extends Controller
     }
 
     /**
-     * Format marketplace label for display.
+     * Format marketplace label for display (fallback when no sales channel).
      */
-    protected function formatMarketplaceLabel(string $platform): string
+    protected function formatMarketplaceLabel(?string $platform): string
     {
+        if (! $platform) {
+            return 'Unknown';
+        }
+
         $labels = [
-            'pos' => 'In Store',
-            'in_store' => 'In Store',
             'shopify' => 'Shopify',
             'reb' => 'REB',
             'memo' => 'Memo',
             'repair' => 'Repair',
             'website' => 'Website',
             'online' => 'Online',
+            'ebay' => 'eBay',
+            'amazon' => 'Amazon',
+            'etsy' => 'Etsy',
+            'walmart' => 'Walmart',
         ];
 
         return $labels[$platform] ?? ucfirst(str_replace('_', ' ', $platform));
@@ -175,15 +181,18 @@ class OrderController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get store users for the employee dropdown
+        // Get store users for the employee dropdown (only assignable users with order permission)
         $storeUsers = $store->storeUsers()
             ->with(['user', 'role'])
+            ->whereNotNull('user_id')
+            ->where('can_be_assigned', true)
             ->get()
             ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('orders.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
                 'name' => $storeUser->user?->name ?? $storeUser->name ?? 'Unknown',
             ])
+            ->sortBy('name')
             ->values();
 
         // Get the current user's store user ID

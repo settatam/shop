@@ -403,18 +403,18 @@ function formatCarrier(carrier?: string): string {
 }
 
 function formatPlatformName(platform?: string): string {
+    // Only used as fallback when no sales_channel is set (legacy data)
     const platforms: Record<string, string> = {
         shopify: 'Shopify',
         ebay: 'eBay',
         amazon: 'Amazon',
         etsy: 'Etsy',
         woocommerce: 'WooCommerce',
-        pos: 'In Store',
-        in_store: 'In Store',
+        walmart: 'Walmart',
         website: 'Website',
         online: 'Online',
     };
-    return platforms[platform ?? ''] || (platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Unknown');
+    return platforms[platform ?? ''] || (platform ? platform.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Unknown');
 }
 
 const platformBadgeColors: Record<string, string> = {

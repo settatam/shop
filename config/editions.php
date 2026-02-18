@@ -76,6 +76,7 @@ return [
                 'shipments',
                 'returns',
                 'transactions',
+                'all_transactions', // All Transactions view
                 'buys',
                 'vendors',
                 'repairs', // Item repairs
@@ -122,6 +123,7 @@ return [
                 'shipments',
                 'returns',
                 'transactions',
+                'all_transactions', // All Transactions view
                 'buys',
                 'vendors',
                 'repairs',

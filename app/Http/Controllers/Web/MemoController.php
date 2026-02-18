@@ -100,15 +100,18 @@ class MemoController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get store users for the employee dropdown
+        // Get store users for the employee dropdown (only assignable users with memo permission)
         $storeUsers = $store->storeUsers()
             ->with(['user', 'role'])
+            ->whereNotNull('user_id')
+            ->where('can_be_assigned', true)
             ->get()
             ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('memos.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
                 'name' => $storeUser->user?->name ?? $storeUser->name ?? 'Unknown',
             ])
+            ->sortBy('name')
             ->values();
 
         // Get the current user's store user ID

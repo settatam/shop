@@ -111,7 +111,7 @@ class OrdersTable extends Table
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
         $query = Order::query()
-            ->with(['customer', 'user', 'items.product', 'items.variant', 'payments'])
+            ->with(['customer', 'user', 'items.product', 'items.variant', 'payments', 'salesChannel'])
             ->withCount('items')
             ->where('store_id', $storeId);
 
@@ -289,18 +289,9 @@ class OrdersTable extends Table
             ->map(fn ($method) => ucfirst(str_replace('_', ' ', $method)))
             ->implode(', ');
 
-        // Format marketplace
-        $marketplaceLabels = [
-            'pos' => 'In Store',
-            'in_store' => 'In Store',
-            'shopify' => 'Shopify',
-            'reb' => 'REB',
-            'memo' => 'Memo',
-            'repair' => 'Repair',
-            'website' => 'Website',
-            'online' => 'Online',
-        ];
-        $marketplace = $marketplaceLabels[$order->source_platform ?? ''] ?? ucfirst($order->source_platform ?? 'In Store');
+        // Format marketplace - use sales channel name if available
+        $marketplace = $order->salesChannel?->name
+            ?? $this->formatSourcePlatform($order->source_platform);
 
         return [
             'id' => [
@@ -425,5 +416,31 @@ class OrdersTable extends Table
                 'confirm' => 'Are you sure you want to cancel the selected orders?',
             ],
         ];
+    }
+
+    /**
+     * Format source platform for display when no sales channel is set.
+     */
+    protected function formatSourcePlatform(?string $platform): string
+    {
+        if (! $platform) {
+            return 'Unknown';
+        }
+
+        // Known platform mappings for legacy data
+        $labels = [
+            'shopify' => 'Shopify',
+            'reb' => 'REB',
+            'memo' => 'Memo',
+            'repair' => 'Repair',
+            'website' => 'Website',
+            'online' => 'Online',
+            'ebay' => 'eBay',
+            'amazon' => 'Amazon',
+            'etsy' => 'Etsy',
+            'walmart' => 'Walmart',
+        ];
+
+        return $labels[$platform] ?? ucfirst(str_replace('_', ' ', $platform));
     }
 }

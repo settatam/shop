@@ -1646,15 +1646,18 @@ class TransactionController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get store users for the employee dropdown (only those authorized to create orders)
+        // Get store users for the employee dropdown (only assignable users with transaction permission)
         $storeUsers = $store->storeUsers()
             ->with(['user', 'role'])
+            ->whereNotNull('user_id')
+            ->where('can_be_assigned', true)
             ->get()
-            ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('orders.create'))
+            ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('transactions.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
                 'name' => $storeUser->user?->name ?? $storeUser->name ?? 'Unknown',
             ])
+            ->sortBy('name')
             ->values();
 
         // Get the current user's store user ID
