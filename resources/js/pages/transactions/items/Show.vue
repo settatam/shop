@@ -11,7 +11,8 @@ import ItemChatPanel from '@/components/transactions/ItemChatPanel.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon, RectangleStackIcon, XMarkIcon, ShareIcon } from '@heroicons/vue/20/solid';
+import axios from 'axios';
+import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon, RectangleStackIcon, XMarkIcon, ShareIcon, SparklesIcon } from '@heroicons/vue/20/solid';
 
 interface ItemImage {
     id: number;
@@ -125,6 +126,8 @@ interface TeamMember {
 interface Vendor {
     id: number;
     name: string;
+    company_name: string | null;
+    display_name?: string;
 }
 
 interface Props {
@@ -267,6 +270,62 @@ const moveToBucket = () => {
         },
         onFinish: () => {
             movingToBucket.value = false;
+        },
+    });
+};
+
+// AI Auto-populate state
+const autoPopulatingFields = ref(false);
+const autoPopulateError = ref<string | null>(null);
+const autoPopulateResult = ref<{
+    identified: boolean;
+    confidence: string;
+    product_info: Record<string, string>;
+    fields: Record<string, string>;
+    notes?: string;
+} | null>(null);
+const applyingChanges = ref(false);
+
+const autoPopulateFields = async () => {
+    if (!props.item.category_id) {
+        autoPopulateError.value = 'Please select a category first. The category determines which template fields to populate.';
+        return;
+    }
+
+    autoPopulatingFields.value = true;
+    autoPopulateError.value = null;
+    autoPopulateResult.value = null;
+
+    try {
+        const response = await axios.post(`/transactions/${props.transaction.id}/items/${props.item.id}/auto-populate-fields`);
+        autoPopulateResult.value = response.data;
+    } catch (error: any) {
+        autoPopulateError.value = error.response?.data?.error || 'Failed to auto-populate fields. Please try again.';
+    } finally {
+        autoPopulatingFields.value = false;
+    }
+};
+
+const applyAutoPopulatedFields = () => {
+    if (!autoPopulateResult.value?.fields) return;
+
+    applyingChanges.value = true;
+
+    // Build the attributes object with the AI suggestions
+    const newAttributes = { ...props.item.attributes };
+    for (const [fieldId, value] of Object.entries(autoPopulateResult.value.fields)) {
+        newAttributes[fieldId] = value;
+    }
+
+    router.patch(`/transactions/${props.transaction.id}/items/${props.item.id}`, {
+        attributes: newAttributes,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            autoPopulateResult.value = null;
+        },
+        onFinish: () => {
+            applyingChanges.value = false;
         },
     });
 };
@@ -527,7 +586,84 @@ const moveToBucket = () => {
                     <!-- Details -->
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Details</h3>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Details</h3>
+                                <button
+                                    v-if="item.category_id && templateFields.length > 0"
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    :disabled="autoPopulatingFields"
+                                    @click="autoPopulateFields"
+                                >
+                                    <SparklesIcon class="size-3.5" :class="{ 'animate-pulse': autoPopulatingFields }" />
+                                    {{ autoPopulatingFields ? 'Analyzing...' : 'Auto-fill with AI' }}
+                                </button>
+                            </div>
+
+                            <!-- AI Auto-populate Error -->
+                            <div
+                                v-if="autoPopulateError"
+                                class="mb-4 rounded-md bg-red-50 p-3 dark:bg-red-900/20"
+                            >
+                                <p class="text-sm text-red-700 dark:text-red-400">{{ autoPopulateError }}</p>
+                            </div>
+
+                            <!-- AI Auto-populate Results -->
+                            <div
+                                v-if="autoPopulateResult"
+                                class="mb-4 rounded-md border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20"
+                            >
+                                <div class="flex items-start gap-2">
+                                    <SparklesIcon class="size-4 text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-purple-900 dark:text-purple-200">
+                                            {{ autoPopulateResult.identified ? 'Product Identified' : 'Could not identify product' }}
+                                            <span
+                                                class="ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium"
+                                                :class="{
+                                                    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': autoPopulateResult.confidence === 'high',
+                                                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': autoPopulateResult.confidence === 'medium',
+                                                    'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300': autoPopulateResult.confidence === 'low',
+                                                }"
+                                            >
+                                                {{ autoPopulateResult.confidence }} confidence
+                                            </span>
+                                        </p>
+                                        <div v-if="autoPopulateResult.product_info && Object.keys(autoPopulateResult.product_info).length" class="mt-1.5">
+                                            <p class="text-xs text-purple-700 dark:text-purple-300">
+                                                <span v-if="autoPopulateResult.product_info.brand">{{ autoPopulateResult.product_info.brand }}</span>
+                                                <span v-if="autoPopulateResult.product_info.model"> {{ autoPopulateResult.product_info.model }}</span>
+                                                <span v-if="autoPopulateResult.product_info.reference_number"> ({{ autoPopulateResult.product_info.reference_number }})</span>
+                                            </p>
+                                        </div>
+                                        <p v-if="autoPopulateResult.notes" class="mt-1 text-xs text-purple-600 dark:text-purple-400">
+                                            {{ autoPopulateResult.notes }}
+                                        </p>
+                                        <p v-if="autoPopulateResult.fields && Object.keys(autoPopulateResult.fields).length" class="mt-1 text-xs text-purple-600 dark:text-purple-400">
+                                            {{ Object.keys(autoPopulateResult.fields).length }} field(s) ready to apply
+                                        </p>
+                                        <div class="mt-2 flex gap-2">
+                                            <button
+                                                v-if="autoPopulateResult.fields && Object.keys(autoPopulateResult.fields).length"
+                                                type="button"
+                                                class="inline-flex items-center rounded-md bg-purple-600 px-2 py-1 text-xs font-semibold text-white shadow-sm hover:bg-purple-500 disabled:opacity-50"
+                                                :disabled="applyingChanges"
+                                                @click="applyAutoPopulatedFields"
+                                            >
+                                                {{ applyingChanges ? 'Applying...' : 'Apply Changes' }}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="inline-flex items-center rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600"
+                                                @click="autoPopulateResult = null"
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <dl class="space-y-3">
                                 <div>
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Category</dt>
@@ -621,7 +757,7 @@ const moveToBucket = () => {
                                     >
                                         <option :value="null" disabled>Choose a vendor...</option>
                                         <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
-                                            {{ vendor.name }}
+                                            {{ vendor.company_name || vendor.name }}
                                         </option>
                                     </select>
                                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">

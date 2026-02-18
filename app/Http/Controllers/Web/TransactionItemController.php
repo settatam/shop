@@ -101,7 +101,7 @@ class TransactionItemController extends Controller
         $vendors = Vendor::where('store_id', $store->id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'company_name']);
 
         return Inertia::render('transactions/items/Show', [
             'transaction' => $this->formatTransaction($transaction),
