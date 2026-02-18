@@ -73,17 +73,28 @@ class MarketplaceController extends Controller
     public function connect(Request $request, string $platform): RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $platformEnum = Platform::from($platform);
 
-        $service = $this->platformManager->getService($platformEnum);
+        try {
+            $platformEnum = Platform::from($platform);
+        } catch (\ValueError) {
+            return redirect()->route('settings.marketplaces.index')
+                ->with('error', "Unknown platform: {$platform}");
+        }
 
-        // Store the marketplace name in session for after callback
-        $name = $request->input('name', $platformEnum->label());
-        session(['marketplace_connect_name' => $name]);
+        try {
+            $service = $this->platformManager->getService($platformEnum);
 
-        return $service->connect($store, [
-            'name' => $name,
-        ]);
+            // Store the marketplace name in session for after callback
+            $name = $request->input('name', $platformEnum->label());
+            session(['marketplace_connect_name' => $name]);
+
+            return $service->connect($store, [
+                'name' => $name,
+            ]);
+        } catch (\Exception $e) {
+            return redirect()->route('settings.marketplaces.index')
+                ->with('error', "Failed to connect {$platformEnum->label()}: {$e->getMessage()}");
+        }
     }
 
     /**

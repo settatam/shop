@@ -195,13 +195,7 @@ class Activity extends Model
     public const ROLES_DELETE = 'roles.delete';
 
     // Report Activities
-    public const REPORTS_VIEW_SALES = 'reports.view_sales';
-
-    public const REPORTS_VIEW_INVENTORY = 'reports.view_inventory';
-
-    public const REPORTS_VIEW_CUSTOMERS = 'reports.view_customers';
-
-    public const REPORTS_VIEW_ACTIVITY = 'reports.view_activity';
+    public const REPORTS_VIEW = 'reports.view';
 
     public const REPORTS_EXPORT = 'reports.export';
 
@@ -407,10 +401,7 @@ class Activity extends Model
             self::ROLES_DELETE => ['name' => 'Delete Role', 'category' => self::CATEGORY_TEAM, 'description' => 'A role was deleted'],
 
             // Reports
-            self::REPORTS_VIEW_SALES => ['name' => 'View Sales Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View sales analytics'],
-            self::REPORTS_VIEW_INVENTORY => ['name' => 'View Inventory Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View inventory analytics'],
-            self::REPORTS_VIEW_CUSTOMERS => ['name' => 'View Customer Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View customer analytics'],
-            self::REPORTS_VIEW_ACTIVITY => ['name' => 'View Activity Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View team activity logs'],
+            self::REPORTS_VIEW => ['name' => 'View Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View all reports and analytics'],
             self::REPORTS_EXPORT => ['name' => 'Export Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'Export report data'],
 
             // AI

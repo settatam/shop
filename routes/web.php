@@ -697,7 +697,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Sales Reports
-    Route::prefix('reports/sales')->name('reports.sales.')->middleware('permission:reports.view_sales')->group(function () {
+    Route::prefix('reports/sales')->name('reports.sales.')->middleware('permission:reports.view')->group(function () {
         Route::get('daily', [SalesReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [SalesReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('daily-items', [SalesReportController::class, 'dailyItems'])->name('daily-items');
@@ -709,7 +709,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Inventory Reports
-    Route::prefix('reports/inventory')->name('reports.inventory.')->middleware('permission:reports.view_inventory')->group(function () {
+    Route::prefix('reports/inventory')->name('reports.inventory.')->middleware('permission:reports.view')->group(function () {
         Route::get('/', [InventoryReportController::class, 'index'])->name('index');
         Route::get('export', [InventoryReportController::class, 'export'])->name('export');
         Route::get('weekly', [InventoryReportController::class, 'weekly'])->name('weekly');
@@ -721,7 +721,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Buys Reports - Unified (all sources)
-    Route::prefix('reports/buys')->name('reports.buys.')->middleware('permission:reports.view_buys')->group(function () {
+    Route::prefix('reports/buys')->name('reports.buys.')->middleware('permission:reports.view')->group(function () {
         // Unified Buys Report (all sources)
         Route::get('/', [BuysReportController::class, 'index'])->name('index');
         Route::get('export', [BuysReportController::class, 'exportIndex'])->name('export');
@@ -757,7 +757,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Leads Reports (online transactions)
-    Route::prefix('reports/leads')->name('reports.leads.')->middleware('permission:reports.view_buys')->group(function () {
+    Route::prefix('reports/leads')->name('reports.leads.')->middleware('permission:reports.view')->group(function () {
         Route::get('/', [LeadsReportController::class, 'index'])->name('index');
         Route::get('export', [LeadsReportController::class, 'exportIndex'])->name('export');
         Route::get('monthly', [LeadsReportController::class, 'monthly'])->name('monthly');
@@ -769,7 +769,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Transactions Reports
-    Route::prefix('reports/transactions')->name('reports.transactions.')->middleware('permission:reports.view_transactions')->group(function () {
+    Route::prefix('reports/transactions')->name('reports.transactions.')->middleware('permission:reports.view')->group(function () {
         Route::get('daily', [TransactionsReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [TransactionsReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('weekly', [TransactionsReportController::class, 'weekly'])->name('weekly');

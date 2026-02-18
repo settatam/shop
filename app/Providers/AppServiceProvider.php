@@ -52,12 +52,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Convenience gates for common checks
         Gate::define('view-reports', function (User $user) {
-            return $user->hasAnyPermission([
-                Activity::REPORTS_VIEW_SALES,
-                Activity::REPORTS_VIEW_INVENTORY,
-                Activity::REPORTS_VIEW_CUSTOMERS,
-                Activity::REPORTS_VIEW_ACTIVITY,
-            ]);
+            return $user->hasPermission(Activity::REPORTS_VIEW);
         });
 
         Gate::define('manage-team', function (User $user) {
