@@ -100,16 +100,23 @@ class TransactionsTable extends Table
             });
         }
 
+        // Apply status filter (supports both status slug and status_id)
+        // We need to check status first to determine which date column to use
+        $status = data_get($filter, 'status');
+        $isPaymentProcessed = $status === 'payment_processed';
+
         // Apply date range filter
+        // Use payment_processed_at for payment_processed status, otherwise created_at
+        $dateColumn = $isPaymentProcessed ? 'payment_processed_at' : 'created_at';
         if ($dateFrom = data_get($filter, 'date_from')) {
-            $query->whereDate('created_at', '>=', $dateFrom);
+            $query->whereDate($dateColumn, '>=', $dateFrom);
         }
         if ($dateTo = data_get($filter, 'date_to')) {
-            $query->whereDate('created_at', '<=', $dateTo);
+            $query->whereDate($dateColumn, '<=', $dateTo);
         }
 
-        // Apply status filter (supports both status slug and status_id)
-        if ($status = data_get($filter, 'status')) {
+        // Apply status filter
+        if ($status) {
             // First try to find by slug
             $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
             $statusModel = Status::where('store_id', $storeId)

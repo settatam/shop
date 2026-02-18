@@ -4,7 +4,8 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Form } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
-import { ArrowLeftIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, SparklesIcon } from '@heroicons/vue/20/solid';
+import axios from 'axios';
 
 interface Category {
     id: number;
@@ -178,6 +179,58 @@ const deleteImage = (imageId: number) => {
     if (!confirm('Delete this image?')) return;
     router.delete(`/transactions/${props.transaction.id}/items/${props.item.id}/images/${imageId}`);
 };
+
+// AI Auto-populate fields
+const autoPopulatingFields = ref(false);
+const autoPopulateError = ref<string | null>(null);
+const autoPopulateResult = ref<{
+    identified: boolean;
+    confidence: string;
+    product_info: Record<string, string | null>;
+    notes: string | null;
+} | null>(null);
+
+const autoPopulateFields = async () => {
+    if (!selectedCategoryId.value) {
+        autoPopulateError.value = 'Please select a category first.';
+        return;
+    }
+
+    autoPopulatingFields.value = true;
+    autoPopulateError.value = null;
+    autoPopulateResult.value = null;
+
+    try {
+        const response = await axios.post(
+            `/transactions/${props.transaction.id}/items/${props.item.id}/auto-populate-fields`
+        );
+
+        const data = response.data;
+
+        if (data.error) {
+            autoPopulateError.value = data.error;
+            return;
+        }
+
+        // Apply the suggested field values
+        if (data.fields) {
+            for (const [fieldId, value] of Object.entries(data.fields)) {
+                attributes.value[fieldId] = value as string;
+            }
+        }
+
+        autoPopulateResult.value = {
+            identified: data.identified,
+            confidence: data.confidence,
+            product_info: data.product_info || {},
+            notes: data.notes,
+        };
+    } catch (error: any) {
+        autoPopulateError.value = error.response?.data?.error || 'Failed to auto-populate fields.';
+    } finally {
+        autoPopulatingFields.value = false;
+    }
+};
 </script>
 
 <template>
@@ -266,7 +319,58 @@ const deleteImage = (imageId: number) => {
 
                         <div v-else-if="templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 mb-6">
                             <div class="px-4 py-5 sm:p-6 space-y-4">
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Template Fields</h3>
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Template Fields</h3>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-x-1.5 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50"
+                                        :disabled="autoPopulatingFields"
+                                        @click="autoPopulateFields"
+                                    >
+                                        <SparklesIcon class="-ml-0.5 size-4" :class="{ 'animate-pulse': autoPopulatingFields }" />
+                                        {{ autoPopulatingFields ? 'Identifying...' : 'Auto-fill with AI' }}
+                                    </button>
+                                </div>
+
+                                <!-- AI Result Alert -->
+                                <div v-if="autoPopulateResult" class="rounded-md p-3" :class="autoPopulateResult.identified ? 'bg-green-50 dark:bg-green-900/20' : 'bg-yellow-50 dark:bg-yellow-900/20'">
+                                    <div class="flex">
+                                        <div class="shrink-0">
+                                            <SparklesIcon v-if="autoPopulateResult.identified" class="size-5 text-green-400" />
+                                            <svg v-else class="size-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div class="ml-3">
+                                            <h3 class="text-sm font-medium" :class="autoPopulateResult.identified ? 'text-green-800 dark:text-green-200' : 'text-yellow-800 dark:text-yellow-200'">
+                                                {{ autoPopulateResult.identified ? 'Product Identified' : 'Could not identify product' }}
+                                                <span v-if="autoPopulateResult.confidence" class="text-xs opacity-75">({{ autoPopulateResult.confidence }} confidence)</span>
+                                            </h3>
+                                            <div v-if="autoPopulateResult.product_info && Object.keys(autoPopulateResult.product_info).length > 0" class="mt-2 text-sm" :class="autoPopulateResult.identified ? 'text-green-700 dark:text-green-300' : 'text-yellow-700 dark:text-yellow-300'">
+                                                <p v-if="autoPopulateResult.product_info.brand"><strong>Brand:</strong> {{ autoPopulateResult.product_info.brand }}</p>
+                                                <p v-if="autoPopulateResult.product_info.model"><strong>Model:</strong> {{ autoPopulateResult.product_info.model }}</p>
+                                                <p v-if="autoPopulateResult.product_info.reference_number"><strong>Ref:</strong> {{ autoPopulateResult.product_info.reference_number }}</p>
+                                            </div>
+                                            <p v-if="autoPopulateResult.notes" class="mt-1 text-xs" :class="autoPopulateResult.identified ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'">
+                                                {{ autoPopulateResult.notes }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Error Alert -->
+                                <div v-if="autoPopulateError" class="rounded-md bg-red-50 p-3 dark:bg-red-900/20">
+                                    <div class="flex">
+                                        <div class="shrink-0">
+                                            <svg class="size-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div class="ml-3">
+                                            <p class="text-sm text-red-700 dark:text-red-300">{{ autoPopulateError }}</p>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <!-- Grouped Fields -->
                                 <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="space-y-2">

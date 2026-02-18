@@ -85,7 +85,7 @@ class TransactionItemMoveToInventoryTest extends TestCase
         $this->assertEquals(200.00, $variant->cost);
     }
 
-    public function test_move_item_transfers_images(): void
+    public function test_move_item_copies_images(): void
     {
         $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
         $item = TransactionItem::factory()->create(['transaction_id' => $transaction->id]);
@@ -106,8 +106,14 @@ class TransactionItemMoveToInventoryTest extends TestCase
         $service = app(TransactionService::class);
         $product = $service->moveItemToInventory($item);
 
+        // Images are copied, not transferred - both item and product have the images
         $this->assertEquals(1, $product->images()->count());
-        $this->assertEquals(0, $item->images()->count());
+        $this->assertEquals(1, $item->images()->count());
+
+        // Verify the product image has the same URL as the original
+        $productImage = $product->images()->first();
+        $this->assertEquals('http://example.com/image.jpg', $productImage->url);
+        $this->assertEquals('http://example.com/thumb.jpg', $productImage->thumbnail_url);
     }
 
     public function test_move_item_creates_inventory_record(): void
@@ -181,8 +187,96 @@ class TransactionItemMoveToInventoryTest extends TestCase
         $this->assertEquals($template->id, $product->template_id);
     }
 
+    public function test_move_item_copies_attributes(): void
+    {
+        $template = \App\Models\ProductTemplate::factory()->create(['store_id' => $this->store->id]);
+        $field1 = \App\Models\ProductTemplateField::factory()->create([
+            'product_template_id' => $template->id,
+            'name' => 'brand',
+            'label' => 'Brand',
+            'type' => 'text',
+        ]);
+        $field2 = \App\Models\ProductTemplateField::factory()->create([
+            'product_template_id' => $template->id,
+            'name' => 'model',
+            'label' => 'Model',
+            'type' => 'text',
+        ]);
+
+        $category = Category::factory()->create([
+            'store_id' => $this->store->id,
+            'template_id' => $template->id,
+        ]);
+
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'category_id' => $category->id,
+            'attributes' => [
+                $field1->id => 'Rolex',
+                $field2->id => 'Submariner',
+            ],
+        ]);
+
+        $service = app(TransactionService::class);
+        $product = $service->moveItemToInventory($item);
+
+        // Verify attributes were copied to product_attribute_values
+        $this->assertEquals(2, $product->attributeValues()->count());
+
+        $brandValue = $product->attributeValues()->where('product_template_field_id', $field1->id)->first();
+        $this->assertNotNull($brandValue);
+        $this->assertEquals('Rolex', $brandValue->value);
+
+        $modelValue = $product->attributeValues()->where('product_template_field_id', $field2->id)->first();
+        $this->assertNotNull($modelValue);
+        $this->assertEquals('Submariner', $modelValue->value);
+    }
+
+    public function test_move_item_via_post_requires_vendor_id(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+        ]);
+
+        $this->actingAs($this->user);
+
+        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory");
+
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('vendor_id');
+    }
+
+    public function test_move_item_via_post_with_vendor_id(): void
+    {
+        $vendor = \App\Models\Vendor::factory()->create(['store_id' => $this->store->id]);
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'title' => 'Gold Chain',
+        ]);
+
+        $this->actingAs($this->user);
+
+        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
+            'vendor_id' => $vendor->id,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $item->refresh();
+        $this->assertTrue($item->is_added_to_inventory);
+        $this->assertNotNull($item->product_id);
+
+        $product = \App\Models\Product::find($item->product_id);
+        $this->assertEquals($vendor->id, $product->vendor_id);
+    }
+
     public function test_cannot_move_already_inventoried_item(): void
     {
+        $vendor = \App\Models\Vendor::factory()->create(['store_id' => $this->store->id]);
         $transaction = Transaction::factory()->create(['store_id' => $this->store->id]);
         $item = TransactionItem::factory()->addedToInventory()->create([
             'transaction_id' => $transaction->id,
@@ -190,7 +284,9 @@ class TransactionItemMoveToInventoryTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory");
+        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
+            'vendor_id' => $vendor->id,
+        ]);
 
         $response->assertRedirect();
         $response->assertSessionHas('error');

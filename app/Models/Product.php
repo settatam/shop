@@ -107,6 +107,14 @@ class Product extends Model
 
     protected static function booted(): void
     {
+        // When product is created as active, auto-list on "In Store"
+        static::created(function (Product $product) {
+            if ($product->status === self::STATUS_ACTIVE) {
+                $product->listOnInStore();
+            }
+        });
+
+        // When product status changes, manage listings accordingly
         static::updated(function (Product $product) {
             if ($product->wasChanged('status')) {
                 if ($product->status === self::STATUS_ACTIVE) {

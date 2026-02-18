@@ -122,6 +122,11 @@ interface TeamMember {
     email?: string;
 }
 
+interface Vendor {
+    id: number;
+    name: string;
+}
+
 interface Props {
     transaction: Transaction;
     item: TransactionItem;
@@ -131,6 +136,7 @@ interface Props {
     notes: Note[];
     buckets: Bucket[];
     teamMembers: TeamMember[];
+    vendors: Vendor[];
     activityLogs?: ActivityDay[];
 }
 
@@ -151,6 +157,10 @@ const openLightbox = (index: number) => {
     lightboxIndex.value = index;
     lightboxOpen.value = true;
 };
+
+// Move to Inventory modal state
+const showInventoryModal = ref(false);
+const selectedVendorId = ref<number | null>(null);
 
 // Move to Bucket modal state
 const showBucketModal = ref(false);
@@ -204,11 +214,31 @@ const margin = (() => {
     return ((props.item.price - props.item.buy_price) / props.item.buy_price * 100).toFixed(1);
 })();
 
+const openInventoryModal = () => {
+    selectedVendorId.value = null;
+    showInventoryModal.value = true;
+};
+
+const closeInventoryModal = () => {
+    showInventoryModal.value = false;
+};
+
 const moveToInventory = () => {
-    if (!confirm('Move this item to inventory? A new product will be created as a draft.')) return;
+    if (!selectedVendorId.value) {
+        alert('Please select a vendor.');
+        return;
+    }
     movingToInventory.value = true;
-    router.post(`/transactions/${props.transaction.id}/items/${props.item.id}/move-to-inventory`, {}, {
-        onFinish: () => { movingToInventory.value = false; },
+    router.post(`/transactions/${props.transaction.id}/items/${props.item.id}/move-to-inventory`, {
+        vendor_id: selectedVendorId.value,
+        status: 'active',
+    }, {
+        onSuccess: () => {
+            showInventoryModal.value = false;
+        },
+        onFinish: () => {
+            movingToInventory.value = false;
+        },
     });
 };
 
@@ -266,14 +296,14 @@ const moveToBucket = () => {
                 </div>
                 <div class="flex gap-3">
                     <button
-                        v-if="!item.is_added_to_inventory && !item.is_added_to_bucket"
+                        v-if="!item.is_added_to_inventory && !item.is_added_to_bucket && vendors.length > 0"
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-50"
                         :disabled="movingToInventory"
-                        @click="moveToInventory"
+                        @click="openInventoryModal"
                     >
                         <ArchiveBoxArrowDownIcon class="-ml-0.5 size-5" />
-                        {{ movingToInventory ? 'Moving...' : 'Move to Inventory' }}
+                        Move to Inventory
                     </button>
                     <button
                         v-if="!item.is_added_to_inventory && !item.is_added_to_bucket && buckets.length > 0"
@@ -534,6 +564,90 @@ const moveToBucket = () => {
                                 </div>
                             </dl>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Move to Inventory Modal -->
+        <div
+            v-if="showInventoryModal"
+            class="fixed inset-0 z-50 overflow-y-auto"
+            aria-labelledby="inventory-modal-title"
+            role="dialog"
+            aria-modal="true"
+        >
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                <!-- Backdrop -->
+                <div
+                    class="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75"
+                    @click="closeInventoryModal"
+                ></div>
+
+                <!-- Modal panel -->
+                <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 dark:bg-gray-800">
+                    <div class="absolute right-0 top-0 pr-4 pt-4">
+                        <button
+                            type="button"
+                            class="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none dark:bg-gray-800 dark:text-gray-500 dark:hover:text-gray-400"
+                            @click="closeInventoryModal"
+                        >
+                            <span class="sr-only">Close</span>
+                            <XMarkIcon class="size-6" />
+                        </button>
+                    </div>
+
+                    <div class="sm:flex sm:items-start">
+                        <div class="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-green-100 sm:mx-0 sm:size-10 dark:bg-green-900/30">
+                            <ArchiveBoxArrowDownIcon class="size-6 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left flex-1">
+                            <h3 id="inventory-modal-title" class="text-base font-semibold text-gray-900 dark:text-white">
+                                Move to Inventory
+                            </h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                A new product will be created and listed on the In Store channel.
+                            </p>
+                            <div class="mt-4 space-y-4">
+                                <!-- Vendor selection -->
+                                <div>
+                                    <label for="vendor-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Select Vendor <span class="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        id="vendor-select"
+                                        v-model="selectedVendorId"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    >
+                                        <option :value="null" disabled>Choose a vendor...</option>
+                                        <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
+                                            {{ vendor.name }}
+                                        </option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        The vendor who supplied this item.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex w-full justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 sm:w-auto disabled:opacity-50"
+                            :disabled="movingToInventory || !selectedVendorId"
+                            @click="moveToInventory"
+                        >
+                            {{ movingToInventory ? 'Creating Product...' : 'Move to Inventory' }}
+                        </button>
+                        <button
+                            type="button"
+                            class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                            @click="closeInventoryModal"
+                        >
+                            Cancel
+                        </button>
                     </div>
                 </div>
             </div>

@@ -1054,11 +1054,14 @@ class TransactionService
             $title = $productData['title'] ?? $item->title ?? 'Product';
             $handle = \Illuminate\Support\Str::slug($title).'-'.uniqid();
 
-            // Determine template from category
+            // Determine template from category (same template used for transaction items)
             $templateId = null;
             if ($item->category_id && $item->category) {
                 $templateId = $item->category->template_id;
             }
+
+            // Default to active status so it auto-lists on "In Store"
+            $status = $productData['status'] ?? Product::STATUS_ACTIVE;
 
             $product = Product::create([
                 'store_id' => $store->id,
@@ -1066,8 +1069,10 @@ class TransactionService
                 'description' => $productData['description'] ?? $item->description,
                 'category_id' => $productData['category_id'] ?? $item->category_id,
                 'template_id' => $templateId,
+                'vendor_id' => $productData['vendor_id'] ?? null,
                 'handle' => $handle,
-                'is_published' => false, // Draft so user can review
+                'status' => $status,
+                'is_published' => false,
             ]);
 
             $variant = ProductVariant::create([
@@ -1077,12 +1082,39 @@ class TransactionService
                 'cost' => $item->buy_price,
             ]);
 
-            // Transfer images from transaction item to product
+            // Copy attributes from transaction item to product_attribute_values
+            // Transaction item attributes are stored as JSON: {field_id: value}
+            if (! empty($item->attributes) && is_array($item->attributes)) {
+                foreach ($item->attributes as $fieldId => $value) {
+                    if ($value !== null && $value !== '') {
+                        \App\Models\ProductAttributeValue::create([
+                            'product_id' => $product->id,
+                            'product_template_field_id' => (int) $fieldId,
+                            'value' => (string) $value,
+                        ]);
+                    }
+                }
+            }
+
+            // Copy images from transaction item to product (don't transfer, keep both)
             $item->load('images');
             foreach ($item->images as $image) {
-                $image->update([
+                \App\Models\Image::create([
+                    'store_id' => $image->store_id,
                     'imageable_type' => Product::class,
                     'imageable_id' => $product->id,
+                    'path' => $image->path,
+                    'url' => $image->url,
+                    'thumbnail_url' => $image->thumbnail_url,
+                    'alt_text' => $image->alt_text,
+                    'disk' => $image->disk,
+                    'size' => $image->size,
+                    'mime_type' => $image->mime_type,
+                    'width' => $image->width,
+                    'height' => $image->height,
+                    'sort_order' => $image->sort_order,
+                    'is_primary' => $image->is_primary,
+                    'is_internal' => false, // Product images default to public
                 ]);
             }
 
@@ -1098,7 +1130,7 @@ class TransactionService
 
             $item->markAsAddedToInventory($product->id);
 
-            return $product->fresh(['variants', 'images']);
+            return $product->fresh(['variants', 'images', 'attributeValues']);
         });
     }
 

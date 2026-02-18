@@ -48,6 +48,7 @@ class GiaProductService
         Category $category,
         Store $store,
         int $userId,
+        ?int $vendorId = null,
     ): array {
         $errors = [];
 
@@ -78,6 +79,7 @@ class GiaProductService
             $category,
             $store,
             $userId,
+            $vendorId,
             $reportNumber,
             $secondReportNumber,
             $existingProduct,
@@ -111,6 +113,7 @@ class GiaProductService
                     $reportNumber,
                     $secondReportNumber,
                     $isEarrings,
+                    $vendorId,
                 );
             }
 
@@ -161,6 +164,7 @@ class GiaProductService
         string $reportNumber,
         ?string $secondReportNumber,
         bool $isEarrings,
+        ?int $vendorId = null,
     ): Product {
         $results = $report['results'] ?? [];
 
@@ -176,13 +180,14 @@ class GiaProductService
             $counter++;
         }
 
-        // Create product
+        // Create product (status=active triggers auto-listing on In Store channel)
         $product = Product::create([
             'store_id' => $store->id,
             'title' => $title,
             'handle' => $handle,
             'category_id' => $category->id,
             'template_id' => $template?->id,
+            'vendor_id' => $vendorId,
             'status' => Product::STATUS_ACTIVE,
             'is_published' => false,
             'is_draft' => false,

@@ -1843,8 +1843,17 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                 >
                                                     {{ item.description }}
                                                 </p>
-                                                <!-- Review Status -->
-                                                <div class="mt-2">
+                                                <!-- Status Badges -->
+                                                <div class="mt-2 flex flex-wrap gap-2">
+                                                    <!-- In Inventory Badge -->
+                                                    <span
+                                                        v-if="item.is_added_to_inventory"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                                                    >
+                                                        <ArchiveBoxIcon class="size-3.5" />
+                                                        In Inventory
+                                                    </span>
+                                                    <!-- Review Status -->
                                                     <span
                                                         v-if="item.reviewed_at"
                                                         class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -2054,8 +2063,17 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                 >
                                                     {{ item.description }}
                                                 </p>
-                                                <!-- Review Status -->
-                                                <div class="mt-2">
+                                                <!-- Status Badges -->
+                                                <div class="mt-2 flex flex-wrap gap-2">
+                                                    <!-- In Inventory Badge -->
+                                                    <span
+                                                        v-if="item.is_added_to_inventory"
+                                                        class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                                                    >
+                                                        <ArchiveBoxIcon class="size-3.5" />
+                                                        In Inventory
+                                                    </span>
+                                                    <!-- Review Status -->
                                                     <span
                                                         v-if="item.reviewed_at"
                                                         class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"

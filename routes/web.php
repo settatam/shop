@@ -297,6 +297,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('/move-to-bucket', [\App\Http\Controllers\Web\TransactionItemController::class, 'moveToBucket'])->name('move-to-bucket');
         Route::post('/review', [\App\Http\Controllers\Web\TransactionItemController::class, 'review'])->name('review');
         Route::post('/ai-research', [\App\Http\Controllers\Web\TransactionItemController::class, 'generateAiResearch'])->name('ai-research');
+        Route::post('/auto-populate-fields', [\App\Http\Controllers\Web\TransactionItemController::class, 'autoPopulateFields'])->name('auto-populate-fields');
         Route::post('/web-search', [\App\Http\Controllers\Web\TransactionItemController::class, 'webPriceSearch'])->name('web-search');
         Route::post('/share', [\App\Http\Controllers\Web\TransactionItemController::class, 'shareWithTeam'])->name('share');
         Route::post('/chat', [\App\Http\Controllers\Web\TransactionItemController::class, 'chatStream'])->name('chat');

@@ -12,6 +12,7 @@ use App\Models\Image;
 use App\Models\StoreUser;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
+use App\Models\Vendor;
 use App\Services\ActivityLogFormatter;
 use App\Services\AI\TransactionItemResearcher;
 use App\Services\Chat\ChatService;
@@ -96,6 +97,12 @@ class TransactionItemController extends Controller
             ])
             ->values();
 
+        // Load vendors for moving to inventory
+        $vendors = Vendor::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('transactions/items/Show', [
             'transaction' => $this->formatTransaction($transaction),
             'item' => $this->formatItem($item),
@@ -105,6 +112,7 @@ class TransactionItemController extends Controller
             'notes' => $notes,
             'buckets' => $buckets,
             'teamMembers' => $teamMembers,
+            'vendors' => $vendors,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($item)),
         ]);
     }
@@ -259,7 +267,17 @@ class TransactionItemController extends Controller
             return redirect()->back()->with('error', 'This item cannot be moved to inventory.');
         }
 
-        $product = $this->transactionService->moveItemToInventory($item);
+        $validated = $request->validate([
+            'vendor_id' => ['required', 'integer', 'exists:vendors,id'],
+            'status' => ['sometimes', 'string', 'in:draft,active'],
+        ]);
+
+        $productData = [
+            'vendor_id' => $validated['vendor_id'],
+            'status' => $validated['status'] ?? 'active',
+        ];
+
+        $product = $this->transactionService->moveItemToInventory($item, $productData);
 
         return redirect()->route('web.transactions.items.show', [$transaction, $item])
             ->with('success', "Item moved to inventory. Product #{$product->id} created.");
@@ -316,6 +334,29 @@ class TransactionItemController extends Controller
         $research = $researcher->generateResearch($item);
 
         return response()->json(['research' => $research]);
+    }
+
+    /**
+     * Auto-populate template fields using AI to identify the product.
+     */
+    public function autoPopulateFields(Transaction $transaction, TransactionItem $item): JsonResponse
+    {
+        $this->authorizeItem($transaction, $item);
+
+        if (! $item->category_id) {
+            return response()->json([
+                'error' => 'Please select a category first. The category determines which template fields to populate.',
+            ], 422);
+        }
+
+        $populator = app(\App\Services\AI\TemplateFieldPopulator::class);
+        $result = $populator->populateFields($item);
+
+        if (isset($result['error'])) {
+            return response()->json($result, 422);
+        }
+
+        return response()->json($result);
     }
 
     public function webPriceSearch(Transaction $transaction, TransactionItem $item): JsonResponse
