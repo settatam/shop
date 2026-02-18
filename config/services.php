@@ -127,4 +127,31 @@ return [
         'voice_id' => env('ELEVENLABS_VOICE_ID'),
     ],
 
+    'ebay' => [
+        'client_id' => env('EBAY_CLIENT_ID'),
+        'client_secret' => env('EBAY_CLIENT_SECRET'),
+        'redirect_uri' => env('EBAY_REDIRECT_URI'),
+        'sandbox' => env('EBAY_SANDBOX', true),
+    ],
+
+    'amazon' => [
+        'client_id' => env('AMAZON_CLIENT_ID'),
+        'client_secret' => env('AMAZON_CLIENT_SECRET'),
+        'redirect_uri' => env('AMAZON_REDIRECT_URI'),
+        'sandbox' => env('AMAZON_SANDBOX', true),
+    ],
+
+    'etsy' => [
+        'client_id' => env('ETSY_CLIENT_ID'),
+        'client_secret' => env('ETSY_CLIENT_SECRET'),
+        'redirect_uri' => env('ETSY_REDIRECT_URI'),
+    ],
+
+    'walmart' => [
+        'client_id' => env('WALMART_CLIENT_ID'),
+        'client_secret' => env('WALMART_CLIENT_SECRET'),
+        'redirect_uri' => env('WALMART_REDIRECT_URI'),
+        'sandbox' => env('WALMART_SANDBOX', true),
+    ],
+
 ];

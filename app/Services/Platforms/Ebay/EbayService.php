@@ -38,6 +38,8 @@ class EbayService extends BasePlatformService
 
     public function connect(Store $store, array $params = []): RedirectResponse
     {
+        $this->ensureConfigured();
+
         $scopes = implode(' ', $this->getRequiredScopes());
 
         $authUrl = "{$this->authBaseUrl}/oauth2/authorize?"
@@ -54,6 +56,8 @@ class EbayService extends BasePlatformService
 
     public function handleCallback(Request $request, Store $store): StoreMarketplace
     {
+        $this->ensureConfigured();
+
         $code = $request->input('code');
 
         $response = Http::withBasicAuth(
@@ -117,6 +121,8 @@ class EbayService extends BasePlatformService
 
     public function refreshToken(StoreMarketplace $connection): StoreMarketplace
     {
+        $this->ensureConfigured();
+
         if (! $connection->refresh_token) {
             throw new \Exception('No refresh token available');
         }
@@ -454,6 +460,29 @@ class EbayService extends BasePlatformService
             'https://api.ebay.com/oauth/api_scope/sell.account',
             'https://api.ebay.com/oauth/api_scope/commerce.notification.subscription',
         ];
+    }
+
+    protected function ensureConfigured(): void
+    {
+        $missing = [];
+
+        if (empty(config('services.ebay.client_id'))) {
+            $missing[] = 'EBAY_CLIENT_ID';
+        }
+
+        if (empty(config('services.ebay.client_secret'))) {
+            $missing[] = 'EBAY_CLIENT_SECRET';
+        }
+
+        if (empty(config('services.ebay.redirect_uri'))) {
+            $missing[] = 'EBAY_REDIRECT_URI';
+        }
+
+        if (! empty($missing)) {
+            throw new \Exception(
+                'eBay integration is not configured. Missing environment variables: '.implode(', ', $missing)
+            );
+        }
     }
 
     protected function mapEbayProduct(array $item, StoreMarketplace $connection): array

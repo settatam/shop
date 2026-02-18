@@ -600,24 +600,49 @@ class ProductController extends Controller
             'templateFields' => $templateFieldsWithValues,
             'activityLogs' => app(ActivityLogFormatter::class)->formatForSubject($product),
             'platformListings' => PlatformListing::where('product_id', $product->id)
-                ->with('storeMarketplace')
+                ->with(['storeMarketplace', 'salesChannel'])
                 ->get()
-                ->map(fn (PlatformListing $listing) => [
-                    'id' => $listing->id,
-                    'platform' => $listing->storeMarketplace->platform->value,
-                    'platform_label' => $listing->storeMarketplace->platform->label(),
-                    'platform_product_id' => $listing->external_listing_id,
-                    'status' => $listing->status,
-                    'listing_url' => $listing->listing_url,
-                    'price' => $listing->platform_price,
-                    'quantity' => $listing->platform_quantity,
-                    'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
-                    'error_message' => $listing->last_error,
-                    'marketplace' => [
-                        'id' => $listing->store_marketplace_id,
-                        'name' => $listing->storeMarketplace->name,
-                    ],
-                ]),
+                ->map(function (PlatformListing $listing) {
+                    // Handle external platforms (have storeMarketplace)
+                    if ($listing->storeMarketplace) {
+                        return [
+                            'id' => $listing->id,
+                            'platform' => $listing->storeMarketplace->platform->value,
+                            'platform_label' => $listing->storeMarketplace->platform->label(),
+                            'platform_product_id' => $listing->external_listing_id,
+                            'status' => $listing->status,
+                            'listing_url' => $listing->listing_url,
+                            'price' => $listing->platform_price,
+                            'quantity' => $listing->platform_quantity,
+                            'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
+                            'error_message' => $listing->last_error,
+                            'is_local' => false,
+                            'marketplace' => [
+                                'id' => $listing->store_marketplace_id,
+                                'name' => $listing->storeMarketplace->name,
+                            ],
+                        ];
+                    }
+
+                    // Handle local channels (In Store, etc.)
+                    return [
+                        'id' => $listing->id,
+                        'platform' => $listing->salesChannel?->code ?? 'local',
+                        'platform_label' => $listing->salesChannel?->name ?? 'In Store',
+                        'platform_product_id' => null,
+                        'status' => $listing->status,
+                        'listing_url' => null,
+                        'price' => $listing->platform_price,
+                        'quantity' => $listing->platform_quantity,
+                        'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
+                        'error_message' => $listing->last_error,
+                        'is_local' => true,
+                        'marketplace' => [
+                            'id' => $listing->sales_channel_id,
+                            'name' => $listing->salesChannel?->name ?? 'In Store',
+                        ],
+                    ];
+                }),
             'availableMarketplaces' => StoreMarketplace::where('store_id', $store->id)
                 ->sellingPlatforms()
                 ->connected()

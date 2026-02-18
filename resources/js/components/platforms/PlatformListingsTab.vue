@@ -31,12 +31,13 @@ interface PlatformListing {
     platform: string;
     platform_label: string;
     platform_product_id: string | null;
-    status: 'active' | 'inactive' | 'pending' | 'error';
+    status: 'active' | 'inactive' | 'pending' | 'error' | 'not_for_sale';
     listing_url: string | null;
     price: number | null;
     quantity: number | null;
     last_synced_at: string | null;
     error_message: string | null;
+    is_local: boolean;
     marketplace: {
         id: number;
         name: string;
@@ -224,6 +225,13 @@ function viewOnPlatform(listing: PlatformListing) {
         window.open(listing.listing_url, '_blank');
     }
 }
+
+function getListingEditUrl(listing: PlatformListing): string {
+    if (listing.is_local) {
+        return `/products/${props.productId}/channels/${listing.marketplace.id}`;
+    }
+    return `/products/${props.productId}/platforms/${listing.marketplace.id}`;
+}
 </script>
 
 <template>
@@ -368,7 +376,7 @@ function viewOnPlatform(listing: PlatformListing) {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem @click="router.visit(`/products/${productId}/platforms/${listing.marketplace.id}`)">
+                                <DropdownMenuItem @click="router.visit(getListingEditUrl(listing))">
                                     <PencilIcon class="h-4 w-4 mr-2" />
                                     Edit Listing Details
                                 </DropdownMenuItem>

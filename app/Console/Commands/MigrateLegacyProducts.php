@@ -183,6 +183,11 @@ class MigrateLegacyProducts extends Command
             // Migrate products
             $this->migrateProducts($legacyStoreId, $newStore, $isDryRun, $limit, $skipDeleted, $syncDeletes);
 
+            // Create "In Store" listings for active products
+            if (! $isDryRun) {
+                $this->createInStoreListings($newStore);
+            }
+
             if ($isDryRun) {
                 DB::rollBack();
                 $this->info('Dry run complete - no changes made');
@@ -1722,6 +1727,58 @@ class MigrateLegacyProducts extends Command
         return null;
     }
 
+    /**
+     * Create "In Store" listings for all active products that don't have one.
+     * This is needed because products created via DB::table() bypass the booted() event.
+     */
+    protected function createInStoreListings(Store $newStore): void
+    {
+        $this->info('Creating "In Store" listings for active products...');
+
+        // Get the default In Store channel
+        $inStoreChannel = \App\Models\SalesChannel::where('store_id', $newStore->id)
+            ->where('is_local', true)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $inStoreChannel) {
+            $this->warn('  No active "In Store" channel found - skipping');
+
+            return;
+        }
+
+        // Get active products without an In Store listing
+        $activeProducts = Product::where('store_id', $newStore->id)
+            ->where('status', Product::STATUS_ACTIVE)
+            ->whereDoesntHave('platformListings', function ($query) use ($inStoreChannel) {
+                $query->where('sales_channel_id', $inStoreChannel->id);
+            })
+            ->get();
+
+        $created = 0;
+        foreach ($activeProducts as $product) {
+            $defaultVariant = $product->variants()->first();
+
+            \App\Models\PlatformListing::create([
+                'sales_channel_id' => $inStoreChannel->id,
+                'store_marketplace_id' => null,
+                'product_id' => $product->id,
+                'product_variant_id' => $defaultVariant?->id,
+                'status' => \App\Models\PlatformListing::STATUS_ACTIVE,
+                'platform_price' => $defaultVariant?->price ?? 0,
+                'platform_quantity' => $defaultVariant?->quantity ?? 0,
+                'platform_data' => [
+                    'title' => $product->title,
+                    'description' => $product->description,
+                ],
+                'published_at' => now(),
+            ]);
+            $created++;
+        }
+
+        $this->line("  Created {$created} 'In Store' listings");
+    }
+
     protected function cleanupExistingProducts(Store $newStore): void
     {
         $this->warn('Cleaning up existing products...');
@@ -1733,6 +1790,10 @@ class MigrateLegacyProducts extends Command
         Image::where('imageable_type', 'App\\Models\\Product')
             ->whereIn('imageable_id', $productIds)
             ->delete();
+
+        // Delete platform listings for these products
+        \App\Models\PlatformListing::whereIn('product_id', $productIds)->forceDelete();
+
         ProductVariant::whereIn('product_id', $productIds)->forceDelete();
         Product::where('store_id', $newStore->id)->forceDelete();
 
