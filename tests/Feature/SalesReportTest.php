@@ -238,4 +238,138 @@ class SalesReportTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/csv; charset=utf-8');
     }
+
+    public function test_can_view_unified_buys_report(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'type' => Transaction::TYPE_IN_STORE,
+            'status' => Transaction::STATUS_PAYMENT_PROCESSED,
+            'estimated_value' => 500,
+            'final_offer' => 400,
+            'payment_processed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/buys');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/buys/Index')
+            ->has('dailyData')
+            ->has('totals')
+            ->has('month')
+        );
+    }
+
+    public function test_can_view_unified_buys_monthly_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/buys/monthly');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/buys/Monthly')
+            ->has('monthlyData')
+            ->has('totals')
+        );
+    }
+
+    public function test_can_view_unified_buys_yearly_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/buys/yearly');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/buys/Yearly')
+            ->has('yearlyData')
+            ->has('totals')
+        );
+    }
+
+    public function test_can_view_leads_funnel_report(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'type' => Transaction::TYPE_MAIL_IN,
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+            'estimated_value' => 500,
+            'offer_given_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/leads');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/leads/Index')
+            ->has('dailyData')
+            ->has('totals')
+            ->has('month')
+        );
+    }
+
+    public function test_can_view_leads_monthly_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/leads/monthly');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/leads/Monthly')
+            ->has('monthlyData')
+            ->has('totals')
+        );
+    }
+
+    public function test_can_view_leads_yearly_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/leads/yearly');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/leads/Yearly')
+            ->has('yearlyData')
+            ->has('totals')
+        );
+    }
+
+    public function test_can_view_daily_kits_report(): void
+    {
+        // Create a transaction with kit delivered but not returned
+        Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'type' => Transaction::TYPE_MAIL_IN,
+            'source' => Transaction::SOURCE_ONLINE,
+            'status' => Transaction::STATUS_KIT_DELIVERED,
+            'kit_sent_at' => now()->subDays(5),
+            'kit_delivered_at' => now()->subDays(3),
+            'items_received_at' => null,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/leads/daily-kits');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/leads/DailyKits')
+            ->has('kits')
+            ->has('daysBack')
+        );
+    }
+
+    public function test_can_export_leads_funnel_csv(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/leads/export');
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=utf-8');
+    }
 }

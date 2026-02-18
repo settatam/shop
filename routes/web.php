@@ -16,6 +16,7 @@ use App\Http\Controllers\Web\InvoiceController;
 use App\Http\Controllers\Web\LabelPrintController;
 use App\Http\Controllers\Web\LabelTemplateController;
 use App\Http\Controllers\Web\LayawayController;
+use App\Http\Controllers\Web\LeadsReportController;
 use App\Http\Controllers\Web\MemoController;
 use App\Http\Controllers\Web\OnboardingController;
 use App\Http\Controllers\Web\OrderController;
@@ -700,8 +701,17 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('yearly/export', [InventoryReportController::class, 'exportYearly'])->name('yearly.export');
     });
 
-    // Buys Reports
+    // Buys Reports - Unified (all sources)
     Route::prefix('reports/buys')->name('reports.buys.')->middleware('permission:reports.view_buys')->group(function () {
+        // Unified Buys Report (all sources)
+        Route::get('/', [BuysReportController::class, 'index'])->name('index');
+        Route::get('export', [BuysReportController::class, 'exportIndex'])->name('export');
+        Route::get('monthly', [BuysReportController::class, 'monthly'])->name('monthly');
+        Route::get('monthly/export', [BuysReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::get('yearly', [BuysReportController::class, 'yearly'])->name('yearly');
+        Route::get('yearly/export', [BuysReportController::class, 'exportYearly'])->name('yearly.export');
+
+        // Legacy routes (kept for backwards compatibility)
         // In-Store
         Route::get('in-store', [BuysReportController::class, 'inStore'])->name('in-store');
         Route::get('in-store/export', [BuysReportController::class, 'exportInStore'])->name('in-store.export');
@@ -725,6 +735,18 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('trade-in/monthly/export', [BuysReportController::class, 'exportTradeInMonthly'])->name('trade-in.monthly.export');
         Route::get('trade-in/yearly', [BuysReportController::class, 'tradeInYearly'])->name('trade-in.yearly');
         Route::get('trade-in/yearly/export', [BuysReportController::class, 'exportTradeInYearly'])->name('trade-in.yearly.export');
+    });
+
+    // Leads Reports (online transactions)
+    Route::prefix('reports/leads')->name('reports.leads.')->middleware('permission:reports.view_buys')->group(function () {
+        Route::get('/', [LeadsReportController::class, 'index'])->name('index');
+        Route::get('export', [LeadsReportController::class, 'exportIndex'])->name('export');
+        Route::get('monthly', [LeadsReportController::class, 'monthly'])->name('monthly');
+        Route::get('monthly/export', [LeadsReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::get('yearly', [LeadsReportController::class, 'yearly'])->name('yearly');
+        Route::get('yearly/export', [LeadsReportController::class, 'exportYearly'])->name('yearly.export');
+        Route::get('daily-kits', [LeadsReportController::class, 'dailyKits'])->name('daily-kits');
+        Route::get('daily-kits/export', [LeadsReportController::class, 'exportDailyKits'])->name('daily-kits.export');
     });
 
     // Transactions Reports

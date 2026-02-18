@@ -38,3 +38,9 @@ Schedule::command('metals:fetch-prices')
 Schedule::command('metals:fetch-prices')
     ->dailyAt('12:00') // noon
     ->withoutOverlapping();
+
+// Update shipment tracking status every hour (FedEx, UPS, USPS)
+Schedule::command('shipments:update-tracking')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();

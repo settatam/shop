@@ -29,6 +29,124 @@ class BuysReportController extends Controller
     }
 
     /**
+     * Unified Buys Report - Month to Date (daily breakdown).
+     * Shows ALL completed buys regardless of source (online, in-store, trade-in).
+     */
+    public function index(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($dailyData);
+
+        return Inertia::render('reports/buys/Index', [
+            'dailyData' => $dailyData,
+            'totals' => $totals,
+            'month' => now()->format('F Y'),
+        ]);
+    }
+
+    /**
+     * Unified Buys Report - Month over Month.
+     */
+    public function monthly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
+
+        $totals = $this->calculateTotals($monthlyData);
+
+        return Inertia::render('reports/buys/Monthly', [
+            'monthlyData' => $monthlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Unified Buys Report - Year over Year.
+     */
+    public function yearly(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getAllBuysYearlyData($store->id);
+        $totals = $this->calculateTotals($yearlyData);
+
+        return Inertia::render('reports/buys/Yearly', [
+            'yearlyData' => $yearlyData,
+            'totals' => $totals,
+        ]);
+    }
+
+    /**
+     * Export Unified MTD to CSV.
+     */
+    public function exportIndex(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->startOfMonth();
+        $endDate = now();
+
+        $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($dailyData, 'buys-mtd-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export Unified Monthly to CSV.
+     */
+    public function exportMonthly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = now()->subMonths(12)->startOfMonth();
+        $endDate = now()->endOfMonth();
+
+        $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
+
+        return $this->exportToCsv($monthlyData, 'buys-monthly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Export Unified Yearly to CSV.
+     */
+    public function exportYearly(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getAllBuysYearlyData($store->id);
+
+        return $this->exportToCsv($yearlyData, 'buys-yearly-'.now()->format('Y-m-d').'.csv');
+    }
+
+    /**
+     * Get all buys daily aggregated data (no type/source filter).
+     */
+    protected function getAllBuysDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getDailyBuysData($storeId, $startDate, $endDate, fn ($query) => $query);
+    }
+
+    /**
+     * Get all buys monthly aggregated data (no type/source filter).
+     */
+    protected function getAllBuysMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    {
+        return $this->getMonthlyBuysData($storeId, $startDate, $endDate, fn ($query) => $query);
+    }
+
+    /**
+     * Get all buys yearly aggregated data (no type/source filter).
+     */
+    protected function getAllBuysYearlyData(int $storeId)
+    {
+        return $this->getYearlyBuysData($storeId, fn ($query) => $query);
+    }
+
+    /**
      * In-Store Buys Report - Month to Date (daily breakdown).
      */
     public function inStore(Request $request): Response
