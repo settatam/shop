@@ -313,6 +313,27 @@ function handleGiaScanSuccess(productId: number) {
     // Reload widget data
     loadWidget();
 }
+
+// Handle marketplace price update (for existing listings or creating new ones)
+async function handleMarketplacePriceUpdate(productId: number, listingId: number | null, channelId: number, price: number) {
+    try {
+        if (listingId) {
+            // Update existing listing price
+            await axios.patch(`/products/${productId}/listings/${listingId}/price`, {
+                price,
+            });
+        } else {
+            // Create new listing with the price (draft status)
+            await axios.post(`/products/${productId}/channels/${channelId}/price`, {
+                price,
+            });
+            // Reload to get the new listing ID
+            loadWidget();
+        }
+    } catch (error) {
+        console.error('Failed to update marketplace price:', error);
+    }
+}
 </script>
 
 <template>
@@ -628,12 +649,13 @@ function handleGiaScanSuccess(productId: number) {
                 :show-totals="true"
                 :total-columns="[
                     { key: 'quantity', format: 'number' },
-                    { key: 'price', format: 'currency' },
+                    { key: 'cost', format: 'currency' },
                 ]"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
                 @bulk-action-modal="handleBulkActionModal"
+                @marketplace-price-update="handleMarketplacePriceUpdate"
             />
 
             <!-- Loading skeleton -->

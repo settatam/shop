@@ -6,6 +6,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductTemplateField;
+use App\Models\SalesChannel;
 use App\Models\StoreMarketplace;
 use App\Models\Tag;
 use App\Services\StoreContext;
@@ -24,6 +25,13 @@ class ProductsTable extends Table
     protected bool $isSearchable = true;
 
     protected string $noDataMessage = 'No products found. Create your first product to get started.';
+
+    /**
+     * All active sales channels for the current store.
+     *
+     * @var \Illuminate\Support\Collection<int, \App\Models\SalesChannel>|null
+     */
+    protected ?\Illuminate\Support\Collection $activeSalesChannels = null;
 
     /**
      * Define the table fields/columns.
@@ -50,14 +58,15 @@ class ProductsTable extends Table
                 'minWidth' => '12rem',
             ],
             [
-                'key' => 'category',
-                'label' => 'Category',
-                'sortable' => false,
+                'key' => 'cost',
+                'label' => 'Cost',
+                'sortable' => true,
             ],
             [
-                'key' => 'price',
-                'label' => 'Price',
-                'sortable' => true,
+                'key' => 'marketplaces',
+                'label' => 'Marketplaces',
+                'sortable' => false,
+                'minWidth' => '10rem',
             ],
             [
                 'key' => 'quantity',
@@ -65,18 +74,23 @@ class ProductsTable extends Table
                 'sortable' => true,
             ],
             [
-                'key' => 'marketplaces',
-                'label' => 'Listed On',
+                'key' => 'product_type',
+                'label' => 'Type',
                 'sortable' => true,
             ],
             [
-                'key' => 'status',
-                'label' => 'Status',
+                'key' => 'vendor',
+                'label' => 'Vendor',
+                'sortable' => true,
+            ],
+            [
+                'key' => 'date_of_purchase',
+                'label' => 'Date of Purchase',
                 'sortable' => true,
             ],
             [
                 'key' => 'created_at',
-                'label' => 'Created',
+                'label' => 'Date Entered',
                 'sortable' => true,
             ],
         ];
@@ -105,17 +119,17 @@ class ProductsTable extends Table
             // If Scout search returns no results, return empty query
             if (empty($this->scoutProductIds)) {
                 return Product::query()
-                    ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace'])
+                    ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace', 'platformListings.salesChannel', 'platformOverrides', 'vendor'])
                     ->whereRaw('1 = 0'); // Return empty result set
             }
 
             $query = Product::query()
-                ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace'])
+                ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace', 'platformListings.salesChannel', 'platformOverrides', 'vendor'])
                 ->whereIn('id', $this->scoutProductIds)
                 ->where('store_id', $storeId);
         } else {
             $query = Product::query()
-                ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace'])
+                ->with(['category', 'brand', 'images', 'variants', 'tags', 'platformListings.marketplace', 'platformListings.salesChannel', 'platformOverrides', 'vendor'])
                 ->where('store_id', $storeId);
         }
 
@@ -259,6 +273,14 @@ class ProductsTable extends Table
      */
     public function data(?array $filter): array
     {
+        $storeId = data_get($filter, 'store_id') ?? app(StoreContext::class)->getCurrentStoreId();
+
+        // Load all active sales channels for the store
+        $this->activeSalesChannels = SalesChannel::where('store_id', $storeId)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+
         $query = $this->query($filter);
 
         // Sorting
@@ -309,9 +331,8 @@ class ProductsTable extends Table
     protected function formatProduct(Product $product): array
     {
         $primaryImage = $product->images->firstWhere('is_primary', true) ?? $product->images->first();
-        $price = $product->has_variants
-            ? $product->variants->min('price')
-            : ($product->variants->first()?->price ?? 0);
+        $defaultVariant = $product->variants->first();
+        $cost = $defaultVariant?->cost ?? 0;
 
         return [
             'id' => [
@@ -326,7 +347,7 @@ class ProductsTable extends Table
             'sku' => [
                 'type' => 'link',
                 'href' => "/products/{$product->id}",
-                'data' => $product->variants->first()?->sku ?? "SKU-{$product->id}",
+                'data' => $defaultVariant?->sku ?? "SKU-{$product->id}",
                 'class' => 'font-mono text-sm',
             ],
             'title' => [
@@ -340,58 +361,29 @@ class ProductsTable extends Table
                     'color' => $tag->color,
                 ])->toArray(),
             ],
-            'category' => [
-                'data' => $product->category?->name ?? '-',
-            ],
-            'price' => [
+            'cost' => [
                 'type' => 'currency',
-                'data' => $price,
+                'data' => $cost,
                 'currency' => $product->currency_code ?? 'USD',
+            ],
+            'marketplaces' => [
+                'type' => 'marketplace_prices',
+                'data' => $this->getChannelPricesForProduct($product, $defaultVariant),
+                'product_id' => $product->id,
             ],
             'quantity' => [
                 'data' => $product->total_quantity,
                 'class' => 'text-center',
             ],
-            'marketplaces' => [
-                'type' => 'platforms',
-                'data' => $product->platformListings
-                    ->filter(fn ($listing) => $listing->status === 'active')
-                    ->map(function ($listing) {
-                        // Handle both external platforms (marketplace) and local channels (salesChannel)
-                        if ($listing->marketplace) {
-                            return [
-                                'id' => $listing->id,
-                                'platform' => $listing->marketplace->platform->value,
-                                'name' => $listing->marketplace->name ?: $listing->marketplace->platform->label(),
-                                'status' => $listing->status,
-                                'listing_url' => $listing->listing_url,
-                                'is_local' => false,
-                            ];
-                        }
-
-                        // Local channel (In Store)
-                        return [
-                            'id' => $listing->id,
-                            'platform' => $listing->salesChannel?->code ?? 'local',
-                            'name' => $listing->salesChannel?->name ?? 'In Store',
-                            'status' => $listing->status,
-                            'listing_url' => null,
-                            'is_local' => true,
-                        ];
-                    })->values()->toArray(),
+            'product_type' => [
+                'data' => $product->category?->name ?? '-',
             ],
-            'status' => [
-                'type' => 'badge',
-                'data' => $product->status_label,
-                'variant' => match ($product->status) {
-                    Product::STATUS_ACTIVE => 'success',
-                    Product::STATUS_DRAFT => 'warning',
-                    Product::STATUS_ARCHIVE => 'secondary',
-                    Product::STATUS_SOLD => 'info',
-                    Product::STATUS_IN_MEMO => 'purple',
-                    Product::STATUS_IN_REPAIR => 'orange',
-                    default => 'secondary',
-                },
+            'vendor' => [
+                'data' => $product->vendor?->name ?? '-',
+            ],
+            'date_of_purchase' => [
+                'data' => $product->date_of_purchase ? Carbon::parse($product->date_of_purchase)->format('M d, Y') : '-',
+                'class' => 'text-sm text-gray-500',
             ],
             'created_at' => [
                 'data' => Carbon::parse($product->created_at)->format('M d, Y'),
@@ -614,6 +606,44 @@ class ProductsTable extends Table
                 ],
             ],
         ];
+    }
+
+    /**
+     * Get all active channels with prices for a product.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getChannelPricesForProduct(Product $product, ?\App\Models\ProductVariant $defaultVariant): array
+    {
+        if (! $this->activeSalesChannels) {
+            return [];
+        }
+
+        $defaultPrice = $defaultVariant?->price ?? 0;
+        $listings = $product->platformListings->keyBy('sales_channel_id');
+        $overrides = $product->platformOverrides->keyBy('store_marketplace_id');
+
+        return $this->activeSalesChannels->map(function ($channel) use ($listings, $overrides, $defaultPrice) {
+            $listing = $listings->get($channel->id);
+            $override = $channel->store_marketplace_id ? $overrides->get($channel->store_marketplace_id) : null;
+
+            // Priority: listing price > override price > default price
+            $price = $listing?->platform_price ?? $override?->price ?? $defaultPrice;
+
+            // Status: use listing status if exists, otherwise 'draft' (unlisted)
+            $status = $listing?->status ?? 'draft';
+
+            return [
+                'id' => $listing?->id,
+                'channel_id' => $channel->id,
+                'platform' => $channel->is_local ? $channel->code : $channel->type,
+                'name' => $channel->name,
+                'price' => $price,
+                'status' => $status,
+                'is_local' => $channel->is_local,
+                'is_listed' => $listing !== null && in_array($listing->status, ['active', 'pending']),
+            ];
+        })->values()->toArray();
     }
 
     /**

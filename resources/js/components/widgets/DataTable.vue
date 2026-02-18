@@ -37,7 +37,7 @@ function closeLightbox() {
 
 // Types for typed cells
 interface TypedCell {
-    type?: 'text' | 'link' | 'image' | 'badge' | 'status-badge' | 'tags' | 'currency' | 'review_action' | 'platforms';
+    type?: 'text' | 'link' | 'image' | 'badge' | 'status-badge' | 'tags' | 'currency' | 'review_action' | 'platforms' | 'marketplace_prices';
     data: unknown;
     href?: string;
     alt?: string;
@@ -49,6 +49,7 @@ interface TypedCell {
     reviewed?: boolean;
     transaction_id?: number;
     item_id?: number;
+    product_id?: number;
 }
 
 interface TagData {
@@ -114,6 +115,7 @@ const emit = defineEmits<{
     bulkAction: [action: string, ids: (number | string)[], config: Record<string, unknown>];
     bulkActionModal: [action: string, ids: (number | string)[]];
     reviewItem: [transactionId: number, itemId: number];
+    marketplacePriceUpdate: [productId: number, listingId: number | null, channelId: number, price: number];
 }>();
 
 // Review action state
@@ -128,6 +130,26 @@ function handleReviewClick(transactionId: number, itemId: number) {
 
 function clearReviewingState() {
     reviewingItemId.value = null;
+}
+
+// Parse currency string to number
+function parseCurrency(value: string): number {
+    const cleaned = value.replace(/[^0-9.-]/g, '');
+    return parseFloat(cleaned) || 0;
+}
+
+// Update marketplace price
+function updateMarketplacePrice(productId: number | undefined, listingId: number | null, channelId: number, event: Event) {
+    if (!productId) return;
+
+    const input = event.target as HTMLInputElement;
+    const newPrice = parseCurrency(input.value);
+
+    // Emit the update event for the parent to handle
+    emit('marketplacePriceUpdate', productId, listingId, channelId, newPrice);
+
+    // Format the input value
+    input.value = formatCurrency(newPrice, 'USD');
 }
 
 const searchTerm = ref(props.initialSearchTerm);
@@ -847,6 +869,55 @@ function exportToCsv() {
                                         </a>
                                     </template>
                                     <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+                                </div>
+                            </template>
+
+                            <template v-else-if="getCellValue(item, key).type === 'marketplace_prices'">
+                                <div class="flex flex-col gap-1.5 min-w-[160px]">
+                                    <template v-if="(getCellValue(item, key).data as any[])?.length > 0">
+                                        <div
+                                            v-for="platform in (getCellValue(item, key).data as any[])"
+                                            :key="platform.channel_id"
+                                            class="flex items-center gap-2"
+                                            :title="`${platform.name} - ${platform.is_listed ? 'Listed' : 'Draft'}`"
+                                        >
+                                            <!-- Platform icon or letter -->
+                                            <div
+                                                class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-semibold"
+                                                :class="platform.is_listed
+                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'"
+                                            >
+                                                <img
+                                                    v-if="!platform.is_local"
+                                                    :src="`/images/platforms/${platform.platform}.svg`"
+                                                    :alt="platform.name"
+                                                    class="h-3.5 w-3.5"
+                                                    @error="($event.target as HTMLImageElement).style.display = 'none'; ($event.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden')"
+                                                />
+                                                <span :class="{ 'hidden': !platform.is_local }">
+                                                    {{ platform.name.charAt(0).toUpperCase() }}
+                                                </span>
+                                            </div>
+                                            <!-- Price input -->
+                                            <input
+                                                type="text"
+                                                :value="formatCurrency(platform.price, 'USD')"
+                                                class="w-20 rounded border-gray-300 px-1.5 py-0.5 text-xs text-right dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                                :class="{ 'opacity-60': !platform.is_listed }"
+                                                @blur="updateMarketplacePrice(getCellValue(item, key).product_id, platform.id, platform.channel_id, $event)"
+                                                @keydown.enter="($event.target as HTMLInputElement).blur()"
+                                            />
+                                            <!-- Status indicator -->
+                                            <span
+                                                v-if="!platform.is_listed"
+                                                class="text-[9px] text-gray-400 dark:text-gray-500 uppercase"
+                                            >
+                                                draft
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <span v-else class="text-gray-400 dark:text-gray-500 text-xs">No listings</span>
                                 </div>
                             </template>
 

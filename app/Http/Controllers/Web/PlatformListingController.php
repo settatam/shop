@@ -322,4 +322,79 @@ class PlatformListingController extends Controller
             ],
         ];
     }
+
+    /**
+     * Update a listing's price directly (inline edit from products table).
+     */
+    public function updatePrice(Request $request, Product $product, PlatformListing $listing): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        // Verify the listing belongs to this product
+        if ($listing->product_id !== $product->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Listing does not belong to this product',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'price' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $listing->update([
+            'platform_price' => $validated['price'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Price updated successfully',
+            'price' => $listing->platform_price,
+        ]);
+    }
+
+    /**
+     * Set price for a channel, creating a draft listing if needed.
+     */
+    public function setChannelPrice(Request $request, Product $product, \App\Models\SalesChannel $channel): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $validated = $request->validate([
+            'price' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        // Check if listing already exists
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+
+        if ($listing) {
+            // Update existing listing
+            $listing->update([
+                'platform_price' => $validated['price'],
+            ]);
+        } else {
+            // Create new draft listing
+            $listing = PlatformListing::create([
+                'product_id' => $product->id,
+                'sales_channel_id' => $channel->id,
+                'store_marketplace_id' => $channel->store_marketplace_id,
+                'status' => 'draft',
+                'platform_price' => $validated['price'],
+                'platform_quantity' => $product->total_quantity,
+                'platform_data' => [
+                    'title' => $product->title,
+                    'description' => $product->description,
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Price set successfully',
+            'listing_id' => $listing->id,
+            'price' => $listing->platform_price,
+        ]);
+    }
 }
