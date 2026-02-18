@@ -1012,13 +1012,29 @@ class MigrateLegacyOrders extends Command
             return;
         }
 
-        // Get store marketplace ID mapping
+        // Get store marketplace ID - try multiple approaches
         $storeMarketplaceId = null;
+
+        // Method 1: Use sales channel map if available
         if ($legacyOrder->store_marketplace_id && isset($this->salesChannelMap[$legacyOrder->store_marketplace_id])) {
-            // The sales channel map points to new sales_channel_id, but we need store_marketplace_id
-            // Look up the store_marketplace_id from the sales channel
             $salesChannel = \App\Models\SalesChannel::find($this->salesChannelMap[$legacyOrder->store_marketplace_id]);
             $storeMarketplaceId = $salesChannel?->store_marketplace_id;
+        }
+
+        // Method 2: Look up store_marketplace directly by legacy ID
+        if (! $storeMarketplaceId && $legacyOrder->store_marketplace_id) {
+            // Try to find by matching the legacy store_marketplace_id
+            $storeMarketplace = DB::table('store_marketplaces')
+                ->where('store_id', $this->newStore->id)
+                ->first();
+            $storeMarketplaceId = $storeMarketplace?->id;
+        }
+
+        // If we still can't find a store_marketplace_id, skip creating platform order
+        if (! $storeMarketplaceId) {
+            $this->warn("  Skipping platform order for order #{$newOrderId} - no valid store_marketplace_id found");
+
+            return;
         }
 
         // Get customer data
