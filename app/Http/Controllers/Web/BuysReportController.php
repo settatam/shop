@@ -29,14 +29,26 @@ class BuysReportController extends Controller
     }
 
     /**
-     * Unified Buys Report - Month to Date (daily breakdown).
+     * Unified Buys Report - Daily breakdown with date range.
      * Shows ALL completed buys regardless of source (online, in-store, trade-in).
      */
     public function index(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $startDate = now()->startOfMonth();
-        $endDate = now();
+
+        // Parse date range from request, default to current month
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        // Ensure start is before end
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate);
 
@@ -45,8 +57,22 @@ class BuysReportController extends Controller
         return Inertia::render('reports/buys/Index', [
             'dailyData' => $dailyData,
             'totals' => $totals,
-            'month' => now()->format('F Y'),
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
         ]);
+    }
+
+    /**
+     * Get a human-readable label for the date range.
+     */
+    protected function getDateRangeLabel(Carbon $startDate, Carbon $endDate): string
+    {
+        if ($startDate->isSameMonth($endDate)) {
+            return $startDate->format('F Y');
+        }
+
+        return $startDate->format('M d, Y').' - '.$endDate->format('M d, Y');
     }
 
     /**
@@ -55,8 +81,20 @@ class BuysReportController extends Controller
     public function monthly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $startDate = now()->subMonths(12)->startOfMonth();
-        $endDate = now()->endOfMonth();
+
+        // Parse month/year range from request, default to last 12 months
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        // Ensure start is before end
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
 
@@ -65,6 +103,11 @@ class BuysReportController extends Controller
         return Inertia::render('reports/buys/Monthly', [
             'monthlyData' => $monthlyData,
             'totals' => $totals,
+            'startMonth' => $startDate->month,
+            'startYear' => $startDate->year,
+            'endMonth' => $endDate->month,
+            'endYear' => $endDate->year,
+            'dateRangeLabel' => $startDate->format('M Y').' - '.$endDate->format('M Y'),
         ]);
     }
 
@@ -84,17 +127,29 @@ class BuysReportController extends Controller
     }
 
     /**
-     * Export Unified MTD to CSV.
+     * Export Unified daily report to CSV.
      */
     public function exportIndex(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $startDate = now()->startOfMonth();
-        $endDate = now();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate);
 
-        return $this->exportToCsv($dailyData, 'buys-mtd-'.now()->format('Y-m-d').'.csv');
+        $filename = 'buys-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.csv';
+
+        return $this->exportToCsv($dailyData, $filename);
     }
 
     /**
@@ -103,12 +158,24 @@ class BuysReportController extends Controller
     public function exportMonthly(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $startDate = now()->subMonths(12)->startOfMonth();
-        $endDate = now()->endOfMonth();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
 
-        return $this->exportToCsv($monthlyData, 'buys-monthly-'.now()->format('Y-m-d').'.csv');
+        $filename = 'buys-monthly-'.$startDate->format('Y-m').'-to-'.$endDate->format('Y-m').'.csv';
+
+        return $this->exportToCsv($monthlyData, $filename);
     }
 
     /**

@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
@@ -32,7 +32,62 @@ interface Totals {
 const props = defineProps<{
     monthlyData: MonthRow[];
     totals: Totals;
+    startMonth: number;
+    startYear: number;
+    endMonth: number;
+    endYear: number;
+    dateRangeLabel: string;
 }>();
+
+// Date range filters
+const startMonth = ref(props.startMonth);
+const startYear = ref(props.startYear);
+const endMonth = ref(props.endMonth);
+const endYear = ref(props.endYear);
+
+const months = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' },
+];
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
+
+function applyDateFilter() {
+    router.get('/reports/buys/monthly', {
+        start_month: startMonth.value,
+        start_year: startYear.value,
+        end_month: endMonth.value,
+        end_year: endYear.value,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+function resetToLast12Months() {
+    const now = new Date();
+    const past = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+    startMonth.value = past.getMonth() + 1;
+    startYear.value = past.getFullYear();
+    endMonth.value = now.getMonth() + 1;
+    endYear.value = now.getFullYear();
+    applyDateFilter();
+}
+
+const exportUrl = computed(() => {
+    return `/reports/buys/monthly/export?start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
@@ -128,7 +183,7 @@ function viewBuys(row: MonthRow): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4">
             <!-- Header -->
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <h1
                         class="text-2xl font-semibold text-gray-900 dark:text-white"
@@ -136,30 +191,96 @@ function viewBuys(row: MonthRow): void {
                         Buys Report
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Month over Month - Past 13 Months
+                        Month over Month - {{ dateRangeLabel }}
                     </p>
                 </div>
-                <div class="flex items-center gap-4">
-                    <Link
-                        href="/reports/buys/yearly"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        View Year over Year
-                    </Link>
-                    <Link
-                        href="/reports/buys"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        View Month to Date
-                    </Link>
-                    <a
-                        href="/reports/buys/monthly/export"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
+                <div class="flex flex-wrap items-center gap-4">
+                    <!-- Date Range Filter -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1">
+                            <select
+                                v-model="startMonth"
+                                class="rounded-md border-gray-300 py-1.5 pr-8 pl-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option
+                                    v-for="month in months"
+                                    :key="month.value"
+                                    :value="month.value"
+                                >
+                                    {{ month.label }}
+                                </option>
+                            </select>
+                            <select
+                                v-model="startYear"
+                                class="rounded-md border-gray-300 py-1.5 pr-8 pl-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option v-for="year in years" :key="year" :value="year">
+                                    {{ year }}
+                                </option>
+                            </select>
+                        </div>
+                        <span class="text-gray-500 dark:text-gray-400">to</span>
+                        <div class="flex items-center gap-1">
+                            <select
+                                v-model="endMonth"
+                                class="rounded-md border-gray-300 py-1.5 pr-8 pl-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option
+                                    v-for="month in months"
+                                    :key="month.value"
+                                    :value="month.value"
+                                >
+                                    {{ month.label }}
+                                </option>
+                            </select>
+                            <select
+                                v-model="endYear"
+                                class="rounded-md border-gray-300 py-1.5 pr-8 pl-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option v-for="year in years" :key="year" :value="year">
+                                    {{ year }}
+                                </option>
+                            </select>
+                        </div>
+                        <button
+                            type="button"
+                            class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            @click="applyDateFilter"
+                        >
+                            Apply
+                        </button>
+                        <button
+                            type="button"
+                            class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            @click="resetToLast12Months"
+                        >
+                            Reset
+                        </button>
+                    </div>
                 </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="flex flex-wrap items-center gap-4">
+                <Link
+                    href="/reports/buys/yearly"
+                    class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                >
+                    View Year over Year
+                </Link>
+                <Link
+                    href="/reports/buys"
+                    class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                >
+                    View Daily
+                </Link>
+                <a
+                    :href="exportUrl"
+                    class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                >
+                    <ArrowDownTrayIcon class="size-4" />
+                    Export CSV
+                </a>
             </div>
 
             <!-- Stat Cards -->

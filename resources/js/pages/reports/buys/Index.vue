@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
 
@@ -30,8 +30,36 @@ interface Totals {
 const props = defineProps<{
     dailyData: DayRow[];
     totals: Totals;
-    month: string;
+    startDate: string;
+    endDate: string;
+    dateRangeLabel: string;
 }>();
+
+// Date range filters
+const startDate = ref(props.startDate);
+const endDate = ref(props.endDate);
+
+function applyDateFilter() {
+    router.get('/reports/buys', {
+        start_date: startDate.value,
+        end_date: endDate.value,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+function resetToCurrentMonth() {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    startDate.value = firstDay.toISOString().split('T')[0];
+    endDate.value = now.toISOString().split('T')[0];
+    applyDateFilter();
+}
+
+const exportUrl = computed(() => {
+    return `/reports/buys/export?start_date=${startDate.value}&end_date=${endDate.value}`;
+});
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
@@ -120,7 +148,7 @@ function viewBuys(row: DayRow): void {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4">
             <!-- Header -->
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1
                         class="text-2xl font-semibold text-gray-900 dark:text-white"
@@ -128,7 +156,7 @@ function viewBuys(row: DayRow): void {
                         Buys Report
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Month to Date - {{ month }}
+                        {{ dateRangeLabel }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
@@ -145,13 +173,47 @@ function viewBuys(row: DayRow): void {
                         View Yearly
                     </Link>
                     <a
-                        href="/reports/buys/export"
+                        :href="exportUrl"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ArrowDownTrayIcon class="size-4" />
                         Export CSV
                     </a>
                 </div>
+            </div>
+
+            <!-- Date Range Filter -->
+            <div class="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+                    <input
+                        v-model="startDate"
+                        type="date"
+                        class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+                    <input
+                        v-model="endDate"
+                        type="date"
+                        class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    />
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    @click="applyDateFilter"
+                >
+                    Apply
+                </button>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    @click="resetToCurrentMonth"
+                >
+                    Current Month
+                </button>
             </div>
 
             <!-- Stat Cards -->

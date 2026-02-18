@@ -260,7 +260,38 @@ class SalesReportTest extends TestCase
             ->component('reports/buys/Index')
             ->has('dailyData')
             ->has('totals')
-            ->has('month')
+            ->has('startDate')
+            ->has('endDate')
+            ->has('dateRangeLabel')
+        );
+    }
+
+    public function test_can_view_unified_buys_report_with_date_range(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'type' => Transaction::TYPE_IN_STORE,
+            'status' => Transaction::STATUS_PAYMENT_PROCESSED,
+            'estimated_value' => 500,
+            'final_offer' => 400,
+            'payment_processed_at' => now()->subDays(5),
+        ]);
+
+        $startDate = now()->subDays(10)->format('Y-m-d');
+        $endDate = now()->format('Y-m-d');
+
+        $response = $this->actingAs($this->user)
+            ->get("/reports/buys?start_date={$startDate}&end_date={$endDate}");
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/buys/Index')
+            ->has('dailyData')
+            ->has('totals')
+            ->where('startDate', $startDate)
+            ->where('endDate', $endDate)
         );
     }
 
@@ -274,6 +305,28 @@ class SalesReportTest extends TestCase
             ->component('reports/buys/Monthly')
             ->has('monthlyData')
             ->has('totals')
+            ->has('startMonth')
+            ->has('startYear')
+            ->has('endMonth')
+            ->has('endYear')
+            ->has('dateRangeLabel')
+        );
+    }
+
+    public function test_can_view_unified_buys_monthly_report_with_date_range(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/buys/monthly?start_month=1&start_year=2025&end_month=6&end_year=2025');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/buys/Monthly')
+            ->has('monthlyData')
+            ->has('totals')
+            ->where('startMonth', 1)
+            ->where('startYear', 2025)
+            ->where('endMonth', 6)
+            ->where('endYear', 2025)
         );
     }
 
