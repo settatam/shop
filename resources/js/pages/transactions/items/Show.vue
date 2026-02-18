@@ -130,6 +130,12 @@ interface Vendor {
     display_name?: string;
 }
 
+interface Warehouse {
+    id: number;
+    name: string;
+    is_default: boolean;
+}
+
 interface Props {
     transaction: Transaction;
     item: TransactionItem;
@@ -140,6 +146,7 @@ interface Props {
     buckets: Bucket[];
     teamMembers: TeamMember[];
     vendors: Vendor[];
+    warehouses: Warehouse[];
     activityLogs?: ActivityDay[];
 }
 
@@ -164,6 +171,8 @@ const openLightbox = (index: number) => {
 // Move to Inventory modal state
 const showInventoryModal = ref(false);
 const selectedVendorId = ref<number | null>(null);
+const selectedWarehouseId = ref<number | null>(props.warehouses.find(w => w.is_default)?.id ?? null);
+const inventoryQuantity = ref<number>(props.item.quantity || 1);
 
 // Move to Bucket modal state
 const showBucketModal = ref(false);
@@ -219,6 +228,8 @@ const margin = (() => {
 
 const openInventoryModal = () => {
     selectedVendorId.value = null;
+    selectedWarehouseId.value = props.warehouses.find(w => w.is_default)?.id ?? props.warehouses[0]?.id ?? null;
+    inventoryQuantity.value = props.item.quantity || 1;
     showInventoryModal.value = true;
 };
 
@@ -231,9 +242,19 @@ const moveToInventory = () => {
         alert('Please select a vendor.');
         return;
     }
+    if (!selectedWarehouseId.value) {
+        alert('Please select a warehouse.');
+        return;
+    }
+    if (inventoryQuantity.value < 1) {
+        alert('Quantity must be at least 1.');
+        return;
+    }
     movingToInventory.value = true;
     router.post(`/transactions/${props.transaction.id}/items/${props.item.id}/move-to-inventory`, {
         vendor_id: selectedVendorId.value,
+        warehouse_id: selectedWarehouseId.value,
+        quantity: inventoryQuantity.value,
         status: 'active',
     }, {
         onSuccess: () => {
@@ -748,7 +769,7 @@ const applyAutoPopulatedFields = () => {
                                 <!-- Vendor selection -->
                                 <div>
                                     <label for="vendor-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Select Vendor <span class="text-red-500">*</span>
+                                        Vendor <span class="text-red-500">*</span>
                                     </label>
                                     <select
                                         id="vendor-select"
@@ -760,8 +781,39 @@ const applyAutoPopulatedFields = () => {
                                             {{ vendor.company_name || vendor.name }}
                                         </option>
                                     </select>
+                                </div>
+
+                                <!-- Warehouse selection -->
+                                <div>
+                                    <label for="warehouse-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Warehouse <span class="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        id="warehouse-select"
+                                        v-model="selectedWarehouseId"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    >
+                                        <option :value="null" disabled>Choose a warehouse...</option>
+                                        <option v-for="warehouse in warehouses" :key="warehouse.id" :value="warehouse.id">
+                                            {{ warehouse.name }}{{ warehouse.is_default ? ' (Default)' : '' }}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <!-- Quantity input -->
+                                <div>
+                                    <label for="inventory-quantity" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Quantity <span class="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        id="inventory-quantity"
+                                        v-model.number="inventoryQuantity"
+                                        type="number"
+                                        min="1"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
                                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        The vendor who supplied this item.
+                                        Item cannot be active without a quantity of at least 1.
                                     </p>
                                 </div>
                             </div>
@@ -772,7 +824,7 @@ const applyAutoPopulatedFields = () => {
                         <button
                             type="button"
                             class="inline-flex w-full justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 sm:w-auto disabled:opacity-50"
-                            :disabled="movingToInventory || !selectedVendorId"
+                            :disabled="movingToInventory || !selectedVendorId || !selectedWarehouseId || inventoryQuantity < 1"
                             @click="moveToInventory"
                         >
                             {{ movingToInventory ? 'Creating Product...' : 'Move to Inventory' }}

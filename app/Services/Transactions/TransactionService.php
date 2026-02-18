@@ -1119,12 +1119,14 @@ class TransactionService
             }
 
             // Create inventory record
-            $warehouseId = $transaction->warehouse_id
+            $warehouseId = $productData['warehouse_id']
+                ?? $transaction->warehouse_id
                 ?? $this->storeContext->getDefaultWarehouseId();
 
             if ($warehouseId) {
                 $inventory = \App\Models\Inventory::getOrCreate($store->id, $variant->id, $warehouseId);
-                $quantity = $item->quantity ?? 1;
+                // Use provided quantity, fallback to item quantity, then default to 1
+                $quantity = $productData['quantity'] ?? $item->quantity ?? 1;
                 $inventory->receive($quantity, (float) $item->buy_price);
             }
 

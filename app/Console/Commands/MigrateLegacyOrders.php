@@ -517,8 +517,9 @@ class MigrateLegacyOrders extends Command
                 'tax_rate' => $this->toDecimal($legacyOrder->tax_rate),
                 'shipping_cost' => $this->toDecimal($legacyOrder->shipping_cost),
                 'discount_cost' => $this->toDecimal($legacyOrder->discount_cost),
-                'service_fee_value' => $this->toDecimal($legacyOrder->service_fee_value),
-                'service_fee_unit' => $this->mapServiceFeeUnit($legacyOrder->service_fee_unit ?? null),
+                // Legacy system stores service fees in credit_card_fees column
+                'service_fee_value' => $this->toDecimal($legacyOrder->credit_card_fees ?? $legacyOrder->service_fee_value),
+                'service_fee_unit' => $this->mapServiceFeeUnit($legacyOrder->service_fee_unit ?? 'fixed'),
                 'service_fee_reason' => $legacyOrder->service_fee_reason ?? '',
                 'invoice_number' => $this->getInvoiceNumber($legacyOrder),
                 'order_id' => $legacyOrder->order_id, // Maintain original order_id

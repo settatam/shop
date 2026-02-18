@@ -99,9 +99,15 @@ class TransactionItemController extends Controller
 
         // Load vendors for moving to inventory
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
-            ->orderBy('name')
+            ->orderByRaw('COALESCE(company_name, name)')
             ->get(['id', 'name', 'company_name']);
+
+        // Load warehouses for moving to inventory
+        $warehouses = \App\Models\Warehouse::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('is_default', 'desc')
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_default']);
 
         return Inertia::render('transactions/items/Show', [
             'transaction' => $this->formatTransaction($transaction),
@@ -113,6 +119,7 @@ class TransactionItemController extends Controller
             'buckets' => $buckets,
             'teamMembers' => $teamMembers,
             'vendors' => $vendors,
+            'warehouses' => $warehouses,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($item)),
         ]);
     }
@@ -269,12 +276,22 @@ class TransactionItemController extends Controller
 
         $validated = $request->validate([
             'vendor_id' => ['required', 'integer', 'exists:vendors,id'],
+            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'quantity' => ['required', 'integer', 'min:1'],
             'status' => ['sometimes', 'string', 'in:draft,active'],
         ]);
 
+        // An item cannot be active without a quantity
+        $status = $validated['status'] ?? 'active';
+        if ($validated['quantity'] < 1 && $status === 'active') {
+            $status = 'draft';
+        }
+
         $productData = [
             'vendor_id' => $validated['vendor_id'],
-            'status' => $validated['status'] ?? 'active',
+            'warehouse_id' => $validated['warehouse_id'],
+            'quantity' => $validated['quantity'],
+            'status' => $status,
         ];
 
         $product = $this->transactionService->moveItemToInventory($item, $productData);

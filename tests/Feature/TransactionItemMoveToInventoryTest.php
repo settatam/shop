@@ -242,13 +242,54 @@ class TransactionItemMoveToInventoryTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory");
+        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 1,
+        ]);
 
         $response->assertRedirect();
         $response->assertSessionHasErrors('vendor_id');
     }
 
-    public function test_move_item_via_post_with_vendor_id(): void
+    public function test_move_item_via_post_requires_warehouse_id(): void
+    {
+        $vendor = \App\Models\Vendor::factory()->create(['store_id' => $this->store->id]);
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+        ]);
+
+        $this->actingAs($this->user);
+
+        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
+            'vendor_id' => $vendor->id,
+            'quantity' => 1,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('warehouse_id');
+    }
+
+    public function test_move_item_via_post_requires_quantity(): void
+    {
+        $vendor = \App\Models\Vendor::factory()->create(['store_id' => $this->store->id]);
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+        ]);
+
+        $this->actingAs($this->user);
+
+        $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
+            'vendor_id' => $vendor->id,
+            'warehouse_id' => $this->warehouse->id,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('quantity');
+    }
+
+    public function test_move_item_via_post_with_all_required_fields(): void
     {
         $vendor = \App\Models\Vendor::factory()->create(['store_id' => $this->store->id]);
         $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
@@ -261,6 +302,8 @@ class TransactionItemMoveToInventoryTest extends TestCase
 
         $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
             'vendor_id' => $vendor->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 3,
         ]);
 
         $response->assertRedirect();
@@ -272,6 +315,14 @@ class TransactionItemMoveToInventoryTest extends TestCase
 
         $product = \App\Models\Product::find($item->product_id);
         $this->assertEquals($vendor->id, $product->vendor_id);
+
+        // Check inventory was created with correct quantity
+        $variant = $product->variants()->first();
+        $inventory = \App\Models\Inventory::where('product_variant_id', $variant->id)
+            ->where('warehouse_id', $this->warehouse->id)
+            ->first();
+        $this->assertNotNull($inventory);
+        $this->assertEquals(3, $inventory->quantity);
     }
 
     public function test_cannot_move_already_inventoried_item(): void
@@ -286,6 +337,8 @@ class TransactionItemMoveToInventoryTest extends TestCase
 
         $response = $this->post("/transactions/{$transaction->id}/items/{$item->id}/move-to-inventory", [
             'vendor_id' => $vendor->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 1,
         ]);
 
         $response->assertRedirect();
