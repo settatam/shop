@@ -6,6 +6,7 @@ use App\Models\Address;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Image;
+use App\Models\Status;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use Illuminate\Console\Command;
@@ -438,7 +439,7 @@ class MigrateLegacyTransactions extends Command
                 'legacy_status_name' => $legacyStatus?->name,
                 'legacy_payment_addresses' => $legacyPaymentAddresses->map(fn ($pa) => (array) $pa)->toArray(),
             ]),
-            'status_id' => null, // Don't use legacy status_id - it references a different statuses table
+            'status_id' => $this->getStatusIdForSlug($this->newStoreId, $statusName),
             'bin_location' => $legacyTransaction->bin_location,
             'customer_notes' => $legacyTransaction->pub_note ?? null,
             'internal_notes' => $legacyTransaction->private_note ?? null,
@@ -990,6 +991,40 @@ class MigrateLegacyTransactions extends Command
 
         // Default to pending
         return Transaction::STATUS_PENDING;
+    }
+
+    /**
+     * Get the status_id for a given status slug from the new store's statuses table.
+     *
+     * @param  int  $storeId  The new store ID
+     * @param  string  $statusSlug  The status slug (e.g., 'payment_processed')
+     * @return int|null The status ID or null if not found
+     */
+    protected function getStatusIdForSlug(int $storeId, string $statusSlug): ?int
+    {
+        static $statusCache = [];
+
+        $cacheKey = "{$storeId}:{$statusSlug}";
+
+        if (isset($statusCache[$cacheKey])) {
+            return $statusCache[$cacheKey];
+        }
+
+        $statusId = Status::where('store_id', $storeId)
+            ->where('slug', $statusSlug)
+            ->value('id');
+
+        $statusCache[$cacheKey] = $statusId;
+
+        if ($statusId === null) {
+            static $missingStatuses = [];
+            if (! isset($missingStatuses[$cacheKey])) {
+                $this->warn("  Status '{$statusSlug}' not found for store {$storeId}. Transaction will have null status_id.");
+                $missingStatuses[$cacheKey] = true;
+            }
+        }
+
+        return $statusId;
     }
 
     protected function mapActivitySlug(string $legacyActivity): string
