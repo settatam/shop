@@ -356,13 +356,29 @@ class ProductsTable extends Table
                 'type' => 'platforms',
                 'data' => $product->platformListings
                     ->filter(fn ($listing) => $listing->status === 'active')
-                    ->map(fn ($listing) => [
-                        'id' => $listing->id,
-                        'platform' => $listing->marketplace->platform->value,
-                        'name' => $listing->marketplace->name ?: $listing->marketplace->platform->label(),
-                        'status' => $listing->status,
-                        'listing_url' => $listing->listing_url,
-                    ])->values()->toArray(),
+                    ->map(function ($listing) {
+                        // Handle both external platforms (marketplace) and local channels (salesChannel)
+                        if ($listing->marketplace) {
+                            return [
+                                'id' => $listing->id,
+                                'platform' => $listing->marketplace->platform->value,
+                                'name' => $listing->marketplace->name ?: $listing->marketplace->platform->label(),
+                                'status' => $listing->status,
+                                'listing_url' => $listing->listing_url,
+                                'is_local' => false,
+                            ];
+                        }
+
+                        // Local channel (In Store)
+                        return [
+                            'id' => $listing->id,
+                            'platform' => $listing->salesChannel?->code ?? 'local',
+                            'name' => $listing->salesChannel?->name ?? 'In Store',
+                            'status' => $listing->status,
+                            'listing_url' => null,
+                            'is_local' => true,
+                        ];
+                    })->values()->toArray(),
             ],
             'status' => [
                 'type' => 'badge',
