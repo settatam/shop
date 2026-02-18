@@ -24,7 +24,7 @@ class MigrateLegacyOrders extends Command
                             {--limit=0 : Number of orders to migrate (0 for all)}
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing orders and start fresh}
-                            {--with-payments : Migrate payments for orders}
+                            {--skip-payments : Skip migrating payments for orders}
                             {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
 
     protected $description = 'Migrate orders, order items, and payments from the legacy database';
@@ -53,7 +53,7 @@ class MigrateLegacyOrders extends Command
         $newStoreId = $this->option('new-store-id') ? (int) $this->option('new-store-id') : null;
         $limit = (int) $this->option('limit');
         $isDryRun = $this->option('dry-run');
-        $withPayments = $this->option('with-payments');
+        $withPayments = ! $this->option('skip-payments'); // Payments are migrated by default
 
         $this->info("Starting order migration from legacy store ID: {$legacyStoreId}");
 
@@ -546,6 +546,14 @@ class MigrateLegacyOrders extends Command
             // Create invoice for this order
             $this->createOrderInvoice($legacyOrder, $newOrderId, $customerId, $userId, $totalPaid);
 
+            // Create platform order if this came from a marketplace (Shopify, etc.)
+            if ($legacyOrder->external_marketplace_id) {
+                $this->createPlatformOrder($legacyOrder, $newOrderId, $customerId);
+            }
+
+            // Migrate order addresses (shipping/billing)
+            $this->migrateOrderAddresses($legacyOrder, $newOrderId);
+
             if ($orderCount % 50 === 0) {
                 $this->line("  Processed {$orderCount} orders...");
             }
@@ -825,14 +833,35 @@ class MigrateLegacyOrders extends Command
             return Payment::METHOD_CASH;
         }
 
-        return match (strtolower($legacyMethod)) {
-            'cash' => Payment::METHOD_CASH,
-            'card', 'credit', 'credit_card', 'debit', 'debit_card' => Payment::METHOD_CARD,
-            'store_credit', 'credit' => Payment::METHOD_STORE_CREDIT,
+        $normalized = strtolower(trim($legacyMethod));
+
+        return match ($normalized) {
+            // Cash payments
+            'cash', 'cash on delivery', 'cash on delivery (cod)', 'cod' => Payment::METHOD_CASH,
+
+            // Card payments (credit/debit cards)
+            'card', 'credit_card', 'credit card', 'debit', 'debit_card', 'debit card',
+            'visa', 'mastercard', 'discover', 'amex', 'american express',
+            'shopify_payments', 'shopify payments', 'square', 'stripe' => Payment::METHOD_CARD,
+
+            // Store credit (must be checked before generic 'credit')
+            'store_credit', 'store credit' => Payment::METHOD_STORE_CREDIT,
+
+            // Generic credit - treat as card payment
+            'credit' => Payment::METHOD_CARD,
+
+            // Layaway
             'layaway' => Payment::METHOD_LAYAWAY,
+
+            // Check/cheque
             'check', 'cheque' => Payment::METHOD_CHECK,
-            'bank_transfer', 'wire', 'ach' => Payment::METHOD_BANK_TRANSFER,
-            'external', 'other' => Payment::METHOD_EXTERNAL,
+
+            // Bank transfers
+            'bank_transfer', 'bank transfer', 'wire', 'wire transfer', 'ach', 'eft' => Payment::METHOD_BANK_TRANSFER,
+
+            // External/other
+            'external', 'other', 'manual' => Payment::METHOD_EXTERNAL,
+
             default => Payment::METHOD_CASH,
         };
     }
@@ -955,5 +984,233 @@ class MigrateLegacyOrders extends Command
         $this->line("Total order items in store: {$itemCount}");
         $this->line("Total payments in store: {$paymentCount}");
         $this->line("Total invoices in store: {$invoiceCount}");
+
+        $platformOrderCount = DB::table('platform_orders')
+            ->whereIn('order_id', Order::where('store_id', $this->newStore->id)->pluck('id'))
+            ->count();
+        $this->line("Total platform orders in store: {$platformOrderCount}");
+    }
+
+    /**
+     * Create a platform order record for marketplace orders (Shopify, eBay, etc.)
+     */
+    protected function createPlatformOrder(object $legacyOrder, int $newOrderId, int $customerId): void
+    {
+        // Check if platform order already exists
+        $existingPlatformOrder = DB::table('platform_orders')
+            ->where('external_order_id', $legacyOrder->external_marketplace_id)
+            ->first();
+
+        if ($existingPlatformOrder) {
+            // Link to the new order if not already linked
+            if (! $existingPlatformOrder->order_id) {
+                DB::table('platform_orders')
+                    ->where('id', $existingPlatformOrder->id)
+                    ->update(['order_id' => $newOrderId]);
+            }
+
+            return;
+        }
+
+        // Get store marketplace ID mapping
+        $storeMarketplaceId = null;
+        if ($legacyOrder->store_marketplace_id && isset($this->salesChannelMap[$legacyOrder->store_marketplace_id])) {
+            // The sales channel map points to new sales_channel_id, but we need store_marketplace_id
+            // Look up the store_marketplace_id from the sales channel
+            $salesChannel = \App\Models\SalesChannel::find($this->salesChannelMap[$legacyOrder->store_marketplace_id]);
+            $storeMarketplaceId = $salesChannel?->store_marketplace_id;
+        }
+
+        // Get customer data
+        $customer = Customer::find($customerId);
+        $customerData = $customer ? [
+            'email' => $customer->email,
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'phone' => $customer->phone_number,
+        ] : null;
+
+        // Get order items for line_items
+        $legacyItems = DB::connection('legacy')
+            ->table('order_items')
+            ->where('order_id', $legacyOrder->id)
+            ->get();
+
+        $lineItems = $legacyItems->map(function ($item) {
+            return [
+                'sku' => $item->sku,
+                'title' => $item->title,
+                'quantity' => $item->quantity,
+                'price' => $this->toDecimal($item->price),
+                'discount' => $this->toDecimal($item->discount),
+                'tax' => $this->toDecimal($item->sales_tax ?? 0),
+                'external_id' => $item->external_marketplace_id,
+            ];
+        })->toArray();
+
+        // Get shipping address
+        $shippingAddress = $this->getLegacyOrderAddress($legacyOrder->id, 'shipping');
+        $billingAddress = $this->getLegacyOrderAddress($legacyOrder->id, 'billing');
+
+        // Determine platform status
+        $status = $this->mapPlatformOrderStatus($legacyOrder->status);
+
+        DB::table('platform_orders')->insert([
+            'store_marketplace_id' => $storeMarketplaceId,
+            'order_id' => $newOrderId,
+            'external_order_id' => $legacyOrder->external_marketplace_id,
+            'external_order_number' => $legacyOrder->order_id,
+            'status' => $status,
+            'fulfillment_status' => $legacyOrder->status === 'completed' ? 'fulfilled' : 'unfulfilled',
+            'payment_status' => in_array($legacyOrder->status, ['confirmed', 'completed']) ? 'paid' : 'pending',
+            'total' => $this->toDecimal($legacyOrder->total),
+            'subtotal' => $this->toDecimal($legacyOrder->sub_total),
+            'shipping_cost' => $this->toDecimal($legacyOrder->shipping_cost),
+            'tax' => $this->toDecimal($legacyOrder->sales_tax),
+            'discount' => $this->toDecimal($legacyOrder->discount_cost),
+            'currency' => 'USD',
+            'customer_data' => json_encode($customerData),
+            'shipping_address' => json_encode($shippingAddress),
+            'billing_address' => json_encode($billingAddress),
+            'line_items' => json_encode($lineItems),
+            'platform_data' => json_encode([
+                'legacy_id' => $legacyOrder->id,
+                'legacy_store_marketplace_id' => $legacyOrder->store_marketplace_id,
+                'migrated_from_legacy' => true,
+            ]),
+            'ordered_at' => $legacyOrder->date_of_purchase ?? $legacyOrder->created_at,
+            'last_synced_at' => now(),
+            'created_at' => $legacyOrder->created_at,
+            'updated_at' => $legacyOrder->updated_at,
+        ]);
+    }
+
+    /**
+     * Get legacy order address (shipping or billing).
+     */
+    protected function getLegacyOrderAddress(int $legacyOrderId, string $type): ?array
+    {
+        $table = $type === 'shipping' ? 'order_shipping_addresses' : 'order_billing_addresses';
+
+        $address = DB::connection('legacy')
+            ->table($table)
+            ->where('order_id', $legacyOrderId)
+            ->first();
+
+        if (! $address) {
+            return null;
+        }
+
+        // Get state code
+        $stateCode = null;
+        if (isset($address->state_id) && $address->state_id) {
+            $state = DB::connection('legacy')
+                ->table('states')
+                ->where('id', $address->state_id)
+                ->first();
+            $stateCode = $state?->code;
+        }
+
+        return [
+            'first_name' => $address->first_name ?? null,
+            'last_name' => $address->last_name ?? null,
+            'company' => $address->company ?? $address->company_name ?? null,
+            'address1' => $address->address ?? $address->street_address ?? null,
+            'address2' => $address->address2 ?? $address->street_address2 ?? null,
+            'city' => $address->city ?? null,
+            'province' => $stateCode ?? $address->state ?? null,
+            'province_code' => $stateCode,
+            'zip' => $address->zip ?? $address->postal_code ?? null,
+            'country' => 'US',
+            'country_code' => 'US',
+            'phone' => $address->phone ?? $address->phone_number ?? null,
+        ];
+    }
+
+    /**
+     * Migrate order shipping and billing addresses.
+     */
+    protected function migrateOrderAddresses(object $legacyOrder, int $newOrderId): void
+    {
+        // Migrate shipping address
+        $shippingAddress = $this->getLegacyOrderAddress($legacyOrder->id, 'shipping');
+        if ($shippingAddress) {
+            $this->createOrderAddress($newOrderId, $shippingAddress, 'shipping');
+        }
+
+        // Migrate billing address
+        $billingAddress = $this->getLegacyOrderAddress($legacyOrder->id, 'billing');
+        if ($billingAddress) {
+            $this->createOrderAddress($newOrderId, $billingAddress, 'billing');
+        }
+    }
+
+    /**
+     * Create an address record for an order.
+     */
+    protected function createOrderAddress(int $orderId, array $addressData, string $type): void
+    {
+        // Check if address already exists
+        $existingAddress = DB::table('addresses')
+            ->where('addressable_type', Order::class)
+            ->where('addressable_id', $orderId)
+            ->where('type', $type)
+            ->first();
+
+        if ($existingAddress) {
+            return;
+        }
+
+        // Get state_id from province_code
+        $stateId = null;
+        if (! empty($addressData['province_code'])) {
+            $state = DB::table('states')
+                ->where('code', $addressData['province_code'])
+                ->first();
+            $stateId = $state?->id;
+        }
+
+        DB::table('addresses')->insert([
+            'store_id' => $this->newStore->id,
+            'addressable_type' => Order::class,
+            'addressable_id' => $orderId,
+            'type' => $type,
+            'first_name' => $addressData['first_name'] ?? null,
+            'last_name' => $addressData['last_name'] ?? null,
+            'company' => $addressData['company'] ?? null,
+            'address' => $addressData['address1'] ?? null,
+            'address2' => $addressData['address2'] ?? null,
+            'city' => $addressData['city'] ?? null,
+            'state_id' => $stateId,
+            'country_id' => 1, // US
+            'zip' => $addressData['zip'] ?? null,
+            'phone' => $addressData['phone'] ?? null,
+            'is_shipping' => $type === 'shipping',
+            'is_billing' => $type === 'billing',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Map legacy order status to platform order status.
+     */
+    protected function mapPlatformOrderStatus(?string $legacyStatus): string
+    {
+        if (! $legacyStatus) {
+            return 'pending';
+        }
+
+        return match (strtolower($legacyStatus)) {
+            'draft' => 'pending',
+            'pending', 'awaiting_payment' => 'pending',
+            'confirmed', 'paid', 'payment_received' => 'paid',
+            'processing', 'in_progress' => 'paid',
+            'shipped', 'in_transit' => 'paid',
+            'delivered', 'completed', 'complete', 'fulfilled' => 'paid',
+            'cancelled', 'canceled', 'voided' => 'voided',
+            'refunded' => 'refunded',
+            default => 'pending',
+        };
     }
 }
