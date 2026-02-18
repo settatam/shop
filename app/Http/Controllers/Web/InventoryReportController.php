@@ -830,7 +830,7 @@ class InventoryReportController extends Controller
             }
         }
 
-        return $weeks;
+        return $weeks->reverse()->values();
     }
 
     /**
@@ -896,7 +896,7 @@ class InventoryReportController extends Controller
             }
         }
 
-        return $months;
+        return $months->reverse()->values();
     }
 
     /**
@@ -980,6 +980,6 @@ class InventoryReportController extends Controller
             ]);
         }
 
-        return $years;
+        return $years->reverse()->values();
     }
 }

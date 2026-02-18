@@ -123,7 +123,7 @@ class TransactionsReportController extends Controller
             $current->addDay();
         }
 
-        return $days;
+        return $days->reverse()->values();
     }
 
     /**
@@ -157,7 +157,7 @@ class TransactionsReportController extends Controller
             }
         }
 
-        return $weeks;
+        return $weeks->reverse()->values();
     }
 
     /**
@@ -183,7 +183,7 @@ class TransactionsReportController extends Controller
             }
         }
 
-        return $months;
+        return $months->reverse()->values();
     }
 
     /**
@@ -201,7 +201,7 @@ class TransactionsReportController extends Controller
             $years->push($this->getPeriodData($storeId, $yearStart, $yearEnd, (string) $year));
         }
 
-        return $years;
+        return $years->reverse()->values();
     }
 
     /**

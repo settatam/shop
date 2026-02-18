@@ -602,7 +602,7 @@ class BuysReportController extends Controller
             $current->addDay();
         }
 
-        return $days;
+        return $days->reverse()->values();
     }
 
     /**
@@ -661,7 +661,7 @@ class BuysReportController extends Controller
             $current->addYear();
         }
 
-        return $years;
+        return $years->reverse()->values();
     }
 
     /**
@@ -716,7 +716,7 @@ class BuysReportController extends Controller
             $current->addMonth();
         }
 
-        return $months;
+        return $months->reverse()->values();
     }
 
     /**

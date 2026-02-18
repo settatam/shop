@@ -192,7 +192,7 @@ class LeadsReportController extends Controller
             $current->addDay();
         }
 
-        return $days->toArray();
+        return $days->reverse()->values()->toArray();
     }
 
     /**
@@ -219,7 +219,7 @@ class LeadsReportController extends Controller
             $current->addMonth();
         }
 
-        return $months->toArray();
+        return $months->reverse()->values()->toArray();
     }
 
     /**
@@ -248,7 +248,7 @@ class LeadsReportController extends Controller
             $current->addYear();
         }
 
-        return $years->toArray();
+        return $years->reverse()->values()->toArray();
     }
 
     /**

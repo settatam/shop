@@ -31,8 +31,6 @@ class MigrateLegacyOrders extends Command
 
     protected array $orderMap = [];
 
-    protected array $customerMap = [];
-
     protected array $userMap = [];
 
     protected array $productMap = [];
@@ -105,9 +103,6 @@ class MigrateLegacyOrders extends Command
         try {
             DB::beginTransaction();
 
-            // Build customer mapping
-            $this->buildCustomerMapping($legacyStoreId);
-
             // Build user mapping
             $this->buildUserMapping($legacyStoreId);
 
@@ -148,13 +143,6 @@ class MigrateLegacyOrders extends Command
     {
         $basePath = storage_path('app/migration_maps');
 
-        // Load customer map
-        $customerMapFile = "{$basePath}/customer_map_{$legacyStoreId}.json";
-        if (file_exists($customerMapFile)) {
-            $this->customerMap = json_decode(file_get_contents($customerMapFile), true) ?? [];
-            $this->line('  Loaded '.count($this->customerMap).' customer mappings');
-        }
-
         // Load user map
         $userMapFile = "{$basePath}/user_map_{$legacyStoreId}.json";
         if (file_exists($userMapFile)) {
@@ -192,35 +180,6 @@ class MigrateLegacyOrders extends Command
         $this->line("  Order map saved to: {$orderMapFile}");
     }
 
-    protected function buildCustomerMapping(int $legacyStoreId): void
-    {
-        if (! empty($this->customerMap)) {
-            return;
-        }
-
-        $this->info('Building customer mapping (ID-preserving mode)...');
-
-        // Since we preserve customer IDs during migration, we just need to verify
-        // which customers exist in the new database. Use chunking to avoid memory issues.
-        $count = 0;
-        DB::connection('legacy')
-            ->table('customers')
-            ->where('store_id', $legacyStoreId)
-            ->select('id')
-            ->orderBy('id')
-            ->chunk(1000, function ($legacyCustomers) use (&$count) {
-                foreach ($legacyCustomers as $legacy) {
-                    // Since we preserve IDs, just check if the customer exists
-                    if (Customer::where('id', $legacy->id)->exists()) {
-                        $this->customerMap[$legacy->id] = $legacy->id;
-                        $count++;
-                    }
-                }
-            });
-
-        $this->line("  Mapped {$count} customers (ID-preserved)");
-    }
-
     /**
      * Normalize customer name for comparison.
      */
@@ -229,6 +188,203 @@ class MigrateLegacyOrders extends Command
         $name = trim(strtolower(($firstName ?? '').' '.($lastName ?? '')));
 
         return $name !== '' ? $name : null;
+    }
+
+    protected ?int $walkInCustomerId = null;
+
+    /**
+     * Get or create a customer for the order.
+     * Searches by email first, then phone. Creates from legacy if not found.
+     */
+    protected function getOrCreateCustomer(?int $legacyCustomerId, int $legacyStoreId): int
+    {
+        // If legacy order had no customer, use walk-in customer
+        if (! $legacyCustomerId) {
+            return $this->getOrCreateWalkInCustomer();
+        }
+
+        // Get legacy customer data
+        $legacy = DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $legacyCustomerId)
+            ->first();
+
+        if (! $legacy) {
+            // Legacy customer doesn't exist - use walk-in
+            return $this->getOrCreateWalkInCustomer();
+        }
+
+        // Search by email first (if email exists and is not empty)
+        if (! empty($legacy->email)) {
+            $existingByEmail = Customer::where('store_id', $this->newStore->id)
+                ->where('email', $legacy->email)
+                ->first();
+
+            if ($existingByEmail) {
+                return $existingByEmail->id;
+            }
+        }
+
+        // Search by phone number (if phone exists and is not empty)
+        if (! empty($legacy->phone_number)) {
+            $normalizedPhone = $this->normalizePhoneNumber($legacy->phone_number);
+            if ($normalizedPhone) {
+                $existingByPhone = Customer::where('store_id', $this->newStore->id)
+                    ->where(function ($query) use ($legacy, $normalizedPhone) {
+                        $query->where('phone_number', $legacy->phone_number)
+                            ->orWhere('phone_number', $normalizedPhone);
+                    })
+                    ->first();
+
+                if ($existingByPhone) {
+                    return $existingByPhone->id;
+                }
+            }
+        }
+
+        // Customer not found - create from legacy data with all fields
+        return $this->createCustomerFromLegacy($legacy);
+    }
+
+    /**
+     * Normalize phone number for comparison (digits only).
+     */
+    protected function normalizePhoneNumber(?string $phone): ?string
+    {
+        if (! $phone) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', $phone);
+
+        return strlen($digits) >= 10 ? $digits : null;
+    }
+
+    /**
+     * Create a customer from legacy data with all fields including addresses and images.
+     */
+    protected function createCustomerFromLegacy(object $legacy): int
+    {
+        // Get state code if state_id is set
+        $stateCode = null;
+        if ($legacy->state_id) {
+            $state = DB::connection('legacy')
+                ->table('states')
+                ->where('id', $legacy->state_id)
+                ->first();
+            $stateCode = $state?->code;
+        }
+
+        $customer = Customer::create([
+            'store_id' => $this->newStore->id,
+            'first_name' => $legacy->first_name ?: 'Unknown',
+            'last_name' => $legacy->last_name ?: 'Customer',
+            'email' => $legacy->email ?: null,
+            'phone_number' => $legacy->phone_number ?: null,
+            'address' => $legacy->street_address ?? null,
+            'address2' => $legacy->street_address2 ?? null,
+            'city' => $legacy->city ?? null,
+            'state' => $stateCode,
+            'zip' => $legacy->zip ?? null,
+            'country_id' => $legacy->country_id ?? null,
+            'state_id' => $legacy->state_id ?? null,
+            'company_name' => $legacy->company_name ?? null,
+            'ethnicity' => $legacy->ethnicity ?? null,
+            'photo' => $legacy->drivers_license_photo ?? $legacy->photo ?? null,
+            'accepts_marketing' => $legacy->accepts_marketing ?? false,
+            'is_active' => $legacy->is_active ?? true,
+            'number_of_sales' => $legacy->number_of_sales ?? 0,
+            'number_of_buys' => $legacy->number_of_buys ?? 0,
+            'last_sales_date' => $legacy->last_sales_date ?? null,
+            'created_at' => $legacy->created_at,
+            'updated_at' => $legacy->updated_at,
+        ]);
+
+        // Migrate customer addresses
+        $this->migrateCustomerAddresses($legacy->id, $customer);
+
+        return $customer->id;
+    }
+
+    /**
+     * Migrate addresses for a customer from legacy database.
+     */
+    protected function migrateCustomerAddresses(int $legacyCustomerId, Customer $customer): void
+    {
+        $legacyAddresses = DB::connection('legacy')
+            ->table('addresses')
+            ->where('addressable_type', 'App\\Models\\Customer')
+            ->where('addressable_id', $legacyCustomerId)
+            ->get();
+
+        foreach ($legacyAddresses as $legacyAddress) {
+            // Check if address already exists
+            $existingAddress = DB::table('addresses')
+                ->where('addressable_type', Customer::class)
+                ->where('addressable_id', $customer->id)
+                ->where('address', $legacyAddress->address)
+                ->first();
+
+            if ($existingAddress) {
+                continue;
+            }
+
+            DB::table('addresses')->insert([
+                'store_id' => $this->newStore->id,
+                'addressable_type' => Customer::class,
+                'addressable_id' => $customer->id,
+                'type' => $legacyAddress->type ?? 'primary',
+                'first_name' => $legacyAddress->first_name ?? $customer->first_name,
+                'last_name' => $legacyAddress->last_name ?? $customer->last_name,
+                'company' => $legacyAddress->company ?? $legacyAddress->company_name ?? null,
+                'address' => $legacyAddress->address,
+                'address2' => $legacyAddress->address2,
+                'city' => $legacyAddress->city,
+                'state_id' => $legacyAddress->state_id,
+                'country_id' => $legacyAddress->country_id ?? 1,
+                'zip' => $legacyAddress->zip,
+                'phone' => $legacyAddress->phone ?? null,
+                'is_default' => (bool) ($legacyAddress->is_default ?? false),
+                'is_shipping' => (bool) ($legacyAddress->is_shipping ?? false),
+                'is_billing' => (bool) ($legacyAddress->is_billing ?? false),
+                'created_at' => $legacyAddress->created_at,
+                'updated_at' => $legacyAddress->updated_at,
+            ]);
+        }
+    }
+
+    /**
+     * Get or create a generic "Walk-in Customer" for orders with no customer data.
+     */
+    protected function getOrCreateWalkInCustomer(): int
+    {
+        if ($this->walkInCustomerId) {
+            return $this->walkInCustomerId;
+        }
+
+        // Check if one already exists
+        $existing = Customer::where('store_id', $this->newStore->id)
+            ->where('first_name', 'Walk-in')
+            ->where('last_name', 'Customer')
+            ->first();
+
+        if ($existing) {
+            $this->walkInCustomerId = $existing->id;
+
+            return $existing->id;
+        }
+
+        // Create new
+        $customer = Customer::create([
+            'store_id' => $this->newStore->id,
+            'first_name' => 'Walk-in',
+            'last_name' => 'Customer',
+            'is_active' => true,
+        ]);
+
+        $this->walkInCustomerId = $customer->id;
+
+        return $customer->id;
     }
 
     protected function buildUserMapping(int $legacyStoreId): void
@@ -314,11 +470,8 @@ class MigrateLegacyOrders extends Command
                 continue;
             }
 
-            // Map customer
-            $customerId = null;
-            if ($legacyOrder->customer_id && isset($this->customerMap[$legacyOrder->customer_id])) {
-                $customerId = $this->customerMap[$legacyOrder->customer_id];
-            }
+            // Map customer - create if doesn't exist
+            $customerId = $this->getOrCreateCustomer($legacyOrder->customer_id, $legacyStoreId);
 
             // Map user
             $userId = null;
@@ -702,26 +855,24 @@ class MigrateLegacyOrders extends Command
 
     /**
      * Get invoice number from legacy order.
-     * Prefixes with store ID to ensure global uniqueness.
+     * Maintains the original order number exactly as is.
      */
     protected function getInvoiceNumber(object $legacyOrder, ?int $newOrderId = null): string
     {
-        $storePrefix = 'S'.$this->newStore->id.'-';
-
         // Use order_id if it's set and not "0"
         if (! empty($legacyOrder->order_id) && $legacyOrder->order_id !== '0') {
-            return $storePrefix.$legacyOrder->order_id;
+            return $legacyOrder->order_id;
         }
 
         // Fall back to invoice_number if set
         if (! empty($legacyOrder->invoice_number)) {
-            return $storePrefix.$legacyOrder->invoice_number;
+            return $legacyOrder->invoice_number;
         }
 
         // Generate a unique invoice number as last resort
         $id = $newOrderId ?? $legacyOrder->id;
 
-        return $storePrefix.'INV-'.strtoupper(substr(md5((string) $id), 0, 8));
+        return 'INV-'.strtoupper(substr(md5((string) $id), 0, 8));
     }
 
     protected function mapPaymentGateway(?int $legacyGatewayId): ?string

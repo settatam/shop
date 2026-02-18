@@ -1087,7 +1087,7 @@ class SalesReportController extends Controller
             $current->addMonth();
         }
 
-        return $months;
+        return $months->reverse()->values();
     }
 
     /**
@@ -1194,6 +1194,6 @@ class SalesReportController extends Controller
             $current->addDay();
         }
 
-        return $days;
+        return $days->reverse()->values();
     }
 }
