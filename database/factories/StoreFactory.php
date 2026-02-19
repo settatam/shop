@@ -72,4 +72,14 @@ class StoreFactory extends Factory
             'tax_id_number' => $taxId,
         ]);
     }
+
+    /**
+     * Configure the store to have online buys workflow enabled.
+     */
+    public function withOnlineBuysWorkflow(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'metal_price_settings' => ['online_buys_workflow' => true],
+        ]);
+    }
 }

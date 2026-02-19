@@ -256,6 +256,11 @@ class Store extends Model
         return $this->hasMany(TransactionPayout::class);
     }
 
+    public function payoutExports(): HasMany
+    {
+        return $this->hasMany(PayoutExport::class);
+    }
+
     public function buckets(): HasMany
     {
         return $this->hasMany(Bucket::class);
@@ -284,6 +289,35 @@ class Store extends Model
     public function agentLearnings(): HasMany
     {
         return $this->hasMany(AgentLearning::class);
+    }
+
+    /**
+     * Check if this store has the online buys workflow enabled.
+     * Stores 43 and 44 have this by default, or any store with the setting enabled.
+     */
+    public function hasOnlineBuysWorkflow(): bool
+    {
+        // Hardcoded stores that have this workflow
+        $onlineBuysStores = [43, 44];
+
+        if (in_array($this->id, $onlineBuysStores)) {
+            return true;
+        }
+
+        // Check for store setting (can be enabled via admin)
+        return (bool) $this->getSetting('online_buys_workflow', false);
+    }
+
+    /**
+     * Get a store setting value.
+     */
+    public function getSetting(string $key, mixed $default = null): mixed
+    {
+        // Check if store has a settings relationship or JSON column
+        // For now we'll check the metal_price_settings array or a dedicated settings column
+        $settings = $this->metal_price_settings ?? [];
+
+        return $settings[$key] ?? $default;
     }
 
     /**

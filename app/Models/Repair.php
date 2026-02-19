@@ -172,6 +172,11 @@ class Repair extends Model implements Payable
         return $this->morphMany(Payment::class, 'payable');
     }
 
+    public function vendorPayments(): HasMany
+    {
+        return $this->hasMany(RepairVendorPayment::class);
+    }
+
     // Status scopes
     public function scopePending($query)
     {

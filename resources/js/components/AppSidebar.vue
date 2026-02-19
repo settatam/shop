@@ -16,7 +16,7 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem, type Store } from '@/types';
 import { usePage } from '@inertiajs/vue3';
-import { ArchiveIcon, Banknotes, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, MessageSquare, Package, ShoppingCart, Plug, ChevronDown, Users, Store as StoreIcon } from 'lucide-vue-next';
+import { ArchiveIcon, Banknote, BarChart3, BookOpen, Building2, CreditCard, FileText, Folder, FolderTree, LayoutGrid, MessageSquare, Package, ShoppingCart, Plug, ChevronDown, Users, Store as StoreIcon, TruckIcon } from 'lucide-vue-next';
 
 const page = usePage();
 
@@ -25,11 +25,17 @@ const currentStore = computed(() => page.props.currentStore as Store | undefined
 
 const showStoreSwitcher = ref(false);
 
-const mainNavItems: NavItem[] = [
+// Base navigation items
+const baseNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Leads',
+        href: '/leads',
+        icon: TruckIcon,
     },
     {
         title: 'Products',
@@ -46,7 +52,7 @@ const mainNavItems: NavItem[] = [
         icon: Users,
         children: [
             { title: 'All Customers', href: '/customers' },
-            { title: 'Lead Sources', href: '/leads' },
+            { title: 'Lead Sources', href: '/settings/lead-sources' },
         ],
     },
     {
@@ -64,7 +70,7 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Buys',
-        icon: Banknotes,
+        icon: Banknote,
         children: [
             { title: 'By Transaction', href: '/buys' },
             { title: 'By Item', href: '/buys/items' },
@@ -114,6 +120,9 @@ const mainNavItems: NavItem[] = [
         ],
     },
 ];
+
+// Main nav items - use base items directly
+const mainNavItems = computed(() => baseNavItems);
 
 const footerNavItems: NavItem[] = [
     {

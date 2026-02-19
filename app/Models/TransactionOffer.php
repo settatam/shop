@@ -20,6 +20,13 @@ class TransactionOffer extends Model
 
     public const STATUS_SUPERSEDED = 'superseded';
 
+    // Tier constants
+    public const TIER_GOOD = 'good';
+
+    public const TIER_BETTER = 'better';
+
+    public const TIER_BEST = 'best';
+
     /**
      * @var array<int, string>
      */
@@ -27,6 +34,10 @@ class TransactionOffer extends Model
         'transaction_id',
         'user_id',
         'amount',
+        'reasoning',
+        'images',
+        'tier',
+        'expires_at',
         'status',
         'admin_notes',
         'customer_response',
@@ -42,7 +53,44 @@ class TransactionOffer extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'images' => 'array',
+            'expires_at' => 'datetime',
             'responded_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Check if the offer has expired.
+     */
+    public function isExpired(): bool
+    {
+        return $this->expires_at && $this->expires_at->isPast();
+    }
+
+    /**
+     * Get the tier label.
+     */
+    public function getTierLabelAttribute(): ?string
+    {
+        return match ($this->tier) {
+            self::TIER_GOOD => 'Good',
+            self::TIER_BETTER => 'Better',
+            self::TIER_BEST => 'Best',
+            default => null,
+        };
+    }
+
+    /**
+     * Get available tiers.
+     *
+     * @return array<string, string>
+     */
+    public static function getTiers(): array
+    {
+        return [
+            self::TIER_GOOD => 'Good',
+            self::TIER_BETTER => 'Better',
+            self::TIER_BEST => 'Best',
         ];
     }
 

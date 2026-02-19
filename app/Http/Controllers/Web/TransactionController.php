@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateBuyTransactionRequest;
+use App\Jobs\GenerateBulkShippingLabels;
 use App\Models\Category;
 use App\Models\Image;
 use App\Models\NotificationChannel;
@@ -15,10 +16,14 @@ use App\Models\TransactionOffer;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
 use App\Services\Image\ImageService;
+use App\Services\Messaging\OfferEmailService;
+use App\Services\Messaging\SmsService;
 use App\Services\Notifications\NotificationManager;
+use App\Services\Offers\MultiOfferService;
 use App\Services\Payments\PayPalPayoutsService;
 use App\Services\Shipping\ShippingLabelService;
 use App\Services\StoreContext;
+use App\Services\Transactions\TransactionPaymentService;
 use App\Services\Transactions\TransactionService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -1077,6 +1082,353 @@ class TransactionController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    // Online Buys Workflow - Bulk Operations (Stores 43/44)
+
+    /**
+     * Generate shipping labels for multiple online transactions in bulk.
+     * Only available for stores with online buys workflow (43/44).
+     */
+    public function bulkGenerateLabels(Request $request): RedirectResponse|\Illuminate\Http\JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Please select a store first.');
+        }
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return back()->with('error', 'Bulk label generation is only available for online buys workflow.');
+        }
+
+        $validated = $request->validate([
+            'transaction_ids' => 'required|array|min:1',
+            'transaction_ids.*' => 'integer|exists:transactions,id',
+            'label_type' => 'required|string|in:outbound,return',
+            'service_type' => 'nullable|string|in:'.implode(',', array_keys(ShippingLabelService::getServiceTypes())),
+            'packaging_type' => 'nullable|string|in:'.implode(',', array_keys(ShippingLabelService::getPackagingTypes())),
+        ]);
+
+        $options = array_filter([
+            'service_type' => $validated['service_type'] ?? null,
+            'packaging_type' => $validated['packaging_type'] ?? null,
+        ]);
+
+        // Dispatch background job for bulk label generation
+        GenerateBulkShippingLabels::dispatch(
+            $store,
+            $validated['transaction_ids'],
+            $validated['label_type'],
+            $options,
+            auth()->id()
+        );
+
+        return back()->with('success', 'Bulk label generation started. You will be notified when complete.');
+    }
+
+    /**
+     * Mark multiple online transactions as paid in bulk.
+     * Only available for stores with online buys workflow (43/44).
+     */
+    public function bulkMarkPaid(Request $request, TransactionPaymentService $paymentService): RedirectResponse|\Illuminate\Http\JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Please select a store first.');
+        }
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return back()->with('error', 'Bulk mark paid is only available for online buys workflow.');
+        }
+
+        $validated = $request->validate([
+            'transaction_ids' => 'required|array|min:1',
+            'transaction_ids.*' => 'integer|exists:transactions,id',
+            'payment_method' => 'nullable|string|in:cash,check,store_credit,ach,paypal,venmo,wire_transfer',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $paymentService->forStore($store);
+
+        $result = $paymentService->bulkMarkPaid(
+            $validated['transaction_ids'],
+            $validated['payment_method'] ?? null,
+            $validated['notes'] ?? null
+        );
+
+        if (! $result['success']) {
+            return back()->with('error', $result['error']);
+        }
+
+        $successCount = count($result['results']['success']);
+        $failCount = count($result['results']['failed']);
+
+        $message = "{$successCount} transaction(s) marked as paid.";
+        if ($failCount > 0) {
+            $message .= " {$failCount} transaction(s) failed.";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Submit multiple offer tiers for an online transaction.
+     * Only available for stores with online buys workflow (43/44).
+     */
+    public function submitMultipleOffers(
+        Request $request,
+        Transaction $transaction,
+        MultiOfferService $multiOfferService
+    ): RedirectResponse {
+        $this->authorizeTransaction($transaction);
+
+        $store = $transaction->store;
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return back()->with('error', 'Multiple offers feature is only available for online buys workflow.');
+        }
+
+        if (! $transaction->isOnline()) {
+            return back()->with('error', 'Multiple offers are only available for online transactions.');
+        }
+
+        $validated = $request->validate([
+            'offers' => 'required|array|min:1|max:3',
+            'offers.*.amount' => 'required|numeric|min:0.01',
+            'offers.*.tier' => 'required|string|in:good,better,best',
+            'offers.*.reasoning' => 'nullable|string|max:2000',
+            'offers.*.images' => 'nullable|array',
+            'offers.*.images.*' => 'integer|exists:images,id',
+            'offers.*.expires_at' => 'nullable|date|after:now',
+            'offers.*.admin_notes' => 'nullable|string|max:1000',
+            'send_notification' => 'nullable|boolean',
+        ]);
+
+        $result = $multiOfferService->createMultipleOffers(
+            $transaction,
+            $validated['offers'],
+            (bool) ($validated['send_notification'] ?? false)
+        );
+
+        if (! $result['success']) {
+            return back()->with('error', $result['error']);
+        }
+
+        $offerCount = $result['offers']->count();
+        $message = "{$offerCount} offer tier(s) created.";
+
+        if ($validated['send_notification'] ?? false) {
+            $message .= ' Customer notification sent.';
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Send a custom SMS to the customer for an online transaction.
+     * Only available for stores with online buys workflow (43/44).
+     */
+    public function sendCustomSms(
+        Request $request,
+        Transaction $transaction,
+        SmsService $smsService
+    ): RedirectResponse {
+        $this->authorizeTransaction($transaction);
+
+        $store = $transaction->store;
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return back()->with('error', 'Custom SMS is only available for online buys workflow.');
+        }
+
+        if (! $transaction->isOnline()) {
+            return back()->with('error', 'SMS messaging is only available for online transactions.');
+        }
+
+        if (! $transaction->customer?->phone_number) {
+            return back()->with('error', 'Customer has no phone number on file.');
+        }
+
+        $validated = $request->validate([
+            'message' => 'required|string|max:1600',
+            'template_id' => 'nullable|string',
+        ]);
+
+        $smsService->forStore($store);
+
+        // If template ID provided, use template rendering
+        $message = $validated['message'];
+        if (! empty($validated['template_id'])) {
+            $template = $smsService->getTemplates()->firstWhere('id', $validated['template_id']);
+            if ($template) {
+                $variables = $smsService->buildVariablesFromTransaction($transaction);
+                $message = $smsService->renderTemplate($template['content'], $variables);
+            }
+        }
+
+        $result = $smsService->sendToTransaction($transaction, $message);
+
+        if (! $result['success']) {
+            return back()->with('error', 'Failed to send SMS: '.($result['error'] ?? 'Unknown error'));
+        }
+
+        return back()->with('success', 'SMS sent successfully.');
+    }
+
+    /**
+     * Get SMS templates and preview for an online transaction.
+     */
+    public function getSmsTemplates(Transaction $transaction, SmsService $smsService): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizeTransaction($transaction);
+
+        $store = $transaction->store;
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return response()->json(['error' => 'SMS templates only available for online buys workflow.'], 400);
+        }
+
+        $smsService->forStore($store);
+
+        $templates = $smsService->getTemplates();
+        $variables = $smsService->buildVariablesFromTransaction($transaction);
+
+        // Preview each template
+        $templatesWithPreview = $templates->map(function ($template) use ($smsService, $variables) {
+            $preview = $smsService->renderTemplate($template['content'], $variables);
+            $info = $smsService->getMessageInfo($preview);
+
+            return array_merge($template, [
+                'preview' => $preview,
+                'character_count' => $info['character_count'],
+                'segment_count' => $info['segment_count'],
+                'encoding' => $info['encoding'],
+            ]);
+        });
+
+        return response()->json([
+            'templates' => $templatesWithPreview,
+            'variables' => array_keys($variables),
+        ]);
+    }
+
+    /**
+     * Send an offer email with reasoning and images for an online transaction.
+     * Only available for stores with online buys workflow (43/44).
+     */
+    public function sendOfferEmail(
+        Request $request,
+        Transaction $transaction,
+        OfferEmailService $offerEmailService
+    ): RedirectResponse {
+        $this->authorizeTransaction($transaction);
+
+        $store = $transaction->store;
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return back()->with('error', 'Offer emails are only available for online buys workflow.');
+        }
+
+        if (! $transaction->isOnline()) {
+            return back()->with('error', 'Offer emails are only available for online transactions.');
+        }
+
+        $validated = $request->validate([
+            'offer_id' => 'required|exists:transaction_offers,id',
+            'reasoning' => 'required|string|max:5000',
+            'image_ids' => 'nullable|array',
+            'image_ids.*' => 'integer|exists:images,id',
+            'custom_subject' => 'nullable|string|max:255',
+        ]);
+
+        $offer = TransactionOffer::findOrFail($validated['offer_id']);
+
+        if ($offer->transaction_id !== $transaction->id) {
+            return back()->with('error', 'Offer does not belong to this transaction.');
+        }
+
+        $offerEmailService->forStore($store);
+
+        $result = $offerEmailService->sendOfferEmail(
+            $transaction,
+            $offer,
+            $validated['reasoning'],
+            $validated['image_ids'] ?? [],
+            $validated['custom_subject'] ?? null
+        );
+
+        if (! $result['success']) {
+            return back()->with('error', 'Failed to send email: '.$result['error']);
+        }
+
+        return back()->with('success', 'Offer email sent to customer.');
+    }
+
+    /**
+     * Preview an offer email before sending.
+     */
+    public function previewOfferEmail(
+        Request $request,
+        Transaction $transaction,
+        OfferEmailService $offerEmailService
+    ): \Illuminate\Http\JsonResponse {
+        $this->authorizeTransaction($transaction);
+
+        $store = $transaction->store;
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return response()->json(['error' => 'Offer emails only available for online buys workflow.'], 400);
+        }
+
+        $validated = $request->validate([
+            'offer_id' => 'required|exists:transaction_offers,id',
+            'reasoning' => 'required|string|max:5000',
+            'image_ids' => 'nullable|array',
+            'image_ids.*' => 'integer|exists:images,id',
+        ]);
+
+        $offer = TransactionOffer::findOrFail($validated['offer_id']);
+
+        if ($offer->transaction_id !== $transaction->id) {
+            return response()->json(['error' => 'Offer does not belong to this transaction.'], 400);
+        }
+
+        $offerEmailService->forStore($store);
+
+        $preview = $offerEmailService->previewEmail(
+            $transaction,
+            $offer,
+            $validated['reasoning'],
+            $validated['image_ids'] ?? []
+        );
+
+        return response()->json(['preview' => $preview]);
+    }
+
+    /**
+     * Get available images for an offer email.
+     */
+    public function getOfferEmailImages(
+        Transaction $transaction,
+        OfferEmailService $offerEmailService
+    ): \Illuminate\Http\JsonResponse {
+        $this->authorizeTransaction($transaction);
+
+        $store = $transaction->store;
+
+        if (! $store->hasOnlineBuysWorkflow()) {
+            return response()->json(['error' => 'Feature only available for online buys workflow.'], 400);
+        }
+
+        $offerEmailService->forStore($store);
+
+        $images = $offerEmailService->getAvailableImages($transaction);
+
+        return response()->json(['images' => $images]);
     }
 
     // PayPal Payout Methods

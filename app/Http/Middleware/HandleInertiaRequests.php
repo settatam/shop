@@ -66,6 +66,7 @@ class HandleInertiaRequests extends Middleware
             'stores' => fn () => $request->user() ? $this->getUserStores($request->user()) : [],
             'currentStore' => fn () => app(StoreContext::class)->getCurrentStore(),
             'storeFeatures' => fn () => $this->getStoreFeatures(),
+            'hasOnlineBuysWorkflow' => fn () => app(StoreContext::class)->getCurrentStore()?->hasOnlineBuysWorkflow() ?? false,
         ];
     }
 

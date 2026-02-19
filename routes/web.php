@@ -26,6 +26,7 @@ use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\ProductTypeController;
 use App\Http\Controllers\Web\PurchaseOrderController;
 use App\Http\Controllers\Web\RepairController;
+use App\Http\Controllers\Web\RepairVendorPaymentController;
 use App\Http\Controllers\Web\SalesReportController;
 use App\Http\Controllers\Web\StoreController;
 use App\Http\Controllers\Web\TagController;
@@ -350,6 +351,33 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     // SMS Messaging
     Route::post('transactions/{transaction}/send-sms', [\App\Http\Controllers\Web\TransactionController::class, 'sendSms'])->name('web.transactions.send-sms')->middleware('permission:transactions.update');
 
+    // Online Buys Workflow - Bulk Operations (Stores 43/44)
+    Route::middleware('permission:transactions.update')->group(function () {
+        // Bulk shipping labels
+        Route::post('transactions/bulk-generate-labels', [\App\Http\Controllers\Web\TransactionController::class, 'bulkGenerateLabels'])->name('web.transactions.bulk-generate-labels');
+        // Bulk mark paid
+        Route::post('transactions/bulk-mark-paid', [\App\Http\Controllers\Web\TransactionController::class, 'bulkMarkPaid'])->name('web.transactions.bulk-mark-paid');
+        // Multiple offers
+        Route::post('transactions/{transaction}/multiple-offers', [\App\Http\Controllers\Web\TransactionController::class, 'submitMultipleOffers'])->name('web.transactions.multiple-offers');
+        // Custom SMS with templates
+        Route::post('transactions/{transaction}/custom-sms', [\App\Http\Controllers\Web\TransactionController::class, 'sendCustomSms'])->name('web.transactions.custom-sms');
+        Route::get('transactions/{transaction}/sms-templates', [\App\Http\Controllers\Web\TransactionController::class, 'getSmsTemplates'])->name('web.transactions.sms-templates');
+        // Offer emails with images
+        Route::post('transactions/{transaction}/offer-email', [\App\Http\Controllers\Web\TransactionController::class, 'sendOfferEmail'])->name('web.transactions.offer-email');
+        Route::post('transactions/{transaction}/offer-email/preview', [\App\Http\Controllers\Web\TransactionController::class, 'previewOfferEmail'])->name('web.transactions.offer-email-preview');
+        Route::get('transactions/{transaction}/offer-email/images', [\App\Http\Controllers\Web\TransactionController::class, 'getOfferEmailImages'])->name('web.transactions.offer-email-images');
+    });
+
+    // Payout Exports (Online Buys Workflow - Stores 43/44)
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('payout-exports', [\App\Http\Controllers\Web\PayoutExportController::class, 'index'])->name('web.payout-exports.index');
+        Route::get('payout-exports/csv', [\App\Http\Controllers\Web\PayoutExportController::class, 'exportCsv'])->name('web.payout-exports.csv');
+        Route::get('payout-exports/paypal', [\App\Http\Controllers\Web\PayoutExportController::class, 'exportPayPal'])->name('web.payout-exports.paypal');
+        Route::post('payout-exports/preview', [\App\Http\Controllers\Web\PayoutExportController::class, 'preview'])->name('web.payout-exports.preview');
+        Route::get('payout-exports/{export}/download', [\App\Http\Controllers\Web\PayoutExportController::class, 'download'])->name('web.payout-exports.download');
+        Route::delete('payout-exports/{export}', [\App\Http\Controllers\Web\PayoutExportController::class, 'destroy'])->name('web.payout-exports.destroy');
+    });
+
     // SMS Message Center
     Route::middleware('permission:transactions.view')->group(function () {
         Route::get('messages', [\App\Http\Controllers\Web\SmsController::class, 'index'])->name('web.sms.index');
@@ -362,6 +390,13 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::middleware('permission:transactions.view')->group(function () {
         Route::get('buys', [BuysController::class, 'index'])->name('buys.index');
         Route::get('buys/items', [BuysController::class, 'items'])->name('buys.items');
+    });
+
+    // Leads Dashboard - Tracks transactions until payment is processed, then they become "buys"
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('leads', [\App\Http\Controllers\Web\LeadsDashboardController::class, 'index'])->name('leads.index');
+        Route::get('leads/status/{status}', [\App\Http\Controllers\Web\LeadsDashboardController::class, 'byStatus'])->name('leads.by-status');
+        Route::get('leads/{transaction}', [\App\Http\Controllers\Web\LeadsDashboardController::class, 'show'])->name('leads.show');
     });
 
     // Buckets (Junk items without SKUs)
@@ -399,7 +434,6 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
 
     // Lead Sources
-    Route::redirect('leads', '/settings/lead-sources');
     Route::get('lead-sources', [\App\Http\Controllers\Web\LeadSourceController::class, 'index'])->name('web.lead-sources.index');
     Route::post('lead-sources', [\App\Http\Controllers\Web\LeadSourceController::class, 'store'])->name('web.lead-sources.store');
 
@@ -477,6 +511,17 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::post('repairs/{repair}/cancel', [RepairController::class, 'cancel'])->name('web.repairs.cancel')->middleware('permission:repairs.cancel');
     Route::delete('repairs/{repair}', [RepairController::class, 'destroy'])->name('web.repairs.destroy')->middleware('permission:repairs.delete');
+
+    // Repair Vendor Payments
+    Route::middleware('permission:repairs.view')->group(function () {
+        Route::get('repair-vendor-payments', [RepairVendorPaymentController::class, 'index'])->name('web.repair-vendor-payments.index');
+    });
+    Route::middleware('permission:repairs.update')->group(function () {
+        Route::post('repairs/{repair}/vendor-payments', [RepairVendorPaymentController::class, 'store'])->name('web.repair-vendor-payments.store');
+        Route::put('repair-vendor-payments/{payment}', [RepairVendorPaymentController::class, 'update'])->name('web.repair-vendor-payments.update');
+        Route::delete('repair-vendor-payments/{payment}', [RepairVendorPaymentController::class, 'destroy'])->name('web.repair-vendor-payments.destroy');
+        Route::get('repair-vendor-payments/{payment}/attachment', [RepairVendorPaymentController::class, 'downloadAttachment'])->name('web.repair-vendor-payments.attachment');
+    });
 
     // Generic Payment Routes - defined explicitly for each model type to avoid route conflicts
     foreach (['memos', 'repairs', 'orders', 'layaways'] as $type) {

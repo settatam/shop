@@ -29,6 +29,7 @@ import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import { CustomerCard } from '@/components/customers';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 import VendorEditModal from '@/components/vendors/VendorEditModal.vue';
+import VendorPaymentForm from '@/components/repairs/VendorPaymentForm.vue';
 import { PencilIcon } from '@heroicons/vue/20/solid';
 
 interface LeadSource {
@@ -112,6 +113,20 @@ interface Payment {
     user?: User;
 }
 
+interface VendorPayment {
+    id: number;
+    check_number?: string;
+    amount: number;
+    vendor_invoice_amount?: number;
+    reason?: string;
+    payment_date?: string;
+    has_attachment: boolean;
+    attachment_name?: string;
+    created_at: string;
+    vendor?: Vendor;
+    user?: User;
+}
+
 interface Repair {
     id: number;
     repair_number: string;
@@ -170,6 +185,7 @@ interface Repair {
     order?: Order;
     invoice?: Invoice;
     payments?: Payment[];
+    vendor_payments?: VendorPayment[];
     note_entries: Note[];
 }
 
@@ -233,6 +249,7 @@ const showPaymentModal = ref(false);
 const showCustomerEditModal = ref(false);
 const showVendorEditModal = ref(false);
 const showVendorSelectModal = ref(false);
+const showVendorPaymentModal = ref(false);
 const isProcessing = ref(false);
 
 // Vendor selection
@@ -433,6 +450,19 @@ function printPackingSlip() {
 }
 
 const profit = computed(() => props.repair.customer_total - props.repair.vendor_total);
+
+function openVendorPaymentModal() {
+    showVendorPaymentModal.value = true;
+}
+
+function closeVendorPaymentModal() {
+    showVendorPaymentModal.value = false;
+}
+
+function onVendorPaymentSaved() {
+    closeVendorPaymentModal();
+    router.reload({ only: ['repair'] });
+}
 </script>
 
 <template>
@@ -794,6 +824,71 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
                             </div>
                         </div>
 
+                        <!-- Vendor Payments -->
+                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+                                    Vendor Payments
+                                    <span v-if="repair.vendor_payments && repair.vendor_payments.length > 0" class="text-sm font-normal text-gray-500 dark:text-gray-400">
+                                        ({{ repair.vendor_payments.length }})
+                                    </span>
+                                </h2>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                    @click="openVendorPaymentModal"
+                                >
+                                    <PlusIcon class="size-4" />
+                                    Add Payment
+                                </button>
+                            </div>
+
+                            <div v-if="repair.vendor_payments && repair.vendor_payments.length > 0" class="space-y-3">
+                                <div
+                                    v-for="payment in repair.vendor_payments"
+                                    :key="payment.id"
+                                    class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50"
+                                >
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3">
+                                                <span class="text-lg font-semibold text-gray-900 dark:text-white">
+                                                    {{ formatCurrency(payment.amount) }}
+                                                </span>
+                                                <span v-if="payment.check_number" class="text-sm text-gray-500 dark:text-gray-400">
+                                                    Check #{{ payment.check_number }}
+                                                </span>
+                                            </div>
+                                            <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                                <span v-if="payment.payment_date">{{ formatDate(payment.payment_date) }}</span>
+                                                <span v-if="payment.vendor"> &bull; {{ payment.vendor.display_name || payment.vendor.name }}</span>
+                                            </div>
+                                            <div v-if="payment.vendor_invoice_amount" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                                Invoice Amount: {{ formatCurrency(payment.vendor_invoice_amount) }}
+                                            </div>
+                                            <p v-if="payment.reason" class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                                {{ payment.reason }}
+                                            </p>
+                                            <div v-if="payment.has_attachment" class="mt-2">
+                                                <a
+                                                    :href="`/repair-vendor-payments/${payment.id}/attachment`"
+                                                    class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                                >
+                                                    {{ payment.attachment_name }}
+                                                </a>
+                                            </div>
+                                            <div v-if="payment.user" class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                                                Recorded by {{ payment.user.name }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="text-center py-4 text-gray-500 dark:text-gray-400">
+                                <p class="text-sm">No vendor payments recorded yet.</p>
+                            </div>
+                        </div>
+
                         <!-- Timeline / Details -->
                         <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Timeline</h2>
@@ -888,6 +983,14 @@ const profit = computed(() => props.repair.customer_total - props.repair.vendor_
             :vendor="repair.vendor"
             @close="showVendorEditModal = false"
             @saved="showVendorEditModal = false"
+        />
+
+        <!-- Vendor Payment Form Modal -->
+        <VendorPaymentForm
+            :show="showVendorPaymentModal"
+            :repair-id="repair.id"
+            @close="closeVendorPaymentModal"
+            @saved="onVendorPaymentSaved"
         />
 
         <!-- Vendor Select Modal -->

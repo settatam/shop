@@ -26,6 +26,7 @@ Route::domain('{storeSlug}'.'.'.config('app.portal_domain'))
             Route::get('/', [PortalTransactionController::class, 'index'])->name('transactions.index');
             Route::get('/transactions/{transaction}', [PortalTransactionController::class, 'show'])->name('transactions.show');
             Route::post('/transactions/{transaction}/accept', [PortalTransactionController::class, 'acceptOffer'])->name('transactions.accept');
+            Route::post('/transactions/{transaction}/accept-offer', [PortalTransactionController::class, 'acceptSpecificOffer'])->name('transactions.accept-specific');
             Route::post('/transactions/{transaction}/decline', [PortalTransactionController::class, 'declineOffer'])->name('transactions.decline');
             Route::put('/transactions/{transaction}/payout-preference', [PortalTransactionController::class, 'updatePayoutPreference'])->name('transactions.update-payout-preference');
             Route::get('/account', [PortalAccountController::class, 'show'])->name('account.show');

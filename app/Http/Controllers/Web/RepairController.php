@@ -69,6 +69,8 @@ class RepairController extends Controller
             'invoice',
             'payments.user',
             'notes.user',
+            'vendorPayments.user',
+            'vendorPayments.vendor',
         ]);
 
         return Inertia::render('repairs/Show', [
@@ -620,6 +622,26 @@ class RepairController extends Controller
                 ] : null,
                 'created_at' => $note->created_at->toISOString(),
                 'updated_at' => $note->updated_at->toISOString(),
+            ]),
+            'vendor_payments' => $repair->vendorPayments->map(fn ($payment) => [
+                'id' => $payment->id,
+                'check_number' => $payment->check_number,
+                'amount' => $payment->amount,
+                'vendor_invoice_amount' => $payment->vendor_invoice_amount,
+                'reason' => $payment->reason,
+                'payment_date' => $payment->payment_date?->toDateString(),
+                'has_attachment' => $payment->hasAttachment(),
+                'attachment_name' => $payment->attachment_name,
+                'created_at' => $payment->created_at->toISOString(),
+                'vendor' => $payment->vendor ? [
+                    'id' => $payment->vendor->id,
+                    'name' => $payment->vendor->name,
+                    'display_name' => $payment->vendor->display_name,
+                ] : null,
+                'user' => $payment->user ? [
+                    'id' => $payment->user->id,
+                    'name' => $payment->user->name,
+                ] : null,
             ]),
         ];
     }
