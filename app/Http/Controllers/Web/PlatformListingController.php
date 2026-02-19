@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Activity;
+use App\Models\ActivityLog;
 use App\Models\PlatformListing;
 use App\Models\Product;
 use App\Models\StoreMarketplace;
@@ -151,7 +153,7 @@ class PlatformListingController extends Controller
     }
 
     /**
-     * Unpublish product from a marketplace.
+     * Unpublish product from a marketplace (keeps the listing record for relisting later).
      */
     public function unpublish(Product $product, StoreMarketplace $marketplace): JsonResponse
     {
@@ -168,16 +170,90 @@ class PlatformListingController extends Controller
 
         try {
             $platformService = $this->platformManager->driver($marketplace->platform);
-            $platformService->deleteListing($listing);
+            $updatedListing = $platformService->unlistListing($listing);
+
+            // Log the activity on the product
+            ActivityLog::log(
+                Activity::LISTINGS_UNLIST,
+                $product,
+                null,
+                [
+                    'platform' => $marketplace->platform->value,
+                    'marketplace_name' => $marketplace->name,
+                    'listing_id' => $listing->id,
+                ],
+                "Unlisted from {$marketplace->name}"
+            );
 
             return response()->json([
                 'success' => true,
-                'message' => 'Product unpublished successfully',
+                'message' => 'Product unlisted successfully. You can relist it at any time.',
+                'listing' => [
+                    'id' => $updatedListing->id,
+                    'status' => $updatedListing->status,
+                ],
             ]);
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to unpublish product: '.$e->getMessage(),
+                'message' => 'Failed to unlist product: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Relist a previously unlisted product on a marketplace.
+     */
+    public function relist(Product $product, StoreMarketplace $marketplace): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $listing = $this->listingBuilder->getExistingListing($product, $marketplace);
+
+        if (! $listing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No listing found for this product on this marketplace',
+            ], 404);
+        }
+
+        if ($listing->status !== PlatformListing::STATUS_UNLISTED) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This listing is not in unlisted status',
+            ], 400);
+        }
+
+        try {
+            $platformService = $this->platformManager->driver($marketplace->platform);
+            $updatedListing = $platformService->relistListing($listing);
+
+            // Log the activity on the product
+            ActivityLog::log(
+                Activity::LISTINGS_RELIST,
+                $product,
+                null,
+                [
+                    'platform' => $marketplace->platform->value,
+                    'marketplace_name' => $marketplace->name,
+                    'listing_id' => $listing->id,
+                ],
+                "Relisted on {$marketplace->name}"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Product relisted successfully',
+                'listing' => [
+                    'id' => $updatedListing->id,
+                    'status' => $updatedListing->status,
+                    'listing_url' => $updatedListing->listing_url,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to relist product: '.$e->getMessage(),
             ], 500);
         }
     }

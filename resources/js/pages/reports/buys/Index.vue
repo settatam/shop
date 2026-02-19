@@ -6,6 +6,7 @@ import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed, ref } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface DayRow {
     date: string;
@@ -183,33 +184,28 @@ function viewBuys(row: DayRow): void {
             </div>
 
             <!-- Date Range Filter -->
-            <div class="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+            <div class="flex flex-wrap items-end gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
-                    <input
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                    <DatePicker
                         v-model="startDate"
-                        type="date"
-                        class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        placeholder="Start date"
+                        class="w-[160px]"
+                        @update:model-value="applyDateFilter"
                     />
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
-                    <input
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                    <DatePicker
                         v-model="endDate"
-                        type="date"
-                        class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        placeholder="End date"
+                        class="w-[160px]"
+                        @update:model-value="applyDateFilter"
                     />
                 </div>
                 <button
                     type="button"
-                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    @click="applyDateFilter"
-                >
-                    Apply
-                </button>
-                <button
-                    type="button"
-                    class="inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     @click="resetToCurrentMonth"
                 >
                     Current Month

@@ -248,6 +248,84 @@ class AmazonService extends BasePlatformService
         $listing->delete();
     }
 
+    public function unlistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $marketplaceId = $connection->credentials['marketplace_ids'][0] ?? 'ATVPDKIKX0DER';
+
+        // Set fulfillment availability to 0 to effectively unlist
+        $this->amazonRequest(
+            $connection,
+            'PATCH',
+            "/listings/2021-08-01/items/{$connection->external_store_id}/{$listing->external_listing_id}",
+            [
+                'productType' => $listing->platform_data['productType'] ?? 'PRODUCT',
+                'patches' => [
+                    [
+                        'op' => 'replace',
+                        'path' => '/attributes/fulfillment_availability',
+                        'value' => [
+                            [
+                                'fulfillment_channel_code' => 'DEFAULT',
+                                'quantity' => 0,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            ['marketplaceIds' => $marketplaceId]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_UNLISTED,
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
+    public function relistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $marketplaceId = $connection->credentials['marketplace_ids'][0] ?? 'ATVPDKIKX0DER';
+        $quantity = $listing->product?->total_quantity ?? $listing->platform_quantity ?? 1;
+
+        // Restore fulfillment availability
+        $this->amazonRequest(
+            $connection,
+            'PATCH',
+            "/listings/2021-08-01/items/{$connection->external_store_id}/{$listing->external_listing_id}",
+            [
+                'productType' => $listing->platform_data['productType'] ?? 'PRODUCT',
+                'patches' => [
+                    [
+                        'op' => 'replace',
+                        'path' => '/attributes/fulfillment_availability',
+                        'value' => [
+                            [
+                                'fulfillment_channel_code' => 'DEFAULT',
+                                'quantity' => $quantity,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            ['marketplaceIds' => $marketplaceId]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_ACTIVE,
+            'published_at' => now(),
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
     public function syncInventory(StoreMarketplace $connection): void
     {
         $this->ensureValidToken($connection);

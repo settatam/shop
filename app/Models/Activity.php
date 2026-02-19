@@ -36,6 +36,8 @@ class Activity extends Model
 
     public const CATEGORY_LAYAWAYS = 'layaways';
 
+    public const CATEGORY_LISTINGS = 'listings';
+
     // Product Activities
     public const PRODUCTS_VIEW = 'products.view';
 
@@ -288,6 +290,17 @@ class Activity extends Model
 
     public const BUCKETS_ITEM_SOLD = 'buckets.item_sold';
 
+    // Listing Activities (Platform Listings)
+    public const LISTINGS_PUBLISH = 'listings.publish';
+
+    public const LISTINGS_UNLIST = 'listings.unlist';
+
+    public const LISTINGS_RELIST = 'listings.relist';
+
+    public const LISTINGS_DELETE = 'listings.delete';
+
+    public const LISTINGS_SYNC = 'listings.sync';
+
     protected $fillable = [
         'slug',
         'name',
@@ -458,6 +471,13 @@ class Activity extends Model
             self::BUCKETS_ITEM_ADDED => ['name' => 'Item Added', 'category' => self::CATEGORY_BUCKETS, 'description' => 'An item was added to the bucket'],
             self::BUCKETS_ITEM_REMOVED => ['name' => 'Item Removed', 'category' => self::CATEGORY_BUCKETS, 'description' => 'An item was removed from the bucket'],
             self::BUCKETS_ITEM_SOLD => ['name' => 'Item Sold', 'category' => self::CATEGORY_BUCKETS, 'description' => 'An item was sold from the bucket'],
+
+            // Listings
+            self::LISTINGS_PUBLISH => ['name' => 'Listing Published', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Product was published to a platform'],
+            self::LISTINGS_UNLIST => ['name' => 'Listing Unlisted', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Product was unlisted from a platform'],
+            self::LISTINGS_RELIST => ['name' => 'Listing Relisted', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Product was relisted on a platform'],
+            self::LISTINGS_DELETE => ['name' => 'Listing Deleted', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing was permanently deleted from a platform'],
+            self::LISTINGS_SYNC => ['name' => 'Listing Synced', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing was synced with platform'],
         ];
     }
 
@@ -561,6 +581,7 @@ class Activity extends Model
             self::CATEGORY_VENDORS => 'Vendors',
             self::CATEGORY_BUCKETS => 'Buckets',
             self::CATEGORY_LAYAWAYS => 'Layaways',
+            self::CATEGORY_LISTINGS => 'Platform Listings',
         ];
     }
 

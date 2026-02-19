@@ -182,6 +182,43 @@ class WooCommerceService extends BasePlatformService
         $listing->delete();
     }
 
+    public function unlistListing(PlatformListing $listing): PlatformListing
+    {
+        // Set product status to 'draft' in WooCommerce
+        $this->wooRequest(
+            $listing->marketplace,
+            'PUT',
+            "products/{$listing->external_listing_id}",
+            ['status' => 'draft']
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_UNLISTED,
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
+    public function relistListing(PlatformListing $listing): PlatformListing
+    {
+        // Set product status back to 'publish' in WooCommerce
+        $this->wooRequest(
+            $listing->marketplace,
+            'PUT',
+            "products/{$listing->external_listing_id}",
+            ['status' => 'publish']
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_ACTIVE,
+            'published_at' => now(),
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
     public function syncInventory(StoreMarketplace $connection): void
     {
         $listings = $connection->listings()->with('variant')->get();

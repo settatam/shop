@@ -285,6 +285,59 @@ class EbayService extends BasePlatformService
         $listing->delete();
     }
 
+    public function unlistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $offerId = $listing->platform_data['offer_id'] ?? null;
+
+        if ($offerId) {
+            // Withdraw the offer (ends the listing but keeps the inventory item)
+            $this->ebayRequest($connection, 'POST', "/sell/inventory/v1/offer/{$offerId}/withdraw");
+        }
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_UNLISTED,
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
+    public function relistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $offerId = $listing->platform_data['offer_id'] ?? null;
+
+        if ($offerId) {
+            // Publish the offer again
+            $publishResponse = $this->ebayRequest(
+                $connection,
+                'POST',
+                "/sell/inventory/v1/offer/{$offerId}/publish"
+            );
+
+            // Update listing with new listing ID if returned
+            $platformData = $listing->platform_data;
+            if (isset($publishResponse['listingId'])) {
+                $platformData['listing_id'] = $publishResponse['listingId'];
+                $listing->listing_url = "https://www.ebay.com/itm/{$publishResponse['listingId']}";
+            }
+
+            $listing->update([
+                'status' => PlatformListing::STATUS_ACTIVE,
+                'platform_data' => $platformData,
+                'published_at' => now(),
+                'last_synced_at' => now(),
+            ]);
+        }
+
+        return $listing->fresh();
+    }
+
     public function syncInventory(StoreMarketplace $connection): void
     {
         $this->ensureValidToken($connection);

@@ -64,6 +64,17 @@ interface PlatformInterface
     public function deleteListing(PlatformListing $listing): void;
 
     /**
+     * Unlist a product from the platform (set to inactive/draft but keep the listing).
+     * This allows the listing to be relisted later without recreating it.
+     */
+    public function unlistListing(PlatformListing $listing): PlatformListing;
+
+    /**
+     * Relist a previously unlisted product on the platform.
+     */
+    public function relistListing(PlatformListing $listing): PlatformListing;
+
+    /**
      * Sync inventory quantities to platform.
      */
     public function syncInventory(StoreMarketplace $connection): void;

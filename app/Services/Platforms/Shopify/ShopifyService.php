@@ -199,6 +199,53 @@ class ShopifyService extends BasePlatformService
         $listing->delete();
     }
 
+    public function unlistListing(PlatformListing $listing): PlatformListing
+    {
+        // Set product status to 'draft' on Shopify (hides from storefront but keeps the product)
+        $this->shopifyRequest(
+            $listing->marketplace,
+            'PUT',
+            "products/{$listing->external_listing_id}.json",
+            [
+                'product' => [
+                    'id' => $listing->external_listing_id,
+                    'status' => 'draft',
+                ],
+            ]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_UNLISTED,
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
+    public function relistListing(PlatformListing $listing): PlatformListing
+    {
+        // Set product status to 'active' on Shopify
+        $this->shopifyRequest(
+            $listing->marketplace,
+            'PUT',
+            "products/{$listing->external_listing_id}.json",
+            [
+                'product' => [
+                    'id' => $listing->external_listing_id,
+                    'status' => 'active',
+                ],
+            ]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_ACTIVE,
+            'published_at' => now(),
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
     public function syncInventory(StoreMarketplace $connection): void
     {
         $listings = $connection->listings()->with('variant')->get();

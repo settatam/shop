@@ -593,12 +593,14 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('products/{product}/channels/{channel}/price', [\App\Http\Controllers\Web\PlatformListingController::class, 'setChannelPrice'])->name('products.channels.set-price');
         Route::post('products/{product}/listings/{marketplace}/publish', [\App\Http\Controllers\Web\PlatformListingController::class, 'publish'])->name('products.listings.publish');
         Route::delete('products/{product}/listings/{marketplace}', [\App\Http\Controllers\Web\PlatformListingController::class, 'unpublish'])->name('products.listings.unpublish');
+        Route::post('products/{product}/listings/{marketplace}/relist', [\App\Http\Controllers\Web\PlatformListingController::class, 'relist'])->name('products.listings.relist');
         Route::put('products/{product}/listings/{marketplace}/override', [\App\Http\Controllers\Web\PlatformListingController::class, 'updateOverride'])->name('products.listings.override');
         Route::post('products/{product}/listings/{marketplace}/sync', [\App\Http\Controllers\Web\PlatformListingController::class, 'sync'])->name('products.listings.sync');
         // Full platform listing page updates
         Route::put('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'update'])->name('products.platforms.update');
         Route::post('products/{product}/platforms/{marketplace}/publish', [\App\Http\Controllers\Web\ProductPlatformController::class, 'publish'])->name('products.platforms.publish');
         Route::delete('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'unpublish'])->name('products.platforms.unpublish');
+        Route::post('products/{product}/platforms/{marketplace}/relist', [\App\Http\Controllers\Web\ProductPlatformController::class, 'relist'])->name('products.platforms.relist');
         Route::post('products/{product}/platforms/{marketplace}/sync', [\App\Http\Controllers\Web\ProductPlatformController::class, 'sync'])->name('products.platforms.sync');
     });
 

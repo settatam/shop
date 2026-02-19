@@ -246,6 +246,54 @@ class WalmartService extends BasePlatformService
         $listing->delete();
     }
 
+    public function unlistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        // Retire the item (unpublish without deleting)
+        $this->walmartRequest(
+            $connection,
+            'DELETE',
+            "/v3/items/{$listing->external_listing_id}",
+            [],
+            ['WM_QOS.CORRELATION_ID' => uniqid()]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_UNLISTED,
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
+    public function relistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $product = $listing->product;
+
+        // Re-create the item on Walmart using the stored product data
+        $walmartItem = $this->mapToWalmartItem($product);
+
+        $this->walmartRequest(
+            $connection,
+            'POST',
+            '/v3/items',
+            ['items' => [$walmartItem]]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_ACTIVE,
+            'published_at' => now(),
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
     public function syncInventory(StoreMarketplace $connection): void
     {
         $this->ensureValidToken($connection);

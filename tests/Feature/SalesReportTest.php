@@ -70,14 +70,16 @@ class SalesReportTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->get('/reports/sales/daily?date='.now()->format('Y-m-d'));
+            ->get('/reports/sales/daily?start_date='.now()->format('Y-m-d').'&end_date='.now()->format('Y-m-d'));
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) => $page
             ->component('reports/sales/Daily')
             ->has('orders')
             ->has('totals')
-            ->has('date')
+            ->has('startDate')
+            ->has('endDate')
+            ->has('dateRangeLabel')
         );
     }
 
@@ -108,14 +110,16 @@ class SalesReportTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->get('/reports/sales/daily-items?date='.now()->format('Y-m-d'));
+            ->get('/reports/sales/daily-items?start_date='.now()->format('Y-m-d').'&end_date='.now()->format('Y-m-d'));
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) => $page
             ->component('reports/sales/DailyItems')
             ->has('items')
             ->has('totals')
-            ->has('date')
+            ->has('startDate')
+            ->has('endDate')
+            ->has('dateRangeLabel')
         );
     }
 
@@ -138,6 +142,28 @@ class SalesReportTest extends TestCase
             ->component('reports/sales/Monthly')
             ->has('monthlyData')
             ->has('totals')
+            ->has('startMonth')
+            ->has('startYear')
+            ->has('endMonth')
+            ->has('endYear')
+            ->has('dateRangeLabel')
+        );
+    }
+
+    public function test_can_view_monthly_sales_report_with_date_range(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/sales/monthly?start_month=1&start_year=2025&end_month=6&end_year=2025');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/sales/Monthly')
+            ->has('monthlyData')
+            ->has('totals')
+            ->where('startMonth', 1)
+            ->where('startYear', 2025)
+            ->where('endMonth', 6)
+            ->where('endYear', 2025)
         );
     }
 
@@ -151,7 +177,27 @@ class SalesReportTest extends TestCase
             ->component('reports/sales/MonthToDate')
             ->has('dailyData')
             ->has('totals')
-            ->has('month')
+            ->has('startDate')
+            ->has('endDate')
+            ->has('dateRangeLabel')
+        );
+    }
+
+    public function test_can_view_month_to_date_sales_report_with_date_range(): void
+    {
+        $startDate = now()->subDays(10)->format('Y-m-d');
+        $endDate = now()->format('Y-m-d');
+
+        $response = $this->actingAs($this->user)
+            ->get("/reports/sales/mtd?start_date={$startDate}&end_date={$endDate}");
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/sales/MonthToDate')
+            ->has('dailyData')
+            ->has('totals')
+            ->where('startDate', $startDate)
+            ->where('endDate', $endDate)
         );
     }
 

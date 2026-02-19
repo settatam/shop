@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { Head, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 interface Channel {
     id: number | null;
@@ -54,12 +54,67 @@ const props = defineProps<{
     monthlyData: MonthRow[];
     totals: Totals;
     channels: Channel[];
+    startMonth: number;
+    startYear: number;
+    endMonth: number;
+    endYear: number;
+    dateRangeLabel: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
     { title: 'Sales (Month over Month)', href: '/reports/sales/monthly' },
 ];
+
+// Date range filters
+const startMonth = ref(props.startMonth);
+const startYear = ref(props.startYear);
+const endMonth = ref(props.endMonth);
+const endYear = ref(props.endYear);
+
+const months = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' },
+];
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
+
+function applyDateFilter() {
+    router.get('/reports/sales/monthly', {
+        start_month: startMonth.value,
+        start_year: startYear.value,
+        end_month: endMonth.value,
+        end_year: endYear.value,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+function resetToLast12Months() {
+    const now = new Date();
+    const past = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+    startMonth.value = past.getMonth() + 1;
+    startYear.value = past.getFullYear();
+    endMonth.value = now.getMonth() + 1;
+    endYear.value = now.getFullYear();
+    applyDateFilter();
+}
+
+const exportUrl = computed(() => {
+    return `/reports/sales/monthly/export?start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+});
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
@@ -169,18 +224,83 @@ function viewSales(row: MonthRow): void {
                         Month over Month Sales Report
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Aggregated sales for the past 13 months
+                        {{ dateRangeLabel }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
                     <a
-                        href="/reports/sales/monthly/export"
+                        :href="exportUrl"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ArrowDownTrayIcon class="size-4" />
                         Export CSV
                     </a>
                 </div>
+            </div>
+
+            <!-- Date Range Filter -->
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Month</label>
+                    <div class="flex items-center gap-1">
+                        <select
+                            v-model="startMonth"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyDateFilter"
+                        >
+                            <option
+                                v-for="month in months"
+                                :key="month.value"
+                                :value="month.value"
+                            >
+                                {{ month.label }}
+                            </option>
+                        </select>
+                        <select
+                            v-model="startYear"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyDateFilter"
+                        >
+                            <option v-for="year in years" :key="year" :value="year">
+                                {{ year }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Month</label>
+                    <div class="flex items-center gap-1">
+                        <select
+                            v-model="endMonth"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyDateFilter"
+                        >
+                            <option
+                                v-for="month in months"
+                                :key="month.value"
+                                :value="month.value"
+                            >
+                                {{ month.label }}
+                            </option>
+                        </select>
+                        <select
+                            v-model="endYear"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyDateFilter"
+                        >
+                            <option v-for="year in years" :key="year" :value="year">
+                                {{ year }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    @click="resetToLast12Months"
+                >
+                    Last 12 Months
+                </button>
             </div>
 
             <!-- Stat Cards -->

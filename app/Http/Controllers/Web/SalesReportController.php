@@ -69,17 +69,36 @@ class SalesReportController extends Controller
     }
 
     /**
-     * Daily sales report - shows individual orders for a specific day.
+     * Daily sales report - shows individual orders for a date range.
      */
     public function daily(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $date = $request->get('date', now()->format('Y-m-d'));
+
+        // Support date range or single date (backwards compatible)
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            $startDate = $request->filled('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : now()->startOfDay();
+            $endDate = $request->filled('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : now()->endOfDay();
+        } else {
+            // Single date mode (legacy)
+            $date = $request->get('date', now()->format('Y-m-d'));
+            $startDate = Carbon::parse($date)->startOfDay();
+            $endDate = Carbon::parse($date)->endOfDay();
+        }
+
+        // Ensure start is before end
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $orders = Order::query()
             ->where('store_id', $store->id)
             ->whereIn('status', Order::PAID_STATUSES)
-            ->whereDate('created_at', $date)
+            ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'customer.leadSource',
                 'items.product.category',
@@ -166,22 +185,59 @@ class SalesReportController extends Controller
         return Inertia::render('reports/sales/Daily', [
             'orders' => $orders,
             'totals' => $totals,
-            'date' => $date,
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
         ]);
     }
 
     /**
-     * Daily items report - shows individual items sold for a specific day.
+     * Get a human-readable label for the date range.
+     */
+    protected function getDateRangeLabel(Carbon $startDate, Carbon $endDate): string
+    {
+        if ($startDate->isSameDay($endDate)) {
+            return $startDate->format('F j, Y');
+        }
+
+        if ($startDate->isSameMonth($endDate)) {
+            return $startDate->format('M j').' - '.$endDate->format('j, Y');
+        }
+
+        return $startDate->format('M j, Y').' - '.$endDate->format('M j, Y');
+    }
+
+    /**
+     * Daily items report - shows individual items sold for a date range.
      */
     public function dailyItems(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $date = $request->get('date', now()->format('Y-m-d'));
+
+        // Support date range or single date (backwards compatible)
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            $startDate = $request->filled('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : now()->startOfDay();
+            $endDate = $request->filled('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : now()->endOfDay();
+        } else {
+            // Single date mode (legacy)
+            $date = $request->get('date', now()->format('Y-m-d'));
+            $startDate = Carbon::parse($date)->startOfDay();
+            $endDate = Carbon::parse($date)->endOfDay();
+        }
+
+        // Ensure start is before end
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $orders = Order::query()
             ->where('store_id', $store->id)
             ->whereIn('status', Order::PAID_STATUSES)
-            ->whereDate('created_at', $date)
+            ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'customer.leadSource',
                 'items.product.category',
@@ -242,7 +298,9 @@ class SalesReportController extends Controller
         return Inertia::render('reports/sales/DailyItems', [
             'items' => $items,
             'totals' => $totals,
-            'date' => $date,
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
         ]);
     }
 
@@ -252,12 +310,29 @@ class SalesReportController extends Controller
     public function exportDailyItems(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $date = $request->get('date', now()->format('Y-m-d'));
+
+        // Support date range or single date (backwards compatible)
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            $startDate = $request->filled('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : now()->startOfDay();
+            $endDate = $request->filled('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : now()->endOfDay();
+        } else {
+            $date = $request->get('date', now()->format('Y-m-d'));
+            $startDate = Carbon::parse($date)->startOfDay();
+            $endDate = Carbon::parse($date)->endOfDay();
+        }
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $orders = Order::query()
             ->where('store_id', $store->id)
             ->whereIn('status', Order::PAID_STATUSES)
-            ->whereDate('created_at', $date)
+            ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'customer.leadSource',
                 'items.product.category',
@@ -269,7 +344,7 @@ class SalesReportController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $filename = "sales-report-daily-items-{$date}.csv";
+        $filename = 'sales-report-daily-items-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($orders) {
             $handle = fopen('php://output', 'w');
@@ -370,15 +445,25 @@ class SalesReportController extends Controller
     }
 
     /**
-     * Month over month report - past 13 months aggregated.
+     * Month over month report - aggregated by month.
      */
     public function monthly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
 
-        // Get past 13 months of data
-        $startDate = now()->subMonths(12)->startOfMonth();
-        $endDate = now()->endOfMonth();
+        // Parse month/year range from request, default to last 12 months
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        // Ensure start is before end
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         // Get sales channels for the store
         $channels = $this->getSalesChannels($store->id);
@@ -412,18 +497,34 @@ class SalesReportController extends Controller
             'monthlyData' => $monthlyData,
             'totals' => $totals,
             'channels' => $channels,
+            'startMonth' => $startDate->month,
+            'startYear' => $startDate->year,
+            'endMonth' => $endDate->month,
+            'endYear' => $endDate->year,
+            'dateRangeLabel' => $startDate->format('M Y').' - '.$endDate->format('M Y'),
         ]);
     }
 
     /**
-     * Month to date report.
+     * Month to date report (daily breakdown for a date range).
      */
     public function monthToDate(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
 
-        $startDate = now()->startOfMonth();
-        $endDate = now();
+        // Parse date range from request, default to current month
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        // Ensure start is before end
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         // Get sales channels for the store
         $channels = $this->getSalesChannels($store->id);
@@ -457,7 +558,9 @@ class SalesReportController extends Controller
         return Inertia::render('reports/sales/MonthToDate', [
             'dailyData' => $dailyData,
             'totals' => $totals,
-            'month' => now()->format('F Y'),
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
             'channels' => $channels,
         ]);
     }
@@ -468,12 +571,29 @@ class SalesReportController extends Controller
     public function exportDaily(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $date = $request->get('date', now()->format('Y-m-d'));
+
+        // Support date range or single date (backwards compatible)
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            $startDate = $request->filled('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : now()->startOfDay();
+            $endDate = $request->filled('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : now()->endOfDay();
+        } else {
+            $date = $request->get('date', now()->format('Y-m-d'));
+            $startDate = Carbon::parse($date)->startOfDay();
+            $endDate = Carbon::parse($date)->endOfDay();
+        }
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $orders = Order::query()
             ->where('store_id', $store->id)
             ->whereIn('status', Order::PAID_STATUSES)
-            ->whereDate('created_at', $date)
+            ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'customer.leadSource',
                 'items.product.category',
@@ -485,7 +605,7 @@ class SalesReportController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $filename = "sales-report-daily-{$date}.csv";
+        $filename = 'sales-report-daily-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($orders) {
             $handle = fopen('php://output', 'w');
@@ -625,13 +745,23 @@ class SalesReportController extends Controller
     public function exportMonthly(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $startDate = now()->subMonths(12)->startOfMonth();
-        $endDate = now()->endOfMonth();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $channels = $this->getSalesChannels($store->id);
         $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate, $channels);
 
-        $filename = 'sales-report-monthly-'.now()->format('Y-m-d').'.csv';
+        $filename = 'sales-report-monthly-'.$startDate->format('Y-m').'-to-'.$endDate->format('Y-m').'.csv';
 
         return response()->streamDownload(function () use ($monthlyData, $channels) {
             $handle = fopen('php://output', 'w');
@@ -740,13 +870,23 @@ class SalesReportController extends Controller
     public function exportMonthToDate(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $startDate = now()->startOfMonth();
-        $endDate = now();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
 
         $channels = $this->getSalesChannels($store->id);
         $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels);
 
-        $filename = 'sales-report-mtd-'.now()->format('Y-m-d').'.csv';
+        $filename = 'sales-report-mtd-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.csv';
 
         return response()->streamDownload(function () use ($dailyData, $channels) {
             $handle = fopen('php://output', 'w');

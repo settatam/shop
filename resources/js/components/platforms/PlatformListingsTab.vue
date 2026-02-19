@@ -31,7 +31,7 @@ interface PlatformListing {
     platform: string;
     platform_label: string;
     platform_product_id: string | null;
-    status: 'active' | 'inactive' | 'pending' | 'error' | 'not_for_sale';
+    status: 'active' | 'inactive' | 'pending' | 'error' | 'not_for_sale' | 'unlisted' | 'draft';
     listing_url: string | null;
     price: number | null;
     quantity: number | null;
@@ -96,6 +96,7 @@ const selectedMarketplace = ref<AvailableMarketplace | null>(null);
 const syncing = ref<number | null>(null);
 const syncingAll = ref(false);
 const unpublishing = ref<number | null>(null);
+const relisting = ref<number | null>(null);
 
 // Check if a listing needs sync (product updated after last sync)
 function needsSync(listing: PlatformListing): boolean {
@@ -130,6 +131,10 @@ function getStatusColor(status: string): string {
             return 'bg-yellow-50 text-yellow-700 ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20';
         case 'error':
             return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20';
+        case 'unlisted':
+            return 'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20';
+        case 'draft':
+            return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20';
         default:
             return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20';
     }
@@ -143,6 +148,8 @@ function getStatusIcon(status: string) {
             return ClockIcon;
         case 'error':
             return ExclamationCircleIcon;
+        case 'unlisted':
+            return ExclamationTriangleIcon;
         default:
             return ClockIcon;
     }
@@ -210,7 +217,7 @@ async function syncAllListings() {
 }
 
 async function unpublishListing(listing: PlatformListing) {
-    if (!confirm(`Are you sure you want to unpublish this listing from ${listing.platform_label}?`)) {
+    if (!confirm(`Are you sure you want to unlist this product from ${listing.platform_label}? You can relist it later.`)) {
         return;
     }
 
@@ -219,9 +226,25 @@ async function unpublishListing(listing: PlatformListing) {
         await axios.delete(`/products/${props.productId}/listings/${listing.marketplace.id}`);
         emit('refresh');
     } catch (error) {
-        console.error('Unpublish failed:', error);
+        console.error('Unlist failed:', error);
     } finally {
         unpublishing.value = null;
+    }
+}
+
+async function relistListing(listing: PlatformListing) {
+    if (!confirm(`Are you sure you want to relist this product on ${listing.platform_label}?`)) {
+        return;
+    }
+
+    relisting.value = listing.id;
+    try {
+        await axios.post(`/products/${props.productId}/listings/${listing.marketplace.id}/relist`);
+        emit('refresh');
+    } catch (error) {
+        console.error('Relist failed:', error);
+    } finally {
+        relisting.value = null;
     }
 }
 
@@ -386,8 +409,20 @@ function getListingEditUrl(listing: PlatformListing): string {
 
                     <!-- Actions -->
                     <div class="flex items-center gap-2">
+                        <!-- Relist button for unlisted items -->
                         <Button
-                            v-if="listing.listing_url"
+                            v-if="listing.status === 'unlisted'"
+                            variant="default"
+                            size="sm"
+                            :disabled="relisting === listing.id"
+                            @click="relistListing(listing)"
+                        >
+                            <ArrowPathIcon class="h-4 w-4 mr-1" :class="{ 'animate-spin': relisting === listing.id }" />
+                            {{ relisting === listing.id ? 'Relisting...' : 'Relist' }}
+                        </Button>
+
+                        <Button
+                            v-if="listing.listing_url && listing.status === 'active'"
                             variant="ghost"
                             size="sm"
                             @click="viewOnPlatform(listing)"
@@ -407,6 +442,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     Edit Listing Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
+                                    v-if="listing.status === 'active'"
                                     @click="syncListing(listing)"
                                     :disabled="syncing === listing.id"
                                 >
@@ -414,12 +450,22 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     {{ syncing === listing.id ? 'Syncing...' : 'Sync Now' }}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    class="text-red-600 dark:text-red-400"
+                                    v-if="listing.status === 'unlisted'"
+                                    class="text-green-600 dark:text-green-400"
+                                    @click="relistListing(listing)"
+                                    :disabled="relisting === listing.id"
+                                >
+                                    <ArrowPathIcon class="h-4 w-4 mr-2" :class="{ 'animate-spin': relisting === listing.id }" />
+                                    {{ relisting === listing.id ? 'Relisting...' : 'Relist' }}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    v-if="listing.status === 'active'"
+                                    class="text-orange-600 dark:text-orange-400"
                                     @click="unpublishListing(listing)"
                                     :disabled="unpublishing === listing.id"
                                 >
-                                    <TrashIcon class="h-4 w-4 mr-2" />
-                                    {{ unpublishing === listing.id ? 'Unpublishing...' : 'Unpublish' }}
+                                    <ExclamationTriangleIcon class="h-4 w-4 mr-2" />
+                                    {{ unpublishing === listing.id ? 'Unlisting...' : 'Unlist' }}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

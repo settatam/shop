@@ -38,7 +38,9 @@ interface Totals {
 const props = defineProps<{
     items: ItemRow[];
     totals: Totals;
-    date: string;
+    startDate: string;
+    endDate: string;
+    dateRangeLabel: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -46,23 +48,32 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Sales (Daily Items)', href: '/reports/sales/daily-items' },
 ];
 
-const selectedDate = ref(props.date);
+const startDate = ref(props.startDate);
+const endDate = ref(props.endDate);
 
-function handleDateChange(newDate: string) {
-    if (newDate && newDate !== props.date) {
-        router.get(
-            '/reports/sales/daily-items',
-            { date: newDate },
-            {
-                preserveState: true,
-                preserveScroll: true,
-            },
-        );
-    }
+function applyDateFilter() {
+    router.get(
+        '/reports/sales/daily-items',
+        {
+            start_date: startDate.value,
+            end_date: endDate.value,
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+        },
+    );
+}
+
+function resetToToday() {
+    const today = new Date().toISOString().split('T')[0];
+    startDate.value = today;
+    endDate.value = today;
+    applyDateFilter();
 }
 
 const exportUrl = computed(
-    () => `/reports/sales/daily-items/export?date=${selectedDate.value}`,
+    () => `/reports/sales/daily-items/export?start_date=${startDate.value}&end_date=${endDate.value}`,
 );
 
 function formatCurrency(value: number): string {
@@ -94,12 +105,12 @@ function formatCostValue(value: number): string {
                         Daily Sales Report (Items)
                     </h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Individual items sold for the selected day
+                        {{ dateRangeLabel }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
                     <Link
-                        href="/reports/sales/daily"
+                        :href="`/reports/sales/daily?start_date=${startDate}&end_date=${endDate}`"
                         class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                     >
                         View by Orders
@@ -115,19 +126,38 @@ function formatCostValue(value: number): string {
             </div>
 
             <!-- Filters -->
-            <div class="flex items-end gap-4">
+            <div class="flex flex-wrap items-end gap-4">
                 <div>
                     <label
                         class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
-                        >Date</label
+                        >Start Date</label
                     >
                     <DatePicker
-                        v-model="selectedDate"
-                        placeholder="Select date"
-                        class="w-[180px]"
-                        @update:model-value="handleDateChange"
+                        v-model="startDate"
+                        placeholder="Start date"
+                        class="w-[160px]"
+                        @update:model-value="applyDateFilter"
                     />
                 </div>
+                <div>
+                    <label
+                        class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300"
+                        >End Date</label
+                    >
+                    <DatePicker
+                        v-model="endDate"
+                        placeholder="End date"
+                        class="w-[160px]"
+                        @update:model-value="applyDateFilter"
+                    />
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    @click="resetToToday"
+                >
+                    Today
+                </button>
             </div>
 
             <!-- Data Table -->

@@ -253,6 +253,57 @@ class EtsyService extends BasePlatformService
         $listing->delete();
     }
 
+    public function unlistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $shopId = $connection->credentials['shop_id'];
+
+        // Set listing state to 'inactive' (deactivates without deleting)
+        $this->etsyRequest(
+            $connection,
+            'PUT',
+            "/application/shops/{$shopId}/listings/{$listing->external_listing_id}",
+            [
+                'state' => 'inactive',
+            ]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_UNLISTED,
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
+    public function relistListing(PlatformListing $listing): PlatformListing
+    {
+        $connection = $listing->marketplace;
+        $this->ensureValidToken($connection);
+
+        $shopId = $connection->credentials['shop_id'];
+
+        // Set listing state back to 'active'
+        $this->etsyRequest(
+            $connection,
+            'PUT',
+            "/application/shops/{$shopId}/listings/{$listing->external_listing_id}",
+            [
+                'state' => 'active',
+            ]
+        );
+
+        $listing->update([
+            'status' => PlatformListing::STATUS_ACTIVE,
+            'published_at' => now(),
+            'last_synced_at' => now(),
+        ]);
+
+        return $listing->fresh();
+    }
+
     public function syncInventory(StoreMarketplace $connection): void
     {
         $this->ensureValidToken($connection);
