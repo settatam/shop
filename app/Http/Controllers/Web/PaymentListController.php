@@ -58,13 +58,43 @@ class PaymentListController extends Controller
             $query->where('customer_id', $request->customer_id);
         }
 
-        // Search by reference or transaction ID
+        // Search by reference, transaction ID, or related entity numbers (memos, repairs, orders, transactions)
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('reference', 'like', "%{$search}%")
                     ->orWhere('transaction_id', 'like', "%{$search}%")
-                    ->orWhere('gateway_payment_id', 'like', "%{$search}%");
+                    ->orWhere('gateway_payment_id', 'like', "%{$search}%")
+                    // Search by memo number
+                    ->orWhere(function ($q2) use ($search) {
+                        $q2->where('payable_type', 'App\\Models\\Memo')
+                            ->whereHas('payable', function ($memoQuery) use ($search) {
+                                $memoQuery->where('memo_number', 'like', "%{$search}%");
+                            });
+                    })
+                    // Search by repair number
+                    ->orWhere(function ($q2) use ($search) {
+                        $q2->where('payable_type', 'App\\Models\\Repair')
+                            ->whereHas('payable', function ($repairQuery) use ($search) {
+                                $repairQuery->where('repair_number', 'like', "%{$search}%");
+                            });
+                    })
+                    // Search by order id or invoice number
+                    ->orWhere(function ($q2) use ($search) {
+                        $q2->where('payable_type', 'App\\Models\\Order')
+                            ->whereHas('payable', function ($orderQuery) use ($search) {
+                                $orderQuery->where('id', 'like', "%{$search}%")
+                                    ->orWhere('invoice_number', 'like', "%{$search}%")
+                                    ->orWhere('order_id', 'like', "%{$search}%");
+                            });
+                    })
+                    // Search by transaction number
+                    ->orWhere(function ($q2) use ($search) {
+                        $q2->where('payable_type', 'App\\Models\\Transaction')
+                            ->whereHas('payable', function ($transactionQuery) use ($search) {
+                                $transactionQuery->where('transaction_number', 'like', "%{$search}%");
+                            });
+                    });
             });
         }
 

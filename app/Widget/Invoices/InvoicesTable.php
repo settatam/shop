@@ -89,7 +89,7 @@ class InvoicesTable extends Table
             ->with(['customer', 'invoiceable'])
             ->where('store_id', $storeId);
 
-        // Apply search filter
+        // Apply search filter - searches invoice number, customer, and related entity numbers (memos, repairs, orders, transactions)
         if ($term = data_get($filter, 'term')) {
             $query->where(function ($q) use ($term) {
                 $q->where('invoice_number', 'like', "%{$term}%")
@@ -97,6 +97,36 @@ class InvoicesTable extends Table
                         $customerQuery->where('first_name', 'like', "%{$term}%")
                             ->orWhere('last_name', 'like', "%{$term}%")
                             ->orWhere('email', 'like', "%{$term}%");
+                    })
+                    // Search by memo number
+                    ->orWhere(function ($q2) use ($term) {
+                        $q2->where('invoiceable_type', 'App\\Models\\Memo')
+                            ->whereHas('invoiceable', function ($memoQuery) use ($term) {
+                                $memoQuery->where('memo_number', 'like', "%{$term}%");
+                            });
+                    })
+                    // Search by repair number
+                    ->orWhere(function ($q2) use ($term) {
+                        $q2->where('invoiceable_type', 'App\\Models\\Repair')
+                            ->whereHas('invoiceable', function ($repairQuery) use ($term) {
+                                $repairQuery->where('repair_number', 'like', "%{$term}%");
+                            });
+                    })
+                    // Search by order id or invoice number
+                    ->orWhere(function ($q2) use ($term) {
+                        $q2->where('invoiceable_type', 'App\\Models\\Order')
+                            ->whereHas('invoiceable', function ($orderQuery) use ($term) {
+                                $orderQuery->where('id', 'like', "%{$term}%")
+                                    ->orWhere('invoice_number', 'like', "%{$term}%")
+                                    ->orWhere('order_id', 'like', "%{$term}%");
+                            });
+                    })
+                    // Search by transaction number
+                    ->orWhere(function ($q2) use ($term) {
+                        $q2->where('invoiceable_type', 'App\\Models\\Transaction')
+                            ->whereHas('invoiceable', function ($transactionQuery) use ($term) {
+                                $transactionQuery->where('transaction_number', 'like', "%{$term}%");
+                            });
                     });
             });
         }

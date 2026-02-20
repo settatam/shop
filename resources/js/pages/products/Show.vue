@@ -179,6 +179,21 @@ const refreshListings = () => {
                         <p class="text-sm text-gray-500 dark:text-gray-400">
                             {{ product.handle }}
                         </p>
+                        <!-- Tags displayed as badges under title -->
+                        <div v-if="product.tags && product.tags.length > 0" class="mt-2 flex flex-wrap gap-1.5">
+                            <span
+                                v-for="tag in product.tags"
+                                :key="tag.id"
+                                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                                :style="{
+                                    backgroundColor: tag.color + '20',
+                                    color: tag.color,
+                                    border: `1px solid ${tag.color}40`
+                                }"
+                            >
+                                {{ tag.name }}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <div class="flex gap-3">

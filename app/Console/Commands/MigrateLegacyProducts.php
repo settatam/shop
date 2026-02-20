@@ -11,6 +11,7 @@ use App\Models\ProductTemplate;
 use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Models\Tag;
 use App\Models\Vendor;
 use App\Models\Warehouse;
 use Illuminate\Console\Command;
@@ -104,10 +105,17 @@ class MigrateLegacyProducts extends Command
 
     protected int $listingCount = 0;
 
+    protected int $tagCount = 0;
+
     /**
      * Maps legacy store_market_place_id => new store_marketplace_id
      */
     protected array $marketplaceMap = [];
+
+    /**
+     * Maps tag value (lowercase) => new tag ID for the current store
+     */
+    protected array $tagMap = [];
 
     protected ?Warehouse $defaultWarehouse = null;
 
@@ -1248,6 +1256,9 @@ class MigrateLegacyProducts extends Command
             // Migrate product images
             $this->migrateProductImages($legacyProduct, $newProduct);
 
+            // Migrate product tags
+            $this->migrateProductTags($legacyProduct, $newProduct);
+
             // Migrate platform listings (store_marketplace_products)
             if (! $this->option('skip-listings') && ! empty($this->marketplaceMap)) {
                 $this->migrateProductListings($legacyProduct, $newProduct);
@@ -1259,7 +1270,7 @@ class MigrateLegacyProducts extends Command
         }
 
         $this->line("  Created {$productCount} products with {$variantCount} variants, skipped {$skipped} existing");
-        $this->line("  Migrated {$this->attributeValueCount} attribute values, {$this->imageCount} images, {$this->listingCount} platform listings");
+        $this->line("  Migrated {$this->attributeValueCount} attribute values, {$this->imageCount} images, {$this->tagCount} tags, {$this->listingCount} platform listings");
         $this->line("  Created {$this->inventoryCount} inventory records");
     }
 
@@ -1476,6 +1487,73 @@ class MigrateLegacyProducts extends Command
             ]);
 
             $this->imageCount++;
+        }
+    }
+
+    /**
+     * Migrate product tags from legacy store_tags table.
+     *
+     * Legacy structure:
+     * - store_tags.tagable_type = 'App\Models\Product'
+     * - store_tags.tagable_id = product ID
+     * - store_tags.value = tag name (e.g., "designer", "Window")
+     *
+     * New structure:
+     * - tags table: id, store_id, name, slug, color
+     * - taggables table: tag_id, taggable_type, taggable_id
+     */
+    protected function migrateProductTags(object $legacyProduct, Product $newProduct): void
+    {
+        // Get tags for this product from legacy store_tags table
+        $legacyTags = DB::connection('legacy')
+            ->table('store_tags')
+            ->where('tagable_type', 'App\\Models\\Product')
+            ->where('tagable_id', $legacyProduct->id)
+            ->whereNotNull('value')
+            ->get();
+
+        if ($legacyTags->isEmpty()) {
+            return;
+        }
+
+        $tagIds = [];
+
+        foreach ($legacyTags as $legacyTag) {
+            $tagValue = trim($legacyTag->value);
+            if (empty($tagValue)) {
+                continue;
+            }
+
+            // Normalize tag name for caching (lowercase)
+            $cacheKey = strtolower($tagValue);
+
+            // Check if we've already created this tag for this store
+            if (isset($this->tagMap[$cacheKey])) {
+                $tagIds[] = $this->tagMap[$cacheKey];
+
+                continue;
+            }
+
+            // Find or create the tag
+            $tag = Tag::firstOrCreate(
+                [
+                    'store_id' => $newProduct->store_id,
+                    'slug' => Str::slug($tagValue),
+                ],
+                [
+                    'name' => $tagValue,
+                    'color' => '#6b7280', // Default gray color
+                ]
+            );
+
+            $this->tagMap[$cacheKey] = $tag->id;
+            $tagIds[] = $tag->id;
+        }
+
+        if (! empty($tagIds)) {
+            // Sync tags (this handles the taggables pivot table)
+            $newProduct->tags()->syncWithoutDetaching($tagIds);
+            $this->tagCount += count($tagIds);
         }
     }
 
@@ -1824,6 +1902,12 @@ class MigrateLegacyProducts extends Command
         $categoryCount = Category::where('store_id', $newStore->id)->count();
         $templateCount = ProductTemplate::where('store_id', $newStore->id)->count();
 
+        $tagCount = Tag::where('store_id', $newStore->id)->count();
+        $taggableCount = DB::table('taggables')
+            ->where('taggable_type', 'App\\Models\\Product')
+            ->whereIn('taggable_id', $productIds)
+            ->count();
+
         $this->newLine();
         $this->line("Total categories in store: {$categoryCount}");
         $this->line("Total templates in store: {$templateCount}");
@@ -1831,6 +1915,7 @@ class MigrateLegacyProducts extends Command
         $this->line("Total variants in store: {$variantCount}");
         $this->line("Total attribute values in store: {$attributeCount}");
         $this->line("Total images in store: {$imageCount}");
+        $this->line("Total tags in store: {$tagCount} ({$taggableCount} product-tag associations)");
 
         $inventoryCount = Inventory::where('store_id', $newStore->id)->count();
         $totalQuantity = Inventory::where('store_id', $newStore->id)->sum('quantity');

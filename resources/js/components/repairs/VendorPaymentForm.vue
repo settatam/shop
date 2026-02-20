@@ -34,13 +34,22 @@ const emit = defineEmits<{
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
 
-const form = useForm({
+const form = useForm<{
+    check_number: string;
+    amount: string;
+    vendor_invoice_amount: string;
+    reason: string;
+    payment_date: string;
+    attachment: File | null;
+    remove_attachment: boolean;
+    _method?: string;
+}>({
     check_number: '',
     amount: '',
     vendor_invoice_amount: '',
     reason: '',
     payment_date: new Date().toISOString().split('T')[0],
-    attachment: null as File | null,
+    attachment: null,
     remove_attachment: false,
 });
 
@@ -76,35 +85,26 @@ const close = () => {
 };
 
 const submit = () => {
-    const url = isEditing.value
-        ? `/repair-vendor-payments/${props.payment?.id}`
-        : `/repairs/${props.repairId}/vendor-payments`;
-
-    const method = isEditing.value ? 'put' : 'post';
-
-    form.transform((data) => {
-        const formData = new FormData();
-        formData.append('check_number', data.check_number || '');
-        formData.append('amount', data.amount);
-        if (data.vendor_invoice_amount) {
-            formData.append('vendor_invoice_amount', data.vendor_invoice_amount);
-        }
-        formData.append('reason', data.reason || '');
-        formData.append('payment_date', data.payment_date || '');
-        if (data.attachment) {
-            formData.append('attachment', data.attachment);
-        }
-        if (data.remove_attachment) {
-            formData.append('remove_attachment', '1');
-        }
-        return formData;
-    })[method](url, {
-        preserveScroll: true,
-        onSuccess: () => {
-            emit('saved');
-            close();
-        },
-    });
+    if (isEditing.value) {
+        form.transform((data) => ({
+            ...data,
+            _method: 'put',
+        })).post(`/repair-vendor-payments/${props.payment?.id}`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                emit('saved');
+                close();
+            },
+        });
+    } else {
+        form.post(`/repairs/${props.repairId}/vendor-payments`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                emit('saved');
+                close();
+            },
+        });
+    }
 };
 
 const handleFileSelect = (event: Event) => {
