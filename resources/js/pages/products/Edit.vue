@@ -398,6 +398,7 @@ async function generateTitle() {
     try {
         const response = await fetch(`/products/${props.product.id}/generate-title`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'text/event-stream',
@@ -451,6 +452,7 @@ async function generateDescription() {
     try {
         const response = await fetch(`/products/${props.product.id}/generate-description`, {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'text/event-stream',
