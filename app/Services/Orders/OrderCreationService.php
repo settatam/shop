@@ -120,6 +120,7 @@ class OrderCreationService
                 $this->order->items()->create([
                     'product_id' => $product?->id,
                     'product_variant_id' => $variant?->id,
+                    'category_id' => $product?->category_id,
                     'sku' => $itemData['sku'] ?? $variant?->sku,
                     'title' => $itemData['title'] ?? $product?->title ?? 'Unknown Item',
                     'quantity' => $itemData['quantity'] ?? 1,
@@ -346,6 +347,7 @@ class OrderCreationService
         $this->order->items()->create([
             'product_id' => $product?->id ?? $itemData['product_id'] ?? null,
             'product_variant_id' => $variant?->id ?? $itemData['product_variant_id'] ?? null,
+            'category_id' => $product?->category_id ?? $itemData['category_id'] ?? null,
             'sku' => $itemData['sku'] ?? ($variant?->sku ?? null),
             'title' => $itemData['title'] ?? ($variant?->title ?? $product?->title ?? 'Unknown Item'),
             'quantity' => $quantity,

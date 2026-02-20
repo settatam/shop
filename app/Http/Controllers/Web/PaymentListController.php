@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Payment;
 use App\Models\StoreMarketplace;
 use App\Services\StoreContext;
@@ -136,6 +137,35 @@ class PaymentListController extends Controller
             });
         }
 
+        // Filter by category (through payable items relationship)
+        // Includes all descendant categories when a parent category is selected
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+            $query->where(function ($q) use ($categoryIds) {
+                // Filter orders by order_items.category_id
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->where('payable_type', 'App\\Models\\Order')
+                        ->whereHas('payable.items', function ($itemQuery) use ($categoryIds) {
+                            $itemQuery->whereIn('category_id', $categoryIds);
+                        });
+                })
+                // Filter repairs by repair_items.category_id
+                    ->orWhere(function ($q2) use ($categoryIds) {
+                        $q2->where('payable_type', 'App\\Models\\Repair')
+                            ->whereHas('payable.items', function ($itemQuery) use ($categoryIds) {
+                                $itemQuery->whereIn('category_id', $categoryIds);
+                            });
+                    })
+                // Filter memos by memo_items.category_id
+                    ->orWhere(function ($q2) use ($categoryIds) {
+                        $q2->where('payable_type', 'App\\Models\\Memo')
+                            ->whereHas('payable.items', function ($itemQuery) use ($categoryIds) {
+                                $itemQuery->whereIn('category_id', $categoryIds);
+                            });
+                    });
+            });
+        }
+
         $payments = $query->paginate(20)->withQueryString();
 
         // Transform payments to include customer from payable if not directly set
@@ -191,6 +221,29 @@ class PaymentListController extends Controller
                     ->orWhere('gateway', $platform);
             });
         }
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+            $totalsQuery->where(function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->where('payable_type', 'App\\Models\\Order')
+                        ->whereHas('payable.items', function ($itemQuery) use ($categoryIds) {
+                            $itemQuery->whereIn('category_id', $categoryIds);
+                        });
+                })
+                    ->orWhere(function ($q2) use ($categoryIds) {
+                        $q2->where('payable_type', 'App\\Models\\Repair')
+                            ->whereHas('payable.items', function ($itemQuery) use ($categoryIds) {
+                                $itemQuery->whereIn('category_id', $categoryIds);
+                            });
+                    })
+                    ->orWhere(function ($q2) use ($categoryIds) {
+                        $q2->where('payable_type', 'App\\Models\\Memo')
+                            ->whereHas('payable.items', function ($itemQuery) use ($categoryIds) {
+                                $itemQuery->whereIn('category_id', $categoryIds);
+                            });
+                    });
+            });
+        }
 
         $totals = [
             'count' => $totalsQuery->count(),
@@ -201,11 +254,12 @@ class PaymentListController extends Controller
         return Inertia::render('payments/Index', [
             'payments' => $payments,
             'totals' => $totals,
-            'filters' => $request->only(['payment_method', 'status', 'from_date', 'to_date', 'search', 'customer_id', 'sort', 'direction', 'min_amount', 'max_amount', 'platform', 'payable_type']),
+            'filters' => $request->only(['payment_method', 'status', 'from_date', 'to_date', 'search', 'customer_id', 'sort', 'direction', 'min_amount', 'max_amount', 'platform', 'payable_type', 'category_id']),
             'paymentMethods' => $this->getPaymentMethods(),
             'statuses' => $this->getStatuses(),
             'platforms' => $this->getPlatforms(),
             'payableTypes' => $this->getPayableTypes(),
+            'categories' => $this->getCategories(),
         ]);
     }
 
@@ -289,5 +343,69 @@ class PaymentListController extends Controller
             ])
             ->values()
             ->toArray();
+    }
+
+    protected function getCategories(): array
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $categories = Category::where('store_id', $store->id)
+            ->get(['id', 'name', 'parent_id']);
+
+        return $this->buildCategoryTree($categories);
+    }
+
+    /**
+     * Build a flat list of categories in tree order with depth information.
+     *
+     * @param  \Illuminate\Support\Collection  $categories
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildCategoryTree($categories, ?int $parentId = null, int $depth = 0): array
+    {
+        $result = [];
+
+        // Find all category IDs that have children
+        $parentIds = $categories->whereNotNull('parent_id')->pluck('parent_id')->unique()->toArray();
+
+        $children = $categories
+            ->filter(fn ($c) => $c->parent_id == $parentId)
+            ->sortBy('name');
+
+        foreach ($children as $category) {
+            $hasChildren = in_array($category->id, $parentIds);
+            $result[] = [
+                'value' => $category->id,
+                'label' => $category->name,
+                'depth' => $depth,
+                'isLeaf' => ! $hasChildren,
+            ];
+
+            // Recursively add children
+            $result = array_merge($result, $this->buildCategoryTree($categories, $category->id, $depth + 1));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get all descendant category IDs for a given category.
+     *
+     * @return array<int>
+     */
+    protected function getCategoryDescendantIds(int $categoryId, int $storeId): array
+    {
+        $allIds = [$categoryId];
+
+        $childIds = Category::where('store_id', $storeId)
+            ->where('parent_id', $categoryId)
+            ->pluck('id')
+            ->toArray();
+
+        foreach ($childIds as $childId) {
+            $allIds = array_merge($allIds, $this->getCategoryDescendantIds($childId, $storeId));
+        }
+
+        return $allIds;
     }
 }

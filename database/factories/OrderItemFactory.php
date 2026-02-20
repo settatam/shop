@@ -21,6 +21,7 @@ class OrderItemFactory extends Factory
             'order_id' => Order::factory(),
             'product_id' => null,
             'product_variant_id' => null,
+            'category_id' => null,
             'sku' => fake()->unique()->regexify('[A-Z]{3}-[0-9]{5}'),
             'title' => fake()->words(3, true),
             'quantity' => fake()->numberBetween(1, 5),
@@ -36,6 +37,7 @@ class OrderItemFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'product_id' => $variant->product_id,
             'product_variant_id' => $variant->id,
+            'category_id' => $variant->product?->category_id,
             'sku' => $variant->sku,
             'title' => $variant->title ?? $variant->product?->title ?? 'Product',
             'price' => $variant->price,
@@ -47,6 +49,7 @@ class OrderItemFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'product_id' => $product->id,
+            'category_id' => $product->category_id,
             'title' => $product->title,
         ]);
     }

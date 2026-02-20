@@ -25,7 +25,8 @@ class MigrateLegacyOrders extends Command
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing orders and start fresh}
                             {--skip-payments : Skip migrating payments for orders}
-                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
+                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}
+                            {--backfill-categories : Backfill category_id for existing order items from products}';
 
     protected $description = 'Migrate orders, order items, and payments from the legacy database';
 
@@ -49,6 +50,11 @@ class MigrateLegacyOrders extends Command
 
     public function handle(): int
     {
+        // Handle backfill-categories option
+        if ($this->option('backfill-categories')) {
+            return $this->backfillCategories();
+        }
+
         $legacyStoreId = (int) $this->option('store-id');
         $newStoreId = $this->option('new-store-id') ? (int) $this->option('new-store-id') : null;
         $limit = (int) $this->option('limit');
@@ -618,10 +624,16 @@ class MigrateLegacyOrders extends Command
                 }
             }
 
-            // Find category by name if order item has category
+            // Find category - try multiple methods:
+            // 1. From legacy item category name
+            // 2. From the product's category_id
             $categoryId = null;
             if ($legacyItem->category) {
                 $categoryId = $this->findCategoryByName($legacyItem->category);
+            }
+            if (! $categoryId && $productId) {
+                $product = Product::find($productId);
+                $categoryId = $product?->category_id;
             }
 
             // Get wholesale value from variant if available
@@ -643,6 +655,7 @@ class MigrateLegacyOrders extends Command
                 'order_id' => $newOrderId,
                 'product_id' => $productId,
                 'product_variant_id' => $variantId,
+                'category_id' => $categoryId,
                 'sku' => $legacyItem->sku ?: null,
                 'title' => $legacyItem->title ?: 'Item',
                 'quantity' => (int) ($legacyItem->quantity ?: 1),
@@ -1229,5 +1242,46 @@ class MigrateLegacyOrders extends Command
             'refunded' => 'refunded',
             default => 'pending',
         };
+    }
+
+    /**
+     * Backfill category_id for existing order items from their associated products.
+     */
+    protected function backfillCategories(): int
+    {
+        $this->info('Backfilling category_id for order items from products...');
+
+        // Count items that need backfilling
+        $itemsToUpdate = DB::table('order_items')
+            ->whereNull('category_id')
+            ->whereNotNull('product_id')
+            ->count();
+
+        $this->line("Found {$itemsToUpdate} order items without category_id that have a product_id");
+
+        if ($itemsToUpdate === 0) {
+            $this->info('No items need backfilling.');
+
+            return 0;
+        }
+
+        // Perform the update
+        $updated = DB::statement('
+            UPDATE order_items oi
+            JOIN products p ON oi.product_id = p.id
+            SET oi.category_id = p.category_id
+            WHERE oi.product_id IS NOT NULL
+              AND oi.category_id IS NULL
+              AND p.category_id IS NOT NULL
+        ');
+
+        // Count how many now have category_id
+        $itemsWithCategory = DB::table('order_items')
+            ->whereNotNull('category_id')
+            ->count();
+
+        $this->info("Backfill complete. {$itemsWithCategory} order items now have category_id.");
+
+        return 0;
     }
 }

@@ -34,7 +34,7 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice): InertiaResponse
     {
-        $invoice->load(['invoiceable', 'customer', 'payments.user']);
+        $invoice->load(['invoiceable.items', 'customer', 'payments.user']);
 
         return Inertia::render('invoices/Show', [
             'invoice' => $invoice,

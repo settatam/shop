@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\Memo;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\OrderItem;
 use App\Models\Repair;
 use App\Models\Role;
 use App\Models\Store;
@@ -533,5 +534,32 @@ class InvoiceTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertHeader('content-type', 'application/pdf');
+    }
+
+    public function test_web_invoice_show_page_includes_line_items(): void
+    {
+        $this->user->update(['current_store_id' => $this->store->id]);
+
+        $order = Order::factory()->create(['store_id' => $this->store->id]);
+        $orderItems = OrderItem::factory()->count(3)->create([
+            'order_id' => $order->id,
+            'title' => 'Test Product',
+            'price' => 100.00,
+        ]);
+
+        $invoice = Invoice::factory()->create([
+            'store_id' => $this->store->id,
+            'invoiceable_type' => Order::class,
+            'invoiceable_id' => $order->id,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get("/invoices/{$invoice->id}");
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('invoices/Show')
+            ->has('invoice.invoiceable.items', 3)
+        );
     }
 }

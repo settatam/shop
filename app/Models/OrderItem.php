@@ -17,6 +17,7 @@ class OrderItem extends Model
         'product_id',
         'product_variant_id',
         'bucket_item_id',
+        'category_id',
         'sku',
         'title',
         'quantity',
@@ -58,6 +59,11 @@ class OrderItem extends Model
     public function bucketItem(): BelongsTo
     {
         return $this->belongsTo(BucketItem::class);
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
     }
 
     public function getLineTotalAttribute(): float

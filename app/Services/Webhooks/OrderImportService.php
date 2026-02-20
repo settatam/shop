@@ -722,6 +722,7 @@ class OrderImportService
             $order->items()->create([
                 'product_id' => $variant?->product_id,
                 'product_variant_id' => $variant?->id,
+                'category_id' => $variant?->product?->category_id,
                 'sku' => $item['sku'] ?? $variant?->sku,
                 'title' => $item['title'],
                 'quantity' => $item['quantity'],
@@ -737,9 +738,10 @@ class OrderImportService
     protected function findMatchingVariant(array $item, int $storeId): ?ProductVariant
     {
         if (! empty($item['sku'])) {
-            $variant = ProductVariant::whereHas('product', function ($query) use ($storeId) {
-                $query->where('store_id', $storeId);
-            })->where('sku', $item['sku'])->first();
+            $variant = ProductVariant::with('product')
+                ->whereHas('product', function ($query) use ($storeId) {
+                    $query->where('store_id', $storeId);
+                })->where('sku', $item['sku'])->first();
 
             if ($variant) {
                 return $variant;
