@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\Invoice;
 use App\Models\Memo;
 use App\Models\Order;
-use App\Models\Payment;
 use App\Models\OrderItem;
+use App\Models\Payment;
 use App\Models\Repair;
 use App\Models\Role;
 use App\Models\Store;
@@ -538,10 +538,12 @@ class InvoiceTest extends TestCase
 
     public function test_web_invoice_show_page_includes_line_items(): void
     {
+        // Ensure store completes onboarding
+        $this->store->update(['step' => 2]);
         $this->user->update(['current_store_id' => $this->store->id]);
 
         $order = Order::factory()->create(['store_id' => $this->store->id]);
-        $orderItems = OrderItem::factory()->count(3)->create([
+        OrderItem::factory()->count(3)->create([
             'order_id' => $order->id,
             'title' => 'Test Product',
             'price' => 100.00,

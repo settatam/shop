@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\SalesChannel;
@@ -95,20 +96,44 @@ class SalesReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
-        $orders = Order::query()
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $ordersQuery = Order::query()
             ->where('store_id', $store->id)
             ->whereIn('status', Order::PAID_STATUSES)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'customer.leadSource',
                 'items.product.category',
+                'items.category',
                 'items.variant',
                 'salesChannel',
                 'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
-            ])
-            ->orderBy('created_at', 'desc')
-            ->get()
+            ]);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $ordersQuery->whereHas('items', function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->whereIn('category_id', $categoryIds)
+                        ->orWhereHas('product', function ($q3) use ($categoryIds) {
+                            $q3->whereIn('category_id', $categoryIds);
+                        });
+                });
+            });
+        }
+
+        $ordersRaw = $ordersQuery->orderBy('created_at', 'desc')->get();
+
+        // Get category breakdown before transforming
+        $categoryBreakdown = $this->getCategoryBreakdown($ordersRaw, $store->id);
+
+        $orders = $ordersRaw
             ->map(function ($order) {
                 // Get categories from items
                 $categories = $order->items
@@ -188,6 +213,9 @@ class SalesReportController extends Controller
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -465,10 +493,16 @@ class SalesReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
         // Get sales channels for the store
         $channels = $this->getSalesChannels($store->id);
 
-        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate, $channels);
+        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate, $channels, $categoryIds);
 
         // Calculate totals
         $totals = [
@@ -493,6 +527,26 @@ class SalesReportController extends Controller
             $totals[$key] = $monthlyData->sum($key);
         }
 
+        // Get category breakdown from orders for the period
+        $ordersForBreakdown = Order::query()
+            ->where('store_id', $store->id)
+            ->whereIn('status', Order::PAID_STATUSES)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->with(['items.product.category', 'items.category', 'items.variant']);
+
+        if ($categoryIds) {
+            $ordersForBreakdown->whereHas('items', function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->whereIn('category_id', $categoryIds)
+                        ->orWhereHas('product', function ($q3) use ($categoryIds) {
+                            $q3->whereIn('category_id', $categoryIds);
+                        });
+                });
+            });
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($ordersForBreakdown->get(), $store->id);
+
         return Inertia::render('reports/sales/Monthly', [
             'monthlyData' => $monthlyData,
             'totals' => $totals,
@@ -502,6 +556,9 @@ class SalesReportController extends Controller
             'endMonth' => $endDate->month,
             'endYear' => $endDate->year,
             'dateRangeLabel' => $startDate->format('M Y').' - '.$endDate->format('M Y'),
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -526,11 +583,17 @@ class SalesReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
         // Get sales channels for the store
         $channels = $this->getSalesChannels($store->id);
 
         // For MTD, we show daily breakdown
-        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels);
+        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels, $categoryIds);
 
         // Calculate totals
         $totals = [
@@ -555,6 +618,26 @@ class SalesReportController extends Controller
             $totals[$key] = $dailyData->sum($key);
         }
 
+        // Get category breakdown from orders for the period
+        $ordersForBreakdown = Order::query()
+            ->where('store_id', $store->id)
+            ->whereIn('status', Order::PAID_STATUSES)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->with(['items.product.category', 'items.category', 'items.variant']);
+
+        if ($categoryIds) {
+            $ordersForBreakdown->whereHas('items', function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->whereIn('category_id', $categoryIds)
+                        ->orWhereHas('product', function ($q3) use ($categoryIds) {
+                            $q3->whereIn('category_id', $categoryIds);
+                        });
+                });
+            });
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($ordersForBreakdown->get(), $store->id);
+
         return Inertia::render('reports/sales/MonthToDate', [
             'dailyData' => $dailyData,
             'totals' => $totals,
@@ -562,6 +645,9 @@ class SalesReportController extends Controller
             'endDate' => $endDate->format('Y-m-d'),
             'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
             'channels' => $channels,
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -1125,19 +1211,33 @@ class SalesReportController extends Controller
     /**
      * Get monthly aggregated data.
      */
-    protected function getMonthlyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate, Collection $channels)
+    protected function getMonthlyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate, Collection $channels, ?array $categoryIds = null)
     {
-        $orders = Order::query()
+        $ordersQuery = Order::query()
             ->where('store_id', $storeId)
             ->whereIn('status', Order::PAID_STATUSES)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'items.variant',
+                'items.product',
                 'salesChannel',
                 'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
-            ])
-            ->get();
+            ]);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $ordersQuery->whereHas('items', function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->whereIn('category_id', $categoryIds)
+                        ->orWhereHas('product', function ($q3) use ($categoryIds) {
+                            $q3->whereIn('category_id', $categoryIds);
+                        });
+                });
+            });
+        }
+
+        $orders = $ordersQuery->get();
 
         // Group by month
         $grouped = $orders->groupBy(fn ($order) => $order->created_at->format('Y-m'));
@@ -1233,19 +1333,33 @@ class SalesReportController extends Controller
     /**
      * Get daily aggregated data.
      */
-    protected function getDailyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate, Collection $channels)
+    protected function getDailyAggregatedData(int $storeId, Carbon $startDate, Carbon $endDate, Collection $channels, ?array $categoryIds = null)
     {
-        $orders = Order::query()
+        $ordersQuery = Order::query()
             ->where('store_id', $storeId)
             ->whereIn('status', Order::PAID_STATUSES)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with([
                 'items.variant',
+                'items.product',
                 'salesChannel',
                 'platformOrder',
                 'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
-            ])
-            ->get();
+            ]);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $ordersQuery->whereHas('items', function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->whereIn('category_id', $categoryIds)
+                        ->orWhereHas('product', function ($q3) use ($categoryIds) {
+                            $q3->whereIn('category_id', $categoryIds);
+                        });
+                });
+            });
+        }
+
+        $orders = $ordersQuery->get();
 
         // Group by day
         $grouped = $orders->groupBy(fn ($order) => $order->created_at->format('Y-m-d'));
@@ -1335,5 +1449,139 @@ class SalesReportController extends Controller
         }
 
         return $days->reverse()->values();
+    }
+
+    /**
+     * Get categories for the store with tree structure.
+     */
+    protected function getCategories(int $storeId): array
+    {
+        $categories = Category::where('store_id', $storeId)
+            ->get(['id', 'name', 'parent_id']);
+
+        return $this->buildCategoryTree($categories);
+    }
+
+    /**
+     * Build a flat list of categories in tree order with depth information.
+     */
+    protected function buildCategoryTree(Collection $categories, ?int $parentId = null, int $depth = 0): array
+    {
+        $result = [];
+
+        // Find all category IDs that have children
+        $parentIds = $categories->whereNotNull('parent_id')->pluck('parent_id')->unique()->toArray();
+
+        $children = $categories
+            ->filter(fn ($c) => $c->parent_id == $parentId)
+            ->sortBy('name');
+
+        foreach ($children as $category) {
+            $hasChildren = in_array($category->id, $parentIds);
+            $result[] = [
+                'value' => $category->id,
+                'label' => $category->name,
+                'depth' => $depth,
+                'isLeaf' => ! $hasChildren,
+            ];
+
+            // Recursively add children
+            $result = array_merge($result, $this->buildCategoryTree($categories, $category->id, $depth + 1));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get all descendant category IDs for a given category.
+     *
+     * @return array<int>
+     */
+    protected function getCategoryDescendantIds(int $categoryId, int $storeId): array
+    {
+        $allIds = [$categoryId];
+
+        $childIds = Category::where('store_id', $storeId)
+            ->where('parent_id', $categoryId)
+            ->pluck('id')
+            ->toArray();
+
+        foreach ($childIds as $childId) {
+            $allIds = array_merge($allIds, $this->getCategoryDescendantIds($childId, $storeId));
+        }
+
+        return $allIds;
+    }
+
+    /**
+     * Get category breakdown for orders.
+     * Returns sales aggregated by each leaf category.
+     */
+    protected function getCategoryBreakdown(Collection $orders, int $storeId): array
+    {
+        $categories = Category::where('store_id', $storeId)
+            ->get(['id', 'name', 'parent_id'])
+            ->keyBy('id');
+
+        // Find all category IDs that have children (non-leaf)
+        $parentIds = $categories->whereNotNull('parent_id')->pluck('parent_id')->unique()->toArray();
+
+        // Build breakdown by category
+        $breakdown = [];
+
+        foreach ($orders as $order) {
+            foreach ($order->items as $item) {
+                $categoryId = $item->category_id ?? $item->product?->category_id;
+                if (! $categoryId) {
+                    $categoryId = 0; // Uncategorized
+                }
+
+                if (! isset($breakdown[$categoryId])) {
+                    $category = $categories->get($categoryId);
+                    $breakdown[$categoryId] = [
+                        'category_id' => $categoryId,
+                        'category_name' => $category?->name ?? 'Uncategorized',
+                        'is_leaf' => $categoryId === 0 || ! in_array($categoryId, $parentIds),
+                        'parent_id' => $category?->parent_id,
+                        'items_sold' => 0,
+                        'orders_count' => 0,
+                        'order_ids' => [],
+                        'total_cost' => 0,
+                        'total_wholesale' => 0,
+                        'total_sales' => 0,
+                        'total_profit' => 0,
+                    ];
+                }
+
+                $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
+                $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
+                $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+
+                $itemTotal = ($item->price ?? $item->unit_price ?? 0) * ($item->quantity ?? 1);
+                $itemCost = $effectiveCost * ($item->quantity ?? 1);
+
+                $breakdown[$categoryId]['items_sold'] += $item->quantity ?? 1;
+                $breakdown[$categoryId]['total_cost'] += $itemCost;
+                $breakdown[$categoryId]['total_wholesale'] += $wholesalePrice * ($item->quantity ?? 1);
+                $breakdown[$categoryId]['total_sales'] += $itemTotal;
+                $breakdown[$categoryId]['total_profit'] += $itemTotal - $itemCost;
+
+                // Track unique orders
+                if (! in_array($order->id, $breakdown[$categoryId]['order_ids'])) {
+                    $breakdown[$categoryId]['order_ids'][] = $order->id;
+                    $breakdown[$categoryId]['orders_count']++;
+                }
+            }
+        }
+
+        // Remove order_ids from final output (just used for counting)
+        foreach ($breakdown as &$cat) {
+            unset($cat['order_ids']);
+        }
+
+        // Sort by total sales descending
+        usort($breakdown, fn ($a, $b) => $b['total_sales'] <=> $a['total_sales']);
+
+        return array_values($breakdown);
     }
 }

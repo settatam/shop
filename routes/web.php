@@ -775,6 +775,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         // Unified Buys Report (all sources)
         Route::get('/', [BuysReportController::class, 'index'])->name('index');
         Route::get('export', [BuysReportController::class, 'exportIndex'])->name('export');
+        Route::get('daily', [BuysReportController::class, 'daily'])->name('daily');
+        Route::get('daily/export', [BuysReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('monthly', [BuysReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [BuysReportController::class, 'exportMonthly'])->name('monthly.export');
         Route::get('yearly', [BuysReportController::class, 'yearly'])->name('yearly');

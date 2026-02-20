@@ -76,6 +76,181 @@ class BuysReportController extends Controller
     }
 
     /**
+     * Unified Buys Report - Daily view showing individual transactions.
+     */
+    public function daily(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        // Parse date range from request, default to today
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfDay();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactions = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items', 'customer', 'user'])
+            ->orderBy('payment_processed_at', 'desc')
+            ->get()
+            ->map(function ($transaction) {
+                $estimatedValue = $transaction->items->sum('price');
+                $profit = $estimatedValue - ($transaction->final_offer ?? 0);
+
+                return [
+                    'id' => $transaction->id,
+                    'date' => Carbon::parse($transaction->payment_processed_at)->format('Y-m-d H:i'),
+                    'transaction_number' => $transaction->transaction_number ?? "#{$transaction->id}",
+                    'customer' => $transaction->customer?->full_name ?? 'Walk-in',
+                    'type' => ucfirst($transaction->type ?? 'in_store'),
+                    'source' => ucfirst($transaction->source ?? 'direct'),
+                    'num_items' => $transaction->items->count(),
+                    'purchase_amt' => $transaction->final_offer ?? 0,
+                    'estimated_value' => $estimatedValue,
+                    'profit' => $profit,
+                    'profit_percent' => ($transaction->final_offer ?? 0) > 0
+                        ? ($profit / ($transaction->final_offer ?? 1)) * 100
+                        : 0,
+                    'user' => $transaction->user?->name ?? '-',
+                ];
+            });
+
+        // Calculate totals
+        $totals = [
+            'num_items' => $transactions->sum('num_items'),
+            'purchase_amt' => $transactions->sum('purchase_amt'),
+            'estimated_value' => $transactions->sum('estimated_value'),
+            'profit' => $transactions->sum('profit'),
+            'profit_percent' => $transactions->sum('purchase_amt') > 0
+                ? ($transactions->sum('profit') / $transactions->sum('purchase_amt')) * 100
+                : 0,
+        ];
+
+        return Inertia::render('reports/buys/Daily', [
+            'transactions' => $transactions,
+            'totals' => $totals,
+            'startDate' => $startDate->format('Y-m-d'),
+            'endDate' => $endDate->format('Y-m-d'),
+            'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
+        ]);
+    }
+
+    /**
+     * Export daily transactions to CSV.
+     */
+    public function exportDaily(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfDay();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactions = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items', 'customer', 'user'])
+            ->orderBy('payment_processed_at', 'desc')
+            ->get();
+
+        $filename = 'buys-daily-'.$startDate->format('Y-m-d').'-to-'.$endDate->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($transactions) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Date',
+                'Transaction #',
+                'Customer',
+                'Type',
+                'Source',
+                '# Items',
+                'Purchase Amt',
+                'Estimated Value',
+                'Profit',
+                'Profit %',
+                'User',
+            ]);
+
+            $totalItems = 0;
+            $totalPurchase = 0;
+            $totalEstimated = 0;
+            $totalProfit = 0;
+
+            foreach ($transactions as $transaction) {
+                $estimatedValue = $transaction->items->sum('price');
+                $purchaseAmt = $transaction->final_offer ?? 0;
+                $profit = $estimatedValue - $purchaseAmt;
+                $profitPercent = $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0;
+                $numItems = $transaction->items->count();
+
+                fputcsv($handle, [
+                    Carbon::parse($transaction->payment_processed_at)->format('Y-m-d H:i'),
+                    $transaction->transaction_number ?? "#{$transaction->id}",
+                    $transaction->customer?->full_name ?? 'Walk-in',
+                    ucfirst($transaction->type ?? 'in_store'),
+                    ucfirst($transaction->source ?? 'direct'),
+                    $numItems,
+                    number_format($purchaseAmt, 2),
+                    number_format($estimatedValue, 2),
+                    number_format($profit, 2),
+                    number_format($profitPercent, 2).'%',
+                    $transaction->user?->name ?? '-',
+                ]);
+
+                $totalItems += $numItems;
+                $totalPurchase += $purchaseAmt;
+                $totalEstimated += $estimatedValue;
+                $totalProfit += $profit;
+            }
+
+            $totalProfitPercent = $totalPurchase > 0 ? ($totalProfit / $totalPurchase) * 100 : 0;
+
+            fputcsv($handle, [
+                'TOTALS',
+                '',
+                '',
+                '',
+                '',
+                $totalItems,
+                number_format($totalPurchase, 2),
+                number_format($totalEstimated, 2),
+                number_format($totalProfit, 2),
+                number_format($totalProfitPercent, 2).'%',
+                '',
+            ]);
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
      * Unified Buys Report - Month over Month.
      */
     public function monthly(Request $request): Response
