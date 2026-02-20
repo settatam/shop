@@ -106,6 +106,20 @@ class PaymentListController extends Controller
             $query->where('amount', '<=', $request->max_amount);
         }
 
+        // Filter by payable type (repair, order/sale, memo, transaction/buy)
+        if ($request->filled('payable_type')) {
+            $payableType = $request->payable_type;
+            $typeMap = [
+                'repair' => 'App\\Models\\Repair',
+                'order' => 'App\\Models\\Order',
+                'memo' => 'App\\Models\\Memo',
+                'transaction' => 'App\\Models\\Transaction',
+            ];
+            if (isset($typeMap[$payableType])) {
+                $query->where('payable_type', $typeMap[$payableType]);
+            }
+        }
+
         // Filter by platform (through payable order relationship)
         if ($request->filled('platform')) {
             $platform = $request->platform;
@@ -153,6 +167,18 @@ class PaymentListController extends Controller
         if ($request->filled('max_amount')) {
             $totalsQuery->where('amount', '<=', $request->max_amount);
         }
+        if ($request->filled('payable_type')) {
+            $payableType = $request->payable_type;
+            $typeMap = [
+                'repair' => 'App\\Models\\Repair',
+                'order' => 'App\\Models\\Order',
+                'memo' => 'App\\Models\\Memo',
+                'transaction' => 'App\\Models\\Transaction',
+            ];
+            if (isset($typeMap[$payableType])) {
+                $totalsQuery->where('payable_type', $typeMap[$payableType]);
+            }
+        }
         if ($request->filled('platform')) {
             $platform = $request->platform;
             $totalsQuery->where(function ($q) use ($platform) {
@@ -175,10 +201,11 @@ class PaymentListController extends Controller
         return Inertia::render('payments/Index', [
             'payments' => $payments,
             'totals' => $totals,
-            'filters' => $request->only(['payment_method', 'status', 'from_date', 'to_date', 'search', 'customer_id', 'sort', 'direction', 'min_amount', 'max_amount', 'platform']),
+            'filters' => $request->only(['payment_method', 'status', 'from_date', 'to_date', 'search', 'customer_id', 'sort', 'direction', 'min_amount', 'max_amount', 'platform', 'payable_type']),
             'paymentMethods' => $this->getPaymentMethods(),
             'statuses' => $this->getStatuses(),
             'platforms' => $this->getPlatforms(),
+            'payableTypes' => $this->getPayableTypes(),
         ]);
     }
 
@@ -229,6 +256,15 @@ class PaymentListController extends Controller
             ['value' => Payment::STATUS_FAILED, 'label' => 'Failed'],
             ['value' => Payment::STATUS_REFUNDED, 'label' => 'Refunded'],
             ['value' => Payment::STATUS_PARTIALLY_REFUNDED, 'label' => 'Partially Refunded'],
+        ];
+    }
+
+    protected function getPayableTypes(): array
+    {
+        return [
+            ['value' => 'order', 'label' => 'Sales'],
+            ['value' => 'repair', 'label' => 'Repairs'],
+            ['value' => 'memo', 'label' => 'Memos'],
         ];
     }
 

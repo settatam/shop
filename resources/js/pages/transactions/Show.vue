@@ -4,7 +4,6 @@ import { NotesSection } from '@/components/notes';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
 import AttachmentsSection from '@/components/transactions/AttachmentsSection.vue';
 import ShippingLabelsSection from '@/components/transactions/ShippingLabelsSection.vue';
-import SmsMessagesSection from '@/components/transactions/SmsMessagesSection.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -1435,338 +1434,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <!-- Main content -->
                 <div class="lg:col-span-2 space-y-6">
-                    <!-- Status Section - shown for all transactions -->
-                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Status</h3>
-                                    <span
-                                        :class="[
-                                            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                                            statusColors[transaction.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-                                        ]"
-                                    >
-                                        {{ currentStatusLabel }}
-                                    </span>
-                                </div>
-                                <Menu as="div" class="relative">
-                                    <MenuButton
-                                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                                    >
-                                        Change Status
-                                        <ChevronDownIcon class="-mr-1 size-5 text-gray-400" />
-                                    </MenuButton>
-                                    <transition
-                                        enter-active-class="transition ease-out duration-100"
-                                        enter-from-class="transform opacity-0 scale-95"
-                                        enter-to-class="transform opacity-100 scale-100"
-                                        leave-active-class="transition ease-in duration-75"
-                                        leave-from-class="transform opacity-100 scale-100"
-                                        leave-to-class="transform opacity-0 scale-95"
-                                    >
-                                        <MenuItems class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-700 dark:ring-white/10">
-                                            <div class="py-1">
-                                                <MenuItem v-for="status in availableStatuses" :key="status.value" v-slot="{ active }">
-                                                    <button
-                                                        type="button"
-                                                        :class="[active ? 'bg-gray-100 dark:bg-gray-600' : '', 'block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200']"
-                                                        @click="changeStatus(status.value)"
-                                                    >
-                                                        {{ status.label }}
-                                                    </button>
-                                                </MenuItem>
-                                            </div>
-                                        </MenuItems>
-                                    </transition>
-                                </Menu>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Online Transaction Actions -->
-                    <div v-if="transaction.is_online" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Workflow Actions</h3>
-                            <div class="flex flex-wrap gap-3">
-                                <!-- Kit Request Phase -->
-                                <button
-                                    v-if="canConfirmKitRequest"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
-                                    @click="confirmKitRequest"
-                                >
-                                    <CheckIcon class="-ml-0.5 size-5" />
-                                    Confirm Kit Request
-                                </button>
-                                <button
-                                    v-if="canHoldKitRequest"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-500"
-                                    @click="holdKitRequest"
-                                >
-                                    <ClockIcon class="-ml-0.5 size-5" />
-                                    Put On Hold
-                                </button>
-                                <button
-                                    v-if="canRejectKitRequest"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
-                                    @click="rejectKitRequest"
-                                >
-                                    <XMarkIcon class="-ml-0.5 size-5" />
-                                    Reject Kit Request
-                                </button>
-
-                                <!-- Kit Shipping Phase -->
-                                <button
-                                    v-if="canMarkKitSent"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                                    @click="showKitSentModal = true"
-                                >
-                                    <TruckIcon class="-ml-0.5 size-5" />
-                                    Mark Kit Sent
-                                </button>
-                                <button
-                                    v-if="canMarkKitDelivered"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500"
-                                    @click="markKitDelivered"
-                                >
-                                    <InboxIcon class="-ml-0.5 size-5" />
-                                    Mark Kit Delivered
-                                </button>
-
-                                <!-- Items Phase -->
-                                <button
-                                    v-if="canMarkItemsReceived"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-500"
-                                    @click="markItemsReceived"
-                                >
-                                    <ArchiveBoxIcon class="-ml-0.5 size-5" />
-                                    Mark Items Received
-                                </button>
-                                <button
-                                    v-if="canMarkItemsReviewed"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-teal-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-500"
-                                    @click="markItemsReviewed"
-                                >
-                                    <CheckIcon class="-ml-0.5 size-5" />
-                                    Mark Items Reviewed
-                                </button>
-
-                                <!-- Offer Phase (for online transactions after review) -->
-                                <button
-                                    v-if="transaction.can_submit_offer"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
-                                    @click="showOfferModal = true"
-                                >
-                                    <CurrencyDollarIcon class="-ml-0.5 size-5" />
-                                    Submit Offer
-                                </button>
-                                <button
-                                    v-if="transaction.can_accept_offer && transaction.pending_offer"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
-                                    @click="acceptOffer()"
-                                >
-                                    <CheckIcon class="-ml-0.5 size-5" />
-                                    Accept Offer
-                                </button>
-                                <button
-                                    v-if="transaction.can_accept_offer && transaction.pending_offer"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
-                                    @click="openDeclineModal()"
-                                >
-                                    <XMarkIcon class="-ml-0.5 size-5" />
-                                    Decline Offer
-                                </button>
-
-                                <!-- Kit Rejection (after items received/reviewed) -->
-                                <button
-                                    v-if="canRejectKit"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
-                                    @click="showRejectKitModal = true"
-                                >
-                                    <XMarkIcon class="-ml-0.5 size-5" />
-                                    Reject Kit
-                                </button>
-
-                                <!-- Initiate Return -->
-                                <button
-                                    v-if="canInitiateReturn"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-500"
-                                    @click="initiateReturn"
-                                >
-                                    <ArrowUturnLeftIcon class="-ml-0.5 size-5" />
-                                    Initiate Return
-                                </button>
-
-                                <!-- Payment Phase -->
-                                <button
-                                    v-if="transaction.can_process_payment"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500"
-                                    @click="showPaymentModal = true"
-                                >
-                                    <BanknotesIcon class="-ml-0.5 size-5" />
-                                    Process Payment
-                                </button>
-
-                                <!-- Return Phase -->
-                                <button
-                                    v-if="canRequestReturn"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-500"
-                                    @click="requestReturn"
-                                >
-                                    <ArrowUturnLeftIcon class="-ml-0.5 size-5" />
-                                    Request Return
-                                </button>
-                                <button
-                                    v-if="canMarkReturnShipped"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-500"
-                                    @click="showReturnShippedModal = true"
-                                >
-                                    <TruckIcon class="-ml-0.5 size-5" />
-                                    Mark Return Shipped
-                                </button>
-                                <button
-                                    v-if="canMarkItemsReturned"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500"
-                                    @click="markItemsReturned"
-                                >
-                                    <CheckIcon class="-ml-0.5 size-5" />
-                                    Mark Items Returned
-                                </button>
-
-                                <!-- Send Payout (PayPal/Venmo) -->
-                                <button
-                                    v-if="transaction.status === 'payment_processed'"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
-                                    @click="openPayoutModal"
-                                >
-                                    <CurrencyDollarIcon class="-ml-0.5 size-5" />
-                                    Send Payout
-                                </button>
-                            </div>
-
-                            <!-- Payouts List -->
-                            <div v-if="transaction.payouts && transaction.payouts.length > 0" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Payouts</h4>
-                                <ul class="space-y-2">
-                                    <li v-for="payout in transaction.payouts" :key="payout.id" class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-700/50">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-sm font-medium text-gray-900 dark:text-white">
-                                                {{ payout.recipient_wallet === 'VENMO' ? 'Venmo' : 'PayPal' }}
-                                            </span>
-                                            <span class="text-sm text-gray-500 dark:text-gray-400">
-                                                {{ payout.recipient_value }}
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center gap-3">
-                                            <span class="text-sm font-semibold text-gray-900 dark:text-white">
-                                                {{ formatCurrency(payout.amount) }}
-                                            </span>
-                                            <span :class="[payoutStatusColors[payout.status] || 'bg-gray-100 text-gray-800', 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset']">
-                                                {{ payoutStatusLabels[payout.status] || payout.status }}
-                                            </span>
-                                            <button
-                                                v-if="['pending', 'processing', 'UNCLAIMED', 'ONHOLD'].includes(payout.status)"
-                                                type="button"
-                                                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                                                title="Refresh status"
-                                                @click="refreshPayoutStatus(payout.id)"
-                                            >
-                                                <ArrowPathIcon class="size-4" />
-                                            </button>
-                                            <a
-                                                v-if="payout.tracking_url"
-                                                :href="payout.tracking_url"
-                                                target="_blank"
-                                                class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs"
-                                            >
-                                                View
-                                            </a>
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
-
-                            <!-- Rollback Actions -->
-                            <div v-if="hasRollbackActions" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Go Back / Reset</h4>
-                                <div class="flex flex-wrap gap-2">
-                                    <button
-                                        v-for="(label, actionKey) in transaction.rollback_actions"
-                                        :key="actionKey"
-                                        type="button"
-                                        class="inline-flex items-center gap-x-1.5 rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                                        @click="executeRollbackAction(actionKey)"
-                                    >
-                                        <ArrowPathIcon class="-ml-0.5 size-4" />
-                                        {{ label }}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- In-Store Actions (simpler) -->
-                    <div v-else class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Actions</h3>
-                            <div class="flex flex-wrap gap-3">
-                                <button
-                                    v-if="transaction.can_submit_offer"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-                                    @click="showOfferModal = true"
-                                >
-                                    <CurrencyDollarIcon class="-ml-0.5 size-5" />
-                                    Submit Offer
-                                </button>
-                                <button
-                                    v-if="transaction.can_accept_offer && transaction.pending_offer"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500"
-                                    @click="acceptOffer()"
-                                >
-                                    <CheckIcon class="-ml-0.5 size-5" />
-                                    Accept Offer
-                                </button>
-                                <button
-                                    v-if="transaction.can_accept_offer && transaction.pending_offer"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
-                                    @click="openDeclineModal()"
-                                >
-                                    <XMarkIcon class="-ml-0.5 size-5" />
-                                    Decline Offer
-                                </button>
-                                <button
-                                    v-if="transaction.can_process_payment"
-                                    type="button"
-                                    class="inline-flex items-center gap-x-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500"
-                                    @click="showPaymentModal = true"
-                                >
-                                    <BanknotesIcon class="-ml-0.5 size-5" />
-                                    Process Payment
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Items Section (for in-store transactions) -->
                     <div v-if="!transaction.is_online" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
@@ -2180,6 +1847,55 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         </div>
                     </div>
 
+                    <!-- Status Section - shown for all transactions -->
+                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Status</h3>
+                                    <span
+                                        :class="[
+                                            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                            statusColors[transaction.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+                                        ]"
+                                    >
+                                        {{ currentStatusLabel }}
+                                    </span>
+                                </div>
+                                <Menu as="div" class="relative">
+                                    <MenuButton
+                                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                    >
+                                        Change Status
+                                        <ChevronDownIcon class="-mr-1 size-5 text-gray-400" />
+                                    </MenuButton>
+                                    <transition
+                                        enter-active-class="transition ease-out duration-100"
+                                        enter-from-class="transform opacity-0 scale-95"
+                                        enter-to-class="transform opacity-100 scale-100"
+                                        leave-active-class="transition ease-in duration-75"
+                                        leave-from-class="transform opacity-100 scale-100"
+                                        leave-to-class="transform opacity-0 scale-95"
+                                    >
+                                        <MenuItems class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-700 dark:ring-white/10">
+                                            <div class="py-1">
+                                                <MenuItem v-for="status in availableStatuses" :key="status.value" v-slot="{ active }">
+                                                    <button
+                                                        type="button"
+                                                        :class="[active ? 'bg-gray-100 dark:bg-gray-600' : '', 'block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200']"
+                                                        @click="changeStatus(status.value)"
+                                                    >
+                                                        {{ status.label }}
+                                                    </button>
+                                                </MenuItem>
+                                            </div>
+                                        </MenuItems>
+                                    </transition>
+                                </Menu>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Shipping Labels Section (for online transactions) -->
                     <ShippingLabelsSection
                         v-if="transaction.is_online"
@@ -2193,14 +1909,6 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         :shipping-address="transaction.shipping_address || null"
                         :shipping-address-id="transaction.shipping_address_id || null"
                         :customer="transaction.customer"
-                    />
-
-                    <!-- SMS Messaging Section (for transactions with customer) -->
-                    <SmsMessagesSection
-                        v-if="transaction.customer"
-                        :messages="smsMessages || []"
-                        :transaction-id="transaction.id"
-                        :customer-phone="transaction.customer?.phone_number || null"
                     />
 
                     <!-- Notes -->

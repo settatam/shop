@@ -89,9 +89,15 @@ interface Filters {
     min_amount?: string;
     max_amount?: string;
     platform?: string;
+    payable_type?: string;
 }
 
 interface PlatformOption {
+    value: string;
+    label: string;
+}
+
+interface PayableTypeOption {
     value: string;
     label: string;
 }
@@ -112,6 +118,7 @@ interface Props {
     paymentMethods: PaymentMethod[];
     statuses: Status[];
     platforms: PlatformOption[];
+    payableTypes: PayableTypeOption[];
 }
 
 const props = defineProps<Props>();
@@ -129,12 +136,13 @@ const toDate = ref(props.filters.to_date || '');
 const minAmount = ref(props.filters.min_amount || '');
 const maxAmount = ref(props.filters.max_amount || '');
 const platform = ref(props.filters.platform || '');
+const payableType = ref(props.filters.payable_type || '');
 const showSummary = ref(false);
 const sortField = ref(props.filters.sort || 'created_at');
 const sortDirection = ref<'asc' | 'desc'>(props.filters.direction || 'desc');
 
 const hasActiveFilters = computed(() => {
-    return paymentMethod.value || status.value || fromDate.value || toDate.value || minAmount.value || maxAmount.value || platform.value;
+    return paymentMethod.value || status.value || fromDate.value || toDate.value || minAmount.value || maxAmount.value || platform.value || payableType.value;
 });
 
 function applyFilters() {
@@ -147,6 +155,7 @@ function applyFilters() {
         min_amount: minAmount.value || undefined,
         max_amount: maxAmount.value || undefined,
         platform: platform.value || undefined,
+        payable_type: payableType.value || undefined,
         sort: sortField.value !== 'created_at' ? sortField.value : undefined,
         direction: sortDirection.value !== 'desc' ? sortDirection.value : undefined,
     }, {
@@ -179,6 +188,7 @@ function clearFilters() {
     minAmount.value = '';
     maxAmount.value = '';
     platform.value = '';
+    payableType.value = '';
     sortField.value = 'created_at';
     sortDirection.value = 'desc';
     router.get('/payments', {}, { preserveState: true });
@@ -347,6 +357,20 @@ function getPayableLabel(payment: Payment): string {
                         <option value="">All Platforms</option>
                         <option v-for="p in platforms" :key="p.value" :value="p.value">
                             {{ p.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Payment For</label>
+                    <select
+                        v-model="payableType"
+                        @change="applyFilters"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Types</option>
+                        <option v-for="t in payableTypes" :key="t.value" :value="t.value">
+                            {{ t.label }}
                         </option>
                     </select>
                 </div>

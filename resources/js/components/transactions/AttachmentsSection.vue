@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import axios from 'axios';
-import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon, TrashIcon } from '@heroicons/vue/24/outline';
+import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon, TrashIcon, DocumentTextIcon, ArrowDownTrayIcon } from '@heroicons/vue/24/outline';
 
 interface Attachment {
     id: number;
     url: string;
     thumbnail_url: string | null;
     alt_text: string | null;
+    file_name: string | null;
+    file_type: string | null;
 }
 
 interface Props {
@@ -62,15 +64,55 @@ function handleDragLeave() {
     dragOver.value = false;
 }
 
+// Allowed file types
+const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+];
+
+function isImageFile(file: File): boolean {
+    return file.type.startsWith('image/');
+}
+
+function getFileIcon(file: File): string {
+    if (file.type === 'application/pdf') return 'pdf';
+    if (file.type.includes('word')) return 'doc';
+    if (file.type.includes('excel') || file.type.includes('spreadsheet')) return 'xls';
+    return 'file';
+}
+
+function isAttachmentImage(attachment: Attachment): boolean {
+    // Check file_type if available
+    if (attachment.file_type) {
+        return attachment.file_type.startsWith('image/');
+    }
+    // Fallback to URL extension check
+    const url = attachment.url.toLowerCase();
+    return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|$)/i.test(url);
+}
+
 function addFiles(files: File[]) {
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    for (const file of imageFiles) {
+    const validFiles = files.filter(file => allowedTypes.includes(file.type));
+    for (const file of validFiles) {
         pendingFiles.value.push(file);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            pendingPreviews.value.push(e.target?.result as string);
-        };
-        reader.readAsDataURL(file);
+        if (isImageFile(file)) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                pendingPreviews.value.push(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        } else {
+            // For non-image files, use a placeholder
+            pendingPreviews.value.push(`file:${file.name}:${getFileIcon(file)}`);
+        }
     }
 }
 
@@ -172,7 +214,7 @@ function prevImage() {
                 Attachments
             </h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Upload ID photos, receipts, or other documentation
+                Upload images, PDFs, or documents (ID photos, receipts, invoices)
             </p>
 
             <!-- Error Message -->
@@ -210,7 +252,7 @@ function prevImage() {
                     ref="fileInput"
                     type="file"
                     class="hidden"
-                    accept="image/*"
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
                     multiple
                     @change="handleFileSelect"
                 />
@@ -242,11 +284,23 @@ function prevImage() {
                         :key="index"
                         class="relative group"
                     >
+                        <!-- Image preview -->
                         <img
+                            v-if="!preview.startsWith('file:')"
                             :src="preview"
                             alt="Preview"
                             class="w-full h-20 object-cover rounded-md"
                         />
+                        <!-- Document preview -->
+                        <div
+                            v-else
+                            class="w-full h-20 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-md"
+                        >
+                            <DocumentTextIcon class="h-8 w-8 text-gray-400" />
+                            <span class="text-xs text-gray-500 dark:text-gray-400 mt-1 px-1 truncate w-full text-center">
+                                {{ preview.split(':')[1] }}
+                            </span>
+                        </div>
                         <button
                             type="button"
                             class="absolute top-1 right-1 p-0.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -269,17 +323,34 @@ function prevImage() {
                         :key="attachment.id"
                         class="relative group"
                     >
-                        <button
-                            type="button"
-                            class="w-full"
-                            @click="openLightbox(index)"
-                        >
-                            <img
-                                :src="attachment.thumbnail_url || attachment.url"
-                                :alt="attachment.alt_text || 'Attachment'"
-                                class="w-full h-24 object-cover rounded-md hover:opacity-80 transition-opacity"
-                            />
-                        </button>
+                        <!-- Image attachment -->
+                        <template v-if="isAttachmentImage(attachment)">
+                            <button
+                                type="button"
+                                class="w-full"
+                                @click="openLightbox(index)"
+                            >
+                                <img
+                                    :src="attachment.thumbnail_url || attachment.url"
+                                    :alt="attachment.alt_text || 'Attachment'"
+                                    class="w-full h-24 object-cover rounded-md hover:opacity-80 transition-opacity"
+                                />
+                            </button>
+                        </template>
+                        <!-- Document attachment -->
+                        <template v-else>
+                            <a
+                                :href="attachment.url"
+                                target="_blank"
+                                class="w-full h-24 flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                            >
+                                <DocumentTextIcon class="h-8 w-8 text-gray-400" />
+                                <span class="text-xs text-gray-500 dark:text-gray-400 mt-1 px-1 truncate w-full text-center">
+                                    {{ attachment.file_name || 'Document' }}
+                                </span>
+                                <ArrowDownTrayIcon class="h-4 w-4 text-indigo-500 mt-1" />
+                            </a>
+                        </template>
                         <button
                             type="button"
                             class="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow"

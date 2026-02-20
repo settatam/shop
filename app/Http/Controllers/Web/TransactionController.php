@@ -219,6 +219,8 @@ class TransactionController extends Controller
                 'url' => $image->url,
                 'thumbnail_url' => $image->thumbnail_url,
                 'alt_text' => $image->alt_text,
+                'file_name' => $image->original_filename ?? null,
+                'file_type' => $image->mime_type ?? null,
             ]),
             'statuses' => $statuses,
             'paymentMethods' => $this->getPaymentMethods(),
@@ -2096,7 +2098,7 @@ class TransactionController extends Controller
     }
 
     /**
-     * Upload attachments (ID photos, documentation) to a transaction.
+     * Upload attachments (ID photos, documentation, PDFs) to a transaction.
      */
     public function uploadAttachments(Request $request, Transaction $transaction): \Illuminate\Http\JsonResponse
     {
@@ -2104,7 +2106,7 @@ class TransactionController extends Controller
 
         $request->validate([
             'images' => ['required', 'array', 'min:1'],
-            'images.*' => ['image', 'max:10240'],
+            'images.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,txt'],
         ]);
 
         $store = $this->storeContext->getCurrentStore();
@@ -2126,6 +2128,8 @@ class TransactionController extends Controller
                 'url' => $image->url,
                 'thumbnail_url' => $image->thumbnail_url,
                 'alt_text' => $image->alt_text,
+                'file_name' => $image->original_filename ?? null,
+                'file_type' => $image->mime_type ?? null,
             ]),
         ]);
     }
