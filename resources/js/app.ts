@@ -32,11 +32,33 @@ if (metaCsrf) {
 axios.interceptors.request.use((config) => {
     const hasXsrf = (config.headers as any)?.['X-XSRF-TOKEN'];
     const hasCsrf = (config.headers as any)?.['X-CSRF-TOKEN'];
-    if (!hasXsrf && !hasCsrf && metaCsrf) {
-        (config.headers as any)['X-CSRF-TOKEN'] = metaCsrf;
+    if (!hasXsrf && !hasCsrf) {
+        // Always get the fresh token from meta (in case it was refreshed)
+        const freshToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content');
+        if (freshToken) {
+            (config.headers as any)['X-CSRF-TOKEN'] = freshToken;
+        }
     }
     return config;
 });
+
+// Handle 419 (CSRF token mismatch) errors by refreshing the page
+// This can happen when the session expires while the user is on the page
+axios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 419) {
+            // Session expired or CSRF token mismatch - refresh the page
+            // This will get a fresh token and restore the session
+            window.location.reload();
+            // Return a pending promise to prevent further error handling
+            return new Promise(() => {});
+        }
+        return Promise.reject(error);
+    }
+);
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

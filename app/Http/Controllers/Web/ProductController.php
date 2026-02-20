@@ -76,10 +76,8 @@ class ProductController extends Controller
         // Keep flat categories list for other uses (mass edit, etc.)
         $categories = $allCategories;
 
-        // Get brands for filters
-        $brands = Brand::where('store_id', $store->id)
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        // Get brands for filters (from product template attribute values, cached)
+        $brands = $this->getBrandOptions($store->id);
 
         // Get warehouses for GIA scanner
         $warehouses = Warehouse::where('store_id', $store->id)
@@ -247,6 +245,53 @@ class ProductController extends Controller
             ->unique('value')
             ->sortBy(fn ($item) => is_numeric($item['value']) ? (float) $item['value'] : $item['value'])
             ->values();
+    }
+
+    /**
+     * Get brand options for filters from product attribute values.
+     * Results are cached for 1 hour per store.
+     *
+     * @return \Illuminate\Support\Collection<int, array{value: string, label: string}>
+     */
+    protected function getBrandOptions(int $storeId): \Illuminate\Support\Collection
+    {
+        $cacheKey = "store_{$storeId}_brand_options";
+
+        return cache()->remember($cacheKey, now()->addHour(), function () use ($storeId) {
+            // Get brand-type fields from templates
+            $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+                ->where('type', ProductTemplateField::TYPE_BRAND)
+                ->pluck('id');
+
+            $brands = collect();
+
+            if ($brandFieldIds->isNotEmpty()) {
+                $brands = ProductAttributeValue::whereIn('product_template_field_id', $brandFieldIds)
+                    ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                    ->whereNotNull('value')
+                    ->where('value', '!=', '')
+                    ->distinct()
+                    ->pluck('value')
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->map(fn ($brand) => [
+                        'value' => $brand,
+                        'label' => $brand,
+                    ]);
+            }
+
+            return $brands;
+        });
+    }
+
+    /**
+     * Clear the cached brand options for a store.
+     */
+    public static function clearBrandOptionsCache(int $storeId): void
+    {
+        cache()->forget("store_{$storeId}_brand_options");
     }
 
     public function create(): Response|RedirectResponse
@@ -1659,6 +1704,94 @@ class ProductController extends Controller
                 'sku' => $variant->sku,
                 'barcode' => $variant->barcode,
             ],
+        ]);
+    }
+
+    /**
+     * Generate AI title for a product (streaming response).
+     */
+    public function generateTitle(Request $request, Product $product): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $product->store_id !== $store->id) {
+            abort(404);
+        }
+
+        $descriptionGenerator = app(\App\Services\AI\DescriptionGenerator::class);
+
+        return response()->stream(function () use ($descriptionGenerator, $product) {
+            try {
+                $suggestion = $descriptionGenerator->generateTitle($product);
+
+                // Send the generated title
+                echo 'data: '.json_encode([
+                    'type' => 'complete',
+                    'content' => $suggestion->suggested_content,
+                ])."\n\n";
+                ob_flush();
+                flush();
+            } catch (\Throwable $e) {
+                echo 'data: '.json_encode([
+                    'type' => 'error',
+                    'message' => 'Failed to generate title: '.$e->getMessage(),
+                ])."\n\n";
+                ob_flush();
+                flush();
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    /**
+     * Generate AI description for a product (streaming response).
+     */
+    public function generateDescription(Request $request, Product $product): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $product->store_id !== $store->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'tone' => 'nullable|string|in:professional,casual,luxury,technical',
+            'length' => 'nullable|string|in:short,medium,long',
+        ]);
+
+        $descriptionGenerator = app(\App\Services\AI\DescriptionGenerator::class);
+
+        return response()->stream(function () use ($descriptionGenerator, $product, $validated) {
+            try {
+                $suggestion = $descriptionGenerator->generate($product, [
+                    'tone' => $validated['tone'] ?? 'professional',
+                    'length' => $validated['length'] ?? 'medium',
+                ]);
+
+                // Send the generated description
+                echo 'data: '.json_encode([
+                    'type' => 'complete',
+                    'content' => $suggestion->suggested_content,
+                ])."\n\n";
+                ob_flush();
+                flush();
+            } catch (\Throwable $e) {
+                echo 'data: '.json_encode([
+                    'type' => 'error',
+                    'message' => 'Failed to generate description: '.$e->getMessage(),
+                ])."\n\n";
+                ob_flush();
+                flush();
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
         ]);
     }
 }

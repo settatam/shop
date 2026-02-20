@@ -28,8 +28,8 @@ interface Level3Category {
 }
 
 interface Brand {
-    id: number;
-    name: string;
+    value: string;
+    label: string;
 }
 
 interface Warehouse {
@@ -105,7 +105,7 @@ function getUrlParams(): WidgetFilter {
     if (params.get('category_id')) filter.category_id = params.get('category_id') || undefined;
     if (params.get('category_level2_id')) filter.category_level2_id = params.get('category_level2_id') || undefined;
     if (params.get('category_level3_id')) filter.category_level3_id = params.get('category_level3_id') || undefined;
-    if (params.get('brand_id')) filter.brand_id = params.get('brand_id') || undefined;
+    if (params.get('brand')) filter.brand = params.get('brand') || undefined;
     if (params.get('status')) filter.status = params.get('status') || undefined;
     if (params.get('stock')) filter.stock = params.get('stock') || undefined;
     if (params.get('type')) filter.type = params.get('type') || undefined;
@@ -116,33 +116,39 @@ function getUrlParams(): WidgetFilter {
 
 const initialParams = getUrlParams();
 
-// Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Products\\ProductsTable', initialParams);
+// Widget setup with initial filter from URL (sync filters to URL)
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Products\\ProductsTable', initialParams, { syncToUrl: true });
 
 // Show/hide advanced filters
 const showAdvancedFilters = ref(false);
 
-// Filter state
-const filters = ref({
-    category_level2_id: '',
-    category_level3_id: '',
-    brand_id: '',
-    status: '',
-    stock: '',
-    type: '',
-    marketplace_id: '',
-    tag_ids: [] as string[],
-    from_date: '',
-    to_date: '',
-    min_price: '',
-    max_price: '',
-    min_cost: '',
-    max_cost: '',
-    stone_shape: '',
-    min_stone_weight: '',
-    max_stone_weight: '',
-    ring_size: '',
-});
+// Initialize filters from URL params
+function getFilterParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        category_level2_id: params.get('category_level2_id') || '',
+        category_level3_id: params.get('category_level3_id') || '',
+        brand: params.get('brand') || '',
+        status: params.get('status') || '',
+        stock: params.get('stock') || '',
+        type: params.get('type') || '',
+        marketplace_id: params.get('marketplace_id') || '',
+        tag_ids: params.get('tag_ids') ? params.get('tag_ids')!.split(',') : [] as string[],
+        from_date: params.get('from_date') || '',
+        to_date: params.get('to_date') || '',
+        min_price: params.get('min_price') || '',
+        max_price: params.get('max_price') || '',
+        min_cost: params.get('min_cost') || '',
+        max_cost: params.get('max_cost') || '',
+        stone_shape: params.get('stone_shape') || '',
+        min_stone_weight: params.get('min_stone_weight') || '',
+        max_stone_weight: params.get('max_stone_weight') || '',
+        ring_size: params.get('ring_size') || '',
+    };
+}
+
+// Filter state - initialized from URL
+const filters = ref(getFilterParams());
 
 // Computed: Level 3 categories based on selected Level 2
 const availableLevel3Categories = computed(() => {
@@ -161,7 +167,7 @@ const activeFilterCount = computed(() => {
     let count = 0;
     if (filters.value.category_level2_id) count++;
     if (filters.value.category_level3_id) count++;
-    if (filters.value.brand_id) count++;
+    if (filters.value.brand) count++;
     if (filters.value.status) count++;
     if (filters.value.stock) count++;
     if (filters.value.type) count++;
@@ -215,7 +221,7 @@ function applyFilters() {
     } else if (filters.value.category_level2_id) {
         filterParams.category_id = filters.value.category_level2_id;
     }
-    if (filters.value.brand_id) filterParams.brand_id = filters.value.brand_id;
+    if (filters.value.brand) filterParams.brand = filters.value.brand;
     if (filters.value.status) filterParams.status = filters.value.status;
     if (filters.value.stock) filterParams.stock = filters.value.stock;
     if (filters.value.type) filterParams.type = filters.value.type;
@@ -239,7 +245,7 @@ function clearAllFilters() {
     filters.value = {
         category_level2_id: '',
         category_level3_id: '',
-        brand_id: '',
+        brand: '',
         status: '',
         stock: '',
         type: '',
@@ -401,12 +407,12 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
 
                 <!-- Brand -->
                 <select
-                    v-model="filters.brand_id"
+                    v-model="filters.brand"
                     class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                 >
                     <option value="">All Brands</option>
-                    <option v-for="brand in brands" :key="brand.id" :value="brand.id">
-                        {{ brand.name }}
+                    <option v-for="brand in brands" :key="brand.value" :value="brand.value">
+                        {{ brand.label }}
                     </option>
                 </select>
 

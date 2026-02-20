@@ -36,8 +36,8 @@ function getUrlParams(): WidgetFilter {
 
 const initialParams = getUrlParams();
 
-// Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuyItemsTable', initialParams);
+// Widget setup with initial filter from URL (sync filters to URL)
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuyItemsTable', initialParams, { syncToUrl: true });
 
 // Filters - initialize from URL params
 const selectedType = ref<string>(initialParams.transaction_type as string || '');

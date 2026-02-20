@@ -33,8 +33,8 @@ function getUrlParams(): WidgetFilter {
 
 const initialParams = getUrlParams();
 
-// Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuysTable', initialParams);
+// Widget setup with initial filter from URL (sync filters to URL)
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuysTable', initialParams, { syncToUrl: true });
 
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status as string || '');

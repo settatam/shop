@@ -13,6 +13,7 @@ import {
     XMarkIcon,
     StarIcon,
     PrinterIcon,
+    SparklesIcon,
 } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
@@ -344,8 +345,6 @@ const form = useForm({
     seo_page_title: props.product.seo_page_title || '',
     seo_description: props.product.seo_description || '',
     tag_ids: props.product.tag_ids || [],
-    generate_title: false,
-    generate_description: false,
     variants: props.product.variants.map(v => ({
         id: v.id,
         sku: v.sku,
@@ -383,6 +382,121 @@ const selectedTags = computed({
         form.tag_ids = tags.map(tag => tag.id);
     },
 });
+
+// AI Generation state
+const generatingTitle = ref(false);
+const generatingDescription = ref(false);
+const aiError = ref<string | null>(null);
+
+// Generate title with AI
+async function generateTitle() {
+    if (generatingTitle.value) return;
+
+    generatingTitle.value = true;
+    aiError.value = null;
+
+    try {
+        const response = await fetch(`/products/${props.product.id}/generate-title`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate title');
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+            throw new Error('Stream not available');
+        }
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'complete') {
+                        form.title = data.content;
+                    } else if (data.type === 'error') {
+                        aiError.value = data.message;
+                    }
+                }
+            }
+        }
+    } catch (error: any) {
+        aiError.value = error.message || 'Failed to generate title';
+    } finally {
+        generatingTitle.value = false;
+    }
+}
+
+// Generate description with AI
+async function generateDescription() {
+    if (generatingDescription.value) return;
+
+    generatingDescription.value = true;
+    aiError.value = null;
+
+    try {
+        const response = await fetch(`/products/${props.product.id}/generate-description`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({
+                tone: 'professional',
+                length: 'medium',
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate description');
+        }
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+            throw new Error('Stream not available');
+        }
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'complete') {
+                        form.description = data.content;
+                    } else if (data.type === 'error') {
+                        aiError.value = data.message;
+                    }
+                }
+            }
+        }
+    } catch (error: any) {
+        aiError.value = error.message || 'Failed to generate description';
+    } finally {
+        generatingDescription.value = false;
+    }
+}
 
 // Sync has_variants with local state
 watch(hasVariants, (newValue) => {
@@ -646,6 +760,25 @@ function deleteProduct() {
                     </div>
                 </div>
 
+                <!-- AI Error Alert -->
+                <div v-if="aiError" class="mb-4 rounded-md bg-red-50 p-4 dark:bg-red-900/20">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="size-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ aiError }}</p>
+                        </div>
+                        <div class="ml-auto pl-3">
+                            <button type="button" class="text-red-500 hover:text-red-600" @click="aiError = null">
+                                <XMarkIcon class="size-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Product Information Section (Top) -->
                 <div class="mb-6">
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
@@ -666,29 +799,29 @@ function deleteProduct() {
 
                                 <!-- Title -->
                                 <div>
-                                    <label for="title_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Title <span class="text-red-500">*</span>
-                                    </label>
+                                    <div class="flex items-center justify-between">
+                                        <label for="title_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Title <span class="text-red-500">*</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            :disabled="generatingTitle"
+                                            class="inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50"
+                                            @click="generateTitle"
+                                        >
+                                            <SparklesIcon class="size-3" :class="{ 'animate-pulse': generatingTitle }" />
+                                            {{ generatingTitle ? 'Generating...' : 'Generate with AI' }}
+                                        </button>
+                                    </div>
                                     <input
                                         id="title_top"
                                         v-model="form.title"
                                         type="text"
-                                        :required="!form.generate_title"
-                                        :disabled="form.generate_title"
+                                        required
+                                        :disabled="generatingTitle"
                                         class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
                                     />
                                     <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
-                                    <div class="mt-2 flex items-center gap-2">
-                                        <input
-                                            id="generate_title_top"
-                                            v-model="form.generate_title"
-                                            type="checkbox"
-                                            class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        <label for="generate_title_top" class="text-sm text-gray-600 dark:text-gray-400">
-                                            Generate title (from category format or AI)
-                                        </label>
-                                    </div>
                                 </div>
 
                                 <!-- SKU and Barcode -->
@@ -1196,7 +1329,18 @@ function deleteProduct() {
                                 class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
                                 @click="toggleSection('productInfo')"
                             >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Description</h3>
+                                <div class="flex items-center gap-3">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Description</h3>
+                                    <button
+                                        type="button"
+                                        :disabled="generatingDescription"
+                                        class="inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50"
+                                        @click.stop="generateDescription"
+                                    >
+                                        <SparklesIcon class="size-3" :class="{ 'animate-pulse': generatingDescription }" />
+                                        {{ generatingDescription ? 'Generating...' : 'Generate with AI' }}
+                                    </button>
+                                </div>
                                 <ChevronDownIcon v-if="!sections.productInfo" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />
                             </button>
@@ -1208,22 +1352,9 @@ function deleteProduct() {
                                         <RichTextEditor
                                             v-model="form.description"
                                             placeholder="Enter product description..."
-                                            :disabled="form.generate_description"
+                                            :disabled="generatingDescription"
                                         />
                                         <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">{{ form.errors.description }}</p>
-
-                                        <!-- Generate Description Checkbox -->
-                                        <div class="mt-2 flex items-center gap-2">
-                                            <input
-                                                id="generate_description"
-                                                v-model="form.generate_description"
-                                                type="checkbox"
-                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                            />
-                                            <label for="generate_description" class="text-sm text-gray-600 dark:text-gray-400">
-                                                Generate with AI
-                                            </label>
-                                        </div>
                                     </div>
                                 </div>
                             </div>

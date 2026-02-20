@@ -160,9 +160,18 @@ class ProductsTable extends Table
             $query->whereNull('category_id');
         }
 
-        // Apply brand filter
-        if ($brandId = data_get($filter, 'brand_id')) {
-            $query->where('brand_id', $brandId);
+        // Apply brand filter (from attribute values)
+        if ($brand = data_get($filter, 'brand')) {
+            // Get brand-type field IDs for this store
+            $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+                ->where('type', ProductTemplateField::TYPE_BRAND)
+                ->pluck('id');
+
+            if ($brandFieldIds->isNotEmpty()) {
+                $query->whereHas('attributeValues', fn ($q) => $q->whereIn('product_template_field_id', $brandFieldIds)
+                    ->where('value', $brand)
+                );
+            }
         }
 
         // Apply type filter (jewelry_type)
@@ -342,7 +351,7 @@ class ProductsTable extends Table
                 'type' => 'image',
                 'data' => $primaryImage?->url ?? null,
                 'alt' => $product->title,
-                'class' => 'w-12 h-12 object-cover rounded',
+                'class' => 'size-16 object-cover rounded',
             ],
             'sku' => [
                 'type' => 'link',
@@ -468,15 +477,32 @@ class ProductsTable extends Table
             ])
             ->toArray();
 
-        // Get brands
-        $brands = Brand::where('store_id', $storeId)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn ($brand) => [
-                'value' => (string) $brand->id,
-                'label' => $brand->name,
-            ])
-            ->toArray();
+        // Get brands from attribute values (cached)
+        $brands = cache()->remember("store_{$storeId}_brand_options", now()->addHour(), function () use ($storeId) {
+            $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+                ->where('type', ProductTemplateField::TYPE_BRAND)
+                ->pluck('id');
+
+            if ($brandFieldIds->isEmpty()) {
+                return [];
+            }
+
+            return ProductAttributeValue::whereIn('product_template_field_id', $brandFieldIds)
+                ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                ->whereNotNull('value')
+                ->where('value', '!=', '')
+                ->distinct()
+                ->pluck('value')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->map(fn ($brand) => [
+                    'value' => $brand,
+                    'label' => $brand,
+                ])
+                ->toArray();
+        });
 
         // Get tags
         $tags = Tag::where('store_id', $storeId)

@@ -38,13 +38,50 @@ export interface WidgetData {
     [key: string]: unknown;
 }
 
-export function useWidget(type: string, initialFilter: WidgetFilter = {}) {
+export interface UseWidgetOptions {
+    syncToUrl?: boolean;
+    urlParamMapping?: Record<string, string>; // Maps filter keys to URL param names
+}
+
+export function useWidget(type: string, initialFilter: WidgetFilter = {}, options: UseWidgetOptions = {}) {
+    const { syncToUrl = false, urlParamMapping = {} } = options;
+
     const data = ref<WidgetData | null>(null);
     const loading = ref(false);
     const error = ref<string | null>(null);
     const filter: Ref<WidgetFilter> = ref({ ...initialFilter });
 
     let cancelToken: AbortController | null = null;
+
+    // Sync filter state to URL
+    function syncFilterToUrl() {
+        if (!syncToUrl) return;
+
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+
+        // Clear existing filter params (but keep non-filter params)
+        const keysToRemove: string[] = [];
+        params.forEach((_, key) => {
+            // Check if this is a filter-related param
+            if (Object.keys(filter.value).includes(key) || Object.values(urlParamMapping).includes(key)) {
+                keysToRemove.push(key);
+            }
+        });
+        keysToRemove.forEach(key => params.delete(key));
+
+        // Add current filter values
+        Object.entries(filter.value).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '' && key !== 'page') {
+                const urlKey = urlParamMapping[key] || key;
+                params.set(urlKey, String(value));
+            }
+        });
+
+        // Update URL without reloading
+        const newUrl = params.toString() ? `${url.pathname}?${params.toString()}` : url.pathname;
+        window.history.replaceState({}, '', newUrl);
+    }
 
     async function loadWidget() {
         // Cancel previous request if still pending
@@ -111,6 +148,7 @@ export function useWidget(type: string, initialFilter: WidgetFilter = {}) {
         filter,
         () => {
             loadWidget();
+            syncFilterToUrl();
         },
         { deep: true }
     );
@@ -126,5 +164,6 @@ export function useWidget(type: string, initialFilter: WidgetFilter = {}) {
         setSort,
         setSearch,
         setPerPage,
+        syncFilterToUrl,
     };
 }

@@ -94,6 +94,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
         Route::post('products/bulk-inline-update', [ProductController::class, 'bulkInlineUpdate'])->name('products.bulk-inline-update');
         Route::post('products/get-for-inline-edit', [ProductController::class, 'getForInlineEdit'])->name('products.get-for-inline-edit');
+        // AI generation routes
+        Route::post('products/{product}/generate-title', [ProductController::class, 'generateTitle'])->name('products.generate-title');
+        Route::post('products/{product}/generate-description', [ProductController::class, 'generateDescription'])->name('products.generate-description');
     });
     Route::middleware('permission:products.delete')->group(function () {
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');

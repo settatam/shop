@@ -3,9 +3,9 @@ import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
     MagnifyingGlassIcon,
-    FunnelIcon,
     ArrowDownTrayIcon,
     BanknotesIcon,
     CreditCardIcon,
@@ -129,7 +129,6 @@ const toDate = ref(props.filters.to_date || '');
 const minAmount = ref(props.filters.min_amount || '');
 const maxAmount = ref(props.filters.max_amount || '');
 const platform = ref(props.filters.platform || '');
-const showFilters = ref(true);
 const showSummary = ref(false);
 const sortField = ref(props.filters.sort || 'created_at');
 const sortDirection = ref<'asc' | 'desc'>(props.filters.direction || 'desc');
@@ -246,6 +245,10 @@ function getPayableLink(payment: Payment): string {
 }
 
 function getPayableLabel(payment: Payment): string {
+    // Prefer invoice number if available
+    if (payment.invoice?.invoice_number) {
+        return payment.invoice.invoice_number;
+    }
     if (!payment.payable) return '-';
     return payment.payable.memo_number || payment.payable.repair_number || payment.payable.order_number || `#${payment.payable_id}`;
 }
@@ -304,153 +307,117 @@ function getPayableLabel(payment: Payment): string {
                 </div>
             </div>
 
-            <!-- Search and Filters -->
-            <div class="space-y-4">
-                <div class="flex flex-wrap items-center gap-4">
-                    <!-- Search -->
-                    <div class="relative flex-1">
-                        <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-                        <input
-                            v-model="search"
-                            type="text"
-                            placeholder="Search by reference, transaction ID..."
-                            class="w-full rounded-md border-gray-300 py-2 pl-10 pr-4 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                        />
-                    </div>
-
-                    <!-- Filter Toggle -->
-                    <button
-                        type="button"
-                        @click="showFilters = !showFilters"
-                        :class="[
-                            'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset',
-                            hasActiveFilters
-                                ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-300 dark:ring-indigo-700'
-                                : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700'
-                        ]"
+            <!-- Filters (inline style matching /buys page) -->
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select
+                        v-model="status"
+                        @change="applyFilters"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                     >
-                        <FunnelIcon class="size-4" />
-                        Filters
-                        <span v-if="hasActiveFilters" class="ml-1 rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">
-                            Active
-                        </span>
-                    </button>
+                        <option value="">All Statuses</option>
+                        <option v-for="s in statuses" :key="s.value" :value="s.value">
+                            {{ s.label }}
+                        </option>
+                    </select>
                 </div>
 
-                <!-- Filter Panel -->
-                <div v-if="showFilters" class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <!-- Date Range -->
-                        <div class="lg:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date Range</label>
-                            <div class="mt-1 flex gap-2">
-                                <input
-                                    v-model="fromDate"
-                                    type="date"
-                                    @change="applyFilters"
-                                    placeholder="From"
-                                    class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                                <span class="flex items-center text-gray-400">to</span>
-                                <input
-                                    v-model="toDate"
-                                    type="date"
-                                    @change="applyFilters"
-                                    placeholder="To"
-                                    class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Payment Method -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payment Method</label>
-                            <select
-                                v-model="paymentMethod"
-                                @change="applyFilters"
-                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                            >
-                                <option value="">All Methods</option>
-                                <option v-for="method in paymentMethods" :key="method.value" :value="method.value">
-                                    {{ method.label }}
-                                </option>
-                            </select>
-                        </div>
-
-                        <!-- Platform -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Platform</label>
-                            <select
-                                v-model="platform"
-                                @change="applyFilters"
-                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                            >
-                                <option value="">All Platforms</option>
-                                <option v-for="p in platforms" :key="p.value" :value="p.value">
-                                    {{ p.label }}
-                                </option>
-                            </select>
-                        </div>
-
-                        <!-- Amount Range -->
-                        <div class="lg:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount Range</label>
-                            <div class="mt-1 flex gap-2">
-                                <div class="relative flex-1">
-                                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">$</span>
-                                    <input
-                                        v-model="minAmount"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        @change="applyFilters"
-                                        placeholder="Min"
-                                        class="block w-full rounded-md border-gray-300 pl-7 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
-                                </div>
-                                <span class="flex items-center text-gray-400">to</span>
-                                <div class="relative flex-1">
-                                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">$</span>
-                                    <input
-                                        v-model="maxAmount"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        @change="applyFilters"
-                                        placeholder="Max"
-                                        class="block w-full rounded-md border-gray-300 pl-7 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Status -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-                            <select
-                                v-model="status"
-                                @change="applyFilters"
-                                class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                            >
-                                <option value="">All Statuses</option>
-                                <option v-for="s in statuses" :key="s.value" :value="s.value">
-                                    {{ s.label }}
-                                </option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div v-if="hasActiveFilters" class="mt-4 flex justify-end">
-                        <button
-                            type="button"
-                            @click="clearFilters"
-                            class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                        >
-                            <XMarkIcon class="size-4" />
-                            Clear Filters
-                        </button>
-                    </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
+                    <select
+                        v-model="paymentMethod"
+                        @change="applyFilters"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Methods</option>
+                        <option v-for="method in paymentMethods" :key="method.value" :value="method.value">
+                            {{ method.label }}
+                        </option>
+                    </select>
                 </div>
+
+                <div v-if="platforms.length > 0">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Platform</label>
+                    <select
+                        v-model="platform"
+                        @change="applyFilters"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Platforms</option>
+                        <option v-for="p in platforms" :key="p.value" :value="p.value">
+                            {{ p.label }}
+                        </option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Min Amount</label>
+                    <input
+                        v-model="minAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        @change="applyFilters"
+                        class="w-28 rounded-md border-0 bg-white py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Max Amount</label>
+                    <input
+                        v-model="maxAmount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        @change="applyFilters"
+                        class="w-28 rounded-md border-0 bg-white py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From Date</label>
+                    <DatePicker
+                        v-model="fromDate"
+                        placeholder="From date"
+                        class="w-[160px]"
+                        @update:model-value="applyFilters"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To Date</label>
+                    <DatePicker
+                        v-model="toDate"
+                        placeholder="To date"
+                        class="w-[160px]"
+                        @update:model-value="applyFilters"
+                    />
+                </div>
+
+                <!-- Clear filters -->
+                <button
+                    v-if="hasActiveFilters"
+                    type="button"
+                    class="inline-flex items-center gap-x-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 pb-1.5"
+                    @click="clearFilters"
+                >
+                    <XMarkIcon class="size-4" />
+                    Clear filters
+                </button>
+            </div>
+
+            <!-- Search -->
+            <div class="relative max-w-md">
+                <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
+                <input
+                    v-model="search"
+                    type="text"
+                    placeholder="Search by invoice number, reference, transaction ID..."
+                    class="w-full rounded-md border-0 bg-white py-2 pl-10 pr-4 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                />
             </div>
 
             <!-- Payments Table -->
@@ -460,7 +427,7 @@ function getPayableLabel(payment: Payment): string {
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                                    Order Number
+                                    Invoice #
                                 </th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                                     <button
@@ -513,13 +480,13 @@ function getPayableLabel(payment: Payment): string {
                                 :key="payment.id"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-700/50"
                             >
-                                <!-- Order Number -->
+                                <!-- Invoice # -->
                                 <td class="whitespace-nowrap px-6 py-4">
-                                    <Link v-if="payment.payable" :href="getPayableLink(payment)" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                                        {{ getPayableLabel(payment) }}
-                                    </Link>
-                                    <Link v-else-if="payment.invoice" :href="`/invoices/${payment.invoice.id}`" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                    <Link v-if="payment.invoice" :href="`/invoices/${payment.invoice.id}`" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
                                         {{ payment.invoice.invoice_number }}
+                                    </Link>
+                                    <Link v-else-if="payment.payable" :href="getPayableLink(payment)" class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                        {{ getPayableLabel(payment) }}
                                     </Link>
                                     <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
                                 </td>
