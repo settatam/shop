@@ -2,6 +2,7 @@
 
 namespace App\Widget\Buys;
 
+use App\Models\Status;
 use App\Models\Transaction;
 use App\Services\StoreContext;
 use App\Widget\Table;
@@ -94,9 +95,26 @@ class BuysTable extends Table
         $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
 
         $query = Transaction::query()
-            ->with(['customer.leadSource', 'images', 'items.images', 'items.product.images'])
-            ->where('store_id', $storeId)
-            ->where('status', Transaction::STATUS_PAYMENT_PROCESSED);
+            ->with(['customer.leadSource', 'images', 'items.images', 'items.product.images', 'statusModel'])
+            ->where('store_id', $storeId);
+
+        // Apply status filter - default to payment_processed if not specified
+        if ($statusSlug = data_get($filter, 'status')) {
+            $status = Status::where('store_id', $storeId)
+                ->where('entity_type', 'transaction')
+                ->where('slug', $statusSlug)
+                ->first();
+
+            if ($status) {
+                $query->where('status_id', $status->id);
+            } else {
+                // Fallback to legacy status field
+                $query->where('status', $statusSlug);
+            }
+        } else {
+            // Default to showing only payment_processed
+            $query->where('status', Transaction::STATUS_PAYMENT_PROCESSED);
+        }
 
         // Apply search filter
         if ($term = data_get($filter, 'term')) {
@@ -210,7 +228,9 @@ class BuysTable extends Table
             Transaction::PAYMENT_WIRE_TRANSFER => 'Wire Transfer',
         ];
 
-        $statusLabels = Transaction::getAvailableStatuses();
+        // Get status from statusModel
+        $statusName = $transaction->statusModel?->name ?? ucfirst(str_replace('_', ' ', $transaction->status ?? 'Unknown'));
+        $statusColor = $transaction->statusModel?->color ?? '#6b7280';
 
         // Calculate values from items
         $purchasePrice = (float) ($transaction->final_offer ?? 0);
@@ -268,7 +288,7 @@ class BuysTable extends Table
                 'type' => 'image',
                 'data' => $firstImage?->url ?? $firstImage?->path,
                 'alt' => 'Item image',
-                'class' => 'size-10 rounded object-cover',
+                'class' => 'size-16 rounded object-cover',
             ],
             'purchase_price' => [
                 'type' => 'currency',
@@ -297,9 +317,9 @@ class BuysTable extends Table
                 'variant' => 'secondary',
             ],
             'status' => [
-                'type' => 'badge',
-                'data' => $statusLabels[$transaction->status] ?? ucfirst(str_replace('_', ' ', $transaction->status)),
-                'variant' => $this->getStatusVariant($transaction->status),
+                'type' => 'status-badge',
+                'data' => $statusName,
+                'color' => $statusColor,
             ],
             'lead_source' => [
                 'data' => $transaction->customer?->leadSource?->name ?? '-',
@@ -350,6 +370,8 @@ class BuysTable extends Table
      */
     public function buildFilters(?array $filter, array $data): ?array
     {
+        $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
+
         $paymentMethods = [
             ['value' => Transaction::PAYMENT_CASH, 'label' => 'Cash'],
             ['value' => Transaction::PAYMENT_CHECK, 'label' => 'Check'],
@@ -360,10 +382,23 @@ class BuysTable extends Table
             ['value' => Transaction::PAYMENT_WIRE_TRANSFER, 'label' => 'Wire Transfer'],
         ];
 
+        // Get transaction statuses
+        $statuses = Status::where('store_id', $storeId)
+            ->where('entity_type', 'transaction')
+            ->orderBy('sort_order')
+            ->get(['id', 'name', 'slug', 'color'])
+            ->map(fn ($status) => [
+                'value' => $status->slug,
+                'label' => $status->name,
+                'color' => $status->color,
+            ])
+            ->toArray();
+
         return [
             'current' => $filter,
             'available' => [
                 'payment_methods' => $paymentMethods,
+                'statuses' => $statuses,
             ],
         ];
     }

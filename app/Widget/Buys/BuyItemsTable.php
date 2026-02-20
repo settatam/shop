@@ -76,7 +76,7 @@ class BuyItemsTable extends Table
             ],
             [
                 'key' => 'type',
-                'label' => 'Type',
+                'label' => 'Source',
                 'sortable' => false,
             ],
             [
@@ -137,19 +137,19 @@ class BuyItemsTable extends Table
         }
 
         // Apply status filter
-                if ($statusSlug = data_get($filter, 'status')) {
-                    $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
-                    $status = Status::where('store_id', $storeId)
-                        ->where('entity_type', 'transaction')
-                        ->where('slug', $statusSlug)
-                        ->first();
+        if ($statusSlug = data_get($filter, 'status')) {
+            $storeId = data_get($filter, 'store_id') ?: app(StoreContext::class)->getCurrentStoreId();
+            $status = Status::where('store_id', $storeId)
+                ->where('entity_type', 'transaction')
+                ->where('slug', $statusSlug)
+                ->first();
 
-                    if ($status) {
-                        $query->whereHas('transaction', function ($q) use ($status) {
-                            $q->where('status_id', $status->id);
-                        });
-                    }
-                }
+            if ($status) {
+                $query->whereHas('transaction', function ($q) use ($status) {
+                    $q->where('status_id', $status->id);
+                });
+            }
+        }
 
         // Apply payment method filter
         if ($paymentMethod = data_get($filter, 'payment_method')) {
@@ -189,9 +189,20 @@ class BuyItemsTable extends Table
             });
         }
 
-        // Apply category filter
-        if ($categoryId = data_get($filter, 'category_id')) {
-            $query->where('category_id', $categoryId);
+        // Apply category filter (supports parent + subcategory cascading)
+        $subcategoryId = data_get($filter, 'subcategory_id');
+        $parentCategoryId = data_get($filter, 'parent_category_id');
+
+        if ($subcategoryId) {
+            // If subcategory is selected, filter by that specific category
+            $query->where('category_id', $subcategoryId);
+        } elseif ($parentCategoryId) {
+            // If only parent category is selected, include parent and all its children
+            $childCategoryIds = Category::where('parent_id', $parentCategoryId)
+                ->pluck('id')
+                ->toArray();
+            $allCategoryIds = array_merge([$parentCategoryId], $childCategoryIds);
+            $query->whereIn('category_id', $allCategoryIds);
         }
 
         return $query;
@@ -294,7 +305,7 @@ class BuyItemsTable extends Table
                 'type' => 'image',
                 'data' => $firstImage?->url ?? $firstImage?->path,
                 'alt' => $item->title ?? 'Item image',
-                'class' => 'size-10 rounded object-cover',
+                'class' => 'size-16 rounded object-cover',
             ],
             'transaction_number' => [
                 'type' => 'link',
@@ -404,14 +415,27 @@ class BuyItemsTable extends Table
             ['value' => Transaction::PAYMENT_WIRE_TRANSFER, 'label' => 'Wire Transfer'],
         ];
 
-        // Get categories for the store
-        $categories = Category::where('store_id', $storeId)
+        // Get parent categories (no parent_id) with their children
+        $parentCategories = Category::where('store_id', $storeId)
+            ->whereNull('parent_id')
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn ($cat) => [
                 'value' => (string) $cat->id,
                 'label' => $cat->name,
             ])
+            ->toArray();
+
+        // Get all categories grouped by parent_id for subcategory lookup
+        $subcategoriesByParent = Category::where('store_id', $storeId)
+            ->whereNotNull('parent_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'parent_id'])
+            ->groupBy('parent_id')
+            ->map(fn ($cats) => $cats->map(fn ($cat) => [
+                'value' => (string) $cat->id,
+                'label' => $cat->name,
+            ])->toArray())
             ->toArray();
 
         // Get transaction statuses
@@ -435,7 +459,8 @@ class BuyItemsTable extends Table
             'current' => $filter,
             'available' => [
                 'payment_methods' => $paymentMethods,
-                'categories' => $categories,
+                'parent_categories' => $parentCategories,
+                'subcategories_by_parent' => $subcategoriesByParent,
                 'statuses' => $statuses,
                 'types' => $types,
             ],

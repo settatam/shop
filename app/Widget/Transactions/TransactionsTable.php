@@ -244,7 +244,7 @@ class TransactionsTable extends Table
                 'type' => 'image',
                 'data' => $firstImage?->url ?? $firstImage?->path,
                 'alt' => 'Transaction image',
-                'class' => 'size-10 rounded object-cover',
+                'class' => 'size-16 rounded object-cover',
             ],
             'customer' => [
                 'type' => 'link',

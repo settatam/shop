@@ -11,6 +11,7 @@ import { XMarkIcon, PlusIcon } from '@heroicons/vue/20/solid';
 interface FilterOption {
     value: string;
     label: string;
+    color?: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -21,6 +22,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
+    if (params.get('status')) filter.status = params.get('status') || undefined;
     if (params.get('payment_method')) filter.payment_method = params.get('payment_method') || undefined;
     if (params.get('min_amount')) filter.min_amount = params.get('min_amount') || undefined;
     if (params.get('max_amount')) filter.max_amount = params.get('max_amount') || undefined;
@@ -35,6 +37,7 @@ const initialParams = getUrlParams();
 const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Buys\\BuysTable', initialParams);
 
 // Filters - initialize from URL params
+const selectedStatus = ref<string>(initialParams.status as string || '');
 const selectedPaymentMethod = ref<string>(initialParams.payment_method as string || '');
 const minAmount = ref<string>(initialParams.min_amount as string || '');
 const maxAmount = ref<string>(initialParams.max_amount as string || '');
@@ -45,6 +48,7 @@ const toDate = ref<string>(initialParams.to_date as string || '');
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
 
 // Get available filters from widget data
+const availableStatuses = computed<FilterOption[]>(() => data.value?.filters?.available?.statuses || []);
 const availablePaymentMethods = computed<FilterOption[]>(() => data.value?.filters?.available?.payment_methods || []);
 
 // Load widget on mount
@@ -53,8 +57,9 @@ onMounted(() => {
 });
 
 // Watch filter changes
-watch([selectedPaymentMethod, minAmount, maxAmount, fromDate, toDate], () => {
+watch([selectedStatus, selectedPaymentMethod, minAmount, maxAmount, fromDate, toDate], () => {
     updateFilter({
+        status: selectedStatus.value || undefined,
         payment_method: selectedPaymentMethod.value || undefined,
         min_amount: minAmount.value || undefined,
         max_amount: maxAmount.value || undefined,
@@ -81,6 +86,7 @@ function handlePerPageChange(perPage: number) {
 }
 
 function clearFilters() {
+    selectedStatus.value = '';
     selectedPaymentMethod.value = '';
     minAmount.value = '';
     maxAmount.value = '';
@@ -89,7 +95,7 @@ function clearFilters() {
 }
 
 const hasActiveFilters = computed(() => {
-    return selectedPaymentMethod.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
+    return selectedStatus.value || selectedPaymentMethod.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
 });
 </script>
 
@@ -125,6 +131,19 @@ const hasActiveFilters = computed(() => {
 
             <!-- Filters -->
             <div class="flex flex-wrap items-end gap-4">
+                <div v-if="availableStatuses.length > 0">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select
+                        v-model="selectedStatus"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    >
+                        <option value="">All Statuses</option>
+                        <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
+                            {{ status.label }}
+                        </option>
+                    </select>
+                </div>
+
                 <div>
                     <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Payment Method</label>
                     <select
