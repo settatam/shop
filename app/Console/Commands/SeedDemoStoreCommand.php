@@ -380,8 +380,7 @@ class SeedDemoStoreCommand extends Command
                         'name' => $platform['name'],
                         'shop_domain' => $platform['domain'],
                         'status' => 'active',
-                        'credentials' => ['demo' => true],
-                        'last_synced_at' => now(),
+                        'last_sync_at' => now(),
                     ]
                 );
 
