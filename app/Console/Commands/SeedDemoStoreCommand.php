@@ -196,6 +196,7 @@ class SeedDemoStoreCommand extends Command
 
                 if ($this->warehouse) {
                     Inventory::create([
+                        'store_id' => $this->store->id,
                         'product_variant_id' => $variant->id,
                         'warehouse_id' => $this->warehouse->id,
                         'quantity' => $product->quantity,
