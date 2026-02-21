@@ -151,6 +151,7 @@ interface Props {
     defaultTaxRate: number;
     preciousMetals: PreciousMetal[];
     itemConditions: ItemCondition[];
+    preSelectedProduct?: Product | null;
 }
 
 const props = defineProps<Props>();
@@ -618,6 +619,13 @@ onMounted(() => {
         if (props.warehouses[0].tax_rate !== undefined && props.warehouses[0].tax_rate !== null) {
             form.tax_rate = props.warehouses[0].tax_rate;
         }
+    }
+
+    // If a pre-selected product was passed, add it to the order and skip to products step
+    if (props.preSelectedProduct) {
+        addProductToOrder(props.preSelectedProduct);
+        // Skip directly to the products step (step 4)
+        currentStep.value = 4;
     }
 });
 

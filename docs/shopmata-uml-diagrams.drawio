@@ -1,0 +1,915 @@
+<mxfile host="app.diagrams.net" modified="2026-02-20T00:00:00.000Z" agent="Claude" version="24.8.5">
+  <diagram id="classdiag" name="Class Diagram - Core Domain">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="title" value="Shopmata - Domain Class Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="400" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== MULTI-TENANCY LAYER ==================== -->
+        <mxCell id="tenant_section" value="Multi-Tenancy (Tenant Scope)" style="swimlane;horizontal=1;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="420" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- Store (Tenant) -->
+        <mxCell id="store" value="&lt;&lt;Tenant&gt;&gt;&#xa;Store&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ user_id: bigint (owner)&#xa;+ name: string&#xa;+ slug: string&#xa;+ business_name: string&#xa;+ timezone_id: int&#xa;+ currency_id: int&#xa;+ edition: string&#xa;+ is_active: boolean&#xa;─────────────────────&#xa;+ users(): BelongsToMany&#xa;+ products(): HasMany&#xa;+ orders(): HasMany&#xa;+ warehouses(): HasMany&#xa;+ categories(): HasMany&#xa;+ customers(): HasMany" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=60;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="tenant_section">
+          <mxGeometry x="20" y="50" width="180" height="310" as="geometry"/>
+        </mxCell>
+
+        <!-- User -->
+        <mxCell id="user" value="User&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ name: string&#xa;+ email: string&#xa;+ password: string&#xa;+ current_store_id: bigint&#xa;─────────────────────&#xa;+ stores(): BelongsToMany&#xa;+ ownedStores(): HasMany&#xa;+ storeUsers(): HasMany&#xa;+ hasPermission()" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="tenant_section">
+          <mxGeometry x="220" y="50" width="180" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- StoreUser (Pivot) -->
+        <mxCell id="storeuser" value="StoreUser (Pivot)&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint&#xa;+ user_id: bigint&#xa;+ role_id: bigint&#xa;+ is_owner: boolean&#xa;+ status: string&#xa;─────────────────────&#xa;+ hasPermission()" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="tenant_section">
+          <mxGeometry x="220" y="250" width="180" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== PRODUCT DOMAIN ==================== -->
+        <mxCell id="product_section" value="Product-Variant Separation" style="swimlane;horizontal=1;startSize=30;fillColor=#ffe6cc;strokeColor=#d79b00;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="80" width="440" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- Product -->
+        <mxCell id="product" value="Product&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint (tenant)&#xa;+ title: string&#xa;+ description: text&#xa;+ category_id: bigint&#xa;+ brand_id: bigint&#xa;+ status: enum&#xa;+ has_variants: boolean&#xa;+ track_quantity: boolean&#xa;─────────────────────&#xa;+ variants(): HasMany&#xa;+ category(): BelongsTo&#xa;+ orderItems(): HasMany&#xa;+ platformListings(): HasMany" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="product_section">
+          <mxGeometry x="20" y="50" width="190" height="250" as="geometry"/>
+        </mxCell>
+
+        <!-- ProductVariant -->
+        <mxCell id="variant" value="ProductVariant&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ product_id: bigint&#xa;+ sku: string&#xa;+ barcode: string&#xa;+ price: decimal&#xa;+ cost: decimal&#xa;+ wholesale_price: decimal&#xa;+ quantity: int&#xa;+ option1_name/value&#xa;+ option2_name/value&#xa;+ option3_name/value&#xa;─────────────────────&#xa;+ product(): BelongsTo&#xa;+ inventories(): HasMany&#xa;+ vendors(): BelongsToMany" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="product_section">
+          <mxGeometry x="230" y="50" width="190" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- Category -->
+        <mxCell id="category" value="Category&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint&#xa;+ parent_id: bigint (self)&#xa;+ name: string&#xa;+ level: int" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="product_section">
+          <mxGeometry x="60" y="310" width="150" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== INVENTORY DOMAIN ==================== -->
+        <mxCell id="inventory_section" value="Inventory per Warehouse" style="swimlane;horizontal=1;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="80" width="440" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- Warehouse -->
+        <mxCell id="warehouse" value="Warehouse&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint (tenant)&#xa;+ name: string&#xa;+ code: string&#xa;+ address_line1: string&#xa;+ city, state, postal_code&#xa;+ is_default: boolean&#xa;+ is_active: boolean&#xa;+ fulfills_orders: boolean&#xa;+ tax_rate: decimal&#xa;─────────────────────&#xa;+ inventories(): HasMany&#xa;+ incomingTransfers(): HasMany&#xa;+ outgoingTransfers(): HasMany" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="inventory_section">
+          <mxGeometry x="20" y="50" width="190" height="270" as="geometry"/>
+        </mxCell>
+
+        <!-- Inventory -->
+        <mxCell id="inventory" value="Inventory&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint (tenant)&#xa;+ product_variant_id: bigint&#xa;+ warehouse_id: bigint&#xa;+ quantity: int&#xa;+ reserved_quantity: int&#xa;+ incoming_quantity: int&#xa;+ reorder_point: int&#xa;+ safety_stock: int&#xa;+ unit_cost: decimal&#xa;+ bin_location: string&#xa;─────────────────────&#xa;+ variant(): BelongsTo&#xa;+ warehouse(): BelongsTo&#xa;+ adjustments(): HasMany&#xa;+ adjustQuantity()&#xa;+ reserve() / fulfill()" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="inventory_section">
+          <mxGeometry x="230" y="50" width="190" height="320" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== ORDER DOMAIN ==================== -->
+        <mxCell id="order_section" value="Order-OrderItem Relationship" style="swimlane;horizontal=1;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="480" width="500" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- Order -->
+        <mxCell id="order" value="Order&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint (tenant)&#xa;+ customer_id: bigint&#xa;+ user_id: bigint&#xa;+ warehouse_id: bigint&#xa;+ sales_channel_id: bigint&#xa;+ invoice_number: string&#xa;+ status: enum&#xa;+ sub_total: decimal&#xa;+ sales_tax: decimal&#xa;+ shipping_cost: decimal&#xa;+ discount_cost: decimal&#xa;+ total: decimal&#xa;+ source_platform: string&#xa;─────────────────────&#xa;+ items(): HasMany&#xa;+ customer(): BelongsTo&#xa;+ payments(): MorphMany&#xa;+ returns(): HasMany&#xa;+ calculateTotals()" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="order_section">
+          <mxGeometry x="20" y="50" width="210" height="320" as="geometry"/>
+        </mxCell>
+
+        <!-- OrderItem -->
+        <mxCell id="orderitem" value="OrderItem&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ order_id: bigint&#xa;+ product_id: bigint&#xa;+ product_variant_id: bigint&#xa;+ category_id: bigint&#xa;+ sku: string&#xa;+ title: string&#xa;+ quantity: int&#xa;+ price: decimal&#xa;+ cost: decimal&#xa;+ discount: decimal&#xa;+ tax: decimal&#xa;─────────────────────&#xa;+ order(): BelongsTo&#xa;+ product(): BelongsTo&#xa;+ variant(): BelongsTo&#xa;+ getLineTotalAttribute()&#xa;+ getLineProfitAttribute()" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="order_section">
+          <mxGeometry x="270" y="50" width="200" height="310" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== AUDIT LOGGING ==================== -->
+        <mxCell id="audit_section" value="Audit Logging (Traceability)" style="swimlane;horizontal=1;startSize=30;fillColor=#f8cecc;strokeColor=#b85450;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="480" width="460" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- ActivityLog -->
+        <mxCell id="activitylog" value="ActivityLog&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint (tenant)&#xa;+ user_id: bigint&#xa;+ activity_slug: string&#xa;+ subject_type: string (morph)&#xa;+ subject_id: bigint&#xa;+ causer_type: string (morph)&#xa;+ causer_id: bigint&#xa;+ properties: json&#xa;+ description: string&#xa;+ ip_address: string&#xa;+ user_agent: string&#xa;+ created_at: timestamp&#xa;─────────────────────&#xa;+ subject(): MorphTo&#xa;+ causer(): MorphTo&#xa;+ user(): BelongsTo&#xa;+ log(): static&#xa;+ logWithChanges(): static" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="audit_section">
+          <mxGeometry x="20" y="50" width="200" height="310" as="geometry"/>
+        </mxCell>
+
+        <!-- Activity (Constants) -->
+        <mxCell id="activity" value="Activity (Enum/Constants)&#xa;─────────────────────&#xa;Categories:&#xa;  PRODUCTS, ORDERS,&#xa;  INVENTORY, CUSTOMERS,&#xa;  INTEGRATIONS, TEAM&#xa;&#xa;Activity Slugs:&#xa;  products.create&#xa;  products.update&#xa;  products.price_change&#xa;  orders.create&#xa;  orders.fulfill&#xa;  inventory.adjust&#xa;  team.invite&#xa;  ...&#xa;─────────────────────&#xa;+ getDefinitions(): array&#xa;+ getGroupedByCategory()" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="audit_section">
+          <mxGeometry x="240" y="50" width="200" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== CUSTOMER DOMAIN ==================== -->
+        <mxCell id="customer_section" value="Customer" style="swimlane;horizontal=1;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="480" width="200" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- Customer -->
+        <mxCell id="customer" value="Customer&#xa;─────────────────────&#xa;+ id: bigint&#xa;+ store_id: bigint&#xa;+ first_name: string&#xa;+ last_name: string&#xa;+ email: string&#xa;+ phone: string&#xa;─────────────────────&#xa;+ orders(): HasMany&#xa;+ transactions(): HasMany" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="customer_section">
+          <mxGeometry x="20" y="40" width="160" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== RELATIONSHIPS ==================== -->
+
+        <!-- Store -> Users (Many-to-Many via StoreUser) -->
+        <mxCell id="r_store_user" value="" style="endArrow=none;html=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="store" target="user">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_store_user_label" value="*..* via StoreUser" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="r_store_user">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Store -> Product (One-to-Many) -->
+        <mxCell id="r_store_product" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="tenant_section" target="product">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="460" y="180" as="sourcePoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_store_product_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="r_store_product">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint x="-10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Product -> Variant (One-to-Many) -->
+        <mxCell id="r_product_variant" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="product" target="variant">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_product_variant_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="r_product_variant">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Variant -> Inventory (One-to-Many) -->
+        <mxCell id="r_variant_inventory" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="variant" target="inventory">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_variant_inventory_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="r_variant_inventory">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Warehouse -> Inventory (One-to-Many) -->
+        <mxCell id="r_warehouse_inventory" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.6;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="warehouse" target="inventory">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_warehouse_inventory_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="r_warehouse_inventory">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Order -> OrderItem (One-to-Many) -->
+        <mxCell id="r_order_item" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=1;exitY=0.4;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="order" target="orderitem">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_order_item_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="r_order_item">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- OrderItem -> Variant -->
+        <mxCell id="r_orderitem_variant" value="" style="endArrow=open;html=1;strokeWidth=2;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="orderitem" target="variant">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="410" y="470"/>
+              <mxPoint x="805" y="470"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_orderitem_variant_label" value="*.1 variant" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="r_orderitem_variant">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ActivityLog -> Subject (MorphTo) -->
+        <mxCell id="r_activitylog_subject" value="" style="endArrow=open;html=1;strokeWidth=2;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;endFill=0;" edge="1" parent="1" source="activitylog">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="680" y="420" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="680" y="470"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_activitylog_subject_label" value="morphTo (subject)&#xa;→ Product, Order,&#xa;   Inventory, etc." style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontColor=#b85450;" vertex="1" connectable="0" parent="r_activitylog_subject">
+          <mxGeometry x="0.2" relative="1" as="geometry">
+            <mxPoint x="10" y="-20" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Store -> Warehouse (One-to-Many) -->
+        <mxCell id="r_store_warehouse" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="tenant_section" target="warehouse">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="346"/>
+              <mxPoint x="920" y="265"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_store_warehouse_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="r_store_warehouse">
+          <mxGeometry x="0.7" relative="1" as="geometry">
+            <mxPoint x="-10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Store -> Order (One-to-Many) -->
+        <mxCell id="r_store_order" value="" style="endArrow=open;html=1;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="tenant_section" target="order_section">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="r_store_order_label" value="1..*" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="r_store_order">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint x="-15" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Order -> Customer -->
+        <mxCell id="r_order_customer" value="" style="endArrow=open;html=1;strokeWidth=2;dashed=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endFill=0;" edge="1" parent="1" source="order_section" target="customer">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="784"/>
+              <mxPoint x="600" y="900"/>
+              <mxPoint x="1020" y="900"/>
+              <mxPoint x="1020" y="595"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_order_customer_label" value="*.1 customer" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="r_order_customer">
+          <mxGeometry x="0.7" relative="1" as="geometry">
+            <mxPoint as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend" style="swimlane;horizontal=1;startSize=25;fillColor=#f5f5f5;strokeColor=#666666;rounded=1;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="80" width="180" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg1" value="─── One-to-Many (1..*)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="35" width="160" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg2" value="- - - BelongsTo / MorphTo" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="55" width="160" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg3" value="Yellow = Tenant-scoped" style="text;html=1;strokeColor=none;fillColor=#fff2cc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;strokeWidth=1;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="85" width="160" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg4" value="Green = Inventory Domain" style="text;html=1;strokeColor=none;fillColor=#d5e8d4;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="105" width="160" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg5" value="Blue = Order Domain" style="text;html=1;strokeColor=none;fillColor=#dae8fc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="125" width="160" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="leg6" value="Red = Audit/Logging" style="text;html=1;strokeColor=none;fillColor=#f8cecc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="legend">
+          <mxGeometry x="10" y="145" width="160" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- Notes -->
+        <mxCell id="notes" value="Key Design Patterns:&#xa;&#xa;1. Multi-Tenancy: Store is the tenant. All&#xa;   domain models have store_id foreign key.&#xa;   BelongsToStore trait enforces scoping.&#xa;&#xa;2. Product-Variant: Products have multiple&#xa;   variants (SKU/price/options per variant).&#xa;&#xa;3. Inventory per Warehouse: Inventory is&#xa;   a join between ProductVariant and&#xa;   Warehouse with quantity tracking.&#xa;&#xa;4. Polymorphic Audit: ActivityLog uses&#xa;   morphTo for subject/causer, enabling&#xa;   logging for any model type.&#xa;&#xa;5. LogsActivity Trait: Models use this&#xa;   trait for automatic activity logging&#xa;   on create/update/delete." style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=top;align=left;spacingTop=5;spacingLeft=10;fontSize=10;fillColor=#ffffcc;strokeColor=#999966;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="280" width="220" height="280" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="erd" name="ERD - Database Schema">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="erd_title" value="Shopmata - Entity Relationship Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="20" width="500" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- stores -->
+        <mxCell id="erd_stores" value="stores&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  user_id: bigint&#xa;    name: varchar(255)&#xa;    slug: varchar(255)&#xa;    business_name: varchar&#xa;    timezone_id: int&#xa;    currency_id: int&#xa;    edition: varchar&#xa;    is_active: boolean&#xa;    created_at: timestamp&#xa;    updated_at: timestamp&#xa;    deleted_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#d6b656;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="200" height="230" as="geometry"/>
+        </mxCell>
+
+        <!-- users -->
+        <mxCell id="erd_users" value="users&#xa;─────────────────────&#xa;PK  id: bigint&#xa;    name: varchar(255)&#xa;    email: varchar(255)&#xa;    password: varchar&#xa;FK  current_store_id: bigint&#xa;    email_verified_at: ts&#xa;    created_at: timestamp&#xa;    updated_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#82b366;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="280" y="80" width="200" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- store_users -->
+        <mxCell id="erd_store_users" value="store_users (pivot)&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;FK  user_id: bigint&#xa;FK  role_id: bigint&#xa;    is_owner: boolean&#xa;    status: varchar&#xa;    first_name: varchar&#xa;    last_name: varchar&#xa;    email: varchar&#xa;    created_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#9673a6;fillColor=#e1d5e7;" vertex="1" parent="1">
+          <mxGeometry x="160" y="320" width="200" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- products -->
+        <mxCell id="erd_products" value="products&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;FK  category_id: bigint&#xa;FK  brand_id: bigint&#xa;    title: varchar(255)&#xa;    description: text&#xa;    status: varchar&#xa;    has_variants: boolean&#xa;    track_quantity: boolean&#xa;    created_at: timestamp&#xa;    deleted_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#d6b656;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="520" y="80" width="200" height="210" as="geometry"/>
+        </mxCell>
+
+        <!-- product_variants -->
+        <mxCell id="erd_variants" value="product_variants&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  product_id: bigint&#xa;    sku: varchar(100)&#xa;    barcode: varchar(100)&#xa;    price: decimal(12,2)&#xa;    cost: decimal(12,2)&#xa;    wholesale_price: decimal&#xa;    quantity: int&#xa;    option1_name: varchar&#xa;    option1_value: varchar&#xa;    option2_name: varchar&#xa;    option2_value: varchar&#xa;    is_active: boolean&#xa;    deleted_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#d6b656;fillColor=#fff2cc;" vertex="1" parent="1">
+          <mxGeometry x="760" y="80" width="200" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- warehouses -->
+        <mxCell id="erd_warehouses" value="warehouses&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;    name: varchar(255)&#xa;    code: varchar(50)&#xa;    address_line1: varchar&#xa;    city: varchar&#xa;    state: varchar&#xa;    is_default: boolean&#xa;    is_active: boolean&#xa;    fulfills_orders: boolean&#xa;    tax_rate: decimal(6,4)&#xa;    deleted_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#82b366;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="80" width="200" height="230" as="geometry"/>
+        </mxCell>
+
+        <!-- inventory -->
+        <mxCell id="erd_inventory" value="inventory&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;FK  product_variant_id: bigint&#xa;FK  warehouse_id: bigint&#xa;    quantity: int&#xa;    reserved_quantity: int&#xa;    incoming_quantity: int&#xa;    reorder_point: int&#xa;    safety_stock: int&#xa;    unit_cost: decimal(12,4)&#xa;    bin_location: varchar&#xa;    last_counted_at: ts&#xa;    last_sold_at: ts" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#82b366;fillColor=#d5e8d4;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="80" width="200" height="250" as="geometry"/>
+        </mxCell>
+
+        <!-- orders -->
+        <mxCell id="erd_orders" value="orders&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;FK  customer_id: bigint&#xa;FK  user_id: bigint&#xa;FK  warehouse_id: bigint&#xa;FK  sales_channel_id: bigint&#xa;    invoice_number: varchar&#xa;    status: varchar&#xa;    sub_total: decimal(12,2)&#xa;    sales_tax: decimal(12,2)&#xa;    shipping_cost: decimal&#xa;    discount_cost: decimal&#xa;    total: decimal(12,2)&#xa;    source_platform: varchar&#xa;    date_of_purchase: date&#xa;    deleted_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#6c8ebf;fillColor=#dae8fc;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="200" height="310" as="geometry"/>
+        </mxCell>
+
+        <!-- order_items -->
+        <mxCell id="erd_order_items" value="order_items&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  order_id: bigint&#xa;FK  product_id: bigint&#xa;FK  product_variant_id: bigint&#xa;FK  category_id: bigint&#xa;    sku: varchar(100)&#xa;    title: varchar(255)&#xa;    quantity: int&#xa;    price: decimal(12,2)&#xa;    cost: decimal(12,2)&#xa;    discount: decimal(12,2)&#xa;    tax: decimal(12,2)&#xa;    deleted_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#6c8ebf;fillColor=#dae8fc;" vertex="1" parent="1">
+          <mxGeometry x="280" y="540" width="200" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- customers -->
+        <mxCell id="erd_customers" value="customers&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;    first_name: varchar&#xa;    last_name: varchar&#xa;    email: varchar&#xa;    phone: varchar&#xa;    created_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#9673a6;fillColor=#e1d5e7;" vertex="1" parent="1">
+          <mxGeometry x="520" y="540" width="200" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- activity_logs -->
+        <mxCell id="erd_activity_logs" value="activity_logs&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;FK  user_id: bigint&#xa;    activity_slug: varchar&#xa;    subject_type: varchar&#xa;    subject_id: bigint&#xa;    causer_type: varchar&#xa;    causer_id: bigint&#xa;    properties: json&#xa;    description: text&#xa;    ip_address: varchar&#xa;    user_agent: varchar&#xa;    created_at: timestamp" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#b85450;fillColor=#f8cecc;" vertex="1" parent="1">
+          <mxGeometry x="760" y="540" width="200" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- categories -->
+        <mxCell id="erd_categories" value="categories&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;FK  parent_id: bigint (self)&#xa;    name: varchar(255)&#xa;    slug: varchar(255)&#xa;    level: int" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#666666;fillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="520" y="320" width="200" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- roles -->
+        <mxCell id="erd_roles" value="roles&#xa;─────────────────────&#xa;PK  id: bigint&#xa;FK  store_id: bigint&#xa;    name: varchar&#xa;    slug: varchar&#xa;    permissions: json&#xa;    is_default: boolean" style="shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=1;fontStyle=1;align=center;strokeColor=#666666;fillColor=#f5f5f5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="100" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- ERD Relationships -->
+        <!-- stores -> users (owner) -->
+        <mxCell id="erd_r1" value="" style="endArrow=ERone;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.2;exitDx=0;exitDy=0;entryX=0;entryY=0.2;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_stores" target="erd_users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="erd_r1_label" value="owner" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;" vertex="1" connectable="0" parent="erd_r1">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- stores <-> users (many-to-many via store_users) -->
+        <mxCell id="erd_r2" value="" style="endArrow=ERmany;startArrow=ERmany;html=1;strokeWidth=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_stores" target="erd_store_users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="erd_r3" value="" style="endArrow=ERmany;startArrow=ERmany;html=1;strokeWidth=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_users" target="erd_store_users">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- stores -> products -->
+        <mxCell id="erd_r4" value="" style="endArrow=ERmany;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_stores" target="erd_products">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="195"/>
+              <mxPoint x="500" y="185"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- products -> variants -->
+        <mxCell id="erd_r5" value="" style="endArrow=ERmany;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_products" target="erd_variants">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- variants -> inventory -->
+        <mxCell id="erd_r6" value="" style="endArrow=ERmany;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_variants" target="erd_inventory">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1200" y="210"/>
+              <mxPoint x="1200" y="155"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- warehouses -> inventory -->
+        <mxCell id="erd_r7" value="" style="endArrow=ERmany;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.6;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_warehouses" target="erd_inventory">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- orders -> order_items -->
+        <mxCell id="erd_r8" value="" style="endArrow=ERmany;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_orders" target="erd_order_items">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- orders -> customers -->
+        <mxCell id="erd_r9" value="" style="endArrow=ERone;startArrow=ERmany;html=1;strokeWidth=1;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_orders" target="erd_customers">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="757"/>
+              <mxPoint x="260" y="900"/>
+              <mxPoint x="480" y="900"/>
+              <mxPoint x="480" y="615"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- products -> categories -->
+        <mxCell id="erd_r10" value="" style="endArrow=ERone;startArrow=ERmany;html=1;strokeWidth=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_products" target="erd_categories">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- stores -> warehouses -->
+        <mxCell id="erd_r11" value="" style="endArrow=ERmany;startArrow=ERone;html=1;strokeWidth=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;" edge="1" parent="1" source="erd_stores" target="erd_warehouses">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="300" y="264"/>
+              <mxPoint x="300" y="290"/>
+              <mxPoint x="980" y="290"/>
+              <mxPoint x="980" y="264"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="erd_legend" value="ERD Legend" style="swimlane;horizontal=1;startSize=25;fillColor=#f5f5f5;strokeColor=#666666;rounded=1;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="540" width="200" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="erd_leg1" value="PK = Primary Key" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="erd_legend">
+          <mxGeometry x="10" y="35" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="erd_leg2" value="FK = Foreign Key" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="erd_legend">
+          <mxGeometry x="10" y="55" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="erd_leg3" value="─○ One   ──&lt; Many" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="erd_legend">
+          <mxGeometry x="10" y="75" width="180" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="erd_leg4" value="store_id = tenant scope" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2;" vertex="1" parent="erd_legend">
+          <mxGeometry x="10" y="95" width="180" height="20" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="sequence-order-import" name="Figure 4.3 - Order Import Sequence">
+    <mxGraphModel dx="1600" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Title -->
+        <mxCell id="seq_title" value="Figure 4.3: Marketplace Order Import Sequence&#xa;Marketplace Order → MySQL Transaction → Stock Deduction → Sync Job" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="20" width="600" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== ACTORS/PARTICIPANTS ==================== -->
+
+        <!-- Marketplace API -->
+        <mxCell id="actor_marketplace" value="Marketplace API&#xa;(Shopify/eBay/Amazon)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="100" width="40" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Lifelines (vertical dashed lines) -->
+        <mxCell id="lifeline_marketplace" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="80" y="170" as="sourcePoint"/>
+            <mxPoint x="80" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- WebhookController -->
+        <mxCell id="actor_controller" value="WebhookController" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="100" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_controller" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="140" as="sourcePoint"/>
+            <mxPoint x="240" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ProcessWebhookJob -->
+        <mxCell id="actor_job" value="ProcessWebhookJob&#xa;(Queue)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="100" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_job" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="400" y="140" as="sourcePoint"/>
+            <mxPoint x="400" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- OrderImportService -->
+        <mxCell id="actor_service" value="OrderImportService" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="100" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_service" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="560" y="140" as="sourcePoint"/>
+            <mxPoint x="560" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- MySQL DB::transaction -->
+        <mxCell id="actor_db" value="MySQL&#xa;DB::transaction()" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="680" y="90" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_db" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="730" y="150" as="sourcePoint"/>
+            <mxPoint x="730" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- PlatformOrder Model -->
+        <mxCell id="actor_platform_order" value="PlatformOrder" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="100" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_platform_order" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="890" y="140" as="sourcePoint"/>
+            <mxPoint x="890" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Order Model -->
+        <mxCell id="actor_order" value="Order" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="980" y="100" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_order" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1020" y="140" as="sourcePoint"/>
+            <mxPoint x="1020" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- OrderItem Model -->
+        <mxCell id="actor_order_item" value="OrderItem" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="100" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_order_item" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1140" y="140" as="sourcePoint"/>
+            <mxPoint x="1140" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Inventory Model -->
+        <mxCell id="actor_inventory" value="Inventory" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="100" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_inventory" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1260" y="140" as="sourcePoint"/>
+            <mxPoint x="1260" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SyncOrderToShipStation Job -->
+        <mxCell id="actor_sync" value="SyncOrderTo&#xa;ShipStation" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="100" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_sync" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1390" y="140" as="sourcePoint"/>
+            <mxPoint x="1390" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ==================== SEQUENCE MESSAGES ==================== -->
+
+        <!-- 1. Marketplace -> WebhookController: POST /webhooks/{platform}/orders -->
+        <mxCell id="msg1" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="80" y="200" as="sourcePoint"/>
+            <mxPoint x="240" y="200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg1_label" value="1. POST /webhooks/{platform}/orders&#xa;   (JSON payload)" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="msg1">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="20" y="-15" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Controller activation box -->
+        <mxCell id="activation_controller" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="235" y="200" width="10" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- 2. WebhookController creates WebhookLog -->
+        <mxCell id="msg2" value="" style="endArrow=classic;html=1;strokeWidth=1;curved=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="245" y="230" as="sourcePoint"/>
+            <mxPoint x="245" y="260" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="280" y="245"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg2_label" value="2. WebhookLog::create()" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="msg2">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint x="10" y="-5" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 3. WebhookController dispatches ProcessWebhookJob -->
+        <mxCell id="msg3" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="245" y="290" as="sourcePoint"/>
+            <mxPoint x="400" y="290" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg3_label" value="3. dispatch(ProcessWebhookJob)&#xa;   [async - queued]" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="msg3">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="20" y="-15" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Return 200 OK to Marketplace -->
+        <mxCell id="msg4" value="" style="endArrow=classic;html=1;strokeWidth=2;dashed=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="235" y="320" as="sourcePoint"/>
+            <mxPoint x="80" y="320" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg4_label" value="4. HTTP 200 OK" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="msg4">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Job activation box -->
+        <mxCell id="activation_job" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="395" y="350" width="10" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- 5. ProcessWebhookJob -> OrderImportService -->
+        <mxCell id="msg5" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#ffe6cc;strokeColor=#d79b00;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="405" y="380" as="sourcePoint"/>
+            <mxPoint x="560" y="380" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg5_label" value="5. importFromWebhookPayload($payload, $platform)" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="msg5">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Service activation box -->
+        <mxCell id="activation_service" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="555" y="380" width="10" height="520" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== DB::TRANSACTION FRAGMENT ==================== -->
+        <mxCell id="fragment_tx" value="DB::transaction()" style="shape=umlFrame;whiteSpace=wrap;html=1;width=130;height=30;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="420" width="690" height="380" as="geometry"/>
+        </mxCell>
+
+        <!-- 6. Begin Transaction -->
+        <mxCell id="msg6" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="460" as="sourcePoint"/>
+            <mxPoint x="730" y="460" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg6_label" value="6. BEGIN TRANSACTION" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1;fontColor=#b85450;" vertex="1" connectable="0" parent="msg6">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- DB activation box -->
+        <mxCell id="activation_db" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="725" y="460" width="10" height="320" as="geometry"/>
+        </mxCell>
+
+        <!-- 7. Create/Update PlatformOrder -->
+        <mxCell id="msg7" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="500" as="sourcePoint"/>
+            <mxPoint x="890" y="500" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg7_label" value="7. PlatformOrder::updateOrCreate()&#xa;   [platform_id, store_id]" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="msg7">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="30" y="-15" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="activation_platform" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="885" y="500" width="10" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Return PlatformOrder -->
+        <mxCell id="msg7_return" value="" style="endArrow=classic;html=1;strokeWidth=1;dashed=1;fillColor=#e1d5e7;strokeColor=#9673a6;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="885" y="530" as="sourcePoint"/>
+            <mxPoint x="565" y="530" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg7_return_label" value="$platformOrder" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontStyle=2;" vertex="1" connectable="0" parent="msg7_return">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 8. Create Order -->
+        <mxCell id="msg8" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="560" as="sourcePoint"/>
+            <mxPoint x="1020" y="560" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg8_label" value="8. Order::create([&#xa;     'store_id', 'customer_id',&#xa;     'invoice_number', 'status', 'total'&#xa;   ])" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="msg8">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="30" y="-20" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="activation_order" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1015" y="560" width="10" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- Return Order -->
+        <mxCell id="msg8_return" value="" style="endArrow=classic;html=1;strokeWidth=1;dashed=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1015" y="590" as="sourcePoint"/>
+            <mxPoint x="565" y="590" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg8_return_label" value="$order" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontStyle=2;" vertex="1" connectable="0" parent="msg8_return">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 9. Loop: Create OrderItems -->
+        <mxCell id="fragment_loop" value="loop [foreach $lineItem in $payload['items']]" style="shape=umlFrame;whiteSpace=wrap;html=1;width=280;height=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="555" y="610" width="430" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="msg9" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#dae8fc;strokeColor=#6c8ebf;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="660" as="sourcePoint"/>
+            <mxPoint x="1140" y="660" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg9_label" value="9. OrderItem::create(['order_id', 'sku', 'quantity', 'price'])&#xa;   + matchVariantBySku($sku)" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="msg9">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="30" y="-15" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="activation_item" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1135" y="660" width="10" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="msg9_return" value="" style="endArrow=classic;html=1;strokeWidth=1;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1135" y="690" as="sourcePoint"/>
+            <mxPoint x="565" y="690" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 10. Inventory Deduction (inside transaction) -->
+        <mxCell id="msg10" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#d5e8d4;strokeColor=#82b366;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="730" as="sourcePoint"/>
+            <mxPoint x="1260" y="730" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg10_label" value="10. Inventory::where(['variant_id', 'warehouse_id'])&#xa;    ->decrement('quantity', $qty)&#xa;    + ActivityLog::log('inventory.order_deduction')" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" connectable="0" parent="msg10">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="30" y="-20" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="activation_inventory" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1255" y="730" width="10" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="msg10_return" value="" style="endArrow=classic;html=1;strokeWidth=1;dashed=1;fillColor=#d5e8d4;strokeColor=#82b366;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1255" y="770" as="sourcePoint"/>
+            <mxPoint x="565" y="770" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg10_return_label" value="stock updated" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontStyle=2;" vertex="1" connectable="0" parent="msg10_return">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- 11. COMMIT -->
+        <mxCell id="msg11" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#f8cecc;strokeColor=#b85450;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="790" as="sourcePoint"/>
+            <mxPoint x="730" y="790" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg11_label" value="11. COMMIT" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1;fontColor=#82b366;" vertex="1" connectable="0" parent="msg11">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ==================== AFTER TRANSACTION ==================== -->
+
+        <!-- 12. Dispatch SyncOrderToShipStation -->
+        <mxCell id="msg12" value="" style="endArrow=classic;html=1;strokeWidth=2;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="565" y="850" as="sourcePoint"/>
+            <mxPoint x="1390" y="850" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg12_label" value="12. dispatch(SyncOrderToShipStation($order))&#xa;    [async - queued after commit]" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontStyle=1" vertex="1" connectable="0" parent="msg12">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint x="30" y="-15" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SyncJob activation -->
+        <mxCell id="activation_sync" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1385" y="850" width="10" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- 13. SyncJob calls ShipStation API -->
+        <mxCell id="msg13" value="" style="endArrow=classic;html=1;strokeWidth=1;curved=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1395" y="880" as="sourcePoint"/>
+            <mxPoint x="1500" y="880" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg13_label" value="13. POST /orders&#xa;    to ShipStation API" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];fontSize=10;" vertex="1" connectable="0" parent="msg13">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+            <mxPoint x="10" y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ShipStation API actor -->
+        <mxCell id="actor_shipstation" value="ShipStation&#xa;API" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="100" width="40" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="lifeline_shipstation" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 4;strokeWidth=1;strokeColor=#999999;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1520" y="170" as="sourcePoint"/>
+            <mxPoint x="1520" y="1200" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Return from service -->
+        <mxCell id="msg14" value="" style="endArrow=classic;html=1;strokeWidth=1;dashed=1;fillColor=#ffe6cc;strokeColor=#d79b00;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="555" y="910" as="sourcePoint"/>
+            <mxPoint x="405" y="910" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg14_label" value="$order (created)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=9;fontStyle=2;" vertex="1" connectable="0" parent="msg14">
+          <mxGeometry x="0.3" relative="1" as="geometry">
+            <mxPoint y="-10" as="offset"/>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ==================== NOTES ==================== -->
+        <mxCell id="note1" value="ACID Guarantees:&#xa;&#xa;1. Atomicity: All DB operations&#xa;   (PlatformOrder, Order, OrderItems,&#xa;   Inventory) succeed or fail together&#xa;&#xa;2. Consistency: Stock never goes&#xa;   negative (constrained)&#xa;&#xa;3. Isolation: Concurrent orders&#xa;   handled via row-level locks&#xa;&#xa;4. Durability: Changes persisted&#xa;   after COMMIT" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=top;align=left;spacingTop=5;spacingLeft=10;fontSize=10;fillColor=#ffffcc;strokeColor=#999966;" vertex="1" parent="1">
+          <mxGeometry x="40" y="960" width="200" height="200" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="note2" value="Queue Jobs:&#xa;&#xa;1. ProcessWebhookJob&#xa;   - Processes incoming webhooks&#xa;   - Calls OrderImportService&#xa;   - Handles platform-specific logic&#xa;&#xa;2. SyncOrderToShipStation&#xa;   - Dispatched AFTER commit&#xa;   - Sends order to ShipStation&#xa;   - Retry on failure (3 attempts)" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=top;align=left;spacingTop=5;spacingLeft=10;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="260" y="960" width="200" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="note3" value="Stock Deduction Logic:&#xa;&#xa;Inventory::where([&#xa;  'product_variant_id' => $variantId,&#xa;  'warehouse_id' => $warehouseId&#xa;])->decrement('quantity', $qty);&#xa;&#xa;- Deducted during order creation&#xa;- Reserved qty also tracked&#xa;- Logs to ActivityLog for audit&#xa;- Supports multi-warehouse" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=top;align=left;spacingTop=5;spacingLeft=10;fontSize=10;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="480" y="960" width="200" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="note4" value="Supported Platforms:&#xa;&#xa;- Shopify (order/create webhook)&#xa;- eBay (order notification)&#xa;- Amazon (order event)&#xa;- Etsy (shop receipt)&#xa;- Walmart (order.created)&#xa;- WooCommerce (order.created)&#xa;&#xa;Each normalized via adapters&#xa;before OrderImportService" style="shape=note;whiteSpace=wrap;html=1;size=14;verticalAlign=top;align=left;spacingTop=5;spacingLeft=10;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="700" y="960" width="180" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="seq_legend" value="Legend" style="swimlane;horizontal=1;startSize=25;fillColor=#f5f5f5;strokeColor=#666666;rounded=1;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="960" width="230" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="seq_leg1" value="──── Synchronous call" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="seq_legend">
+          <mxGeometry x="10" y="35" width="200" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="seq_leg2" value="- - - Async/Queued job" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="seq_legend">
+          <mxGeometry x="10" y="55" width="200" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="seq_leg3" value="█ Red box = DB Transaction scope" style="text;html=1;strokeColor=none;fillColor=#f8cecc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="seq_legend">
+          <mxGeometry x="10" y="75" width="200" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="seq_leg4" value="█ Yellow = Queue jobs" style="text;html=1;strokeColor=none;fillColor=#fff2cc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="seq_legend">
+          <mxGeometry x="10" y="95" width="200" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="seq_leg5" value="█ Green = Inventory operations" style="text;html=1;strokeColor=none;fillColor=#d5e8d4;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="seq_legend">
+          <mxGeometry x="10" y="115" width="200" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="seq_leg6" value="█ Blue = Order domain" style="text;html=1;strokeColor=none;fillColor=#dae8fc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;" vertex="1" parent="seq_legend">
+          <mxGeometry x="10" y="135" width="200" height="20" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

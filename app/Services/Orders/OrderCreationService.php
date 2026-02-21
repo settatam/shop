@@ -380,9 +380,11 @@ class OrderCreationService
     {
         $remaining = $quantity;
 
+        // Use lockForUpdate to prevent race conditions (overselling)
         $inventories = Inventory::where('product_variant_id', $variant->id)
             ->where('quantity', '>', 0)
             ->orderBy('quantity', 'desc')
+            ->lockForUpdate()
             ->get();
 
         foreach ($inventories as $inventory) {
@@ -394,9 +396,27 @@ class OrderCreationService
             $reduceBy = min($available, $remaining);
 
             if ($reduceBy > 0) {
-                $inventory->decrement('quantity', $reduceBy);
-                $inventory->update(['last_sold_at' => now()]);
-                $remaining -= $reduceBy;
+                // Use atomic conditional update to ensure we don't go negative
+                $updated = Inventory::where('id', $inventory->id)
+                    ->where('quantity', '>=', $reduceBy)
+                    ->update([
+                        'quantity' => DB::raw("quantity - {$reduceBy}"),
+                        'last_sold_at' => now(),
+                    ]);
+
+                if ($updated) {
+                    $remaining -= $reduceBy;
+                }
+            }
+        }
+
+        // If we couldn't reduce all requested quantity, check if product allows overselling
+        if ($remaining > 0) {
+            $product = $variant->product;
+            if (! $product?->sell_out_of_stock) {
+                throw new \RuntimeException(
+                    "Insufficient stock for {$variant->sku}. Requested: {$quantity}, Available: ".($quantity - $remaining)
+                );
             }
         }
     }

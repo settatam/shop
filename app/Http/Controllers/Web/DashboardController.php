@@ -11,6 +11,8 @@ use App\Models\Memo;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Repair;
+use App\Models\SalesChannel;
+use App\Models\StoreMarketplace;
 use App\Models\Transaction;
 use App\Services\StoreContext;
 use Carbon\Carbon;
@@ -28,7 +30,7 @@ class DashboardController extends Controller
         $store = $this->storeContext->getCurrentStore();
 
         if (! $store) {
-            return Inertia::render('Dashboard', [
+            return Inertia::render(edition_view('Dashboard'), [
                 'stats' => [],
                 'recentActivity' => [],
                 'lowStockProducts' => [],
@@ -60,7 +62,7 @@ class DashboardController extends Controller
         $previousStartDate = now()->subDays(59)->startOfDay();
         $previousEndDate = now()->subDays(30)->endOfDay();
 
-        return Inertia::render('Dashboard', [
+        return Inertia::render(edition_view('Dashboard'), [
             'stats' => $this->getStats($storeId, $startDate, $endDate, $previousStartDate, $previousEndDate),
             'recentActivity' => $this->getRecentActivity($storeId),
             'lowStockProducts' => $this->getLowStockProducts($storeId),
@@ -74,6 +76,8 @@ class DashboardController extends Controller
             'recentMemos' => $this->getRecentMemos($storeId),
             'memosByStatus' => $this->getMemosByStatus($storeId),
             'todaySummary' => $this->getTodaySummary($storeId),
+            'marketplaces' => $this->getActiveMarketplaces($storeId),
+            'salesByChannel' => $this->getSalesByChannel($storeId, $startDate, $endDate),
         ]);
     }
 
@@ -597,6 +601,71 @@ class DashboardController extends Controller
     }
 
     /**
+     * Get active marketplaces for the store.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getActiveMarketplaces(int $storeId): array
+    {
+        return StoreMarketplace::where('store_id', $storeId)
+            ->sellingPlatforms()
+            ->connected()
+            ->where('status', 'active')
+            ->get()
+            ->map(fn ($marketplace) => [
+                'id' => $marketplace->id,
+                'platform' => $marketplace->platform->value,
+                'platform_label' => $marketplace->platform->label(),
+                'name' => $marketplace->name,
+                'status' => $marketplace->status,
+                'last_sync_at' => $marketplace->last_sync_at?->toIso8601String(),
+                'last_sync_ago' => $marketplace->last_sync_at?->diffForHumans(),
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Get sales grouped by sales channel.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getSalesByChannel(int $storeId, Carbon $startDate, Carbon $endDate): array
+    {
+        $channels = SalesChannel::where('store_id', $storeId)
+            ->where('is_active', true)
+            ->get();
+
+        $result = [];
+
+        foreach ($channels as $channel) {
+            $orders = Order::where('store_id', $storeId)
+                ->where('sales_channel_id', $channel->id)
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->get();
+
+            $paidOrders = $orders->filter(fn ($o) => in_array($o->status, Order::PAID_STATUSES));
+
+            $result[] = [
+                'id' => $channel->id,
+                'name' => $channel->name,
+                'code' => $channel->code,
+                'color' => $channel->color,
+                'is_local' => $channel->is_local,
+                'orders_count' => $orders->count(),
+                'revenue' => round($paidOrders->sum('total'), 2),
+                'avg_order_value' => $paidOrders->count() > 0
+                    ? round($paidOrders->sum('total') / $paidOrders->count(), 2)
+                    : 0,
+            ];
+        }
+
+        // Sort by revenue descending
+        usort($result, fn ($a, $b) => $b['revenue'] <=> $a['revenue']);
+
+        return $result;
+    }
+
+    /**
      * API endpoint for refreshing dashboard data.
      */
     public function getData(Request $request): JsonResponse
@@ -629,6 +698,8 @@ class DashboardController extends Controller
             'recentMemos' => $this->getRecentMemos($storeId),
             'memosByStatus' => $this->getMemosByStatus($storeId),
             'todaySummary' => $this->getTodaySummary($storeId),
+            'marketplaces' => $this->getActiveMarketplaces($storeId),
+            'salesByChannel' => $this->getSalesByChannel($storeId, $startDate, $endDate),
         ]);
     }
 }

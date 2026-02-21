@@ -191,4 +191,24 @@ class FeatureManager
 
         return $rules;
     }
+
+    /**
+     * Get the logo URL for a store's edition.
+     */
+    public function getEditionLogo(Store $store): ?string
+    {
+        $edition = $store->edition ?? config('editions.default', 'shopmata-public');
+
+        return config("editions.editions.{$edition}.logo");
+    }
+
+    /**
+     * Get the display name for a store's edition.
+     */
+    public function getEditionName(Store $store): string
+    {
+        $edition = $store->edition ?? config('editions.default', 'shopmata-public');
+
+        return config("editions.editions.{$edition}.name", 'Shopmata');
+    }
 }

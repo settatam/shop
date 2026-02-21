@@ -212,8 +212,7 @@ class MigrateLegacyPayments extends Command
             ->table('payments as p')
             ->join('orders as o', 'p.order_id', '=', 'o.id')
             ->where('o.store_id', $legacyStoreId)
-
-            ->select('p.*')
+            ->select('p.*', 'o.order_id as order_number')
             ->orderBy('p.id', 'asc');
 
         if ($limit > 0) {
@@ -237,25 +236,52 @@ class MigrateLegacyPayments extends Command
                 continue;
             }
 
-            // Map order
+            // Detect payment source based on order number prefix
+            $orderNumber = strtoupper($legacyPayment->order_number ?? '');
             $orderId = null;
             $payableType = null;
             $payableId = null;
 
-            if ($legacyPayment->order_id && isset($this->orderMap[$legacyPayment->order_id])) {
-                $orderId = $this->orderMap[$legacyPayment->order_id];
-                $payableType = Order::class;
-                $payableId = $orderId;
+            if (str_starts_with($orderNumber, 'MEM')) {
+                // This is a Memo payment
+                $payableType = Memo::class;
+                $memo = Memo::where('store_id', $newStore->id)
+                    ->where('memo_number', $legacyPayment->order_number)
+                    ->first();
+                $payableId = $memo?->id;
+                // Try to get orderId from memo map
+                if ($legacyPayment->order_id && isset($this->memoMap[$legacyPayment->order_id])) {
+                    $payableId = $this->memoMap[$legacyPayment->order_id];
+                }
+            } elseif (str_starts_with($orderNumber, 'REP')) {
+                // This is a Repair payment
+                $payableType = Repair::class;
+                $repair = Repair::where('store_id', $newStore->id)
+                    ->where('repair_number', $legacyPayment->order_number)
+                    ->first();
+                $payableId = $repair?->id;
+                // Try to get repairId from repair map
+                if ($legacyPayment->order_id && isset($this->repairMap[$legacyPayment->order_id])) {
+                    $payableId = $this->repairMap[$legacyPayment->order_id];
+                }
+            } else {
+                // This is a regular Order payment
+                if ($legacyPayment->order_id && isset($this->orderMap[$legacyPayment->order_id])) {
+                    $orderId = $this->orderMap[$legacyPayment->order_id];
+                    $payableType = Order::class;
+                    $payableId = $orderId;
+                }
             }
 
             if ($isDryRun) {
-                $this->line("  Would create payment: \${$legacyPayment->amount} for order #{$legacyPayment->order_id}");
+                $sourceType = str_starts_with($orderNumber, 'MEM') ? 'memo' : (str_starts_with($orderNumber, 'REP') ? 'repair' : 'order');
+                $this->line("  Would create payment: \${$legacyPayment->amount} for {$sourceType} #{$legacyPayment->order_number}");
                 $paymentCount++;
 
                 continue;
             }
 
-            if (! $orderId) {
+            if (! $payableId) {
                 $skipped++;
 
                 continue;

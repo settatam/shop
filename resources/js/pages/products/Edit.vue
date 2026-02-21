@@ -1833,12 +1833,11 @@ function deleteProduct() {
 
                                 <div>
                                     <label for="vendor_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Vendor <span class="text-red-500">*</span>
+                                        Vendor
                                     </label>
                                     <select
                                         id="vendor_id"
                                         v-model="form.vendor_id"
-                                        required
                                         class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     >
                                         <option value="">Select a vendor...</option>

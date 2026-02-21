@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Status;
 use App\Models\Transaction;
 use App\Services\StoreContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -26,6 +28,140 @@ class BuysReportController extends Controller
         return Status::where('store_id', $storeId)
             ->where('slug', 'payment_processed')
             ->value('id');
+    }
+
+    /**
+     * Get categories for the store with tree structure.
+     *
+     * @return array<int, array{value: int, label: string, depth: int, isLeaf: bool}>
+     */
+    protected function getCategories(int $storeId): array
+    {
+        $categories = Category::where('store_id', $storeId)
+            ->get(['id', 'name', 'parent_id']);
+
+        return $this->buildCategoryTree($categories);
+    }
+
+    /**
+     * Build a flat list of categories in tree order with depth information.
+     *
+     * @return array<int, array{value: int, label: string, depth: int, isLeaf: bool}>
+     */
+    protected function buildCategoryTree(Collection $categories, ?int $parentId = null, int $depth = 0): array
+    {
+        $result = [];
+
+        // Find all category IDs that have children
+        $parentIds = $categories->whereNotNull('parent_id')->pluck('parent_id')->unique()->toArray();
+
+        $children = $categories
+            ->filter(fn ($c) => $c->parent_id == $parentId)
+            ->sortBy('name');
+
+        foreach ($children as $category) {
+            $hasChildren = in_array($category->id, $parentIds);
+            $result[] = [
+                'value' => $category->id,
+                'label' => $category->name,
+                'depth' => $depth,
+                'isLeaf' => ! $hasChildren,
+            ];
+
+            // Recursively add children
+            $result = array_merge($result, $this->buildCategoryTree($categories, $category->id, $depth + 1));
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get all descendant category IDs for a given category.
+     *
+     * @return array<int>
+     */
+    protected function getCategoryDescendantIds(int $categoryId, int $storeId): array
+    {
+        $allIds = [$categoryId];
+
+        $childIds = Category::where('store_id', $storeId)
+            ->where('parent_id', $categoryId)
+            ->pluck('id')
+            ->toArray();
+
+        foreach ($childIds as $childId) {
+            $allIds = array_merge($allIds, $this->getCategoryDescendantIds($childId, $storeId));
+        }
+
+        return $allIds;
+    }
+
+    /**
+     * Get category breakdown for transactions.
+     * Returns buys aggregated by each category.
+     *
+     * @return array<int, array{category_id: int, category_name: string, is_leaf: bool, items_count: int, transactions_count: int, total_purchase: float, total_estimated_value: float, total_profit: float}>
+     */
+    protected function getCategoryBreakdown(Collection $transactions, int $storeId): array
+    {
+        $categories = Category::where('store_id', $storeId)
+            ->get(['id', 'name', 'parent_id'])
+            ->keyBy('id');
+
+        // Find all category IDs that have children (non-leaf)
+        $parentIds = $categories->whereNotNull('parent_id')->pluck('parent_id')->unique()->toArray();
+
+        // Build breakdown by category
+        $breakdown = [];
+
+        foreach ($transactions as $transaction) {
+            foreach ($transaction->items as $item) {
+                $categoryId = $item->category_id ?? 0; // 0 for uncategorized
+                if (! $categoryId) {
+                    $categoryId = 0;
+                }
+
+                if (! isset($breakdown[$categoryId])) {
+                    $category = $categories->get($categoryId);
+                    $breakdown[$categoryId] = [
+                        'category_id' => $categoryId,
+                        'category_name' => $category?->name ?? 'Uncategorized',
+                        'is_leaf' => $categoryId === 0 || ! in_array($categoryId, $parentIds),
+                        'parent_id' => $category?->parent_id,
+                        'items_count' => 0,
+                        'transactions_count' => 0,
+                        'transaction_ids' => [],
+                        'total_purchase' => 0,
+                        'total_estimated_value' => 0,
+                        'total_profit' => 0,
+                    ];
+                }
+
+                $itemPrice = (float) ($item->price ?? 0); // Estimated value
+                $itemBuyPrice = (float) ($item->buy_price ?? 0); // What we paid
+
+                $breakdown[$categoryId]['items_count'] += $item->quantity ?? 1;
+                $breakdown[$categoryId]['total_estimated_value'] += $itemPrice * ($item->quantity ?? 1);
+                $breakdown[$categoryId]['total_purchase'] += $itemBuyPrice * ($item->quantity ?? 1);
+
+                // Track unique transactions
+                if (! in_array($transaction->id, $breakdown[$categoryId]['transaction_ids'])) {
+                    $breakdown[$categoryId]['transaction_ids'][] = $transaction->id;
+                    $breakdown[$categoryId]['transactions_count']++;
+                }
+            }
+        }
+
+        // Calculate profit and remove transaction_ids from final output
+        foreach ($breakdown as &$cat) {
+            $cat['total_profit'] = $cat['total_estimated_value'] - $cat['total_purchase'];
+            unset($cat['transaction_ids']);
+        }
+
+        // Sort by total estimated value descending
+        usort($breakdown, fn ($a, $b) => $b['total_estimated_value'] <=> $a['total_estimated_value']);
+
+        return array_values($breakdown);
     }
 
     /**
@@ -50,9 +186,30 @@ class BuysReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
-        $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate);
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate, $categoryIds);
 
         $totals = $this->calculateTotals($dailyData);
+
+        // Get transactions for category breakdown
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+        $transactionsQuery = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items.category']);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
 
         return Inertia::render('reports/buys/Index', [
             'dailyData' => $dailyData,
@@ -60,6 +217,9 @@ class BuysReportController extends Controller
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -95,19 +255,43 @@ class BuysReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
         $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
 
-        $transactions = Transaction::query()
+        $transactionsQuery = Transaction::query()
             ->where('store_id', $store->id)
             ->where('status_id', $paymentProcessedStatusId)
             ->whereNotNull('payment_processed_at')
             ->whereBetween('payment_processed_at', [$startDate, $endDate])
-            ->with(['items', 'customer', 'user'])
-            ->orderBy('payment_processed_at', 'desc')
-            ->get()
+            ->with(['items.category', 'customer', 'user']);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $transactionsRaw = $transactionsQuery->orderBy('payment_processed_at', 'desc')->get();
+
+        // Get category breakdown
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsRaw, $store->id);
+
+        $transactions = $transactionsRaw
             ->map(function ($transaction) {
                 $estimatedValue = $transaction->items->sum('price');
                 $profit = $estimatedValue - ($transaction->final_offer ?? 0);
+
+                // Get categories from items
+                $categories = $transaction->items
+                    ->pluck('category.name')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
 
                 return [
                     'id' => $transaction->id,
@@ -116,6 +300,7 @@ class BuysReportController extends Controller
                     'customer' => $transaction->customer?->full_name ?? 'Walk-in',
                     'type' => ucfirst($transaction->type ?? 'in_store'),
                     'source' => ucfirst($transaction->source ?? 'direct'),
+                    'categories' => $categories ?: '-',
                     'num_items' => $transaction->items->count(),
                     'purchase_amt' => $transaction->final_offer ?? 0,
                     'estimated_value' => $estimatedValue,
@@ -144,6 +329,9 @@ class BuysReportController extends Controller
             'startDate' => $startDate->format('Y-m-d'),
             'endDate' => $endDate->format('Y-m-d'),
             'dateRangeLabel' => $this->getDateRangeLabel($startDate, $endDate),
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -271,9 +459,30 @@ class BuysReportController extends Controller
             [$startDate, $endDate] = [$endDate, $startDate];
         }
 
-        $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate, $categoryIds);
 
         $totals = $this->calculateTotals($monthlyData);
+
+        // Get transactions for category breakdown
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+        $transactionsQuery = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items.category']);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
 
         return Inertia::render('reports/buys/Monthly', [
             'monthlyData' => $monthlyData,
@@ -283,6 +492,9 @@ class BuysReportController extends Controller
             'endMonth' => $endDate->month,
             'endYear' => $endDate->year,
             'dateRangeLabel' => $startDate->format('M Y').' - '.$endDate->format('M Y'),
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -292,12 +504,40 @@ class BuysReportController extends Controller
     public function yearly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $yearlyData = $this->getAllBuysYearlyData($store->id);
+
+        // Category filter - get descendant IDs if filtering
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $yearlyData = $this->getAllBuysYearlyData($store->id, $categoryIds);
         $totals = $this->calculateTotals($yearlyData);
+
+        // Get transactions for category breakdown (last 5 years)
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+        $startDate = now()->subYears(4)->startOfYear();
+        $endDate = now()->endOfYear();
+
+        $transactionsQuery = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items.category']);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
 
         return Inertia::render('reports/buys/Yearly', [
             'yearlyData' => $yearlyData,
             'totals' => $totals,
+            'categories' => $this->getCategories($store->id),
+            'categoryBreakdown' => $categoryBreakdown,
+            'filters' => $request->only(['category_id']),
         ]);
     }
 
@@ -366,26 +606,32 @@ class BuysReportController extends Controller
 
     /**
      * Get all buys daily aggregated data (no type/source filter).
+     *
+     * @param  array<int>|null  $categoryIds
      */
-    protected function getAllBuysDailyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    protected function getAllBuysDailyData(int $storeId, Carbon $startDate, Carbon $endDate, ?array $categoryIds = null)
     {
-        return $this->getDailyBuysData($storeId, $startDate, $endDate, fn ($query) => $query);
+        return $this->getDailyBuysData($storeId, $startDate, $endDate, fn ($query) => $query, $categoryIds);
     }
 
     /**
      * Get all buys monthly aggregated data (no type/source filter).
+     *
+     * @param  array<int>|null  $categoryIds
      */
-    protected function getAllBuysMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate)
+    protected function getAllBuysMonthlyData(int $storeId, Carbon $startDate, Carbon $endDate, ?array $categoryIds = null)
     {
-        return $this->getMonthlyBuysData($storeId, $startDate, $endDate, fn ($query) => $query);
+        return $this->getMonthlyBuysData($storeId, $startDate, $endDate, fn ($query) => $query, $categoryIds);
     }
 
     /**
      * Get all buys yearly aggregated data (no type/source filter).
+     *
+     * @param  array<int>|null  $categoryIds
      */
-    protected function getAllBuysYearlyData(int $storeId)
+    protected function getAllBuysYearlyData(int $storeId, ?array $categoryIds = null)
     {
-        return $this->getYearlyBuysData($storeId, fn ($query) => $query);
+        return $this->getYearlyBuysData($storeId, fn ($query) => $query, $categoryIds);
     }
 
     /**
@@ -796,8 +1042,10 @@ class BuysReportController extends Controller
     /**
      * Get daily buys data with custom filter.
      * Includes all transactions that have reached payment_processed status.
+     *
+     * @param  array<int>|null  $categoryIds
      */
-    protected function getDailyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
+    protected function getDailyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter, ?array $categoryIds = null)
     {
         $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($storeId);
 
@@ -809,6 +1057,11 @@ class BuysReportController extends Controller
             ->with(['items']);
 
         $filter($query);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $query->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
 
         $transactions = $query->get();
 
@@ -850,8 +1103,10 @@ class BuysReportController extends Controller
     /**
      * Get yearly buys data with custom filter.
      * Includes all transactions that have reached payment_processed status.
+     *
+     * @param  array<int>|null  $categoryIds
      */
-    protected function getYearlyBuysData(int $storeId, callable $filter)
+    protected function getYearlyBuysData(int $storeId, callable $filter, ?array $categoryIds = null)
     {
         $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($storeId);
 
@@ -867,6 +1122,11 @@ class BuysReportController extends Controller
             ->with(['items']);
 
         $filter($query);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $query->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
 
         $transactions = $query->get();
 
@@ -909,8 +1169,10 @@ class BuysReportController extends Controller
     /**
      * Get monthly buys data with custom filter.
      * Includes all transactions that have reached payment_processed status.
+     *
+     * @param  array<int>|null  $categoryIds
      */
-    protected function getMonthlyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter)
+    protected function getMonthlyBuysData(int $storeId, Carbon $startDate, Carbon $endDate, callable $filter, ?array $categoryIds = null)
     {
         $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($storeId);
 
@@ -922,6 +1184,11 @@ class BuysReportController extends Controller
             ->with(['items']);
 
         $filter($query);
+
+        // Apply category filter if set
+        if ($categoryIds) {
+            $query->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
 
         $transactions = $query->get();
 

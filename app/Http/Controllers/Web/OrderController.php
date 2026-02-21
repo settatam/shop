@@ -172,7 +172,7 @@ class OrderController extends Controller
         return redirect()->route('invoices.print', $invoice);
     }
 
-    public function createWizard(): Response|RedirectResponse
+    public function createWizard(Request $request): Response|RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
@@ -235,6 +235,31 @@ class OrderController extends Controller
         $currentStoreUser = auth()->user()?->currentStoreUser();
         $defaultWarehouseId = $currentStoreUser?->default_warehouse_id;
 
+        // Check if a product_id was passed to pre-add to the order
+        $preSelectedProduct = null;
+        if ($request->has('product_id')) {
+            $product = Product::where('store_id', $store->id)
+                ->where('id', $request->get('product_id'))
+                ->with(['category', 'images', 'variants'])
+                ->first();
+
+            if ($product) {
+                $variant = $product->variants->first();
+                $preSelectedProduct = [
+                    'id' => $product->id,
+                    'variant_id' => $variant?->id,
+                    'title' => $product->title,
+                    'sku' => $variant?->sku,
+                    'description' => $product->description,
+                    'price' => $variant?->price ?? 0,
+                    'cost' => $variant?->cost ?? 0,
+                    'quantity' => $product->total_quantity,
+                    'category' => $product->category?->name,
+                    'image' => $product->images->first()?->url,
+                ];
+            }
+        }
+
         return Inertia::render('orders/CreateWizard', [
             'storeUsers' => $storeUsers,
             'currentStoreUserId' => $currentStoreUserId,
@@ -245,6 +270,7 @@ class OrderController extends Controller
             'defaultTaxRate' => $store->default_tax_rate ?? 0,
             'preciousMetals' => $this->getPreciousMetals(),
             'itemConditions' => $this->getItemConditions(),
+            'preSelectedProduct' => $preSelectedProduct,
         ]);
     }
 
@@ -1172,21 +1198,29 @@ class OrderController extends Controller
         $query = $request->get('query', '');
         $categoryId = $request->get('category_id');
 
-        $products = Product::where('store_id', $store->id)
-            ->when($query, function ($q) use ($query) {
-                $q->where(function ($sub) use ($query) {
-                    $sub->where('title', 'like', "%{$query}%")
-                        ->orWhere('description', 'like', "%{$query}%")
-                        ->orWhereHas('variants', function ($variantQuery) use ($query) {
-                            $variantQuery->where('sku', 'like', "%{$query}%")
-                                ->orWhere('barcode', 'like', "%{$query}%");
-                        });
-                });
-            })
-            ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
-            ->with(['category', 'images', 'variants'])
-            ->limit(50) // Get more initially to filter
-            ->get()
+        // Use Scout/MeiliSearch for better search results
+        if ($query) {
+            $searchQuery = Product::search($query)
+                ->where('store_id', $store->id);
+
+            if ($categoryId) {
+                $searchQuery->where('category_id', $categoryId);
+            }
+
+            $products = $searchQuery
+                ->take(50)
+                ->get()
+                ->load(['category', 'images', 'variants']);
+        } else {
+            // No query - just list products with optional category filter
+            $products = Product::where('store_id', $store->id)
+                ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
+                ->with(['category', 'images', 'variants'])
+                ->limit(50)
+                ->get();
+        }
+
+        $products = $products
             ->filter(function ($product) {
                 // Include if sell_out_of_stock is enabled OR has stock available
                 return $product->sell_out_of_stock || $product->total_quantity > 0;

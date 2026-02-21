@@ -11,9 +11,41 @@ return [
     |
     */
 
-    'default' => 'standard',
+    'default' => 'shopmata-public',
 
     'editions' => [
+        // Shopmata Public - Standard inventory management system for new stores
+        'shopmata-public' => [
+            'name' => 'Shopmata',
+            'description' => 'Standard inventory management system for e-commerce and retail',
+            'logo' => 'https://fashionerize.nyc3.cdn.digitaloceanspaces.com/shopmata/logo.svg',
+            'features' => [
+                // Core features
+                'dashboard',
+                'customers',
+                'products',
+                'categories',
+                'product_types',
+                'templates',
+                'orders',
+                'shipments',
+                'returns',
+                'vendors',
+                'invoices',
+                'payments',
+                'labels',
+                'reports',
+                'tags',
+                'integrations',
+                'settings',
+                'marketplaces',
+
+                // Standard inventory features
+                'multi_warehouse',
+                'inventory_tracking',
+            ],
+        ],
+
         'standard' => [
             'name' => 'Standard',
             'description' => 'Standard retail edition with all features enabled',

@@ -64,7 +64,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'stores' => fn () => $request->user() ? $this->getUserStores($request->user()) : [],
-            'currentStore' => fn () => app(StoreContext::class)->getCurrentStore(),
+            'currentStore' => fn () => $this->getCurrentStoreData(),
             'storeFeatures' => fn () => $this->getStoreFeatures(),
             'hasOnlineBuysWorkflow' => fn () => app(StoreContext::class)->getCurrentStore()?->hasOnlineBuysWorkflow() ?? false,
         ];
@@ -118,6 +118,33 @@ class HandleInertiaRequests extends Middleware
      *
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Get the current store data with edition info.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function getCurrentStoreData(): ?array
+    {
+        $store = app(StoreContext::class)->getCurrentStore();
+
+        if (! $store) {
+            return null;
+        }
+
+        $featureManager = app(FeatureManager::class);
+
+        return [
+            'id' => $store->id,
+            'name' => $store->name,
+            'slug' => $store->slug,
+            'logo' => $store->logo,
+            'logo_url' => $store->logo ? Storage::disk('do_spaces')->url($store->logo) : null,
+            'edition' => $store->edition,
+            'edition_name' => $featureManager->getEditionName($store),
+            'edition_logo' => $featureManager->getEditionLogo($store),
+        ];
+    }
+
     /**
      * Get the current store's features.
      *

@@ -29,6 +29,28 @@ interface Totals {
     avg_buy_price: number;
 }
 
+interface Category {
+    value: number;
+    label: string;
+    depth: number;
+    isLeaf: boolean;
+}
+
+interface CategoryBreakdownRow {
+    category_id: number;
+    category_name: string;
+    is_leaf: boolean;
+    items_count: number;
+    transactions_count: number;
+    total_purchase: number;
+    total_estimated_value: number;
+    total_profit: number;
+}
+
+interface Filters {
+    category_id?: string;
+}
+
 const props = defineProps<{
     monthlyData: MonthRow[];
     totals: Totals;
@@ -37,6 +59,9 @@ const props = defineProps<{
     endMonth: number;
     endYear: number;
     dateRangeLabel: string;
+    categories: Category[];
+    categoryBreakdown: CategoryBreakdownRow[];
+    filters: Filters;
 }>();
 
 // Date range filters
@@ -44,6 +69,7 @@ const startMonth = ref(props.startMonth);
 const startYear = ref(props.startYear);
 const endMonth = ref(props.endMonth);
 const endYear = ref(props.endYear);
+const categoryId = ref(props.filters?.category_id || '');
 
 const months = [
     { value: 1, label: 'January' },
@@ -63,13 +89,17 @@ const months = [
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
-function applyDateFilter() {
-    router.get('/reports/buys/monthly', {
+function applyFilters() {
+    const params: Record<string, string | number> = {
         start_month: startMonth.value,
         start_year: startYear.value,
         end_month: endMonth.value,
         end_year: endYear.value,
-    }, {
+    };
+    if (categoryId.value) {
+        params.category_id = categoryId.value;
+    }
+    router.get('/reports/buys/monthly', params, {
         preserveState: true,
         preserveScroll: true,
     });
@@ -82,11 +112,15 @@ function resetToLast12Months() {
     startYear.value = past.getFullYear();
     endMonth.value = now.getMonth() + 1;
     endYear.value = now.getFullYear();
-    applyDateFilter();
+    applyFilters();
 }
 
 const exportUrl = computed(() => {
-    return `/reports/buys/monthly/export?start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+    let url = `/reports/buys/monthly/export?start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+    if (categoryId.value) {
+        url += `&category_id=${categoryId.value}`;
+    }
+    return url;
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -217,7 +251,7 @@ function viewBuys(row: MonthRow): void {
                 </div>
             </div>
 
-            <!-- Date Range Filter -->
+            <!-- Filters -->
             <div class="flex flex-wrap items-end gap-4">
                 <div>
                     <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Month</label>
@@ -225,7 +259,7 @@ function viewBuys(row: MonthRow): void {
                         <select
                             v-model="startMonth"
                             class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyDateFilter"
+                            @change="applyFilters"
                         >
                             <option
                                 v-for="month in months"
@@ -238,7 +272,7 @@ function viewBuys(row: MonthRow): void {
                         <select
                             v-model="startYear"
                             class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyDateFilter"
+                            @change="applyFilters"
                         >
                             <option v-for="year in years" :key="year" :value="year">
                                 {{ year }}
@@ -252,7 +286,7 @@ function viewBuys(row: MonthRow): void {
                         <select
                             v-model="endMonth"
                             class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyDateFilter"
+                            @change="applyFilters"
                         >
                             <option
                                 v-for="month in months"
@@ -265,13 +299,30 @@ function viewBuys(row: MonthRow): void {
                         <select
                             v-model="endYear"
                             class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyDateFilter"
+                            @change="applyFilters"
                         >
                             <option v-for="year in years" :key="year" :value="year">
                                 {{ year }}
                             </option>
                         </select>
                     </div>
+                </div>
+                <div v-if="categories.length > 0">
+                    <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Category</label>
+                    <select
+                        v-model="categoryId"
+                        class="block w-[200px] rounded-md border-gray-300 py-2 pr-10 pl-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        @change="applyFilters"
+                    >
+                        <option value="">All Categories</option>
+                        <option
+                            v-for="cat in categories"
+                            :key="cat.value"
+                            :value="cat.value"
+                        >
+                            {{ '\u00A0\u00A0'.repeat(cat.depth) }}{{ cat.isLeaf ? '' : '📁 ' }}{{ cat.label }}
+                        </option>
+                    </select>
                 </div>
                 <button
                     type="button"
@@ -388,6 +439,108 @@ function viewBuys(row: MonthRow): void {
                             No data available
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Category Breakdown -->
+            <div
+                v-if="categoryBreakdown.length > 0"
+                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+            >
+                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                        Buys by Category
+                    </h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table
+                        class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+                    >
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th
+                                    class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Category
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Transactions
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Items
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Purchase Amt
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Est. Value
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Profit
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody
+                            class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
+                        >
+                            <tr
+                                v-for="row in categoryBreakdown"
+                                :key="row.category_id"
+                                class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                                <td
+                                    class="px-4 py-3 text-sm text-gray-900 dark:text-white"
+                                >
+                                    <span
+                                        v-if="!row.is_leaf"
+                                        class="mr-1 text-gray-400"
+                                        >📁</span
+                                    >
+                                    {{ row.category_name }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ row.transactions_count }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ row.items_count }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ formatCurrency(row.total_purchase) }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ formatCurrency(row.total_estimated_value) }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm"
+                                    :class="
+                                        row.total_profit >= 0
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                    "
+                                >
+                                    {{ formatCurrency(row.total_profit) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

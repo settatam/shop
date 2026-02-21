@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 
@@ -28,9 +28,34 @@ interface Totals {
     avg_buy_price: number;
 }
 
+interface Category {
+    value: number;
+    label: string;
+    depth: number;
+    isLeaf: boolean;
+}
+
+interface CategoryBreakdownRow {
+    category_id: number;
+    category_name: string;
+    is_leaf: boolean;
+    items_count: number;
+    transactions_count: number;
+    total_purchase: number;
+    total_estimated_value: number;
+    total_profit: number;
+}
+
+interface Filters {
+    category_id?: string;
+}
+
 const props = defineProps<{
     yearlyData: YearRow[];
     totals: Totals;
+    categories: Category[];
+    categoryBreakdown: CategoryBreakdownRow[];
+    filters: Filters;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,6 +63,27 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Buys Report', href: '/reports/buys' },
     { title: 'Yearly', href: '/reports/buys/yearly' },
 ];
+
+const categoryId = ref(props.filters?.category_id || '');
+
+function applyFilters() {
+    const params: Record<string, string> = {};
+    if (categoryId.value) {
+        params.category_id = categoryId.value;
+    }
+    router.get('/reports/buys/yearly', params, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+const exportUrl = computed(() => {
+    let url = '/reports/buys/yearly/export';
+    if (categoryId.value) {
+        url += `?category_id=${categoryId.value}`;
+    }
+    return url;
+});
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
@@ -152,12 +198,33 @@ function viewBuys(row: YearRow): void {
                         View Month to Date
                     </Link>
                     <a
-                        href="/reports/buys/yearly/export"
+                        :href="exportUrl"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ArrowDownTrayIcon class="size-4" />
                         Export CSV
                     </a>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div v-if="categories.length > 0" class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-300">Category</label>
+                    <select
+                        v-model="categoryId"
+                        class="block w-[200px] rounded-md border-gray-300 py-2 pr-10 pl-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        @change="applyFilters"
+                    >
+                        <option value="">All Categories</option>
+                        <option
+                            v-for="cat in categories"
+                            :key="cat.value"
+                            :value="cat.value"
+                        >
+                            {{ '\u00A0\u00A0'.repeat(cat.depth) }}{{ cat.isLeaf ? '' : '📁 ' }}{{ cat.label }}
+                        </option>
+                    </select>
                 </div>
             </div>
 
@@ -228,6 +295,108 @@ function viewBuys(row: YearRow): void {
                     >
                         No data available
                     </div>
+                </div>
+            </div>
+
+            <!-- Category Breakdown -->
+            <div
+                v-if="categoryBreakdown.length > 0"
+                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+            >
+                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                        Buys by Category
+                    </h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table
+                        class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+                    >
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th
+                                    class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Category
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Transactions
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Items
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Purchase Amt
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Est. Value
+                                </th>
+                                <th
+                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                                >
+                                    Profit
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody
+                            class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
+                        >
+                            <tr
+                                v-for="row in categoryBreakdown"
+                                :key="row.category_id"
+                                class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                                <td
+                                    class="px-4 py-3 text-sm text-gray-900 dark:text-white"
+                                >
+                                    <span
+                                        v-if="!row.is_leaf"
+                                        class="mr-1 text-gray-400"
+                                        >📁</span
+                                    >
+                                    {{ row.category_name }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ row.transactions_count }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ row.items_count }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ formatCurrency(row.total_purchase) }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                                >
+                                    {{ formatCurrency(row.total_estimated_value) }}
+                                </td>
+                                <td
+                                    class="px-4 py-3 text-right text-sm"
+                                    :class="
+                                        row.total_profit >= 0
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                    "
+                                >
+                                    {{ formatCurrency(row.total_profit) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

@@ -86,6 +86,10 @@ const allNavigation: NavGroup[] = [
         icon: ChartBarIcon,
         feature: 'reports',
         children: [
+            { name: 'Buys (Daily)', href: '/reports/buys/daily' },
+            { name: 'Buys (Month over Month)', href: '/reports/buys/monthly' },
+            { name: 'Buys (Month to Date)', href: '/reports/buys' },
+            { name: 'Buys (Year over Year)', href: '/reports/buys/yearly' },
             { name: 'Sales (Daily Orders)', href: '/reports/sales/daily' },
             { name: 'Sales (Daily Items)', href: '/reports/sales/daily-items' },
             { name: 'Sales (Month over Month)', href: '/reports/sales/monthly' },
@@ -94,7 +98,6 @@ const allNavigation: NavGroup[] = [
             { name: 'Transactions (Weekly)', href: '/reports/transactions/weekly', feature: 'transactions_reports' },
             { name: 'Transactions (Monthly)', href: '/reports/transactions/monthly', feature: 'transactions_reports' },
             { name: 'Transactions (Yearly)', href: '/reports/transactions/yearly', feature: 'transactions_reports' },
-            { name: 'Buys Report', href: '/reports/buys' },
             { name: 'Leads Funnel', href: '/reports/leads' },
             { name: 'Inventory Report', href: '/reports/inventory' },
         ],

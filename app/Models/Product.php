@@ -552,11 +552,13 @@ class Product extends Model
             'description' => $this->description,
             'handle' => $this->handle,
             'sku' => $this->variants->pluck('sku')->filter()->implode(' '),
+            'barcode' => $this->variants->pluck('barcode')->filter()->implode(' '),
             'upc' => $this->upc,
             'mpn' => $this->mpn,
             'brand' => $this->brand?->name,
             'category' => $this->category?->name,
             'store_id' => $this->store_id,
+            'category_id' => $this->category_id,
             'is_published' => $this->is_published,
             'created_at' => $this->created_at?->timestamp,
         ];

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Webhooks\AmazonWebhookController;
+use App\Http\Controllers\Webhooks\BigCommerceWebhookController;
 use App\Http\Controllers\Webhooks\EbayWebhookController;
 use App\Http\Controllers\Webhooks\EtsyWebhookController;
 use App\Http\Controllers\Webhooks\PaperformWebhookController;
@@ -45,6 +46,10 @@ Route::prefix('webhooks')->withoutMiddleware(['web', 'csrf'])->group(function ()
     // WooCommerce webhooks
     Route::post('woocommerce/{connectionId}', [WooCommerceWebhookController::class, 'handle'])
         ->name('webhooks.woocommerce');
+
+    // BigCommerce webhooks
+    Route::post('bigcommerce/{connectionId}', [BigCommerceWebhookController::class, 'handle'])
+        ->name('webhooks.bigcommerce');
 
     // Paperform webhooks
     Route::post('paperform', [PaperformWebhookController::class, 'handle'])

@@ -84,8 +84,8 @@ class SalesChannel extends Model
             // Set is_local based on type
             $channel->is_local = $channel->type === self::TYPE_LOCAL;
 
-            // Set sort order if not provided
-            if (empty($channel->sort_order)) {
+            // Set sort order if not provided (null check, not empty, since 0 is valid)
+            if ($channel->sort_order === null) {
                 $maxOrder = static::where('store_id', $channel->store_id)->max('sort_order') ?? 0;
                 $channel->sort_order = $maxOrder + 1;
             }
@@ -237,20 +237,34 @@ class SalesChannel extends Model
 
         // Fallback for legacy stores: get or create "In Store" channel
         // New stores have this created automatically via Store::booted()
-        return static::firstOrCreate(
-            [
-                'store_id' => $storeId,
-                'code' => 'in_store',
-            ],
-            [
-                'name' => 'In Store',
-                'type' => self::TYPE_LOCAL,
-                'is_local' => true,
-                'is_active' => true,
-                'is_default' => true,
-                'sort_order' => 0,
-            ]
-        );
+        // Check for soft-deleted record first and restore it
+        $trashedChannel = static::withTrashed()
+            ->where('store_id', $storeId)
+            ->where('code', 'in_store')
+            ->first();
+
+        if ($trashedChannel) {
+            if ($trashedChannel->trashed()) {
+                $trashedChannel->restore();
+                $trashedChannel->update([
+                    'is_active' => true,
+                    'is_local' => true,
+                ]);
+            }
+
+            return $trashedChannel;
+        }
+
+        return static::create([
+            'store_id' => $storeId,
+            'code' => 'in_store',
+            'name' => 'In Store',
+            'type' => self::TYPE_LOCAL,
+            'is_local' => true,
+            'is_active' => true,
+            'is_default' => true,
+            'sort_order' => 0,
+        ]);
     }
 
     /**

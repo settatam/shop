@@ -81,6 +81,8 @@ abstract class BaseWebhookController extends Controller
             'x-wc-webhook-signature',
             'x-wc-webhook-topic',
             'x-etsy-signature',
+            'x-bc-webhook-hmac',
+            'x-bc-store-hash',
         ];
 
         foreach ($relevantKeys as $key) {
@@ -110,6 +112,7 @@ abstract class BaseWebhookController extends Controller
         return $request->header('x-shopify-hmac-sha256')
             ?? $request->header('x-wc-webhook-signature')
             ?? $request->header('x-ebay-signature')
+            ?? $request->header('x-bc-webhook-hmac')
             ?? null;
     }
 
@@ -127,6 +130,9 @@ abstract class BaseWebhookController extends Controller
             'order.completed',
             'woocommerce_order_created',
             'woocommerce_order_updated',
+            'store/order/created',
+            'store/order/updated',
+            'store/order/statusUpdated',
         ];
 
         foreach ($processableEvents as $event) {

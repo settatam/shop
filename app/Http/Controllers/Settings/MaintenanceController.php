@@ -29,7 +29,7 @@ class MaintenanceController extends Controller
     }
 
     /**
-     * Reindex all Scout searchable models.
+     * Reindex all Scout searchable models for the current store.
      */
     public function reindexSearch(): JsonResponse
     {
@@ -40,12 +40,12 @@ class MaintenanceController extends Controller
         }
 
         try {
-            Artisan::call('scout:reindex-all', ['--flush' => true]);
+            Artisan::call('scout:reindex-store', ['store' => $store->id]);
             $output = Artisan::output();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Search index rebuilt successfully.',
+                'message' => 'Search index rebuilt successfully for this store.',
                 'output' => $output,
             ]);
         } catch (\Exception $e) {
@@ -74,12 +74,16 @@ class MaintenanceController extends Controller
         }
 
         try {
-            Artisan::call('scout:flush', ['model' => $modelClass['class']]);
-            Artisan::call('scout:import', ['model' => $modelClass['class']]);
+            Artisan::call('scout:reindex-store', [
+                'store' => $store->id,
+                '--model' => [$model],
+            ]);
+            $output = Artisan::output();
 
             return response()->json([
                 'success' => true,
-                'message' => "{$modelClass['name']} index rebuilt successfully.",
+                'message' => "{$modelClass['name']} index rebuilt successfully for this store.",
+                'output' => $output,
             ]);
         } catch (\Exception $e) {
             return response()->json([

@@ -28,6 +28,7 @@ class StoreFactory extends Factory
             'zip' => fake()->postcode(),
             'is_active' => true,
             'default_tax_rate' => 0.08,
+            'edition' => config('editions.default', 'shopmata-public'),
         ];
     }
 
@@ -81,5 +82,47 @@ class StoreFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'metal_price_settings' => ['online_buys_workflow' => true],
         ]);
+    }
+
+    /**
+     * Set a specific edition for the store.
+     */
+    public function withEdition(string $edition): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'edition' => $edition,
+        ]);
+    }
+
+    /**
+     * Create a store with the standard edition (full features).
+     */
+    public function standard(): static
+    {
+        return $this->withEdition('standard');
+    }
+
+    /**
+     * Create a store with the pawn shop edition.
+     */
+    public function pawnShop(): static
+    {
+        return $this->withEdition('pawn_shop');
+    }
+
+    /**
+     * Create a store with the legacy edition.
+     */
+    public function legacy(): static
+    {
+        return $this->withEdition('legacy');
+    }
+
+    /**
+     * Create a store with the shopmata-public edition (new default).
+     */
+    public function shopmataPublic(): static
+    {
+        return $this->withEdition('shopmata-public');
     }
 }
