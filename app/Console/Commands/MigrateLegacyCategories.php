@@ -244,8 +244,22 @@ class MigrateLegacyCategories extends Command
 
         $this->info("Found {$legacyCategories->count()} categories to migrate");
 
-        // First pass: migrate all categories without parent relationships
-        foreach ($legacyCategories as $legacyCategory) {
+        // Build a lookup map for validation
+        $categoryLookup = $legacyCategories->keyBy('id');
+
+        // Filter out categories with invalid parent chains
+        // A valid category must have a parent chain that leads to parent_id = 0 or null
+        $validCategories = $legacyCategories->filter(function ($category) use ($categoryLookup) {
+            return $this->hasValidParentChain($category, $categoryLookup);
+        });
+
+        $skippedCount = $legacyCategories->count() - $validCategories->count();
+        if ($skippedCount > 0) {
+            $this->warn("Skipping {$skippedCount} categories with invalid parent chains (orphaned categories)");
+        }
+
+        // First pass: migrate all valid categories without parent relationships
+        foreach ($validCategories as $legacyCategory) {
             try {
                 $this->migrateCategory($legacyCategory);
             } catch (\Exception $e) {
@@ -259,7 +273,43 @@ class MigrateLegacyCategories extends Command
 
         // Second pass: update parent relationships
         if (! $this->dryRun) {
-            $this->updateParentRelationships($legacyCategories);
+            $this->updateParentRelationships($validCategories);
+        }
+    }
+
+    /**
+     * Check if a category has a valid parent chain leading to parent_id = 0 or null.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $categoryLookup
+     */
+    protected function hasValidParentChain(object $category, $categoryLookup): bool
+    {
+        $visited = [];
+        $current = $category;
+
+        while (true) {
+            // Top-level category (parent_id = 0 or null) - valid
+            if (empty($current->parent_id) || $current->parent_id == 0) {
+                return true;
+            }
+
+            // Detect circular references
+            if (in_array($current->id, $visited)) {
+                $this->warn("  Category '{$current->name}' (ID {$current->id}) has circular parent reference - skipping");
+
+                return false;
+            }
+            $visited[] = $current->id;
+
+            // Check if parent exists
+            $parent = $categoryLookup->get($current->parent_id);
+            if (! $parent) {
+                $this->warn("  Category '{$category->name}' (ID {$category->id}) has orphaned parent_id {$current->parent_id} - skipping");
+
+                return false;
+            }
+
+            $current = $parent;
         }
     }
 

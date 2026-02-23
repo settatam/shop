@@ -220,18 +220,10 @@ class MigrateLegacyTransactions extends Command
             }
         }
 
-        // Load category mappings if available
+        // Category lookups are now done at runtime from the legacy store_categories table
+        // This ensures accurate mapping even if product_type_id references categories from other stores
         if (! $this->option('skip-category-mapping')) {
-            // Allow using category mappings from a different legacy store (e.g., store 44 uses store 43's categories)
-            $categoryMappingStore = (int) ($this->option('category-mapping-store') ?? $this->legacyStoreId);
-            $mappings = MigrateLegacyCategories::loadMappings($categoryMappingStore, $this->newStoreId);
-            if ($mappings) {
-                $this->categoryMap = $mappings['categories'];
-                $this->info('Loaded '.count($this->categoryMap)." category mappings from store {$categoryMappingStore}");
-            } else {
-                $this->warn("No category mappings found for store {$categoryMappingStore}. Run migrate:legacy-categories first for proper category linking.");
-                $this->warn('Continuing with category_id set to null for all items.');
-            }
+            $this->info('Category lookups will be performed at runtime from legacy store_categories table.');
         }
 
         $syncDeletes = (bool) $this->option('sync-deletes');
@@ -1121,10 +1113,8 @@ class MigrateLegacyTransactions extends Command
     /**
      * Find a category by the legacy product_type_id.
      *
-     * Uses the category mapping loaded from migrate:legacy-categories.
-     * The mapping handles cases where IDs couldn't be preserved due to collisions.
-     *
-     * This avoids issues with duplicate category names like "Other" appearing in multiple parent categories.
+     * Queries the legacy store_categories table at runtime to get accurate mapping.
+     * Validates that the category has a valid parent chain (leads to parent_id = 0).
      */
     protected function findOrCreateCategoryByLegacyProductType(?int $productTypeId): ?int
     {
@@ -1132,12 +1122,12 @@ class MigrateLegacyTransactions extends Command
             return null;
         }
 
-        // Check if we already have this in our mapping (loaded from file or cached)
+        // Check cache first
         if (isset($this->categoryMap[$productTypeId])) {
             return $this->categoryMap[$productTypeId];
         }
 
-        // Verify this category exists in the legacy system (regardless of which store owns it)
+        // Query the legacy store_categories table at runtime
         $legacyCategory = DB::connection('legacy')
             ->table('store_categories')
             ->where('id', $productTypeId)
@@ -1154,10 +1144,21 @@ class MigrateLegacyTransactions extends Command
             return null;
         }
 
-        // Try to find category by legacy ID (works when ID was preserved)
+        // Validate parent chain - must lead to parent_id = 0 or null
+        if (! $this->hasValidLegacyParentChain($legacyCategory)) {
+            static $invalidChainCategories = [];
+            if (! isset($invalidChainCategories[$productTypeId])) {
+                $this->warn("  Legacy category ID {$productTypeId} ('{$legacyCategory->name}') has invalid parent chain - skipping.");
+                $invalidChainCategories[$productTypeId] = true;
+            }
+
+            return null;
+        }
+
+        // Try to find category by legacy ID in the new system (IDs are preserved when possible)
         $category = Category::withoutGlobalScopes()->find($productTypeId);
 
-        if ($category) {
+        if ($category && $category->store_id == $this->newStoreId) {
             $this->categoryMap[$productTypeId] = $category->id;
 
             return $category->id;
@@ -1171,6 +1172,45 @@ class MigrateLegacyTransactions extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Check if a legacy category has a valid parent chain leading to parent_id = 0 or null.
+     */
+    protected function hasValidLegacyParentChain(object $legacyCategory): bool
+    {
+        $visited = [];
+        $currentId = $legacyCategory->parent_id;
+
+        // Top-level category (parent_id = 0 or null) is valid
+        if (empty($currentId) || $currentId == 0) {
+            return true;
+        }
+
+        while ($currentId && $currentId != 0) {
+            // Detect circular references
+            if (in_array($currentId, $visited)) {
+                return false;
+            }
+            $visited[] = $currentId;
+
+            // Get parent category
+            $parent = DB::connection('legacy')
+                ->table('store_categories')
+                ->where('id', $currentId)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (! $parent) {
+                // Parent doesn't exist - orphaned category
+                return false;
+            }
+
+            $currentId = $parent->parent_id;
+        }
+
+        // Reached parent_id = 0 or null - valid chain
+        return true;
     }
 
     /**
