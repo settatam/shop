@@ -13,7 +13,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     DropdownMenuSeparator,
-    DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import {
     MagnifyingGlassIcon,
@@ -25,35 +24,35 @@ import {
     ExclamationCircleIcon,
     ClockIcon,
     XCircleIcon,
+    ChevronRightIcon,
+    ChevronDownIcon,
+    ChevronUpIcon,
 } from '@heroicons/vue/20/solid';
 import axios from 'axios';
 
-interface Product {
-    id: number;
-    title: string;
-    sku: string | null;
-    image: string | null;
-}
-
-interface Marketplace {
-    id: number;
-    name: string;
-    platform: string;
-}
-
 interface Listing {
     id: number;
-    product: Product;
-    marketplace: Marketplace;
-    platform: string;
-    platform_label: string;
-    platform_product_id: string | null;
-    status: 'active' | 'inactive' | 'pending' | 'error';
+    sales_channel_id: number | null;
+    marketplace_id: number | null;
+    channel_name: string;
+    channel_type: string;
+    channel_code: string | null;
+    platform: string | null;
+    status: string;
     listing_url: string | null;
-    price: number | null;
-    quantity: number | null;
+    external_listing_id: string | null;
+    platform_price: number | null;
+    platform_quantity: number | null;
     last_synced_at: string | null;
-    error_message: string | null;
+    last_error: string | null;
+}
+
+interface ProductWithListings {
+    id: number;
+    title: string;
+    handle: string | null;
+    image: string | null;
+    listings: Listing[];
 }
 
 interface Filters {
@@ -69,26 +68,36 @@ interface Pagination {
     total: number;
 }
 
+interface ListingsData {
+    data: ProductWithListings[];
+    meta: Pagination;
+}
+
 interface Props {
-    listings: Listing[];
-    pagination: Pagination;
+    listings?: ListingsData;
+    marketplaces: Array<{ id: number; name: string; platform: string; platform_label: string }>;
     filters: Filters;
-    platforms: Array<{ value: string; label: string }>;
 }
 
 const props = defineProps<Props>();
+
+// Computed for easier access to deferred data
+const productsData = computed(() => props.listings?.data ?? []);
+const pagination = computed(() => props.listings?.meta ?? { current_page: 1, last_page: 1, per_page: 25, total: 0 });
+const platforms = computed(() => props.marketplaces?.map(m => ({ value: m.platform, label: m.platform_label })) ?? []);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Listings', href: '/listings' },
 ];
 
 // Local state
-const search = ref(props.filters.search || '');
-const selectedPlatform = ref(props.filters.platform || '');
-const selectedStatus = ref(props.filters.status || '');
+const search = ref(props.filters?.search || '');
+const selectedPlatform = ref(props.filters?.platform || '');
+const selectedStatus = ref(props.filters?.status || '');
 const selectedListings = ref<number[]>([]);
 const syncing = ref<number[]>([]);
 const bulkSyncing = ref(false);
+const expandedProducts = ref<number[]>([]);
 
 // Platform icons
 const platformIcons: Record<string, string> = {
@@ -102,22 +111,28 @@ const platformIcons: Record<string, string> = {
 const statuses = [
     { value: '', label: 'All Statuses' },
     { value: 'active', label: 'Active' },
-    { value: 'inactive', label: 'Inactive' },
+    { value: 'listed', label: 'Listed' },
+    { value: 'draft', label: 'Draft' },
     { value: 'pending', label: 'Pending' },
     { value: 'error', label: 'Error' },
 ];
 
+// Get all listing IDs
+const allListingIds = computed(() => {
+    return productsData.value.flatMap(p => p.listings.map(l => l.id));
+});
+
 const allSelected = computed(() => {
-    return props.listings.length > 0 && selectedListings.value.length === props.listings.length;
+    return allListingIds.value.length > 0 && selectedListings.value.length === allListingIds.value.length;
 });
 
 const someSelected = computed(() => {
-    return selectedListings.value.length > 0 && selectedListings.value.length < props.listings.length;
+    return selectedListings.value.length > 0 && selectedListings.value.length < allListingIds.value.length;
 });
 
 // Search debounce
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-watch(search, (newSearch) => {
+watch(search, () => {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         applyFilters();
@@ -138,10 +153,13 @@ function applyFilters() {
 function getStatusColor(status: string): string {
     switch (status) {
         case 'active':
+        case 'listed':
             return 'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-500/10 dark:text-green-400';
         case 'pending':
+        case 'draft':
             return 'bg-yellow-50 text-yellow-700 ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400';
         case 'error':
+        case 'failed':
             return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400';
         default:
             return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400';
@@ -151,10 +169,13 @@ function getStatusColor(status: string): string {
 function getStatusIcon(status: string) {
     switch (status) {
         case 'active':
+        case 'listed':
             return CheckCircleIcon;
         case 'pending':
+        case 'draft':
             return ClockIcon;
         case 'error':
+        case 'failed':
             return XCircleIcon;
         default:
             return ExclamationCircleIcon;
@@ -180,23 +201,78 @@ function toggleSelectAll() {
     if (allSelected.value) {
         selectedListings.value = [];
     } else {
-        selectedListings.value = props.listings.map(l => l.id);
+        selectedListings.value = [...allListingIds.value];
     }
 }
 
-function toggleSelect(listingId: number) {
-    const index = selectedListings.value.indexOf(listingId);
-    if (index === -1) {
-        selectedListings.value.push(listingId);
+function toggleSelectListing(listingId: number) {
+    const isSelected = selectedListings.value.includes(listingId);
+    if (isSelected) {
+        selectedListings.value = selectedListings.value.filter(id => id !== listingId);
     } else {
-        selectedListings.value.splice(index, 1);
+        selectedListings.value = [...selectedListings.value, listingId];
     }
 }
 
-async function syncListing(listing: Listing) {
+function toggleSelectProduct(product: ProductWithListings, checked: boolean) {
+    const productListingIds = product.listings.map(l => l.id);
+
+    if (checked) {
+        // Select all listings for this product
+        const existingIds = new Set(selectedListings.value);
+        const newIds = productListingIds.filter(id => !existingIds.has(id));
+        selectedListings.value = [...selectedListings.value, ...newIds];
+    } else {
+        // Deselect all listings for this product
+        const productIdsSet = new Set(productListingIds);
+        selectedListings.value = selectedListings.value.filter(id => !productIdsSet.has(id));
+    }
+}
+
+function isProductSelected(product: ProductWithListings): boolean {
+    return product.listings.every(l => selectedListings.value.includes(l.id));
+}
+
+function isProductPartiallySelected(product: ProductWithListings): boolean {
+    const selected = product.listings.filter(l => selectedListings.value.includes(l.id));
+    return selected.length > 0 && selected.length < product.listings.length;
+}
+
+function toggleExpand(productId: number) {
+    const index = expandedProducts.value.indexOf(productId);
+    if (index === -1) {
+        expandedProducts.value.push(productId);
+    } else {
+        expandedProducts.value.splice(index, 1);
+    }
+}
+
+function isExpanded(productId: number): boolean {
+    return expandedProducts.value.includes(productId);
+}
+
+function expandAll() {
+    expandedProducts.value = productsData.value.map(p => p.id);
+}
+
+function collapseAll() {
+    expandedProducts.value = [];
+}
+
+const allExpanded = computed(() => {
+    return productsData.value.length > 0 && expandedProducts.value.length === productsData.value.length;
+});
+
+async function syncListing(productId: number, listing: Listing) {
+    // Only sync if we have a marketplace (external platform)
+    if (!listing.marketplace_id) {
+        console.warn('Cannot sync local channel listing');
+        return;
+    }
+
     syncing.value.push(listing.id);
     try {
-        await axios.post(`/products/${listing.product.id}/listings/${listing.marketplace.id}/sync`);
+        await axios.post(`/products/${productId}/listings/${listing.marketplace_id}/sync`);
         router.reload({ only: ['listings'] });
     } catch (error) {
         console.error('Sync failed:', error);
@@ -222,6 +298,26 @@ async function bulkSync() {
     }
 }
 
+const bulkActionLoading = ref(false);
+
+async function bulkAction(action: 'list' | 'end' | 'archive') {
+    if (selectedListings.value.length === 0) return;
+
+    bulkActionLoading.value = true;
+    try {
+        await axios.post('/listings/bulk-status', {
+            listing_ids: [...selectedListings.value],
+            action,
+        });
+        router.reload({ only: ['listings'] });
+        selectedListings.value = [];
+    } catch (error) {
+        console.error('Bulk action failed:', error);
+    } finally {
+        bulkActionLoading.value = false;
+    }
+}
+
 function viewOnPlatform(listing: Listing) {
     if (listing.listing_url) {
         window.open(listing.listing_url, '_blank');
@@ -239,6 +335,13 @@ function goToPage(page: number) {
         preserveScroll: true,
     });
 }
+
+// Expand all by default on initial load
+watch(productsData, (products) => {
+    if (products.length > 0 && expandedProducts.value.length === 0) {
+        expandedProducts.value = products.map(p => p.id);
+    }
+}, { immediate: true });
 </script>
 
 <template>
@@ -254,6 +357,17 @@ function goToPage(page: number) {
                         Manage all your product listings across platforms
                     </p>
                 </div>
+                <div class="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        @click="allExpanded ? collapseAll() : expandAll()"
+                    >
+                        <ChevronDownIcon v-if="!allExpanded" class="h-4 w-4 mr-1" />
+                        <ChevronUpIcon v-else class="h-4 w-4 mr-1" />
+                        {{ allExpanded ? 'Collapse All' : 'Expand All' }}
+                    </Button>
+                </div>
             </div>
 
             <!-- Filters -->
@@ -263,7 +377,7 @@ function goToPage(page: number) {
                     <Input
                         v-model="search"
                         type="text"
-                        placeholder="Search by product title or SKU..."
+                        placeholder="Search by product title..."
                         class="pl-10"
                     />
                 </div>
@@ -318,14 +432,36 @@ function goToPage(page: number) {
                     <span class="text-sm text-gray-500 dark:text-gray-400">
                         {{ selectedListings.length }} selected
                     </span>
+
+                    <Button
+                        variant="default"
+                        size="sm"
+                        @click="bulkAction('list')"
+                        :disabled="bulkActionLoading"
+                        class="bg-green-600 hover:bg-green-700"
+                    >
+                        <CheckCircleIcon class="h-4 w-4 mr-1" />
+                        List
+                    </Button>
+
                     <Button
                         variant="outline"
                         size="sm"
-                        @click="bulkSync"
-                        :disabled="bulkSyncing"
+                        @click="bulkAction('end')"
+                        :disabled="bulkActionLoading"
                     >
-                        <ArrowPathIcon class="h-4 w-4 mr-1" :class="{ 'animate-spin': bulkSyncing }" />
-                        {{ bulkSyncing ? 'Syncing...' : 'Sync Selected' }}
+                        <XCircleIcon class="h-4 w-4 mr-1" />
+                        End
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        @click="bulkAction('archive')"
+                        :disabled="bulkActionLoading"
+                        class="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+                    >
+                        Archive
                     </Button>
                 </div>
             </div>
@@ -342,11 +478,9 @@ function goToPage(page: number) {
                                     @update:checked="toggleSelectAll"
                                 />
                             </th>
+                            <th class="w-8 px-2 py-3"></th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                Product
-                            </th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                Platform
+                                Product / Platform
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Status
@@ -355,7 +489,7 @@ function goToPage(page: number) {
                                 Price
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                Quantity
+                                Qty
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Last Synced
@@ -366,117 +500,186 @@ function goToPage(page: number) {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <tr
-                            v-for="listing in listings"
-                            :key="listing.id"
-                            class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                        >
-                            <td class="px-4 py-4">
-                                <Checkbox
-                                    :checked="selectedListings.includes(listing.id)"
-                                    @update:checked="toggleSelect(listing.id)"
-                                />
-                            </td>
-                            <td class="px-4 py-4">
-                                <Link
-                                    :href="`/products/${listing.product.id}`"
-                                    class="flex items-center gap-3 hover:text-indigo-600 dark:hover:text-indigo-400"
-                                >
-                                    <div class="h-10 w-10 rounded bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
-                                        <img
-                                            v-if="listing.product.image"
-                                            :src="listing.product.image"
-                                            :alt="listing.product.title"
-                                            class="h-full w-full object-cover"
-                                        />
+                        <!-- Loading State -->
+                        <tr v-if="!listings">
+                            <td colspan="8" class="px-4 py-8">
+                                <div class="flex flex-col gap-4">
+                                    <div v-for="i in 5" :key="i" class="animate-pulse">
+                                        <div class="flex items-center gap-4 mb-2">
+                                            <div class="w-5 h-5 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                            <div class="w-4 h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                            <div class="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                            <div class="flex-1">
+                                                <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-2"></div>
+                                            </div>
+                                        </div>
+                                        <div class="ml-16 pl-4 border-l-2 border-gray-100 dark:border-gray-700 space-y-2">
+                                            <div class="flex items-center gap-4">
+                                                <div class="h-6 w-6 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                                <div class="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                                <div class="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                            {{ listing.product.title }}
-                                        </p>
-                                        <p v-if="listing.product.sku" class="text-xs text-gray-500 dark:text-gray-400">
-                                            {{ listing.product.sku }}
-                                        </p>
-                                    </div>
-                                </Link>
-                            </td>
-                            <td class="px-4 py-4">
-                                <div class="flex items-center gap-2">
-                                    <div class="h-6 w-6 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                        <img
-                                            v-if="platformIcons[listing.platform]"
-                                            :src="platformIcons[listing.platform]"
-                                            :alt="listing.platform_label"
-                                            class="h-4 w-4"
-                                        />
-                                    </div>
-                                    <span class="text-sm text-gray-900 dark:text-white">
-                                        {{ listing.marketplace.name }}
-                                    </span>
                                 </div>
                             </td>
-                            <td class="px-4 py-4">
-                                <Badge :class="['text-xs ring-1 ring-inset', getStatusColor(listing.status)]">
-                                    <component :is="getStatusIcon(listing.status)" class="h-3 w-3 mr-1" />
-                                    {{ listing.status }}
-                                </Badge>
-                                <p v-if="listing.error_message" class="text-xs text-red-600 dark:text-red-400 mt-1 max-w-xs truncate">
-                                    {{ listing.error_message }}
-                                </p>
-                            </td>
-                            <td class="px-4 py-4 text-sm text-gray-900 dark:text-white">
-                                {{ formatPrice(listing.price) }}
-                            </td>
-                            <td class="px-4 py-4 text-sm text-gray-900 dark:text-white">
-                                {{ listing.quantity ?? '-' }}
-                            </td>
-                            <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
-                                {{ formatDate(listing.last_synced_at) }}
-                            </td>
-                            <td class="px-4 py-4 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <Button
-                                        v-if="listing.listing_url"
-                                        variant="ghost"
-                                        size="sm"
-                                        @click="viewOnPlatform(listing)"
+                        </tr>
+
+                        <template v-else>
+                            <template v-for="product in productsData" :key="product.id">
+                                <!-- Product Row -->
+                                <tr class="bg-gray-50/50 dark:bg-gray-800/50">
+                                    <td class="px-4 py-3">
+                                        <Checkbox
+                                            :checked="isProductSelected(product)"
+                                            :indeterminate="isProductPartiallySelected(product)"
+                                            @update:checked="(checked: boolean) => toggleSelectProduct(product, checked)"
+                                        />
+                                    </td>
+                                    <td class="px-2 py-3">
+                                        <button
+                                            @click="toggleExpand(product.id)"
+                                            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+                                        >
+                                            <ChevronRightIcon
+                                                class="h-4 w-4 text-gray-500 transition-transform"
+                                                :class="{ 'rotate-90': isExpanded(product.id) }"
+                                            />
+                                        </button>
+                                    </td>
+                                    <td class="px-4 py-3" colspan="6">
+                                        <Link
+                                            :href="`/products/${product.id}`"
+                                            class="flex items-center gap-3 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                        >
+                                            <div class="h-10 w-10 rounded bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
+                                                <img
+                                                    v-if="product.image"
+                                                    :src="product.image"
+                                                    :alt="product.title"
+                                                    class="h-full w-full object-cover"
+                                                />
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {{ product.title }}
+                                                </p>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                                    {{ product.listings.length }} listing{{ product.listings.length === 1 ? '' : 's' }}
+                                                </p>
+                                            </div>
+                                        </Link>
+                                    </td>
+                                </tr>
+
+                                <!-- Listing Rows (nested under product) -->
+                                <template v-if="isExpanded(product.id)">
+                                    <tr
+                                        v-for="listing in product.listings"
+                                        :key="listing.id"
+                                        class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                                     >
-                                        <ArrowTopRightOnSquareIcon class="h-4 w-4" />
-                                    </Button>
+                                        <td class="px-4 py-3">
+                                            <Checkbox
+                                                :checked="selectedListings.includes(listing.id)"
+                                                @update:checked="() => toggleSelectListing(listing.id)"
+                                            />
+                                        </td>
+                                        <td class="px-2 py-3"></td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex items-center gap-3 pl-6">
+                                                <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 -ml-3"></div>
+                                                <div class="h-7 w-7 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                                                    <img
+                                                        v-if="listing.platform && platformIcons[listing.platform]"
+                                                        :src="platformIcons[listing.platform]"
+                                                        :alt="listing.channel_name"
+                                                        class="h-4 w-4"
+                                                    />
+                                                    <span v-else class="text-xs font-medium text-gray-500">
+                                                        {{ listing.channel_type === 'local' ? 'L' : listing.channel_type === 'pos' ? 'P' : '?' }}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <p class="text-sm text-gray-900 dark:text-white">
+                                                        {{ listing.channel_name }}
+                                                    </p>
+                                                    <p v-if="listing.external_listing_id" class="text-xs text-gray-500 dark:text-gray-400">
+                                                        ID: {{ listing.external_listing_id }}
+                                                    </p>
+                                                    <p v-else-if="listing.channel_type === 'local'" class="text-xs text-gray-500 dark:text-gray-400">
+                                                        Local Channel
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <Badge :class="['text-xs ring-1 ring-inset', getStatusColor(listing.status)]">
+                                                <component :is="getStatusIcon(listing.status)" class="h-3 w-3 mr-1" />
+                                                {{ listing.status }}
+                                            </Badge>
+                                            <p v-if="listing.last_error" class="text-xs text-red-600 dark:text-red-400 mt-1 max-w-xs truncate">
+                                                {{ listing.last_error }}
+                                            </p>
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                                            {{ formatPrice(listing.platform_price) }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                                            {{ listing.platform_quantity ?? '-' }}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                            {{ formatDate(listing.last_synced_at) }}
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <div class="flex items-center justify-end gap-2">
+                                                <Button
+                                                    v-if="listing.listing_url"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    @click="viewOnPlatform(listing)"
+                                                    title="View on platform"
+                                                >
+                                                    <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+                                                </Button>
 
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger as-child>
-                                            <Button variant="ghost" size="sm">
-                                                <EllipsisVerticalIcon class="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem as-child>
-                                                <Link :href="`/products/${listing.product.id}`">
-                                                    View Product
-                                                </Link>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                @click="syncListing(listing)"
-                                                :disabled="syncing.includes(listing.id)"
-                                            >
-                                                <ArrowPathIcon class="h-4 w-4 mr-2" :class="{ 'animate-spin': syncing.includes(listing.id) }" />
-                                                {{ syncing.includes(listing.id) ? 'Syncing...' : 'Sync Now' }}
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-                            </td>
-                        </tr>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger as-child>
+                                                        <Button variant="ghost" size="sm">
+                                                            <EllipsisVerticalIcon class="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem as-child>
+                                                            <Link :href="`/listings/${listing.id}`">
+                                                                View Listing Details
+                                                            </Link>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            @click="syncListing(product.id, listing)"
+                                                            :disabled="syncing.includes(listing.id)"
+                                                        >
+                                                            <ArrowPathIcon class="h-4 w-4 mr-2" :class="{ 'animate-spin': syncing.includes(listing.id) }" />
+                                                            {{ syncing.includes(listing.id) ? 'Syncing...' : 'Sync Now' }}
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </template>
 
-                        <!-- Empty State -->
-                        <tr v-if="listings.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center">
-                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                    No listings found matching your filters.
-                                </p>
-                            </td>
-                        </tr>
+                            <!-- Empty State -->
+                            <tr v-if="productsData.length === 0">
+                                <td colspan="8" class="px-4 py-12 text-center">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        No listings found matching your filters.
+                                    </p>
+                                </td>
+                            </tr>
+                        </template>
                     </tbody>
                 </table>
 
@@ -485,7 +688,7 @@ function goToPage(page: number) {
                     <p class="text-sm text-gray-500 dark:text-gray-400">
                         Showing {{ (pagination.current_page - 1) * pagination.per_page + 1 }} to
                         {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} of
-                        {{ pagination.total }} results
+                        {{ pagination.total }} products
                     </p>
                     <div class="flex items-center gap-2">
                         <Button

@@ -26,6 +26,7 @@ class MigrateLegacyProducts extends Command
                             {--limit=0 : Number of products to migrate (0 for all)}
                             {--dry-run : Show what would be migrated without making changes}
                             {--fresh : Delete existing products and start fresh}
+                            {--remove-all : Remove all products and related data then exit}
                             {--skip-deleted : Skip soft-deleted products}
                             {--skip-categories : Skip building category mappings}
                             {--skip-templates : Skip building template mappings}
@@ -161,6 +162,11 @@ class MigrateLegacyProducts extends Command
             return 1;
         }
 
+        // Handle --remove-all option
+        if ($this->option('remove-all')) {
+            return $this->removeAll($newStore);
+        }
+
         $this->info("Migrating products to store: {$newStore->name} (ID: {$newStore->id})");
 
         // Load mapping files from previous migrations
@@ -219,6 +225,78 @@ class MigrateLegacyProducts extends Command
 
             return 1;
         }
+    }
+
+    /**
+     * Remove all products and related data for the store.
+     */
+    protected function removeAll(Store $newStore): int
+    {
+        $this->warn("This will remove ALL products and related data for store: {$newStore->name}");
+
+        $shouldProceed = ! $this->input->isInteractive() || $this->confirm('Are you sure you want to continue?');
+
+        if (! $shouldProceed) {
+            $this->info('Operation cancelled.');
+
+            return 0;
+        }
+
+        $this->info('Removing all product data...');
+
+        $productIds = Product::withTrashed()->where('store_id', $newStore->id)->pluck('id');
+        $variantIds = ProductVariant::withTrashed()->whereIn('product_id', $productIds)->pluck('id');
+
+        // Delete in order of dependencies
+
+        // 1. Delete inventory records
+        $inventoryCount = Inventory::whereIn('product_variant_id', $variantIds)->count();
+        Inventory::whereIn('product_variant_id', $variantIds)->delete();
+        $this->line("  Deleted {$inventoryCount} inventory records");
+
+        // 2. Delete product attribute values
+        $attributeCount = ProductAttributeValue::whereIn('product_id', $productIds)->count();
+        ProductAttributeValue::whereIn('product_id', $productIds)->delete();
+        $this->line("  Deleted {$attributeCount} attribute values");
+
+        // 3. Delete product images
+        $imageCount = Image::where('imageable_type', 'App\\Models\\Product')
+            ->whereIn('imageable_id', $productIds)
+            ->count();
+        Image::where('imageable_type', 'App\\Models\\Product')
+            ->whereIn('imageable_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$imageCount} images");
+
+        // 4. Delete product tags (taggables pivot table)
+        $tagCount = DB::table('taggables')
+            ->where('taggable_type', 'App\\Models\\Product')
+            ->whereIn('taggable_id', $productIds)
+            ->count();
+        DB::table('taggables')
+            ->where('taggable_type', 'App\\Models\\Product')
+            ->whereIn('taggable_id', $productIds)
+            ->delete();
+        $this->line("  Deleted {$tagCount} tag associations");
+
+        // 5. Delete platform listings
+        $listingCount = \App\Models\PlatformListing::whereIn('product_id', $productIds)->count();
+        \App\Models\PlatformListing::whereIn('product_id', $productIds)->forceDelete();
+        $this->line("  Deleted {$listingCount} platform listings");
+
+        // 6. Delete product variants
+        $variantCount = ProductVariant::withTrashed()->whereIn('product_id', $productIds)->count();
+        ProductVariant::withTrashed()->whereIn('product_id', $productIds)->forceDelete();
+        $this->line("  Deleted {$variantCount} variants");
+
+        // 7. Delete products
+        $productCount = $productIds->count();
+        Product::withTrashed()->where('store_id', $newStore->id)->forceDelete();
+        $this->line("  Deleted {$productCount} products");
+
+        $this->info('All product data removed successfully.');
+
+        return 0;
     }
 
     protected function loadMappingFiles(int $legacyStoreId): void

@@ -344,7 +344,7 @@ class PlatformListingController extends Controller
             ->connected()
             ->get(['id', 'name', 'platform']);
 
-        return Inertia::render('Listings/Index', [
+        return Inertia::render('listings/Index', [
             'marketplaces' => $marketplaces->map(fn ($m) => [
                 'id' => $m->id,
                 'name' => $m->name ?: ucfirst($m->platform->value),
@@ -361,40 +361,91 @@ class PlatformListingController extends Controller
     }
 
     /**
-     * Get paginated listings for overview.
+     * Get paginated listings for overview, grouped by product.
      *
      * @return array<string, mixed>
      */
     protected function getPaginatedListings(Request $request, $store): array
     {
-        $query = PlatformListing::whereHas('marketplace', fn ($q) => $q->where('store_id', $store->id))
-            ->with(['product:id,title,handle', 'marketplace:id,name,platform']);
+        // Build query for products that have listings via sales channels
+        $productQuery = Product::where('store_id', $store->id)
+            ->whereHas('platformListings', function ($q) use ($store, $request) {
+                $q->whereHas('salesChannel', fn ($sc) => $sc->where('store_id', $store->id));
 
-        // Apply filters
-        if ($request->filled('platform')) {
-            $query->whereHas('marketplace', fn ($q) => $q->where('platform', $request->input('platform')));
-        }
+                if ($request->filled('platform')) {
+                    $q->whereHas('salesChannel.storeMarketplace', fn ($sm) => $sm->where('platform', $request->input('platform')));
+                }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->input('status'));
-        }
+                if ($request->filled('status')) {
+                    $q->where('status', $request->input('status'));
+                }
+            })
+            ->with(['platformListings' => function ($q) use ($store, $request) {
+                $q->whereHas('salesChannel', fn ($sc) => $sc->where('store_id', $store->id))
+                    ->with(['salesChannel', 'marketplace']);
 
+                if ($request->filled('platform')) {
+                    $q->whereHas('salesChannel.storeMarketplace', fn ($sm) => $sm->where('platform', $request->input('platform')));
+                }
+
+                if ($request->filled('status')) {
+                    $q->where('status', $request->input('status'));
+                }
+            }, 'images', 'legacyImages']);
+
+        // Apply search filter
         if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->whereHas('product', fn ($q) => $q->where('title', 'like', "%{$search}%")
-                ->orWhere('handle', 'like', "%{$search}%"));
+            $productQuery->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('handle', 'like', "%{$search}%");
+            });
         }
 
-        $listings = $query->orderByDesc('updated_at')
+        $products = $productQuery->orderByDesc('updated_at')
             ->paginate(25);
 
+        $data = $products->map(function ($product) {
+            $primaryImage = $product->images->firstWhere('is_primary', true)
+                ?? $product->images->first()
+                ?? $product->legacyImages->first();
+
+            return [
+                'id' => $product->id,
+                'title' => $product->title,
+                'handle' => $product->handle,
+                'image' => $primaryImage?->url,
+                'listings' => $product->platformListings->map(function ($listing) {
+                    $channel = $listing->salesChannel;
+                    $marketplace = $listing->marketplace ?? $channel?->storeMarketplace;
+
+                    return [
+                        'id' => $listing->id,
+                        'sales_channel_id' => $listing->sales_channel_id,
+                        'marketplace_id' => $listing->store_marketplace_id,
+                        'channel_name' => $channel?->name ?? 'Unknown',
+                        'channel_type' => $channel?->type ?? 'unknown',
+                        'channel_code' => $channel?->code,
+                        'platform' => $marketplace?->platform?->value,
+                        'status' => $listing->status,
+                        'listing_url' => $listing->listing_url,
+                        'external_listing_id' => $listing->external_listing_id,
+                        'platform_price' => $listing->platform_price,
+                        'platform_quantity' => $listing->platform_quantity,
+                        'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
+                        'last_error' => $listing->last_error,
+                    ];
+                }),
+            ];
+        });
+
         return [
-            'data' => $listings->items(),
+            'data' => $data,
             'meta' => [
-                'current_page' => $listings->currentPage(),
-                'last_page' => $listings->lastPage(),
-                'per_page' => $listings->perPage(),
-                'total' => $listings->total(),
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total(),
             ],
         ];
     }
@@ -471,6 +522,77 @@ class PlatformListingController extends Controller
             'message' => 'Price set successfully',
             'listing_id' => $listing->id,
             'price' => $listing->platform_price,
+        ]);
+    }
+
+    /**
+     * Bulk update listing statuses.
+     */
+    public function bulkUpdateStatus(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'listing_ids' => ['required', 'array', 'min:1'],
+            'listing_ids.*' => ['required', 'integer'],
+            'action' => ['required', 'string', 'in:list,end,archive'],
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+        $listingIds = $validated['listing_ids'];
+        $action = $validated['action'];
+
+        // Get listings that belong to this store
+        $listings = PlatformListing::whereIn('id', $listingIds)
+            ->whereHas('salesChannel', fn ($q) => $q->where('store_id', $store->id))
+            ->get();
+
+        if ($listings->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No valid listings found',
+            ], 404);
+        }
+
+        $updated = 0;
+        $errors = [];
+
+        foreach ($listings as $listing) {
+            try {
+                $newStatus = match ($action) {
+                    'list' => PlatformListing::STATUS_LISTED,
+                    'end' => PlatformListing::STATUS_ENDED,
+                    'archive' => PlatformListing::STATUS_ARCHIVED,
+                };
+
+                if ($listing->canTransitionTo($newStatus)) {
+                    $listing->transitionTo($newStatus);
+
+                    // Update timestamps for realistic demo behavior
+                    $updateData = ['last_synced_at' => now()];
+                    if ($action === 'list') {
+                        $updateData['published_at'] = now();
+                    }
+                    $listing->update($updateData);
+
+                    $updated++;
+                } else {
+                    $errors[] = "Listing #{$listing->id} cannot transition to {$newStatus}";
+                }
+            } catch (\Exception $e) {
+                $errors[] = "Listing #{$listing->id}: {$e->getMessage()}";
+            }
+        }
+
+        $actionLabel = match ($action) {
+            'list' => 'listed',
+            'end' => 'ended',
+            'archive' => 'archived',
+        };
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$updated} listing(s) {$actionLabel} successfully",
+            'updated' => $updated,
+            'errors' => $errors,
         ]);
     }
 }

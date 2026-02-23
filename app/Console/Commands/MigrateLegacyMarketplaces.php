@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Enums\Platform;
+use App\Models\PlatformListing;
+use App\Models\Product;
 use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
@@ -15,7 +17,9 @@ class MigrateLegacyMarketplaces extends Command
                             {--store-id=63 : Legacy store ID to migrate}
                             {--new-store-id= : New store ID (if different from legacy)}
                             {--dry-run : Show what would be migrated without making changes}
-                            {--fresh : Delete existing marketplaces and sales channels first}';
+                            {--fresh : Delete existing marketplaces and sales channels first}
+                            {--remove-all : Remove all marketplaces, sales channels, and listings then exit}
+                            {--create-listings : Create platform listings for all products after migration}';
 
     protected $description = 'Migrate store marketplaces from the legacy database and create sales channels';
 
@@ -30,12 +34,6 @@ class MigrateLegacyMarketplaces extends Command
         $legacyStoreId = (int) $this->option('store-id');
         $newStoreId = $this->option('new-store-id') ? (int) $this->option('new-store-id') : null;
         $isDryRun = $this->option('dry-run');
-
-        $this->info("Starting marketplace migration from legacy store ID: {$legacyStoreId}");
-
-        if ($isDryRun) {
-            $this->warn('DRY RUN MODE - No changes will be made');
-        }
 
         // Get legacy store info
         $legacyStore = DB::connection('legacy')
@@ -62,6 +60,17 @@ class MigrateLegacyMarketplaces extends Command
             return 1;
         }
 
+        // Handle --remove-all option
+        if ($this->option('remove-all')) {
+            return $this->removeAll();
+        }
+
+        $this->info("Starting marketplace migration from legacy store ID: {$legacyStoreId}");
+
+        if ($isDryRun) {
+            $this->warn('DRY RUN MODE - No changes will be made');
+        }
+
         $this->info("Migrating marketplaces to store: {$this->newStore->name} (ID: {$this->newStore->id})");
 
         if ($this->option('fresh') && ! $isDryRun) {
@@ -85,6 +94,11 @@ class MigrateLegacyMarketplaces extends Command
 
                 // Save mapping file
                 $this->saveMappingFile($legacyStoreId);
+
+                // Create listings for all products if requested
+                if ($this->option('create-listings')) {
+                    $this->createListingsForAllProducts();
+                }
             }
 
             $this->displaySummary();
@@ -99,15 +113,58 @@ class MigrateLegacyMarketplaces extends Command
         }
     }
 
+    /**
+     * Remove all marketplaces, sales channels, and listings for the store.
+     */
+    protected function removeAll(): int
+    {
+        $this->warn("This will remove ALL marketplaces, sales channels, and platform listings for store: {$this->newStore->name}");
+
+        if (! $this->confirm('Are you sure you want to continue?')) {
+            $this->info('Operation cancelled.');
+
+            return 0;
+        }
+
+        $this->info('Removing all data...');
+
+        // Delete platform listings first (they reference sales channels)
+        $listingsCount = PlatformListing::whereHas('salesChannel', function ($q) {
+            $q->where('store_id', $this->newStore->id);
+        })->count();
+        PlatformListing::whereHas('salesChannel', function ($q) {
+            $q->where('store_id', $this->newStore->id);
+        })->forceDelete();
+        $this->line("  Deleted {$listingsCount} platform listings");
+
+        // Delete sales channels
+        $channelsCount = SalesChannel::where('store_id', $this->newStore->id)->count();
+        SalesChannel::where('store_id', $this->newStore->id)->forceDelete();
+        $this->line("  Deleted {$channelsCount} sales channels");
+
+        // Delete marketplaces
+        $marketplacesCount = StoreMarketplace::where('store_id', $this->newStore->id)->count();
+        StoreMarketplace::where('store_id', $this->newStore->id)->forceDelete();
+        $this->line("  Deleted {$marketplacesCount} store marketplaces");
+
+        $this->info('All marketplace data removed successfully.');
+
+        return 0;
+    }
+
     protected function migrateMarketplaces(int $legacyStoreId, bool $isDryRun): void
     {
-        $this->info('Migrating marketplaces...');
+        $this->info('Migrating marketplaces (filtering: is_app=false, connected_successfully=true)...');
 
         $legacyMarketplaces = DB::connection('legacy')
             ->table('store_market_places')
             ->where('store_id', $legacyStoreId)
+            ->where('is_app', false)
+            ->where('connected_successfully', true)
             ->whereNull('deleted_at')
             ->get();
+
+        $this->line("  Found {$legacyMarketplaces->count()} marketplaces matching criteria");
 
         $marketplaceCount = 0;
         $channelCount = 0;
@@ -178,7 +235,7 @@ class MigrateLegacyMarketplaces extends Command
                     'is_local' => $isLocal,
                     'store_marketplace_id' => $storeMarketplaceId,
                     'is_active' => true,
-                    'is_default' => $isLocal && $legacy->marketplace === 'POS',
+                    'is_default' => $isLocal && strtolower($legacy->marketplace) === 'pos',
                     'settings' => [
                         'legacy_marketplace_id' => $legacy->id,
                     ],
@@ -330,7 +387,67 @@ class MigrateLegacyMarketplaces extends Command
         foreach ($channels as $channel) {
             $type = $channel->is_local ? 'Local' : 'Online';
             $default = $channel->is_default ? ' (Default)' : '';
-            $this->line("  - {$channel->name} [{$channel->code}] - {$type}{$default}");
+            $listingCount = PlatformListing::where('sales_channel_id', $channel->id)->count();
+            $this->line("  - {$channel->name} [{$channel->code}] - {$type}{$default} ({$listingCount} listings)");
         }
+    }
+
+    /**
+     * Create platform listings for all products in the store.
+     */
+    protected function createListingsForAllProducts(): void
+    {
+        $this->newLine();
+        $this->info('Creating platform listings for all products...');
+
+        $channels = SalesChannel::where('store_id', $this->newStore->id)
+            ->where('is_active', true)
+            ->get();
+
+        if ($channels->isEmpty()) {
+            $this->warn('No active sales channels found. Skipping listing creation.');
+
+            return;
+        }
+
+        $products = Product::where('store_id', $this->newStore->id)->get();
+        $this->line("  Found {$products->count()} products");
+
+        $listingsCreated = 0;
+        $bar = $this->output->createProgressBar($products->count() * $channels->count());
+        $bar->start();
+
+        foreach ($products as $product) {
+            foreach ($channels as $channel) {
+                // Determine status: local channels get 'listed', external get 'not_listed'
+                $status = $channel->is_local
+                    ? PlatformListing::STATUS_LISTED
+                    : PlatformListing::STATUS_NOT_LISTED;
+
+                // Create or update the listing
+                $listing = PlatformListing::firstOrCreate(
+                    [
+                        'product_id' => $product->id,
+                        'sales_channel_id' => $channel->id,
+                    ],
+                    [
+                        'store_marketplace_id' => $channel->store_marketplace_id,
+                        'status' => $status,
+                        'platform_price' => $product->variants()->first()?->price ?? 0,
+                        'platform_quantity' => $product->total_quantity ?? 0,
+                    ]
+                );
+
+                if ($listing->wasRecentlyCreated) {
+                    $listingsCreated++;
+                }
+
+                $bar->advance();
+            }
+        }
+
+        $bar->finish();
+        $this->newLine();
+        $this->info("Created {$listingsCreated} new platform listings");
     }
 }

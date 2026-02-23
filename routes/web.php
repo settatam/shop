@@ -659,6 +659,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:products.update')->group(function () {
         Route::patch('listings/{listing}/status', [\App\Http\Controllers\Web\ListingController::class, 'updateStatus'])->name('listings.update-status');
+        Route::post('listings/bulk-status', [\App\Http\Controllers\Web\PlatformListingController::class, 'bulkUpdateStatus'])->name('listings.bulk-status');
     });
 
     // Sales Channel Listings (for In Store and other local channels)
