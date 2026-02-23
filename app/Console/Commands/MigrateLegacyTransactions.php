@@ -933,6 +933,239 @@ class MigrateLegacyTransactions extends Command
                 'updated_at' => $legacyActivity->updated_at,
             ]);
         }
+
+        // Also migrate from the 'activities' table (status changes with is_status = 1)
+        $this->migrateStatusActivities($legacyTransactionId, $transaction);
+
+        // Also migrate non-status activities (notes, notifications, calls, SMS, etc.)
+        $this->migrateNonStatusActivities($legacyTransactionId, $transaction);
+    }
+
+    /**
+     * Migrate non-status activities from the legacy 'activities' table.
+     * These include notes, notifications, calls, SMS, etc. (is_status = 0, is_tag = 0)
+     */
+    protected function migrateNonStatusActivities(int $legacyTransactionId, Transaction $transaction): void
+    {
+        $legacyActivities = DB::connection('legacy')
+            ->table('activities')
+            ->where('activityable_type', 'App\\Models\\Transaction')
+            ->where('activityable_id', $legacyTransactionId)
+            ->where('is_status', 0)
+            ->where('is_tag', 0)
+            ->whereNotNull('name')
+            ->where('name', '!=', '')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        foreach ($legacyActivities as $legacyActivity) {
+            if ($this->dryRun) {
+                continue;
+            }
+
+            // Check if user exists in new database
+            $userId = $legacyActivity->user_id;
+            if ($userId) {
+                $userExists = DB::connection('mysql')->table('users')->where('id', $userId)->exists();
+                if (! $userExists) {
+                    $userId = null;
+                }
+            }
+
+            // Determine activity slug based on the activity name
+            $activitySlug = $this->mapNonStatusActivitySlug($legacyActivity->name);
+
+            // Use DB insert to preserve exact timestamps
+            DB::table('activity_logs')->insert([
+                'store_id' => $this->newStoreId,
+                'user_id' => $userId,
+                'activity_slug' => $activitySlug,
+                'subject_type' => Transaction::class,
+                'subject_id' => $transaction->id,
+                'causer_type' => $userId ? 'App\\Models\\User' : null,
+                'causer_id' => $userId,
+                'properties' => json_encode([
+                    'legacy_name' => $legacyActivity->name,
+                    'legacy_status' => $legacyActivity->status,
+                    'notes' => $legacyActivity->notes,
+                    'is_from_admin' => $legacyActivity->is_from_admin,
+                    'legacy_activity_id' => $legacyActivity->id,
+                ]),
+                'description' => $legacyActivity->name,
+                'created_at' => $legacyActivity->created_at,
+                'updated_at' => $legacyActivity->updated_at,
+            ]);
+        }
+    }
+
+    /**
+     * Map non-status activity names to activity slugs.
+     */
+    protected function mapNonStatusActivitySlug(?string $activityName): string
+    {
+        if (! $activityName) {
+            return 'transactions.update';
+        }
+
+        $normalizedName = strtolower(trim($activityName));
+
+        // Map common activity types
+        if (str_contains($normalizedName, 'sms') || str_contains($normalizedName, 'text')) {
+            return 'transactions.update';
+        }
+        if (str_contains($normalizedName, 'call') || str_contains($normalizedName, 'called')) {
+            return 'transactions.update';
+        }
+        if (str_contains($normalizedName, 'email')) {
+            return 'transactions.update';
+        }
+        if (str_contains($normalizedName, 'note')) {
+            return 'notes.create';
+        }
+        if (str_contains($normalizedName, 'shipping') || str_contains($normalizedName, 'fedex') || str_contains($normalizedName, 'tracking')) {
+            return 'transactions.update';
+        }
+        if (str_contains($normalizedName, 'package')) {
+            return 'transactions.update';
+        }
+
+        return 'transactions.update';
+    }
+
+    /**
+     * Migrate status change activities from the legacy 'activities' table.
+     * These records have is_status = 1 and contain the historical status transitions.
+     */
+    protected function migrateStatusActivities(int $legacyTransactionId, Transaction $transaction): void
+    {
+        $legacyStatusActivities = DB::connection('legacy')
+            ->table('activities')
+            ->where('activityable_type', 'App\\Models\\Transaction')
+            ->where('activityable_id', $legacyTransactionId)
+            ->where('is_status', 1)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        foreach ($legacyStatusActivities as $legacyActivity) {
+            if ($this->dryRun) {
+                continue;
+            }
+
+            // Check if user exists in new database
+            $userId = $legacyActivity->user_id;
+            if ($userId) {
+                $userExists = DB::connection('mysql')->table('users')->where('id', $userId)->exists();
+                if (! $userExists) {
+                    $userId = null;
+                }
+            }
+
+            // Map the legacy status to our new status constants
+            $newStatus = $this->mapLegacyStatusName($legacyActivity->status);
+            $activitySlug = $this->mapStatusToActivitySlug($legacyActivity->status);
+
+            // Use DB insert to preserve exact timestamps
+            DB::table('activity_logs')->insert([
+                'store_id' => $this->newStoreId,
+                'user_id' => $userId,
+                'activity_slug' => $activitySlug,
+                'subject_type' => Transaction::class,
+                'subject_id' => $transaction->id,
+                'causer_type' => $userId ? 'App\\Models\\User' : null,
+                'causer_id' => $userId,
+                'properties' => json_encode([
+                    'legacy_status' => $legacyActivity->status,
+                    'new_status' => $newStatus,
+                    'offer' => $legacyActivity->offer,
+                    'notes' => $legacyActivity->notes,
+                    'is_from_admin' => $legacyActivity->is_from_admin,
+                    'legacy_activity_id' => $legacyActivity->id,
+                ]),
+                'description' => $legacyActivity->name ?: "Status changed to {$legacyActivity->status}",
+                'created_at' => $legacyActivity->created_at,
+                'updated_at' => $legacyActivity->updated_at,
+            ]);
+        }
+    }
+
+    /**
+     * Map legacy status name to activity slug.
+     */
+    protected function mapStatusToActivitySlug(?string $statusName): string
+    {
+        if (! $statusName) {
+            return 'transactions.status_change';
+        }
+
+        $normalizedName = strtolower(trim($statusName));
+
+        // Map specific status changes to their activity slugs
+        if (str_contains($normalizedName, 'offer given') || str_contains($normalizedName, 'offer #')) {
+            return 'transactions.submit_offer';
+        }
+        if (str_contains($normalizedName, 'offer accepted')) {
+            return 'transactions.accept_offer';
+        }
+        if (str_contains($normalizedName, 'offer declined') || str_contains($normalizedName, 'customer declined')) {
+            return 'transactions.decline_offer';
+        }
+        if (str_contains($normalizedName, 'payment processed') || str_contains($normalizedName, 'payments processed')) {
+            return 'transactions.process_payment';
+        }
+        if (str_contains($normalizedName, 'pending kit request')) {
+            return 'transactions.create';
+        }
+
+        return 'transactions.status_change';
+    }
+
+    /**
+     * Map legacy status name to new status constant.
+     */
+    protected function mapLegacyStatusName(?string $statusName): string
+    {
+        if (! $statusName) {
+            return Transaction::STATUS_PENDING;
+        }
+
+        $normalizedName = strtolower(trim($statusName));
+
+        // Check the existing statusNameMap first
+        if (isset($this->statusNameMap[$normalizedName])) {
+            return $this->statusNameMap[$normalizedName];
+        }
+
+        // Fuzzy matching for common patterns
+        foreach ($this->statusNameMap as $key => $value) {
+            if (str_contains($normalizedName, $key)) {
+                return $value;
+            }
+        }
+
+        // Additional mappings for legacy-specific statuses
+        if (str_contains($normalizedName, '14 day') || str_contains($normalizedName, 'on hold')) {
+            return Transaction::STATUS_KIT_REQUEST_ON_HOLD;
+        }
+        if (str_contains($normalizedName, 'ready for melt') || str_contains($normalizedName, 'moved to nwe')) {
+            return Transaction::STATUS_PAYMENT_PROCESSED;
+        }
+        if (str_contains($normalizedName, 'kit received - ready to buy')) {
+            return Transaction::STATUS_ITEMS_REVIEWED;
+        }
+        if (str_contains($normalizedName, 'high value')) {
+            return Transaction::STATUS_KIT_REQUEST_ON_HOLD;
+        }
+        if (str_contains($normalizedName, 'incomplete')) {
+            return Transaction::STATUS_PENDING_KIT_REQUEST;
+        }
+        if (str_contains($normalizedName, 'bulk')) {
+            return Transaction::STATUS_PENDING_KIT_REQUEST;
+        }
+        if (str_contains($normalizedName, 'archive')) {
+            return Transaction::STATUS_CANCELLED;
+        }
+
+        return Transaction::STATUS_PENDING;
     }
 
     /**

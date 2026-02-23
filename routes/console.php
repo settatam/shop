@@ -44,3 +44,18 @@ Schedule::command('shipments:update-tracking')
     ->hourly()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Legacy warehouse sync - Clear and reload at configured time (default 8pm ET)
+Schedule::command('clear:legacy-warehouse --force')
+    ->when(fn () => config('legacy-sync.enabled'))
+    ->dailyAt(config('legacy-sync.schedule.clear_and_reload_at', '20:00'))
+    ->timezone(config('legacy-sync.schedule.timezone', 'America/New_York'))
+    ->then(function () {
+        Artisan::call('sync:legacy-warehouse');
+    });
+
+// Legacy daily reports - Send at configured time (default midnight ET)
+Schedule::command('reports:send-legacy-daily')
+    ->when(fn () => config('legacy-sync.enabled') && config('legacy-sync.reports.enabled'))
+    ->dailyAt(config('legacy-sync.schedule.send_reports_at', '00:00'))
+    ->timezone(config('legacy-sync.schedule.timezone', 'America/New_York'));
