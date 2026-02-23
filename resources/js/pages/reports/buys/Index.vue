@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed, ref } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
@@ -88,13 +88,18 @@ function resetToCurrentMonth() {
     applyFilters();
 }
 
-const exportUrl = computed(() => {
-    let url = `/reports/buys/export?start_date=${startDate.value}&end_date=${endDate.value}`;
+const queryParams = computed(() => {
+    let params = `start_date=${startDate.value}&end_date=${endDate.value}`;
     if (categoryId.value) {
-        url += `&category_id=${categoryId.value}`;
+        params += `&category_id=${categoryId.value}`;
     }
-    return url;
+    return params;
 });
+
+const dailyExportUrl = computed(() => `/reports/buys/export?${queryParams.value}`);
+const dailyEmailUrl = computed(() => `/reports/buys/email?${queryParams.value}`);
+const categoryExportUrl = computed(() => `/reports/buys/export/categories?${queryParams.value}`);
+const categoryEmailUrl = computed(() => `/reports/buys/email/categories?${queryParams.value}`);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
@@ -207,13 +212,6 @@ function viewBuys(row: DayRow): void {
                     >
                         View Yearly
                     </Link>
-                    <a
-                        :href="exportUrl"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -337,16 +335,12 @@ function viewBuys(row: DayRow): void {
             </div>
 
             <!-- Category Breakdown -->
-            <div
+            <ReportTable
                 v-if="categoryBreakdown.length > 0"
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+                title="Buys by Category"
+                :export-url="categoryExportUrl"
+                :email-url="categoryEmailUrl"
             >
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                        Buys by Category
-                    </h2>
-                </div>
-                <div class="overflow-x-auto">
                     <table
                         class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
                     >
@@ -435,14 +429,14 @@ function viewBuys(row: DayRow): void {
                             </tr>
                         </tbody>
                     </table>
-                </div>
-            </div>
+            </ReportTable>
 
             <!-- Data Table -->
-            <div
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+            <ReportTable
+                title="Daily Buys Data"
+                :export-url="dailyExportUrl"
+                :email-url="dailyEmailUrl"
             >
-                <div class="overflow-x-auto">
                     <table
                         class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
                     >
@@ -605,8 +599,7 @@ function viewBuys(row: DayRow): void {
                             </tr>
                         </tfoot>
                     </table>
-                </div>
-            </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

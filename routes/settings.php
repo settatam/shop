@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\EmailSettingsController;
 use App\Http\Controllers\Settings\JobLogsController;
 use App\Http\Controllers\Settings\MaintenanceController;
 use App\Http\Controllers\Settings\MarketplaceController;
@@ -49,6 +50,13 @@ Route::middleware(['auth', 'store'])->group(function () {
     Route::delete('settings/store/logo', [StoreSettingsController::class, 'removeLogo'])
         ->middleware(['store', 'onboarding'])
         ->name('store-settings.remove-logo');
+
+    // Email Settings
+    Route::middleware(['store', 'onboarding'])->prefix('settings/email')->name('settings.email.')->group(function () {
+        Route::get('/', [EmailSettingsController::class, 'index'])->name('index');
+        Route::patch('/', [EmailSettingsController::class, 'update'])->name('update');
+        Route::post('/test', [EmailSettingsController::class, 'sendTest'])->name('test');
+    });
 
     Route::get('settings/two-factor', [TwoFactorAuthenticationController::class, 'show'])
         ->name('two-factor.show');

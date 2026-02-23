@@ -2,8 +2,8 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import StatCard from '@/components/charts/StatCard.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 
 interface DataRow {
     period: string;
@@ -67,6 +67,9 @@ function formatNumber(value: number): string {
 function viewTransactions(row: DataRow): void {
     router.visit(`/transactions?date_from=${row.start_date}&date_to=${row.end_date}`);
 }
+
+const exportUrl = '/reports/transactions/yearly/export';
+const emailUrl = '/reports/transactions/yearly/email';
 </script>
 
 <template>
@@ -89,13 +92,6 @@ function viewTransactions(row: DataRow): void {
                     >
                         View Monthly
                     </Link>
-                    <a
-                        href="/reports/transactions/yearly/export"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -122,6 +118,7 @@ function viewTransactions(row: DataRow): void {
             </div>
 
             <!-- Data Table -->
+            <ReportTable title="Yearly Transactions Data" :export-url="exportUrl" :email-url="emailUrl">
             <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -193,6 +190,7 @@ function viewTransactions(row: DataRow): void {
                     </table>
                 </div>
             </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

@@ -594,6 +594,253 @@ class BuysReportController extends Controller
     }
 
     /**
+     * Export Monthly Category Breakdown to CSV.
+     */
+    public function exportMonthlyCategories(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactionsQuery = Transaction::with('items')
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereBetween('payment_processed_at', [$startDate, $endDate]);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
+
+        $filename = 'buys-by-category-'.$startDate->format('Y-m').'-to-'.$endDate->format('Y-m').'.csv';
+
+        return $this->exportCategoryBreakdownToCsv($categoryBreakdown, $filename);
+    }
+
+    /**
+     * Email Monthly Report.
+     */
+    public function emailMonthly(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'emails' => 'required|array|min:1',
+            'emails.*' => 'required|email',
+            'subject' => 'nullable|string|max:255',
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
+
+        $headers = ['Month', '# of Buys', 'Purchase Amt', 'Estimated Value', 'Profit', 'Profit %', 'Avg Buy Price'];
+        $rows = collect($monthlyData)->map(fn ($row) => [
+            $row['date'],
+            $row['buys_count'],
+            '$'.number_format($row['purchase_amt'], 2),
+            '$'.number_format($row['estimated_value'], 2),
+            '$'.number_format($row['profit'], 2),
+            number_format($row['profit_percent'], 1).'%',
+            '$'.number_format($row['avg_buy_price'], 2),
+        ])->toArray();
+
+        $subject = $request->input('subject', 'Monthly Buys Report');
+        $description = "Buys data from {$startDate->format('M Y')} to {$endDate->format('M Y')}";
+
+        $mailable = new \App\Mail\DynamicReportMail(
+            $subject,
+            $description,
+            ['headers' => $headers, 'rows' => $rows],
+            count($rows),
+            now()
+        );
+
+        // Attach CSV
+        $mailable->attachCsv($headers, $rows, 'monthly-buys-report.csv');
+
+        // Set from address using store settings
+        $fromAddress = $store->email_from_address ?: config('mail.from.address');
+        $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
+        $mailable->from($fromAddress, $fromName);
+
+        if ($store->email_reply_to_address) {
+            $mailable->replyTo($store->email_reply_to_address);
+        }
+
+        // Send to all recipients
+        foreach ($request->input('emails') as $email) {
+            \Illuminate\Support\Facades\Mail::to($email)->send(clone $mailable);
+        }
+
+        $count = count($request->input('emails'));
+
+        return response()->json([
+            'success' => true,
+            'message' => $count === 1 ? 'Report sent successfully' : "Report sent to {$count} recipients",
+        ]);
+    }
+
+    /**
+     * Email Monthly Category Breakdown Report.
+     */
+    public function emailMonthlyCategories(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'emails' => 'required|array|min:1',
+            'emails.*' => 'required|email',
+            'subject' => 'nullable|string|max:255',
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactionsQuery = Transaction::with('items')
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereBetween('payment_processed_at', [$startDate, $endDate]);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
+
+        $headers = ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit'];
+        $rows = collect($categoryBreakdown)->map(fn ($row) => [
+            $row['category_name'],
+            $row['transactions_count'],
+            $row['items_count'],
+            '$'.number_format($row['total_purchase'], 2),
+            '$'.number_format($row['total_estimated_value'], 2),
+            '$'.number_format($row['total_profit'], 2),
+        ])->toArray();
+
+        $subject = $request->input('subject', 'Buys by Category Report');
+        $description = "Category breakdown from {$startDate->format('M Y')} to {$endDate->format('M Y')}";
+
+        $mailable = new \App\Mail\DynamicReportMail(
+            $subject,
+            $description,
+            ['headers' => $headers, 'rows' => $rows],
+            count($rows),
+            now()
+        );
+
+        // Attach CSV
+        $mailable->attachCsv($headers, $rows, 'buys-by-category-report.csv');
+
+        // Set from address using store settings
+        $fromAddress = $store->email_from_address ?: config('mail.from.address');
+        $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
+        $mailable->from($fromAddress, $fromName);
+
+        if ($store->email_reply_to_address) {
+            $mailable->replyTo($store->email_reply_to_address);
+        }
+
+        // Send to all recipients
+        foreach ($request->input('emails') as $email) {
+            \Illuminate\Support\Facades\Mail::to($email)->send(clone $mailable);
+        }
+
+        $count = count($request->input('emails'));
+
+        return response()->json([
+            'success' => true,
+            'message' => $count === 1 ? 'Report sent successfully' : "Report sent to {$count} recipients",
+        ]);
+    }
+
+    /**
+     * Export category breakdown to CSV.
+     *
+     * @param  array<int, array{category_id: int, category_name: string, is_leaf: bool, items_count: int, transactions_count: int, total_purchase: float, total_estimated_value: float, total_profit: float}>  $data
+     */
+    protected function exportCategoryBreakdownToCsv(array $data, string $filename): StreamedResponse
+    {
+        return response()->streamDownload(function () use ($data) {
+            $handle = fopen('php://output', 'w');
+
+            // Headers
+            fputcsv($handle, ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit']);
+
+            // Data rows
+            foreach ($data as $row) {
+                fputcsv($handle, [
+                    $row['category_name'],
+                    $row['transactions_count'],
+                    $row['items_count'],
+                    $row['total_purchase'],
+                    $row['total_estimated_value'],
+                    $row['total_profit'],
+                ]);
+            }
+
+            // Totals row
+            $totals = [
+                'TOTALS',
+                array_sum(array_column($data, 'transactions_count')),
+                array_sum(array_column($data, 'items_count')),
+                array_sum(array_column($data, 'total_purchase')),
+                array_sum(array_column($data, 'total_estimated_value')),
+                array_sum(array_column($data, 'total_profit')),
+            ];
+            fputcsv($handle, $totals);
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
      * Export Unified Yearly to CSV.
      */
     public function exportYearly(Request $request): StreamedResponse

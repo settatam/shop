@@ -788,6 +788,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('daily/export', [BuysReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('monthly', [BuysReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [BuysReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::get('monthly/export/categories', [BuysReportController::class, 'exportMonthlyCategories'])->name('monthly.export.categories');
+        Route::post('monthly/email', [BuysReportController::class, 'emailMonthly'])->name('monthly.email');
+        Route::post('monthly/email/categories', [BuysReportController::class, 'emailMonthlyCategories'])->name('monthly.email.categories');
         Route::get('yearly', [BuysReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [BuysReportController::class, 'exportYearly'])->name('yearly.export');
 

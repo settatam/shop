@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Services\StoreContext;
+use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,6 +14,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TransactionsReportController extends Controller
 {
+    use SendsReportEmails;
+
     public function __construct(
         protected StoreContext $storeContext,
     ) {}

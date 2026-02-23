@@ -2,9 +2,9 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { TruckIcon } from '@heroicons/vue/24/outline';
 import StatCard from '@/components/charts/StatCard.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import { computed } from 'vue';
 
 interface DayRow {
@@ -181,6 +181,11 @@ const offersAcceptedData = computed(() =>
     props.dailyData.map((row) => row.offers_accepted),
 );
 const profitData = computed(() => props.dailyData.map((row) => row.profit));
+
+const incomingKitsExportUrl = '/reports/leads/incoming-kits/export';
+const incomingKitsEmailUrl = '/reports/leads/incoming-kits/email';
+const exportUrl = '/reports/leads/export';
+const emailUrl = '/reports/leads/email';
 </script>
 
 <template>
@@ -219,13 +224,6 @@ const profitData = computed(() => props.dailyData.map((row) => row.profit));
                     >
                         Daily Kits
                     </Link>
-                    <a
-                        href="/reports/leads/export"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -255,8 +253,13 @@ const profitData = computed(() => props.dailyData.map((row) => row.profit));
             </div>
 
             <!-- Incoming Kits -->
-            <div
+            <ReportTable
                 v-if="incomingKits && incomingKits.length > 0"
+                title="Incoming Kits"
+                :export-url="incomingKitsExportUrl"
+                :email-url="incomingKitsEmailUrl"
+            >
+            <div
                 class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
             >
                 <div
@@ -413,8 +416,10 @@ const profitData = computed(() => props.dailyData.map((row) => row.profit));
                     </table>
                 </div>
             </div>
+            </ReportTable>
 
             <!-- Data Table -->
+            <ReportTable title="Daily Leads Data" :export-url="exportUrl" :email-url="emailUrl">
             <div
                 class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
             >
@@ -687,6 +692,7 @@ const profitData = computed(() => props.dailyData.map((row) => row.profit));
                     </table>
                 </div>
             </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

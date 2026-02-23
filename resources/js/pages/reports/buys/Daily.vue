@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { DatePicker } from '@/components/ui/date-picker';
 import AppLayout from '@/layouts/AppLayout.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import { type BreadcrumbItem } from '@/types';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -93,13 +93,18 @@ function resetToToday() {
     applyFilters();
 }
 
-const exportUrl = computed(() => {
-    let url = `/reports/buys/daily/export?start_date=${startDate.value}&end_date=${endDate.value}`;
+const queryParams = computed(() => {
+    let params = `start_date=${startDate.value}&end_date=${endDate.value}`;
     if (categoryId.value) {
-        url += `&category_id=${categoryId.value}`;
+        params += `&category_id=${categoryId.value}`;
     }
-    return url;
+    return params;
 });
+
+const transactionsExportUrl = computed(() => `/reports/buys/daily/export?${queryParams.value}`);
+const transactionsEmailUrl = computed(() => `/reports/buys/daily/email?${queryParams.value}`);
+const categoryExportUrl = computed(() => `/reports/buys/daily/export/categories?${queryParams.value}`);
+const categoryEmailUrl = computed(() => `/reports/buys/daily/email/categories?${queryParams.value}`);
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
@@ -133,15 +138,6 @@ function formatPercent(value: number): string {
                     <p class="text-sm text-gray-500 dark:text-gray-400">
                         {{ dateRangeLabel }}
                     </p>
-                </div>
-                <div class="flex items-center gap-4">
-                    <a
-                        :href="exportUrl"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -201,16 +197,12 @@ function formatPercent(value: number): string {
             </div>
 
             <!-- Category Breakdown -->
-            <div
+            <ReportTable
                 v-if="categoryBreakdown.length > 0"
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+                title="Buys by Category"
+                :export-url="categoryExportUrl"
+                :email-url="categoryEmailUrl"
             >
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                        Buys by Category
-                    </h2>
-                </div>
-                <div class="overflow-x-auto">
                     <table
                         class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
                     >
@@ -299,14 +291,14 @@ function formatPercent(value: number): string {
                             </tr>
                         </tbody>
                     </table>
-                </div>
-            </div>
+            </ReportTable>
 
             <!-- Data Table -->
-            <div
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+            <ReportTable
+                title="Daily Transactions"
+                :export-url="transactionsExportUrl"
+                :email-url="transactionsEmailUrl"
             >
-                <div class="overflow-x-auto">
                     <table
                         class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
                     >
@@ -519,8 +511,7 @@ function formatPercent(value: number): string {
                             </tr>
                         </tfoot>
                     </table>
-                </div>
-            </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

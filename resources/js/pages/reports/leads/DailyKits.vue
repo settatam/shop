@@ -2,12 +2,12 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import {
     TruckIcon,
     ClockIcon,
     ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import { computed } from 'vue';
 
 interface Kit {
@@ -84,6 +84,9 @@ function getStatusBadge(kit: Kit): { label: string; class: string } {
 function changeDaysBack(days: number) {
     router.get('/reports/leads/daily-kits', { days }, { preserveState: true });
 }
+
+const exportUrl = computed(() => `/reports/leads/daily-kits/export?days=${props.daysBack}`);
+const emailUrl = computed(() => `/reports/leads/daily-kits/email?days=${props.daysBack}`);
 </script>
 
 <template>
@@ -124,13 +127,6 @@ function changeDaysBack(days: number) {
                     >
                         Back to Leads
                     </Link>
-                    <a
-                        :href="`/reports/leads/daily-kits/export?days=${daysBack}`"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -240,6 +236,7 @@ function changeDaysBack(days: number) {
             </div>
 
             <!-- Data Table -->
+            <ReportTable title="Daily Kits Data" :export-url="exportUrl" :email-url="emailUrl">
             <div
                 class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
             >
@@ -393,6 +390,7 @@ function changeDaysBack(days: number) {
                     </table>
                 </div>
             </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

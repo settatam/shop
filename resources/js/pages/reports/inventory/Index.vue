@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon, ChevronRightIcon, HomeIcon, Squares2X2Icon, FolderIcon } from '@heroicons/vue/20/solid';
+import { ChevronRightIcon, HomeIcon, Squares2X2Icon, FolderIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
@@ -157,6 +158,21 @@ const currentViewTotals = computed(() => ({
     deleted_cost: props.categoryData.reduce((sum, row) => sum + row.deleted_cost, 0),
     projected_profit: props.categoryData.reduce((sum, row) => sum + row.projected_profit, 0),
 }));
+
+// Export/email URLs
+const queryParams = computed(() => {
+    const params: string[] = [];
+    if (props.currentCategory) {
+        params.push(`category_id=${props.currentCategory.id}`);
+    }
+    if (props.viewAll) {
+        params.push('view_all=1');
+    }
+    return params.length ? params.join('&') : '';
+});
+
+const inventoryExportUrl = computed(() => queryParams.value ? `/reports/inventory/export?${queryParams.value}` : '/reports/inventory/export');
+const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory/email?${queryParams.value}` : '/reports/inventory/email');
 </script>
 
 <template>
@@ -191,13 +207,6 @@ const currentViewTotals = computed(() => ({
                     >
                         Yearly
                     </Link>
-                    <a
-                        href="/reports/inventory/export"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -277,9 +286,13 @@ const currentViewTotals = computed(() => ({
             </div>
 
             <!-- Category Navigation & Data Table -->
-            <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
+            <ReportTable
+                title="Inventory by Category"
+                :export-url="inventoryExportUrl"
+                :email-url="inventoryEmailUrl"
+            >
                 <!-- Category Breadcrumb Navigation -->
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                <div class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
                     <div class="flex items-center justify-between">
                         <nav class="flex items-center gap-2">
                             <!-- Home/Root link -->
@@ -457,7 +470,7 @@ const currentViewTotals = computed(() => ({
                         </tfoot>
                     </table>
                 </div>
-            </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

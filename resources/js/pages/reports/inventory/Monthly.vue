@@ -2,8 +2,8 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed } from 'vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
 import BarChart from '@/components/charts/BarChart.vue';
@@ -113,6 +113,9 @@ const avgMonthlyAdded = computed(() => {
     if (props.monthlyData.length === 0) return 0;
     return props.totals.cost_added / props.monthlyData.length;
 });
+
+const exportUrl = '/reports/inventory/monthly/export';
+const emailUrl = '/reports/inventory/monthly/email';
 </script>
 
 <template>
@@ -135,13 +138,6 @@ const avgMonthlyAdded = computed(() => {
                     >
                         View Current
                     </Link>
-                    <a
-                        href="/reports/inventory/monthly/export"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -219,6 +215,7 @@ const avgMonthlyAdded = computed(() => {
             </div>
 
             <!-- Data Table -->
+            <ReportTable title="Monthly Inventory Data" :export-url="exportUrl" :email-url="emailUrl">
             <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -301,6 +298,7 @@ const avgMonthlyAdded = computed(() => {
                     </table>
                 </div>
             </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

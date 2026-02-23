@@ -3,8 +3,8 @@ import AreaChart from '@/components/charts/AreaChart.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 import { type BreadcrumbItem } from '@/types';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -143,13 +143,18 @@ function resetToLast12Months() {
     applyFilters();
 }
 
-const exportUrl = computed(() => {
-    let url = `/reports/sales/monthly/export?start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+const queryParams = computed(() => {
+    let params = `start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
     if (categoryId.value) {
-        url += `&category_id=${categoryId.value}`;
+        params += `&category_id=${categoryId.value}`;
     }
-    return url;
+    return params;
 });
+
+const monthlyExportUrl = computed(() => `/reports/sales/monthly/export?${queryParams.value}`);
+const monthlyEmailUrl = computed(() => `/reports/sales/monthly/email?${queryParams.value}`);
+const categoryExportUrl = computed(() => `/reports/sales/monthly/export/categories?${queryParams.value}`);
+const categoryEmailUrl = computed(() => `/reports/sales/monthly/email/categories?${queryParams.value}`);
 
 function formatCostValue(value: number): string {
     if (value <= 0) {
@@ -269,15 +274,6 @@ function viewSales(row: MonthRow): void {
                         {{ dateRangeLabel }}
                     </p>
                 </div>
-                <div class="flex items-center gap-4">
-                    <a
-                        :href="exportUrl"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
-                </div>
             </div>
 
             <!-- Date Range Filter -->
@@ -364,16 +360,12 @@ function viewSales(row: MonthRow): void {
             </div>
 
             <!-- Category Breakdown -->
-            <div
+            <ReportTable
                 v-if="categoryBreakdown.length > 0"
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+                title="Sales by Category"
+                :export-url="categoryExportUrl"
+                :email-url="categoryEmailUrl"
             >
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                        Sales by Category
-                    </h2>
-                </div>
-                <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
@@ -408,8 +400,7 @@ function viewSales(row: MonthRow): void {
                             </tr>
                         </tbody>
                     </table>
-                </div>
-            </div>
+            </ReportTable>
 
             <!-- Stat Cards -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -522,10 +513,11 @@ function viewSales(row: MonthRow): void {
             </div>
 
             <!-- Data Table -->
-            <div
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+            <ReportTable
+                title="Monthly Sales Data"
+                :export-url="monthlyExportUrl"
+                :email-url="monthlyEmailUrl"
             >
-                <div class="overflow-x-auto">
                     <table
                         class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
                     >
@@ -807,8 +799,7 @@ function viewSales(row: MonthRow): void {
                             </tr>
                         </tfoot>
                     </table>
-                </div>
-            </div>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>

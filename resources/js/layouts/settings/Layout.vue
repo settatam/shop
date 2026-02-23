@@ -16,6 +16,10 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/store',
     },
     {
+        title: 'Email',
+        href: '/settings/email',
+    },
+    {
         title: 'Profile',
         href: editProfile(),
     },

@@ -2,11 +2,11 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
 import { computed, ref } from 'vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
+import ReportTable from '@/components/widgets/ReportTable.vue';
 
 interface MonthRow {
     date: string;
@@ -115,13 +115,18 @@ function resetToLast12Months() {
     applyFilters();
 }
 
-const exportUrl = computed(() => {
-    let url = `/reports/buys/monthly/export?start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+const queryParams = computed(() => {
+    let params = `start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
     if (categoryId.value) {
-        url += `&category_id=${categoryId.value}`;
+        params += `&category_id=${categoryId.value}`;
     }
-    return url;
+    return params;
 });
+
+const monthlyExportUrl = computed(() => `/reports/buys/monthly/export?${queryParams.value}`);
+const monthlyEmailUrl = computed(() => `/reports/buys/monthly/email?${queryParams.value}`);
+const categoryExportUrl = computed(() => `/reports/buys/monthly/export/categories?${queryParams.value}`);
+const categoryEmailUrl = computed(() => `/reports/buys/monthly/email/categories?${queryParams.value}`);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
@@ -241,13 +246,6 @@ function viewBuys(row: MonthRow): void {
                     >
                         View Daily
                     </Link>
-                    <a
-                        :href="exportUrl"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    >
-                        <ArrowDownTrayIcon class="size-4" />
-                        Export CSV
-                    </a>
                 </div>
             </div>
 
@@ -443,276 +441,271 @@ function viewBuys(row: MonthRow): void {
             </div>
 
             <!-- Category Breakdown -->
-            <div
+            <ReportTable
                 v-if="categoryBreakdown.length > 0"
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+                title="Buys by Category"
+                :export-url="categoryExportUrl"
+                :email-url="categoryEmailUrl"
             >
-                <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
-                        Buys by Category
-                    </h2>
-                </div>
-                <div class="overflow-x-auto">
-                    <table
-                        class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
-                    >
-                        <thead class="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th
-                                    class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Category
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Transactions
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Items
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Purchase Amt
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Est. Value
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Profit
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody
-                            class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
-                        >
-                            <tr
-                                v-for="row in categoryBreakdown"
-                                :key="row.category_id"
-                                class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                <table
+                    class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+                >
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                             >
-                                <td
-                                    class="px-4 py-3 text-sm text-gray-900 dark:text-white"
+                                Category
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Transactions
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Items
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Purchase Amt
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Est. Value
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Profit
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody
+                        class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
+                    >
+                        <tr
+                            v-for="row in categoryBreakdown"
+                            :key="row.category_id"
+                            class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                            <td
+                                class="px-4 py-3 text-sm text-gray-900 dark:text-white"
+                            >
+                                <span
+                                    v-if="!row.is_leaf"
+                                    class="mr-1 text-gray-400"
+                                    >📁</span
                                 >
-                                    <span
-                                        v-if="!row.is_leaf"
-                                        class="mr-1 text-gray-400"
-                                        >📁</span
-                                    >
-                                    {{ row.category_name }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
-                                >
-                                    {{ row.transactions_count }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
-                                >
-                                    {{ row.items_count }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(row.total_purchase) }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(row.total_estimated_value) }}
-                                </td>
-                                <td
-                                    class="px-4 py-3 text-right text-sm"
-                                    :class="
-                                        row.total_profit >= 0
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                    "
-                                >
-                                    {{ formatCurrency(row.total_profit) }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                {{ row.category_name }}
+                            </td>
+                            <td
+                                class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                            >
+                                {{ row.transactions_count }}
+                            </td>
+                            <td
+                                class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                            >
+                                {{ row.items_count }}
+                            </td>
+                            <td
+                                class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(row.total_purchase) }}
+                            </td>
+                            <td
+                                class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(row.total_estimated_value) }}
+                            </td>
+                            <td
+                                class="px-4 py-3 text-right text-sm"
+                                :class="
+                                    row.total_profit >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                "
+                            >
+                                {{ formatCurrency(row.total_profit) }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </ReportTable>
 
             <!-- Data Table -->
-            <div
-                class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10"
+            <ReportTable
+                title="Monthly Buys Data"
+                :export-url="monthlyExportUrl"
+                :email-url="monthlyEmailUrl"
             >
-                <div class="overflow-x-auto">
-                    <table
-                        class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
-                    >
-                        <thead class="bg-gray-50 dark:bg-gray-700">
-                            <tr>
-                                <th
-                                    class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Month
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    # of Buys
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Purchase Amt
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Estimated Value
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Profit
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Profit %
-                                </th>
-                                <th
-                                    class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
-                                >
-                                    Avg Buy Price
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody
-                            class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
-                        >
-                            <tr
-                                v-for="row in monthlyData"
-                                :key="row.date"
-                                class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
-                                @click="viewBuys(row)"
+                <table
+                    class="min-w-full divide-y divide-gray-200 dark:divide-gray-700"
+                >
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th
+                                class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
                             >
-                                <td
-                                    class="px-4 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ row.date }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ row.buys_count }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(row.purchase_amt) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(row.estimated_value) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap"
-                                    :class="
-                                        row.profit >= 0
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                    "
-                                >
-                                    {{ formatCurrency(row.profit) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap"
-                                    :class="
-                                        row.profit_percent >= 0
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                    "
-                                >
-                                    {{ formatPercent(row.profit_percent) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(row.avg_buy_price) }}
-                                </td>
-                            </tr>
-
-                            <!-- Empty state -->
-                            <tr v-if="monthlyData.length === 0">
-                                <td
-                                    colspan="7"
-                                    class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
-                                >
-                                    No buys data found.
-                                </td>
-                            </tr>
-                        </tbody>
-                        <!-- Totals row -->
-                        <tfoot
-                            v-if="monthlyData.length > 0"
-                            class="bg-gray-100 dark:bg-gray-700"
+                                Month
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                # of Buys
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Purchase Amt
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Estimated Value
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Profit
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Profit %
+                            </th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300"
+                            >
+                                Avg Buy Price
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody
+                        class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800"
+                    >
+                        <tr
+                            v-for="row in monthlyData"
+                            :key="row.date"
+                            class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                            @click="viewBuys(row)"
                         >
-                            <tr class="font-semibold">
-                                <td
-                                    class="px-4 py-4 text-sm text-gray-900 dark:text-white"
-                                >
-                                    TOTALS
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ totals.buys_count }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(totals.purchase_amt) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(totals.estimated_value) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap"
-                                    :class="
-                                        totals.profit >= 0
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                    "
-                                >
-                                    {{ formatCurrency(totals.profit) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap"
-                                    :class="
-                                        totals.profit_percent >= 0
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
-                                    "
-                                >
-                                    {{ formatPercent(totals.profit_percent) }}
-                                </td>
-                                <td
-                                    class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
-                                >
-                                    {{ formatCurrency(totals.avg_buy_price) }}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
+                            <td
+                                class="px-4 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ row.date }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ row.buys_count }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(row.purchase_amt) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(row.estimated_value) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap"
+                                :class="
+                                    row.profit >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                "
+                            >
+                                {{ formatCurrency(row.profit) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap"
+                                :class="
+                                    row.profit_percent >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                "
+                            >
+                                {{ formatPercent(row.profit_percent) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(row.avg_buy_price) }}
+                            </td>
+                        </tr>
+
+                        <!-- Empty state -->
+                        <tr v-if="monthlyData.length === 0">
+                            <td
+                                colspan="7"
+                                class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                            >
+                                No buys data found.
+                            </td>
+                        </tr>
+                    </tbody>
+                    <!-- Totals row -->
+                    <tfoot
+                        v-if="monthlyData.length > 0"
+                        class="bg-gray-100 dark:bg-gray-700"
+                    >
+                        <tr class="font-semibold">
+                            <td
+                                class="px-4 py-4 text-sm text-gray-900 dark:text-white"
+                            >
+                                TOTALS
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ totals.buys_count }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(totals.purchase_amt) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(totals.estimated_value) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap"
+                                :class="
+                                    totals.profit >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                "
+                            >
+                                {{ formatCurrency(totals.profit) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap"
+                                :class="
+                                    totals.profit_percent >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                "
+                            >
+                                {{ formatPercent(totals.profit_percent) }}
+                            </td>
+                            <td
+                                class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white"
+                            >
+                                {{ formatCurrency(totals.avg_buy_price) }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </ReportTable>
         </div>
     </AppLayout>
 </template>
