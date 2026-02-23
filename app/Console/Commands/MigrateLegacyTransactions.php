@@ -185,13 +185,6 @@ class MigrateLegacyTransactions extends Command
 
     public function handle(): int
     {
-        // DISABLED: Transaction migration is disabled until comprehensive cutover plan is ready
-        $this->error('Transaction migration is disabled - using legacy sync instead.');
-        $this->info('This command will be re-enabled when the comprehensive cutover plan is ready.');
-
-        return 1;
-
-        // @codeCoverageIgnoreStart
         $this->legacyStoreId = (int) $this->argument('store_id');
         $this->newStoreId = (int) ($this->option('new-store-id') ?? $this->legacyStoreId);
         $this->dryRun = (bool) $this->option('dry-run');
