@@ -452,9 +452,16 @@ class MigrateLegacyTransactions extends Command
             return 'migrated';
         }
 
-        // Determine if this is a payment_processed status (for setting timestamps)
-        // Since we now map to constants, just compare directly
-        $isPaymentProcessed = $statusName === Transaction::STATUS_PAYMENT_PROCESSED;
+        // Get payment_processed_at from the legacy activity log
+        $paymentActivity = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activityable_type', 'App\\Models\\Transaction')
+            ->where('activityable_id', $legacyTransaction->id)
+            ->where('activity', 'payment_added_to_transaction')
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        $paymentProcessedAt = $paymentActivity?->created_at;
 
         // Create the transaction using DB insert to preserve timestamps exactly
         $transactionData = [
@@ -482,8 +489,7 @@ class MigrateLegacyTransactions extends Command
             'customer_description' => $legacyTransaction->customer_description ?? null,
             'created_at' => $legacyTransaction->created_at,
             'updated_at' => $legacyTransaction->updated_at,
-            // Set payment_processed_at for transactions that have reached that status
-            'payment_processed_at' => $isPaymentProcessed ? ($legacyTransaction->updated_at ?? $legacyTransaction->created_at) : null,
+            'payment_processed_at' => $paymentProcessedAt,
         ];
 
         // Only add tracking fields if we have actual tracking data (to let defaults apply)

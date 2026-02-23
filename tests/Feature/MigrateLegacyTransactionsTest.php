@@ -1046,4 +1046,97 @@ class MigrateLegacyTransactionsTest extends TestCase
         $this->assertArrayHasKey('template_values', $attributes);
         $this->assertEmpty($attributes['template_values']);
     }
+
+    public function test_migrates_payment_processed_at_from_activity_log(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+        $paymentDate = now()->subDays(5);
+
+        // Create legacy transaction
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 8, // payment_processed
+            'is_in_house' => true,
+            'final_offer' => 100.00,
+            'created_at' => now()->subDays(10),
+            'updated_at' => now()->subDays(3),
+        ]);
+
+        // Create legacy payment activity with specific timestamp
+        DB::connection('legacy')->table('store_activities')->insert([
+            'activityable_type' => 'App\\Models\\Transaction',
+            'activityable_id' => $legacyTransactionId,
+            'activity' => 'payment_added_to_transaction',
+            'description' => 'Payment added',
+            'created_at' => $paymentDate,
+            'updated_at' => $paymentDate,
+        ]);
+
+        // Run the migration
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        // Verify payment_processed_at was migrated from the activity log
+        $transaction = Transaction::where('store_id', $this->store->id)->first();
+        $this->assertNotNull($transaction->payment_processed_at);
+        $this->assertEquals(
+            $paymentDate->format('Y-m-d H:i:s'),
+            $transaction->payment_processed_at->format('Y-m-d H:i:s')
+        );
+    }
+
+    public function test_migrates_item_prices_exactly_as_in_legacy(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'final_offer' => 500.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create items with specific prices - these should be migrated exactly
+        DB::connection('legacy')->table('transaction_items')->insert([
+            [
+                'transaction_id' => $legacyTransactionId,
+                'sku' => 'EXACT-PRICE-1',
+                'title' => 'Item with exact price',
+                'price' => 123.45,
+                'buy_price' => 100.00,
+                'dwt' => 2.0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'transaction_id' => $legacyTransactionId,
+                'sku' => 'ZERO-PRICE',
+                'title' => 'Item with zero price',
+                'price' => 0, // Zero price should stay zero - no calculation
+                'buy_price' => 0,
+                'dwt' => 1.0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        // Run the migration
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        // Verify prices are migrated exactly as they were in legacy
+        $item1 = TransactionItem::where('sku', 'EXACT-PRICE-1')->first();
+        $this->assertEquals(123.45, $item1->price);
+        $this->assertEquals(100.00, $item1->buy_price);
+
+        // Zero price should remain zero - no backfill calculation
+        $item2 = TransactionItem::where('sku', 'ZERO-PRICE')->first();
+        $this->assertEquals(0, $item2->price);
+        $this->assertEquals(0, $item2->buy_price);
+    }
 }
