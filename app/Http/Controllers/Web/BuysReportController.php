@@ -661,9 +661,10 @@ class BuysReportController extends Controller
         }
 
         $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
+        $monthlyCollection = collect($monthlyData);
 
         $headers = ['Month', '# of Buys', 'Purchase Amt', 'Estimated Value', 'Profit', 'Profit %', 'Avg Buy Price'];
-        $rows = collect($monthlyData)->map(fn ($row) => [
+        $rows = $monthlyCollection->map(fn ($row) => [
             $row['date'],
             $row['buys_count'],
             '$'.number_format($row['purchase_amt'], 2),
@@ -673,6 +674,25 @@ class BuysReportController extends Controller
             '$'.number_format($row['avg_buy_price'], 2),
         ])->toArray();
 
+        // Calculate totals
+        $totalBuys = $monthlyCollection->sum('buys_count');
+        $totalPurchase = $monthlyCollection->sum('purchase_amt');
+        $totalEstimated = $monthlyCollection->sum('estimated_value');
+        $totalProfit = $monthlyCollection->sum('profit');
+        $avgProfitPercent = $totalEstimated > 0 ? ($totalProfit / $totalEstimated) * 100 : 0;
+        $avgBuyPrice = $totalBuys > 0 ? $totalPurchase / $totalBuys : 0;
+
+        // Add totals row
+        $rows[] = [
+            'TOTALS',
+            $totalBuys,
+            '$'.number_format($totalPurchase, 2),
+            '$'.number_format($totalEstimated, 2),
+            '$'.number_format($totalProfit, 2),
+            number_format($avgProfitPercent, 1).'%',
+            '$'.number_format($avgBuyPrice, 2),
+        ];
+
         $subject = $request->input('subject', 'Monthly Buys Report');
         $description = "Buys data from {$startDate->format('M Y')} to {$endDate->format('M Y')}";
 
@@ -680,7 +700,7 @@ class BuysReportController extends Controller
             $subject,
             $description,
             ['headers' => $headers, 'rows' => $rows],
-            count($rows),
+            count($rows) - 1, // Exclude totals row from count
             now()
         );
 
@@ -751,9 +771,10 @@ class BuysReportController extends Controller
         }
 
         $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
+        $categoryCollection = collect($categoryBreakdown);
 
         $headers = ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit'];
-        $rows = collect($categoryBreakdown)->map(fn ($row) => [
+        $rows = $categoryCollection->map(fn ($row) => [
             $row['category_name'],
             $row['transactions_count'],
             $row['items_count'],
@@ -762,6 +783,23 @@ class BuysReportController extends Controller
             '$'.number_format($row['total_profit'], 2),
         ])->toArray();
 
+        // Calculate totals
+        $totalTransactions = $categoryCollection->sum('transactions_count');
+        $totalItems = $categoryCollection->sum('items_count');
+        $totalPurchase = $categoryCollection->sum('total_purchase');
+        $totalEstimated = $categoryCollection->sum('total_estimated_value');
+        $totalProfit = $categoryCollection->sum('total_profit');
+
+        // Add totals row
+        $rows[] = [
+            'TOTALS',
+            $totalTransactions,
+            $totalItems,
+            '$'.number_format($totalPurchase, 2),
+            '$'.number_format($totalEstimated, 2),
+            '$'.number_format($totalProfit, 2),
+        ];
+
         $subject = $request->input('subject', 'Buys by Category Report');
         $description = "Category breakdown from {$startDate->format('M Y')} to {$endDate->format('M Y')}";
 
@@ -769,7 +807,7 @@ class BuysReportController extends Controller
             $subject,
             $description,
             ['headers' => $headers, 'rows' => $rows],
-            count($rows),
+            count($rows) - 1, // Exclude totals row from count
             now()
         );
 
