@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\ActivityLog;
+use App\Models\Category;
 use App\Models\Customer;
+use App\Models\ProductTemplate;
+use App\Models\ProductTemplateField;
 use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
@@ -124,10 +127,65 @@ class MigrateLegacyTransactionsTest extends TestCase
             $table->string('condition')->nullable();
             $table->unsignedBigInteger('category_id')->nullable();
             $table->unsignedBigInteger('product_type_id')->nullable();
+            $table->unsignedBigInteger('html_form_id')->nullable();
             $table->boolean('is_added_to_inventory')->default(false);
             $table->timestamp('date_added_to_inventory')->nullable();
             $table->timestamp('reviewed_date_time')->nullable();
             $table->timestamps();
+        });
+
+        Schema::connection('legacy')->create('store_categories', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('store_id');
+            $table->string('name');
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->unsignedBigInteger('html_form_id')->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::connection('legacy')->create('html_forms', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('store_id');
+            $table->string('title');
+            $table->text('description')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::connection('legacy')->create('html_form_fields', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('html_form_id');
+            $table->string('name');
+            $table->string('label')->nullable();
+            $table->string('type')->default('text');
+            $table->string('placeholder')->nullable();
+            $table->boolean('is_required')->default(false);
+            $table->boolean('is_searchable')->default(true);
+            $table->boolean('show_in_listing')->default(true);
+            $table->integer('sort_order')->default(0);
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::connection('legacy')->create('html_form_field_options', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('html_form_field_id');
+            $table->string('value');
+            $table->string('label')->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->timestamps();
+        });
+
+        Schema::connection('legacy')->create('metas', function ($table) {
+            $table->id();
+            $table->string('metaable_type');
+            $table->unsignedBigInteger('metaable_id');
+            $table->string('field');
+            $table->text('value')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::connection('legacy')->create('images', function ($table) {
@@ -186,9 +244,10 @@ class MigrateLegacyTransactionsTest extends TestCase
 
         Schema::connection('legacy')->create('shipping_labels', function ($table) {
             $table->id();
-            $table->string('labelable_type');
-            $table->unsignedBigInteger('labelable_id');
-            $table->string('label_type');
+            $table->string('shippable_type');
+            $table->unsignedBigInteger('shippable_id');
+            $table->boolean('to_customer')->default(false);
+            $table->boolean('is_return')->default(false);
             $table->string('tracking_number')->nullable();
             $table->timestamps();
         });
@@ -226,6 +285,22 @@ class MigrateLegacyTransactionsTest extends TestCase
         DB::connection('legacy')->table('states')->insert([
             ['id' => 1, 'name' => 'California', 'code' => 'CA', 'created_at' => now(), 'updated_at' => now()],
             ['id' => 2, 'name' => 'New York', 'code' => 'NY', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+    }
+
+    /**
+     * Create a legacy customer and return its ID.
+     * The migration command requires customer_id to be set for transactions.
+     */
+    protected function createLegacyCustomer(): int
+    {
+        return DB::connection('legacy')->table('customers')->insertGetId([
+            'store_id' => $this->store->id,
+            'first_name' => 'Test',
+            'last_name' => 'Customer',
+            'email' => 'test'.uniqid().'@example.com',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
@@ -336,9 +411,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_migrates_transaction_items(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy transaction
         $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'is_in_house' => true,
             'created_at' => now(),
@@ -391,9 +469,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_migrates_item_images(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy transaction
         $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'created_at' => now(),
             'updated_at' => now(),
@@ -430,34 +511,35 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_migrates_activities(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy transaction
         $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        // Create legacy activities
+        // Create legacy activities (individual inserts for SQLite compatibility)
         DB::connection('legacy')->table('store_activities')->insert([
-            [
-                'activityable_type' => 'App\\Models\\Transaction',
-                'activityable_id' => $legacyTransactionId,
-                'activity' => 'created_transaction',
-                'description' => 'Transaction created',
-                'user_id' => 1,
-                'created_at' => now()->subHours(2),
-                'updated_at' => now()->subHours(2),
-            ],
-            [
-                'activityable_type' => 'App\\Models\\Transaction',
-                'activityable_id' => $legacyTransactionId,
-                'activity' => 'status_updated',
-                'description' => 'Status changed to Kit Received',
-                'user_id' => 1,
-                'created_at' => now()->subHour(),
-                'updated_at' => now()->subHour(),
-            ],
+            'activityable_type' => 'App\\Models\\Transaction',
+            'activityable_id' => $legacyTransactionId,
+            'activity' => 'created_transaction',
+            'description' => 'Transaction created',
+            'user_id' => null,
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2),
+        ]);
+        DB::connection('legacy')->table('store_activities')->insert([
+            'activityable_type' => 'App\\Models\\Transaction',
+            'activityable_id' => $legacyTransactionId,
+            'activity' => 'status_updated',
+            'description' => 'Status changed to Kit Received',
+            'user_id' => null,
+            'created_at' => now()->subHour(),
+            'updated_at' => now()->subHour(),
         ]);
 
         $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
@@ -475,9 +557,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_dry_run_does_not_create_records(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy transaction
         DB::connection('legacy')->table('transactions')->insert([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'is_in_house' => true,
             'created_at' => now(),
@@ -495,9 +580,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_skips_already_migrated_transactions(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy transaction
         $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'created_at' => now(),
             'updated_at' => now(),
@@ -516,9 +604,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_in_store_transaction_type(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy in-house transaction
         DB::connection('legacy')->table('transactions')->insert([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'is_in_house' => true,
             'created_at' => now(),
@@ -536,9 +627,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_mail_in_transaction_type(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy mail-in transaction
         DB::connection('legacy')->table('transactions')->insert([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'is_in_house' => false,
             'created_at' => now(),
@@ -556,6 +650,8 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_status_mapping(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         $testCases = [
             ['legacy_status' => 60, 'expected' => Transaction::STATUS_PENDING_KIT_REQUEST],
             ['legacy_status' => 2, 'expected' => Transaction::STATUS_ITEMS_RECEIVED],
@@ -567,6 +663,7 @@ class MigrateLegacyTransactionsTest extends TestCase
         foreach ($testCases as $index => $testCase) {
             DB::connection('legacy')->table('transactions')->insert([
                 'store_id' => $this->store->id,
+                'customer_id' => $customerId,
                 'status_id' => $testCase['legacy_status'],
                 'is_in_house' => true,
                 'bin_location' => "TEST-{$index}",
@@ -630,9 +727,12 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_skip_activities_option(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create legacy transaction
         $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'created_at' => now(),
             'updated_at' => now(),
@@ -659,11 +759,13 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_new_store_id_option(): void
     {
+        $customerId = $this->createLegacyCustomer();
         $newStore = Store::factory()->create();
 
         // Create legacy transaction in original store
         DB::connection('legacy')->table('transactions')->insert([
             'store_id' => $this->store->id,
+            'customer_id' => $customerId,
             'status_id' => 60,
             'created_at' => now(),
             'updated_at' => now(),
@@ -687,10 +789,13 @@ class MigrateLegacyTransactionsTest extends TestCase
 
     public function test_limit_option(): void
     {
+        $customerId = $this->createLegacyCustomer();
+
         // Create multiple legacy transactions
         for ($i = 0; $i < 5; $i++) {
             DB::connection('legacy')->table('transactions')->insert([
                 'store_id' => $this->store->id,
+                'customer_id' => $customerId,
                 'status_id' => 60,
                 'bin_location' => "BIN-{$i}",
                 'created_at' => now()->addMinutes($i),
@@ -745,5 +850,200 @@ class MigrateLegacyTransactionsTest extends TestCase
             'store_id' => $this->store->id,
             'customer_id' => $existingCustomer->id,
         ]);
+    }
+
+    public function test_migrates_transaction_item_template_values(): void
+    {
+        // Create a template with fields in the new system
+        $template = ProductTemplate::create([
+            'store_id' => $this->store->id,
+            'name' => 'Ring Template',
+            'is_active' => true,
+        ]);
+
+        $metalField = ProductTemplateField::create([
+            'product_template_id' => $template->id,
+            'name' => 'metal_type',
+            'canonical_name' => 'metal_type',
+            'label' => 'Metal Type',
+            'type' => 'select',
+            'sort_order' => 1,
+        ]);
+
+        $caratField = ProductTemplateField::create([
+            'product_template_id' => $template->id,
+            'name' => 'carat_weight',
+            'canonical_name' => 'carat_weight',
+            'label' => 'Carat Weight',
+            'type' => 'text',
+            'sort_order' => 2,
+        ]);
+
+        // Create a category with the template in the new system
+        $category = Category::create([
+            'store_id' => $this->store->id,
+            'name' => 'Rings',
+            'slug' => 'rings',
+            'template_id' => $template->id,
+        ]);
+
+        // Create legacy template (html_form)
+        $legacyTemplateId = DB::connection('legacy')->table('html_forms')->insertGetId([
+            'store_id' => $this->store->id,
+            'title' => 'Ring Template',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create legacy template fields
+        $legacyMetalFieldId = DB::connection('legacy')->table('html_form_fields')->insertGetId([
+            'html_form_id' => $legacyTemplateId,
+            'name' => 'metal_type',
+            'label' => 'Metal Type',
+            'type' => 'select',
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $legacyCaratFieldId = DB::connection('legacy')->table('html_form_fields')->insertGetId([
+            'html_form_id' => $legacyTemplateId,
+            'name' => 'carat_weight',
+            'label' => 'Carat Weight',
+            'type' => 'text',
+            'sort_order' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create field options for the metal type select
+        DB::connection('legacy')->table('html_form_field_options')->insert([
+            ['html_form_field_id' => $legacyMetalFieldId, 'value' => '14k-gold', 'label' => '14K Gold', 'sort_order' => 1],
+            ['html_form_field_id' => $legacyMetalFieldId, 'value' => '18k-gold', 'label' => '18K Gold', 'sort_order' => 2],
+            ['html_form_field_id' => $legacyMetalFieldId, 'value' => 'platinum', 'label' => 'Platinum', 'sort_order' => 3],
+        ]);
+
+        // Create legacy category (store_categories) pointing to the template
+        DB::connection('legacy')->table('store_categories')->insert([
+            'id' => $category->id, // Use same ID as new category
+            'store_id' => $this->store->id,
+            'name' => 'Rings',
+            'html_form_id' => $legacyTemplateId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create legacy customer and transaction
+        $customerId = $this->createLegacyCustomer();
+
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create legacy transaction item with product_type_id pointing to the category
+        $legacyItemId = DB::connection('legacy')->table('transaction_items')->insertGetId([
+            'transaction_id' => $legacyTransactionId,
+            'sku' => 'RING-001',
+            'title' => 'Gold Ring',
+            'price' => 500.00,
+            'product_type_id' => $category->id,
+            'html_form_id' => $legacyTemplateId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create legacy meta values for this transaction item
+        DB::connection('legacy')->table('metas')->insert([
+            [
+                'metaable_type' => 'App\\Models\\TransactionItem',
+                'metaable_id' => $legacyItemId,
+                'field' => 'metal_type',
+                'value' => '14K Gold', // This should be transformed to '14k-gold'
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'metaable_type' => 'App\\Models\\TransactionItem',
+                'metaable_id' => $legacyItemId,
+                'field' => 'carat_weight',
+                'value' => '0.75',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        // Run the migration
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        // Verify transaction item was created
+        $item = TransactionItem::where('sku', 'RING-001')->first();
+        $this->assertNotNull($item);
+
+        // Verify category is set
+        $this->assertEquals($category->id, $item->category_id);
+
+        // Verify template values are in the attributes JSON
+        $attributes = $item->attributes;
+        $this->assertNotNull($attributes);
+        $this->assertArrayHasKey('template_id', $attributes);
+        $this->assertEquals($template->id, $attributes['template_id']);
+        $this->assertArrayHasKey('template_values', $attributes);
+
+        // Verify template values were migrated correctly
+        $templateValues = $attributes['template_values'];
+        $this->assertArrayHasKey((string) $metalField->id, $templateValues);
+        $this->assertArrayHasKey((string) $caratField->id, $templateValues);
+
+        // Metal type should be transformed to match the select option value
+        $this->assertEquals('14k-gold', $templateValues[(string) $metalField->id]);
+        $this->assertEquals('0.75', $templateValues[(string) $caratField->id]);
+    }
+
+    public function test_transaction_item_without_template_still_migrates(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction without category/template
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create legacy transaction item without product_type_id
+        DB::connection('legacy')->table('transaction_items')->insert([
+            'transaction_id' => $legacyTransactionId,
+            'sku' => 'ITEM-NO-CAT',
+            'title' => 'Item Without Category',
+            'price' => 100.00,
+            'product_type_id' => null,
+            'html_form_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Run the migration
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        // Verify transaction item was created
+        $item = TransactionItem::where('sku', 'ITEM-NO-CAT')->first();
+        $this->assertNotNull($item);
+
+        // Verify attributes still has proper structure
+        $attributes = $item->attributes;
+        $this->assertArrayHasKey('template_id', $attributes);
+        $this->assertNull($attributes['template_id']);
+        $this->assertArrayHasKey('template_values', $attributes);
+        $this->assertEmpty($attributes['template_values']);
     }
 }

@@ -6,12 +6,14 @@ use App\Models\Address;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Image;
+use App\Models\ProductTemplateField;
 use App\Models\Status;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class MigrateLegacyTransactions extends Command
 {
@@ -133,6 +135,47 @@ class MigrateLegacyTransactions extends Command
      * @var array<int, int>
      */
     protected array $categoryMap = [];
+
+    /**
+     * Map category_id to template_id.
+     *
+     * @var array<int, int|null>
+     */
+    protected array $categoryTemplateMap = [];
+
+    /**
+     * Maps legacy html_form_field.name => new product_template_field.id (by template).
+     * Structure: [template_id => [field_name => field_id]]
+     *
+     * @var array<int, array<string, int>>
+     */
+    protected array $templateFieldNameMap = [];
+
+    /**
+     * Maps template_id => [field_name => field_type].
+     *
+     * @var array<int, array<string, string>>
+     */
+    protected array $templateFieldTypeMap = [];
+
+    /**
+     * Maps template_id => [field_name => select_options].
+     *
+     * @var array<int, array<string, array<int, array<string, string>>>>
+     */
+    protected array $templateFieldOptionsMap = [];
+
+    /**
+     * Cache of legacy template ID => legacy template fields.
+     *
+     * @var array<int, \Illuminate\Support\Collection>
+     */
+    protected array $legacyTemplateFieldsCache = [];
+
+    /**
+     * Counter for migrated template attribute values.
+     */
+    protected int $attributeValueCount = 0;
 
     protected bool $dryRun = false;
 
@@ -266,6 +309,7 @@ class MigrateLegacyTransactions extends Command
                 ['Migrated', $migrated],
                 ['Skipped', $skipped],
                 ['Soft-deleted (synced)', $synced],
+                ['Template attribute values', $this->attributeValueCount],
                 ['Errors', $errors],
             ]
         );
@@ -688,10 +732,20 @@ class MigrateLegacyTransactions extends Command
                 continue;
             }
 
-            // Find or create category by looking up product_type_id in store_categories
-            $categoryId = $this->findOrCreateCategoryByLegacyProductType(
-                $legacyItem->product_type_id ?? $legacyItem->category_id ?? null
-            );
+            // Find category and get template_id from category
+            $legacyProductTypeId = $legacyItem->product_type_id ?? $legacyItem->category_id ?? null;
+            $categoryResult = $this->findOrCreateCategoryWithTemplate($legacyProductTypeId, $legacyItem->html_form_id ?? null);
+            $categoryId = $categoryResult['category_id'];
+            $templateId = $categoryResult['template_id'];
+
+            // Build initial attributes with legacy info and template reference
+            $attributes = [
+                'legacy_category_id' => $legacyItem->category_id,
+                'legacy_product_type_id' => $legacyItem->product_type_id ?? null,
+                'legacy_html_form_id' => $legacyItem->html_form_id ?? null,
+                'template_id' => $templateId,
+                'template_values' => [], // Will be populated by migrateTransactionItemMetas
+            ];
 
             // Use DB insert to preserve exact timestamps and original ID
             DB::table('transaction_items')->insert([
@@ -710,16 +764,15 @@ class MigrateLegacyTransactions extends Command
                 'is_added_to_inventory' => (bool) ($legacyItem->is_added_to_inventory ?? false),
                 'date_added_to_inventory' => $legacyItem->date_added_to_inventory,
                 'reviewed_at' => $legacyItem->reviewed_date_time ?? null,
-                'attributes' => json_encode([
-                    'legacy_category_id' => $legacyItem->category_id,
-                    'legacy_product_type_id' => $legacyItem->product_type_id ?? null,
-                    'legacy_html_form_id' => $legacyItem->html_form_id ?? null,
-                ]),
+                'attributes' => json_encode($attributes),
                 'created_at' => $legacyItem->created_at,
                 'updated_at' => $legacyItem->updated_at,
             ]);
 
             $item = TransactionItem::find($legacyItem->id);
+
+            // Migrate template attribute values from legacy metas table
+            $this->migrateTransactionItemMetas($legacyItem, $item, $templateId);
 
             // Migrate item images
             if (! $this->option('skip-images')) {
@@ -1118,5 +1171,276 @@ class MigrateLegacyTransactions extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Find category and get its template_id for template value migration.
+     * Returns array with 'category_id' and 'template_id'.
+     *
+     * @return array{category_id: int|null, template_id: int|null}
+     */
+    protected function findOrCreateCategoryWithTemplate(?int $productTypeId, ?int $legacyHtmlFormId): array
+    {
+        $categoryId = $this->findOrCreateCategoryByLegacyProductType($productTypeId);
+
+        if (! $categoryId) {
+            return ['category_id' => null, 'template_id' => null];
+        }
+
+        // Check template cache first
+        if (isset($this->categoryTemplateMap[$categoryId])) {
+            $templateId = $this->categoryTemplateMap[$categoryId];
+
+            // Ensure template fields are mapped
+            if ($templateId && $legacyHtmlFormId) {
+                $this->ensureTemplateFieldsMapped($legacyHtmlFormId, $templateId);
+            }
+
+            return ['category_id' => $categoryId, 'template_id' => $templateId];
+        }
+
+        // Get template_id from category
+        $category = Category::withoutGlobalScopes()->find($categoryId);
+        $templateId = $category?->template_id;
+
+        $this->categoryTemplateMap[$categoryId] = $templateId;
+
+        // Ensure template fields are mapped
+        if ($templateId && $legacyHtmlFormId) {
+            $this->ensureTemplateFieldsMapped($legacyHtmlFormId, $templateId);
+        }
+
+        return ['category_id' => $categoryId, 'template_id' => $templateId];
+    }
+
+    /**
+     * Migrate transaction item attribute values from the legacy metas table.
+     *
+     * Legacy structure:
+     * - metas.metaable_type = 'App\Models\TransactionItem'
+     * - metas.metaable_id = transaction item ID
+     * - metas.field = field name (matches html_form_fields.name)
+     * - metas.value = the actual value
+     *
+     * New structure:
+     * - Stored in transaction_items.attributes JSON as 'template_values' key
+     * - Format: { field_id: value } for each migrated field
+     */
+    protected function migrateTransactionItemMetas(object $legacyItem, TransactionItem $newItem, ?int $templateId): void
+    {
+        if (! $templateId) {
+            return;
+        }
+
+        // Get metas for this transaction item (legacy uses metaable_type/metaable_id with double 'a')
+        $legacyMetas = DB::connection('legacy')
+            ->table('metas')
+            ->where('metaable_type', 'App\\Models\\TransactionItem')
+            ->where('metaable_id', $legacyItem->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($legacyMetas->isEmpty()) {
+            return;
+        }
+
+        // Get the field mapping for this template
+        $fieldMap = $this->templateFieldNameMap[$templateId] ?? [];
+        $fieldTypeMap = $this->templateFieldTypeMap[$templateId] ?? [];
+        $fieldOptionsMap = $this->templateFieldOptionsMap[$templateId] ?? [];
+
+        if (empty($fieldMap)) {
+            return;
+        }
+
+        $templateValues = [];
+
+        foreach ($legacyMetas as $meta) {
+            // Skip empty values
+            if ($meta->value === null || $meta->value === '') {
+                continue;
+            }
+
+            $fieldName = strtolower($meta->field);
+            $matchedFieldName = null;
+            $newFieldId = null;
+
+            // Try different name formats
+            if (isset($fieldMap[$fieldName])) {
+                $matchedFieldName = $fieldName;
+                $newFieldId = $fieldMap[$fieldName];
+            } elseif (isset($fieldMap[str_replace('-', '_', $fieldName)])) {
+                $matchedFieldName = str_replace('-', '_', $fieldName);
+                $newFieldId = $fieldMap[$matchedFieldName];
+            } elseif (isset($fieldMap[Str::snake($fieldName)])) {
+                $matchedFieldName = Str::snake($fieldName);
+                $newFieldId = $fieldMap[$matchedFieldName];
+            }
+
+            if (! $newFieldId || ! $matchedFieldName) {
+                continue;
+            }
+
+            // Get field type and options for value transformation
+            $fieldType = $fieldTypeMap[$matchedFieldName] ?? 'text';
+            $fieldOptions = $fieldOptionsMap[$matchedFieldName] ?? [];
+
+            // Transform value for select fields
+            $value = $this->transformMetaValue($meta->value, $fieldType, $fieldOptions);
+
+            // Store using field_id as key for consistency with product attribute values
+            $templateValues[(string) $newFieldId] = $value;
+            $this->attributeValueCount++;
+        }
+
+        if (! empty($templateValues)) {
+            // Update the attributes JSON to include template_values
+            $attributes = $newItem->attributes ?? [];
+            $attributes['template_values'] = $templateValues;
+            $newItem->update(['attributes' => $attributes]);
+        }
+    }
+
+    /**
+     * Ensure template fields are mapped for an existing template.
+     * This populates templateFieldNameMap, templateFieldTypeMap, and templateFieldOptionsMap.
+     */
+    protected function ensureTemplateFieldsMapped(int $legacyTemplateId, int $templateId): void
+    {
+        // If already mapped, skip
+        if (isset($this->templateFieldNameMap[$templateId]) && ! empty($this->templateFieldNameMap[$templateId])) {
+            return;
+        }
+
+        // Fetch legacy fields
+        if (! isset($this->legacyTemplateFieldsCache[$legacyTemplateId])) {
+            $legacyFields = DB::connection('legacy')
+                ->table('html_form_fields')
+                ->where('html_form_id', $legacyTemplateId)
+                ->orderBy('sort_order')
+                ->get();
+
+            $this->legacyTemplateFieldsCache[$legacyTemplateId] = $legacyFields;
+        }
+
+        $legacyFields = $this->legacyTemplateFieldsCache[$legacyTemplateId];
+
+        // Get existing new fields
+        $existingFields = ProductTemplateField::where('product_template_id', $templateId)->get();
+        $existingFieldsByName = $existingFields->keyBy(fn ($f) => strtolower($f->canonical_name ?? $f->name));
+        $existingFieldsBySnakeName = $existingFields->keyBy(fn ($f) => strtolower($f->name));
+
+        $this->templateFieldNameMap[$templateId] = [];
+        $this->templateFieldTypeMap[$templateId] = [];
+        $this->templateFieldOptionsMap[$templateId] = [];
+
+        foreach ($legacyFields as $legacyField) {
+            $canonicalName = strtolower($legacyField->name);
+
+            // Try to find matching existing field
+            $existingField = $existingFieldsByName[$canonicalName]
+                ?? $existingFieldsBySnakeName[$canonicalName]
+                ?? $existingFieldsBySnakeName[Str::snake($canonicalName)]
+                ?? null;
+
+            if (! $existingField) {
+                continue;
+            }
+
+            $fieldType = $this->mapFieldType($legacyField->type ?? 'text');
+
+            // Store mappings
+            $this->templateFieldNameMap[$templateId][$canonicalName] = $existingField->id;
+            $this->templateFieldTypeMap[$templateId][$canonicalName] = $fieldType;
+
+            // Get field options for select/radio/checkbox fields
+            if (in_array($fieldType, ['select', 'radio', 'checkbox'])) {
+                $legacyOptions = DB::connection('legacy')
+                    ->table('html_form_field_options')
+                    ->where('html_form_field_id', $legacyField->id)
+                    ->orderBy('sort_order')
+                    ->get();
+
+                $options = [];
+                foreach ($legacyOptions as $legacyOption) {
+                    $options[] = [
+                        'value' => $legacyOption->value ?? Str::slug($legacyOption->label ?? ''),
+                        'label' => $legacyOption->label ?? $legacyOption->value ?? '',
+                    ];
+                }
+
+                $this->templateFieldOptionsMap[$templateId][$canonicalName] = $options;
+            }
+        }
+    }
+
+    /**
+     * Transform a legacy meta value to match the new field format.
+     * Handles select fields by matching against available options.
+     *
+     * @param  array<int, array{value: string, label: string}>  $fieldOptions
+     */
+    protected function transformMetaValue(string $value, string $fieldType, array $fieldOptions): string
+    {
+        // Only transform select field values
+        if ($fieldType !== 'select' || empty($fieldOptions)) {
+            return $value;
+        }
+
+        // Build a map of option values (existing values in the select)
+        $optionValues = collect($fieldOptions)->pluck('value')->filter()->toArray();
+
+        // If value already matches an option exactly, use it
+        if (in_array($value, $optionValues, true)) {
+            return $value;
+        }
+
+        // Try lowercase match
+        $lowerValue = strtolower($value);
+        foreach ($optionValues as $optionValue) {
+            if (strtolower($optionValue) === $lowerValue) {
+                return $optionValue;
+            }
+        }
+
+        // Try slugified match (handles "Natural Diamond" -> "natural-diamond")
+        $slugValue = Str::slug($value);
+        foreach ($optionValues as $optionValue) {
+            if ($optionValue === $slugValue) {
+                return $optionValue;
+            }
+        }
+
+        // Try matching by label
+        foreach ($fieldOptions as $option) {
+            $label = $option['label'] ?? '';
+            if (strtolower($label) === $lowerValue || Str::slug($label) === $slugValue) {
+                return $option['value'] ?? $value;
+            }
+        }
+
+        // Return original value if no match found
+        return $value;
+    }
+
+    /**
+     * Map legacy field type to new field type.
+     */
+    protected function mapFieldType(?string $legacyType): string
+    {
+        if (! $legacyType) {
+            return 'text';
+        }
+
+        return match (strtolower($legacyType)) {
+            'text', 'string' => 'text',
+            'textarea', 'text_area' => 'textarea',
+            'number', 'integer', 'float', 'decimal' => 'number',
+            'select', 'dropdown' => 'select',
+            'checkbox' => 'checkbox',
+            'radio' => 'radio',
+            'date', 'datetime' => 'date',
+            default => 'text',
+        };
     }
 }
