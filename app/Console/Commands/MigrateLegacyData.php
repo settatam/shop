@@ -141,9 +141,11 @@ class MigrateLegacyData extends Command
             }
 
             // Step 4: Migrate Categories (from store_categories, with template_id linking)
-            if (! $this->option('skip-categories')) {
-                $this->migrateCategories($legacyStoreId, $isDryRun);
-            }
+            // DISABLED: Categories migration is disabled until comprehensive cutover plan is ready
+            // if (! $this->option('skip-categories')) {
+            //     $this->migrateCategories($legacyStoreId, $isDryRun);
+            // }
+            $this->warn('Categories migration is disabled - using legacy sync instead');
 
             // Step 5: Create Status Mapping
             $this->createStatusMapping($legacyStoreId, $isDryRun);
@@ -162,9 +164,11 @@ class MigrateLegacyData extends Command
             }
 
             // Step 7: Migrate Transactions (preserving IDs)
-            if (! $this->option('skip-transactions')) {
-                $this->migrateTransactions($legacyStoreId, $isDryRun, $limit);
-            }
+            // DISABLED: Transaction migration is disabled until comprehensive cutover plan is ready
+            // if (! $this->option('skip-transactions')) {
+            //     $this->migrateTransactions($legacyStoreId, $isDryRun, $limit);
+            // }
+            $this->warn('Transactions migration is disabled - using legacy sync instead');
 
             // Step 8: Migrate SMS Messages
             if (! $this->option('skip-sms')) {

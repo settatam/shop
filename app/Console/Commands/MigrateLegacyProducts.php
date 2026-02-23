@@ -124,6 +124,13 @@ class MigrateLegacyProducts extends Command
 
     public function handle(): int
     {
+        // DISABLED: Product migration is disabled until comprehensive cutover plan is ready
+        $this->error('Product migration is disabled - using legacy sync instead.');
+        $this->info('This command will be re-enabled when the comprehensive cutover plan is ready.');
+
+        return 1;
+
+        // @codeCoverageIgnoreStart
         $legacyStoreId = (int) $this->option('store-id');
         $newStoreId = $this->option('new-store-id') ? (int) $this->option('new-store-id') : null;
         $limit = (int) $this->option('limit');
