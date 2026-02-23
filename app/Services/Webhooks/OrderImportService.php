@@ -4,6 +4,7 @@ namespace App\Services\Webhooks;
 
 use App\Enums\Platform;
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PlatformOrder;
@@ -11,7 +12,10 @@ use App\Models\ProductVariant;
 use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
+use App\Notifications\InventoryOversoldNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class OrderImportService
 {
@@ -716,6 +720,8 @@ class OrderImportService
 
     protected function createOrderItems(Order $order, PlatformOrder $platformOrder): void
     {
+        $productsToSync = [];
+
         foreach ($platformOrder->line_items as $item) {
             $variant = $this->findMatchingVariant($item, $order->store_id);
 
@@ -732,6 +738,31 @@ class OrderImportService
                 'discount' => $item['discount'] ?? 0,
                 'tax' => $item['tax'] ?? 0,
             ]);
+
+            // Reduce inventory for matching variant using proper stock management
+            if ($variant && $item['quantity'] > 0) {
+                $this->reduceVariantStock(
+                    $variant,
+                    (int) $item['quantity'],
+                    $order->store,
+                    $platformOrder->marketplace->platform->value,
+                    $platformOrder->external_order_number
+                );
+
+                // Track product for inventory sync to other platforms
+                if ($variant->product && ! in_array($variant->product_id, $productsToSync)) {
+                    $productsToSync[] = $variant->product_id;
+                }
+            }
+        }
+
+        // Sync inventory to all other platforms for affected products
+        $platformName = $platformOrder->marketplace?->platform->value ?? 'external';
+        foreach ($productsToSync as $productId) {
+            $product = \App\Models\Product::find($productId);
+            if ($product) {
+                $product->syncInventoryToAllPlatforms("{$platformName}_order_received");
+            }
         }
     }
 
@@ -785,5 +816,116 @@ class OrderImportService
             'platform_data' => $normalizedData['platform_data'],
             'last_synced_at' => now(),
         ]);
+    }
+
+    /**
+     * Reduce stock for a variant using proper locking to prevent overselling.
+     *
+     * For external platform orders, we're more lenient - the sale already happened
+     * on the platform, so we reduce what we can and notify if we go short.
+     */
+    protected function reduceVariantStock(
+        ProductVariant $variant,
+        int $quantity,
+        Store $store,
+        string $platform,
+        ?string $orderNumber = null
+    ): void {
+        $remaining = $quantity;
+
+        // Try to reduce from inventory records first (proper warehouse-level tracking)
+        $inventories = Inventory::where('product_variant_id', $variant->id)
+            ->where('quantity', '>', 0)
+            ->orderBy('quantity', 'desc')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($inventories as $inventory) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $available = $inventory->quantity - ($inventory->reserved_quantity ?? 0);
+            $reduceBy = min($available, $remaining);
+
+            if ($reduceBy > 0) {
+                // Atomic conditional update to prevent going below zero
+                $updated = Inventory::where('id', $inventory->id)
+                    ->where('quantity', '>=', $reduceBy)
+                    ->update([
+                        'quantity' => DB::raw("quantity - {$reduceBy}"),
+                        'last_sold_at' => now(),
+                    ]);
+
+                if ($updated) {
+                    $remaining -= $reduceBy;
+                }
+            }
+        }
+
+        // If there's still remaining quantity, reduce from variant directly
+        // This handles cases where inventory tracking isn't set up
+        if ($remaining > 0 && $variant->quantity > 0) {
+            $reduceBy = min($variant->quantity, $remaining);
+
+            // Atomic conditional update
+            $updated = ProductVariant::where('id', $variant->id)
+                ->where('quantity', '>=', $reduceBy)
+                ->update([
+                    'quantity' => DB::raw("quantity - {$reduceBy}"),
+                ]);
+
+            if ($updated) {
+                $remaining -= $reduceBy;
+            }
+        }
+
+        // Notify store owners if we couldn't fulfill the entire quantity
+        if ($remaining > 0) {
+            Log::warning('OrderImportService: Insufficient stock for external order', [
+                'variant_id' => $variant->id,
+                'sku' => $variant->sku,
+                'requested' => $quantity,
+                'unfulfilled' => $remaining,
+                'store_id' => $store->id,
+                'platform' => $platform,
+            ]);
+
+            // Send notification to store owners
+            $this->notifyOversold($store, $variant, $quantity, $remaining, $platform, $orderNumber);
+        }
+    }
+
+    /**
+     * Notify store owners about an oversold situation.
+     */
+    protected function notifyOversold(
+        Store $store,
+        ProductVariant $variant,
+        int $requested,
+        int $unfulfilled,
+        string $platform,
+        ?string $orderNumber = null
+    ): void {
+        // Get store owners/admins to notify
+        $usersToNotify = $store->users()
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->get();
+
+        if ($usersToNotify->isEmpty()) {
+            return;
+        }
+
+        Notification::send(
+            $usersToNotify,
+            new InventoryOversoldNotification(
+                $store,
+                $variant,
+                $requested,
+                $unfulfilled,
+                $platform,
+                $orderNumber
+            )
+        );
     }
 }

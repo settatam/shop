@@ -24,6 +24,7 @@
         "league/flysystem-aws-s3-v3": "^3.0",
         "meilisearch/meilisearch-php": "^1.16",
         "picqer/php-barcode-generator": "^3.2",
+        "predis/predis": "^3.4",
         "twig/twig": "^3.22",
         "twilio/sdk": "^8.10"
     },

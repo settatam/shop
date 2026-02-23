@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Facades\Channel;
 use App\Models\Activity;
 use App\Models\User;
+use App\Services\Platforms\ChannelService;
 use App\Services\StoreContext;
+use Illuminate\Foundation\AliasLoader;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -18,6 +21,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(StoreContext::class, function () {
             return new StoreContext;
         });
+
+        $this->app->singleton(ChannelService::class, function () {
+            return new ChannelService;
+        });
+
+        // Register Channel facade alias
+        AliasLoader::getInstance()->alias('Channel', Channel::class);
 
         $this->app->singleton(
             \Laravel\Fortify\Contracts\RegisterResponse::class,

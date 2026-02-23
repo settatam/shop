@@ -107,25 +107,88 @@ class Product extends Model
 
     protected static function booted(): void
     {
-        // When product is created as active, auto-list on "In Store"
+        // When product is created, create listings for ALL active channels
+        // Local channels get 'listed' status, external get 'not_listed'
         static::created(function (Product $product) {
-            if ($product->status === self::STATUS_ACTIVE) {
-                $product->listOnInStore();
-            }
+            $product->createListingsForAllActiveChannels();
         });
 
         // When product status changes, manage listings accordingly
         static::updated(function (Product $product) {
             if ($product->wasChanged('status')) {
                 if ($product->status === self::STATUS_ACTIVE) {
-                    // When product becomes active, auto-list on "In Store" channel only
-                    $product->listOnInStore();
+                    // When product becomes active, ensure all listings exist and list local channels
+                    $product->createListingsForAllActiveChannels();
                 } else {
-                    // When product moves away from active, unlist from ALL platforms
-                    $product->unlistFromAllPlatforms();
+                    // When product moves away from active, end all listed items
+                    $product->endAllListings();
                 }
             }
         });
+    }
+
+    /**
+     * Create listings for ALL active channels.
+     * Local channels get 'listed' status (if product is active), external get 'not_listed'.
+     *
+     * @return array<PlatformListing>
+     */
+    public function createListingsForAllActiveChannels(): array
+    {
+        $channels = SalesChannel::where('store_id', $this->store_id)
+            ->where('is_active', true)
+            ->get();
+
+        $listings = [];
+        foreach ($channels as $channel) {
+            $listings[] = $this->ensureListingExists($channel);
+        }
+
+        return $listings;
+    }
+
+    /**
+     * Ensure a listing exists for the given channel.
+     * Creates one if it doesn't exist with appropriate default status.
+     */
+    public function ensureListingExists(SalesChannel $channel): PlatformListing
+    {
+        $existingListing = $this->platformListings()
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+
+        if ($existingListing) {
+            // If product just became active and this is a local channel, list it
+            if ($this->status === self::STATUS_ACTIVE && $channel->is_local && $existingListing->isNotListed()) {
+                $existingListing->markAsListed();
+            }
+
+            return $existingListing;
+        }
+
+        // Determine initial status:
+        // - Local channels: 'listed' if product is active, 'not_listed' otherwise
+        // - External channels: always 'not_listed' initially (user must explicitly list)
+        $status = PlatformListing::STATUS_NOT_LISTED;
+        if ($channel->is_local && $this->status === self::STATUS_ACTIVE) {
+            $status = PlatformListing::STATUS_LISTED;
+        }
+
+        $defaultVariant = $this->variants()->first();
+
+        return PlatformListing::create([
+            'sales_channel_id' => $channel->id,
+            'store_marketplace_id' => $channel->store_marketplace_id,
+            'product_id' => $this->id,
+            'status' => $status,
+            'platform_price' => $defaultVariant?->price ?? 0,
+            'platform_quantity' => $defaultVariant?->quantity ?? 0,
+            'platform_data' => [
+                'title' => $this->title,
+                'description' => $this->description,
+            ],
+            'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+        ]);
     }
 
     /**
@@ -149,20 +212,37 @@ class Product extends Model
     /**
      * List product on a specific sales channel.
      */
-    public function listOnChannel(SalesChannel $channel, string $status = 'active'): PlatformListing
+    public function listOnChannel(SalesChannel $channel, string $status = PlatformListing::STATUS_LISTED): PlatformListing
     {
         $existingListing = $this->platformListings()
             ->where('sales_channel_id', $channel->id)
             ->first();
 
         if ($existingListing) {
-            // Update status if listing exists
-            if ($existingListing->status !== $status) {
-                $existingListing->update(['status' => $status]);
+            // Normalize legacy status to new status
+            $normalizedStatus = match ($status) {
+                'active' => PlatformListing::STATUS_LISTED,
+                'unlisted', 'draft', 'not_for_sale' => PlatformListing::STATUS_NOT_LISTED,
+                default => $status,
+            };
+
+            // Update status if listing exists and status is different
+            if ($existingListing->normalized_status !== $normalizedStatus) {
+                $existingListing->update([
+                    'status' => $normalizedStatus,
+                    'published_at' => $normalizedStatus === PlatformListing::STATUS_LISTED ? now() : $existingListing->published_at,
+                ]);
             }
 
             return $existingListing;
         }
+
+        // Normalize status for creation
+        $normalizedStatus = match ($status) {
+            'active' => PlatformListing::STATUS_LISTED,
+            'unlisted', 'draft', 'not_for_sale' => PlatformListing::STATUS_NOT_LISTED,
+            default => $status,
+        };
 
         $defaultVariant = $this->variants()->first();
 
@@ -170,13 +250,14 @@ class Product extends Model
             'sales_channel_id' => $channel->id,
             'store_marketplace_id' => $channel->store_marketplace_id,
             'product_id' => $this->id,
-            'status' => $status,
+            'status' => $normalizedStatus,
             'platform_price' => $defaultVariant?->price ?? 0,
             'platform_quantity' => $defaultVariant?->quantity ?? 0,
             'platform_data' => [
                 'title' => $this->title,
                 'description' => $this->description,
             ],
+            'published_at' => $normalizedStatus === PlatformListing::STATUS_LISTED ? now() : null,
         ]);
     }
 
@@ -193,31 +274,56 @@ class Product extends Model
 
         $listings = [];
         foreach ($channels as $channel) {
-            $listings[] = $this->listOnChannel($channel);
+            $listings[] = $this->listOnChannel($channel, PlatformListing::STATUS_LISTED);
         }
 
         return $listings;
     }
 
     /**
-     * Unlist product from a specific channel.
+     * End (unlist) product from a specific channel.
      */
     public function unlistFromChannel(SalesChannel $channel): bool
     {
         return $this->platformListings()
             ->where('sales_channel_id', $channel->id)
-            ->update(['status' => 'unlisted']) > 0;
+            ->update(['status' => PlatformListing::STATUS_ENDED]) > 0;
     }
 
     /**
-     * Unlist product from ALL platforms/channels.
+     * End (unlist) product from ALL platforms/channels.
      * Called when product status changes away from active.
+     *
+     * @deprecated Use endAllListings() instead
      */
     public function unlistFromAllPlatforms(): int
     {
+        return $this->endAllListings();
+    }
+
+    /**
+     * End all active listings for this product.
+     * Called when product status changes away from active.
+     */
+    public function endAllListings(): int
+    {
         return $this->platformListings()
-            ->whereIn('status', ['active', 'pending'])
-            ->update(['status' => 'unlisted']);
+            ->whereIn('status', [
+                PlatformListing::STATUS_LISTED,
+                PlatformListing::STATUS_PENDING,
+                'active', // Legacy status
+            ])
+            ->update(['status' => PlatformListing::STATUS_ENDED]);
+    }
+
+    /**
+     * Dispatch a job to sync inventory to all platform listings.
+     * If quantity is zero, listings will be ended on all platforms.
+     * Otherwise, inventory will be updated on all platforms.
+     */
+    public function syncInventoryToAllPlatforms(?string $reason = null): void
+    {
+        \App\Jobs\SyncProductInventoryJob::dispatch($this, $reason);
     }
 
     /**
@@ -237,7 +343,7 @@ class Product extends Model
     {
         return $this->platformListings()
             ->where('sales_channel_id', $channel->id)
-            ->where('status', 'active')
+            ->whereIn('status', [PlatformListing::STATUS_LISTED, 'active'])
             ->exists();
     }
 

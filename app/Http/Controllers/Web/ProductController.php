@@ -28,6 +28,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -257,7 +258,7 @@ class ProductController extends Controller
     {
         $cacheKey = "store_{$storeId}_brand_options";
 
-        return cache()->remember($cacheKey, now()->addHour(), function () use ($storeId) {
+        $cached = cache()->remember($cacheKey, now()->addHour(), function () use ($storeId) {
             // Get brand-type fields from templates
             $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
                 ->where('type', ProductTemplateField::TYPE_BRAND)
@@ -284,6 +285,9 @@ class ProductController extends Controller
 
             return $brands;
         });
+
+        // Ensure we always return a Collection (cache may return array)
+        return collect($cached);
     }
 
     /**
@@ -398,6 +402,18 @@ class ProductController extends Controller
 
         // Determine has_variants based on user input (not just count)
         $hasVariants = $validated['has_variants'] ?? (count($validated['variants']) > 1);
+
+        // Validate: cannot publish if quantity is 0 and sell_out_of_stock is false
+        $isPublished = $validated['is_published'] ?? false;
+        $sellOutOfStock = $validated['sell_out_of_stock'] ?? false;
+        if ($isPublished && ! $sellOutOfStock) {
+            $totalQuantity = collect($validated['variants'] ?? [])->sum('quantity');
+            if ($totalQuantity <= 0) {
+                throw ValidationException::withMessages([
+                    'is_published' => 'Products with no available stock cannot be published unless "Continue selling when out of stock" is enabled.',
+                ]);
+            }
+        }
 
         $product = Product::create([
             'store_id' => $store->id,
@@ -977,6 +993,17 @@ class ProductController extends Controller
         $status = $validated['status'] ?? $product->status ?? Product::STATUS_DRAFT;
         $isPublished = $status === Product::STATUS_ACTIVE;
         $isDraft = $status === Product::STATUS_DRAFT;
+
+        // Validate: cannot make active if quantity is 0 and sell_out_of_stock is false
+        $sellOutOfStock = $validated['sell_out_of_stock'] ?? false;
+        if ($status === Product::STATUS_ACTIVE && ! $sellOutOfStock) {
+            $totalQuantity = collect($validated['variants'] ?? [])->sum('quantity');
+            if ($totalQuantity <= 0) {
+                throw ValidationException::withMessages([
+                    'status' => 'Products with no available stock cannot be made active unless "Continue selling when out of stock" is enabled.',
+                ]);
+            }
+        }
 
         $product->update([
             'title' => $validated['title'],

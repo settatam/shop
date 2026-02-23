@@ -7,6 +7,7 @@ use App\Models\SalesChannel;
 use App\Models\StoreMarketplace;
 use App\Models\Warehouse;
 use App\Services\StoreContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -37,6 +38,7 @@ class SalesChannelController extends Controller
                 'is_default' => $channel->is_default,
                 'color' => $channel->color,
                 'sort_order' => $channel->sort_order,
+                'active_listing_count' => $channel->getActiveListingCount(),
                 'warehouse' => $channel->warehouse ? [
                     'id' => $channel->warehouse->id,
                     'name' => $channel->warehouse->name,
@@ -197,5 +199,29 @@ class SalesChannelController extends Controller
         }
 
         return back()->with('success', 'Channel order updated.');
+    }
+
+    /**
+     * Get deactivation preflight info (listing count that will be affected).
+     */
+    public function deactivatePreflight(SalesChannel $salesChannel): JsonResponse
+    {
+        $storeId = $this->storeContext->getCurrentStoreId();
+
+        if ($salesChannel->store_id !== $storeId) {
+            abort(403);
+        }
+
+        $activeListingCount = $salesChannel->getActiveListingCount();
+
+        return response()->json([
+            'channel_id' => $salesChannel->id,
+            'channel_name' => $salesChannel->name,
+            'active_listing_count' => $activeListingCount,
+            'is_external' => $salesChannel->isExternal(),
+            'warning' => $activeListingCount > 0
+                ? "This will end {$activeListingCount} active listing(s) on this channel. For external platforms, items will be delisted which may take some time."
+                : null,
+        ]);
     }
 }

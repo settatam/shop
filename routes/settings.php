@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\JobLogsController;
 use App\Http\Controllers\Settings\MaintenanceController;
 use App\Http\Controllers\Settings\MarketplaceController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -116,6 +117,7 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::put('/{salesChannel}', [SalesChannelController::class, 'update'])->name('update');
         Route::delete('/{salesChannel}', [SalesChannelController::class, 'destroy'])->name('destroy');
         Route::post('/reorder', [SalesChannelController::class, 'reorder'])->name('reorder');
+        Route::get('/{salesChannel}/deactivate-preflight', [SalesChannelController::class, 'deactivatePreflight'])->name('deactivate-preflight');
     });
 
     // Maintenance
@@ -123,6 +125,14 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::get('/', [MaintenanceController::class, 'index'])->name('index');
         Route::post('/reindex-search', [MaintenanceController::class, 'reindexSearch'])->name('reindex-search');
         Route::post('/reindex-model/{model}', [MaintenanceController::class, 'reindexModel'])->name('reindex-model');
+    });
+
+    // Job Logs (Redis-based queue monitoring)
+    Route::middleware(['store', 'onboarding'])->prefix('settings/job-logs')->name('settings.job-logs.')->group(function () {
+        Route::get('/', [JobLogsController::class, 'index'])->name('index');
+        Route::get('/logs', [JobLogsController::class, 'logs'])->name('logs');
+        Route::get('/stats', [JobLogsController::class, 'stats'])->name('stats');
+        Route::get('/{jobId}', [JobLogsController::class, 'show'])->name('show');
     });
 
     // Marketplace Integrations

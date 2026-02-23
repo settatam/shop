@@ -457,9 +457,24 @@ async function generateSku(variantIndex: number = 0) {
     }
 }
 
+// Helper to get validation error for a field (supports nested keys like "variants.0.sku")
+function getError(key: string): string | undefined {
+    return form.errors[key as keyof typeof form.errors];
+}
+
+// Check if form has any errors
+const hasAnyErrors = computed(() => Object.keys(form.errors).length > 0);
+
 function submit() {
     form.post('/products', {
         forceFormData: true,
+        preserveState: true,
+        preserveScroll: true,
+        onError: (errors) => {
+            console.error('Validation errors:', errors);
+            // Scroll to the top to show error summary
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
     });
 }
 </script>
@@ -470,6 +485,27 @@ function submit() {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
             <form @submit.prevent="submit" class="space-y-6">
+                <!-- Validation Error Summary -->
+                <div v-if="hasAnyErrors" class="rounded-md bg-red-50 p-4 dark:bg-red-900/30">
+                    <div class="flex">
+                        <div class="shrink-0">
+                            <svg class="size-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800 dark:text-red-200">
+                                There were errors with your submission
+                            </h3>
+                            <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                                <ul role="list" class="list-disc space-y-1 pl-5">
+                                    <li v-for="(error, key) in form.errors" :key="key">{{ error }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Header -->
                 <div class="flex items-center justify-between">
                     <div>
@@ -603,7 +639,7 @@ function submit() {
                                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                         <div>
                                             <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                SKU
+                                                SKU <span class="text-red-500">*</span>
                                             </label>
                                             <div class="mt-1 flex gap-2">
                                                 <input
@@ -611,7 +647,10 @@ function submit() {
                                                     v-model="form.variants[0].sku"
                                                     type="text"
                                                     :disabled="hasVariants"
-                                                    class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                                    :class="[
+                                                        'block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm/6 dark:bg-gray-700 dark:text-white disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600',
+                                                        getError('variants.0.sku') ? 'ring-red-300 focus:ring-red-500 dark:ring-red-600' : 'ring-gray-300 focus:ring-indigo-600 dark:ring-gray-600'
+                                                    ]"
                                                 />
                                                 <button
                                                     v-if="categoryHasSkuFormat && !hasVariants"
@@ -624,7 +663,8 @@ function submit() {
                                                     <SparklesIcon class="size-5" :class="{ 'animate-pulse': generatingSku }" />
                                                 </button>
                                             </div>
-                                            <p v-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            <p v-if="getError('variants.0.sku')" class="mt-1 text-sm text-red-600">{{ getError('variants.0.sku') }}</p>
+                                            <p v-else-if="hasVariants" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                                 SKU is managed per variant
                                             </p>
                                             <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -715,9 +755,13 @@ function submit() {
                                                     min="0"
                                                     required
                                                     :disabled="hasVariants"
-                                                    class="block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                                    :class="[
+                                                        'block w-full rounded-none rounded-r-md border-0 bg-white px-3 py-1.5 text-gray-900 ring-1 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm/6 dark:bg-gray-700 dark:text-white disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600',
+                                                        getError('variants.0.price') ? 'ring-red-300 focus:ring-red-500 dark:ring-red-600' : 'ring-gray-300 focus:ring-indigo-600 dark:ring-gray-600'
+                                                    ]"
                                                 />
                                             </div>
+                                            <p v-if="getError('variants.0.price')" class="mt-1 text-sm text-red-600">{{ getError('variants.0.price') }}</p>
                                         </div>
 
                                         <div>
@@ -885,7 +929,10 @@ function submit() {
                                                         v-model="variant.sku"
                                                         type="text"
                                                         required
-                                                        class="block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        :class="[
+                                                            'block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm/6 dark:bg-gray-700 dark:text-white',
+                                                            getError(`variants.${index}.sku`) ? 'ring-red-300 focus:ring-red-500 dark:ring-red-600' : 'ring-gray-300 focus:ring-indigo-600 dark:ring-gray-600'
+                                                        ]"
                                                     />
                                                     <button
                                                         v-if="categoryHasSkuFormat"
@@ -898,6 +945,7 @@ function submit() {
                                                         <SparklesIcon class="size-4" :class="{ 'animate-pulse': generatingSku }" />
                                                     </button>
                                                 </div>
+                                                <p v-if="getError(`variants.${index}.sku`)" class="mt-1 text-sm text-red-600">{{ getError(`variants.${index}.sku`) }}</p>
                                             </div>
 
                                             <div>
@@ -934,8 +982,12 @@ function submit() {
                                                     step="0.01"
                                                     min="0"
                                                     required
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    :class="[
+                                                        'mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm/6 dark:bg-gray-700 dark:text-white',
+                                                        getError(`variants.${index}.price`) ? 'ring-red-300 focus:ring-red-500 dark:ring-red-600' : 'ring-gray-300 focus:ring-indigo-600 dark:ring-gray-600'
+                                                    ]"
                                                 />
+                                                <p v-if="getError(`variants.${index}.price`)" class="mt-1 text-sm text-red-600">{{ getError(`variants.${index}.price`) }}</p>
                                             </div>
 
                                             <div>
@@ -960,8 +1012,12 @@ function submit() {
                                                     type="number"
                                                     min="0"
                                                     required
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    :class="[
+                                                        'mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm/6 dark:bg-gray-700 dark:text-white',
+                                                        getError(`variants.${index}.quantity`) ? 'ring-red-300 focus:ring-red-500 dark:ring-red-600' : 'ring-gray-300 focus:ring-indigo-600 dark:ring-gray-600'
+                                                    ]"
                                                 />
+                                                <p v-if="getError(`variants.${index}.quantity`)" class="mt-1 text-sm text-red-600">{{ getError(`variants.${index}.quantity`) }}</p>
                                             </div>
 
                                             <div>

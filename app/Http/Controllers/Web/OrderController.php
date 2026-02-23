@@ -1222,8 +1222,9 @@ class OrderController extends Controller
 
         $products = $products
             ->filter(function ($product) {
-                // Include if sell_out_of_stock is enabled OR has stock available
-                return $product->sell_out_of_stock || $product->total_quantity > 0;
+                // Only include active products that have stock OR allow selling out of stock
+                return $product->status === Product::STATUS_ACTIVE
+                    && ($product->sell_out_of_stock || $product->total_quantity > 0);
             })
             ->take(20)
             ->map(function ($product) {
@@ -1268,7 +1269,8 @@ class OrderController extends Controller
 
         // First try exact match on barcode
         $variant = ProductVariant::whereHas('product', function ($q) use ($store) {
-            $q->where('store_id', $store->id);
+            $q->where('store_id', $store->id)
+                ->where('status', Product::STATUS_ACTIVE);
         })
             ->where(function ($q) use ($barcode) {
                 $q->where('barcode', $barcode)
@@ -1281,7 +1283,7 @@ class OrderController extends Controller
             return response()->json([
                 'found' => false,
                 'product' => null,
-                'message' => 'Product not found',
+                'message' => 'Product not found or not active',
             ]);
         }
 

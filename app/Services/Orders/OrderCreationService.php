@@ -2,6 +2,8 @@
 
 namespace App\Services\Orders;
 
+use App\Exceptions\InsufficientStockException;
+use App\Jobs\SyncProductInventoryJob;
 use App\Models\BucketItem;
 use App\Models\Customer;
 use App\Models\Inventory;
@@ -13,11 +15,13 @@ use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\Warehouse;
+use App\Notifications\InventoryOversoldNotification;
 use App\Services\BucketService;
 use App\Services\Invoices\InvoiceService;
 use App\Services\TaxService;
 use App\Services\TradeIn\TradeInService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use InvalidArgumentException;
 
 class OrderCreationService
@@ -45,6 +49,9 @@ class OrderCreationService
      */
     public function createFromWizard(array $data, Store $store): Order
     {
+        // Validate stock availability BEFORE starting transaction
+        $this->validateStockAvailability($data['items'] ?? [], $data['bucket_items'] ?? []);
+
         return DB::transaction(function () use ($data, $store) {
             // Get user from store_user
             $storeUser = StoreUser::with('user')->find($data['store_user_id']);
@@ -370,9 +377,85 @@ class OrderCreationService
             ->sum(DB::raw('quantity - reserved_quantity'));
 
         if ($availableStock < $quantity) {
+            // Notify store owners about the failed order attempt due to insufficient stock
+            $this->notifyInsufficientStock($variant, $quantity, (int) $availableStock);
+
             throw new InvalidArgumentException(
                 "Insufficient stock for {$variant->sku}. Available: {$availableStock}, Requested: {$quantity}"
             );
+        }
+    }
+
+    /**
+     * Notify store owners when an order attempt fails due to insufficient stock.
+     */
+    protected function notifyInsufficientStock(ProductVariant $variant, int $requested, int $available): void
+    {
+        $usersToNotify = $this->store->users()
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->get();
+
+        if ($usersToNotify->isEmpty()) {
+            return;
+        }
+
+        $shortfall = $requested - $available;
+
+        Notification::send(
+            $usersToNotify,
+            new InventoryOversoldNotification(
+                $this->store,
+                $variant,
+                $requested,
+                $shortfall,
+                'POS', // Local point of sale
+                null
+            )
+        );
+    }
+
+    /**
+     * Validate stock availability for all items before creating the order.
+     * This runs BEFORE the transaction to provide immediate feedback.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @param  array<int, array<string, mixed>>  $bucketItems
+     */
+    protected function validateStockAvailability(array $items, array $bucketItems): void
+    {
+        foreach ($items as $itemData) {
+            $product = Product::find($itemData['product_id']);
+
+            if (! $product) {
+                continue;
+            }
+
+            // Skip if product allows overselling
+            if ($product->sell_out_of_stock) {
+                continue;
+            }
+
+            $variant = isset($itemData['variant_id'])
+                ? ProductVariant::find($itemData['variant_id'])
+                : $product->variants()->first();
+
+            if (! $variant) {
+                continue;
+            }
+
+            $requestedQty = (int) ($itemData['quantity'] ?? 1);
+
+            // Get total available quantity across all warehouses
+            $availableQty = Inventory::where('product_variant_id', $variant->id)
+                ->sum(DB::raw('quantity - reserved_quantity'));
+
+            if ($availableQty < $requestedQty) {
+                throw new InsufficientStockException(
+                    sku: $variant->sku,
+                    requested: $requestedQty,
+                    available: max(0, (int) $availableQty),
+                );
+            }
         }
     }
 
@@ -414,10 +497,17 @@ class OrderCreationService
         if ($remaining > 0) {
             $product = $variant->product;
             if (! $product?->sell_out_of_stock) {
-                throw new \RuntimeException(
-                    "Insufficient stock for {$variant->sku}. Requested: {$quantity}, Available: ".($quantity - $remaining)
+                throw new InsufficientStockException(
+                    sku: $variant->sku,
+                    requested: $quantity,
+                    available: $quantity - $remaining,
                 );
             }
+        }
+
+        // Sync inventory to all platform listings
+        if ($variant->product) {
+            SyncProductInventoryJob::dispatch($variant->product, 'order_placed');
         }
     }
 
@@ -559,6 +649,12 @@ class OrderCreationService
 
         if ($inventory) {
             $inventory->increment('quantity', $quantity);
+
+            // Sync inventory to all platform listings
+            $variant = ProductVariant::find($variantId);
+            if ($variant?->product) {
+                SyncProductInventoryJob::dispatch($variant->product, 'order_cancelled');
+            }
         }
     }
 }

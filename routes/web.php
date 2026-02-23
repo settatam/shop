@@ -652,6 +652,15 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('products/{product}/platforms/{marketplace}/sync', [\App\Http\Controllers\Web\ProductPlatformController::class, 'sync'])->name('products.platforms.sync');
     });
 
+    // Standalone Listing Routes (by listing ID)
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('listings/{listing}', [\App\Http\Controllers\Web\ListingController::class, 'show'])->name('listings.show');
+        Route::get('listings/{listing}/activities', [\App\Http\Controllers\Web\ListingController::class, 'activities'])->name('listings.activities');
+    });
+    Route::middleware('permission:products.update')->group(function () {
+        Route::patch('listings/{listing}/status', [\App\Http\Controllers\Web\ListingController::class, 'updateStatus'])->name('listings.update-status');
+    });
+
     // Sales Channel Listings (for In Store and other local channels)
     Route::middleware('permission:products.view')->group(function () {
         Route::get('products/{product}/channels/{channel}', [\App\Http\Controllers\Web\ProductChannelController::class, 'show'])->name('products.channels.show');

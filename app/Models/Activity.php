@@ -301,6 +301,12 @@ class Activity extends Model
 
     public const LISTINGS_SYNC = 'listings.sync';
 
+    public const LISTINGS_STATUS_CHANGE = 'listings.status_change';
+
+    public const LISTINGS_CREATED = 'listings.created';
+
+    public const LISTINGS_UPDATE = 'listings.update';
+
     protected $fillable = [
         'slug',
         'name',
@@ -478,6 +484,9 @@ class Activity extends Model
             self::LISTINGS_RELIST => ['name' => 'Listing Relisted', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Product was relisted on a platform'],
             self::LISTINGS_DELETE => ['name' => 'Listing Deleted', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing was permanently deleted from a platform'],
             self::LISTINGS_SYNC => ['name' => 'Listing Synced', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing was synced with platform'],
+            self::LISTINGS_STATUS_CHANGE => ['name' => 'Status Changed', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing status was changed'],
+            self::LISTINGS_CREATED => ['name' => 'Listing Created', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing was created for a product'],
+            self::LISTINGS_UPDATE => ['name' => 'Listing Updated', 'category' => self::CATEGORY_LISTINGS, 'description' => 'Listing details were updated'],
         ];
     }
 

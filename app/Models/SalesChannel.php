@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Jobs\DeactivateSalesChannelJob;
 use App\Traits\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 class SalesChannel extends Model
@@ -105,6 +107,11 @@ class SalesChannel extends Model
             if ($channel->wasChanged('is_active') && $channel->is_active) {
                 $channel->createListingsForAllProducts();
             }
+
+            // When a channel is deactivated, end all listed listings
+            if ($channel->wasChanged('is_active') && ! $channel->is_active) {
+                DeactivateSalesChannelJob::dispatch($channel, Auth::id());
+            }
         });
 
         static::created(function (SalesChannel $channel) {
@@ -120,6 +127,20 @@ class SalesChannel extends Model
                 $channel->listActiveProducts();
             }
         });
+    }
+
+    /**
+     * Create listings for ALL products on this channel.
+     * Local channels: active products get 'listed', others get 'not_listed'
+     * External channels: all products get 'not_listed' initially
+     */
+    public function createListingsForAllProducts(): void
+    {
+        $products = Product::where('store_id', $this->store_id)->get();
+
+        foreach ($products as $product) {
+            $product->ensureListingExists($this);
+        }
     }
 
     /**
@@ -160,6 +181,16 @@ class SalesChannel extends Model
     public function isLocal(): bool
     {
         return $this->is_local || $this->type === self::TYPE_LOCAL;
+    }
+
+    /**
+     * Get the count of currently listed items on this channel.
+     */
+    public function getActiveListingCount(): int
+    {
+        return $this->platformListings()
+            ->where('status', PlatformListing::STATUS_LISTED)
+            ->count();
     }
 
     public function isExternal(): bool

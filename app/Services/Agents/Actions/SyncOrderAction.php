@@ -136,6 +136,9 @@ class SyncOrderAction implements AgentActionInterface
             if ($product && ($item['quantity'] ?? 0) > 0) {
                 // Deduct sold quantity
                 $product->decrement('quantity', (int) $item['quantity']);
+
+                // Sync inventory to all platform listings
+                $product->syncInventoryToAllPlatforms('external_order_synced');
             }
         }
     }

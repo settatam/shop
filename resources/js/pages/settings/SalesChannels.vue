@@ -8,6 +8,7 @@ import {
     BuildingStorefrontIcon,
     GlobeAltIcon,
     LinkIcon,
+    ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -45,6 +46,7 @@ interface SalesChannel {
     is_default: boolean;
     color: string | null;
     sort_order: number;
+    active_listing_count: number;
     warehouse: Warehouse | null;
     store_marketplace: {
         id: number;
@@ -80,9 +82,18 @@ const breadcrumbItems: BreadcrumbItem[] = [
 const showCreateModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteModal = ref(false);
+const showDeactivateModal = ref(false);
 
 // Form state
 const selectedChannel = ref<SalesChannel | null>(null);
+const deactivateInfo = ref<{
+    channel_id: number;
+    channel_name: string;
+    active_listing_count: number;
+    is_external: boolean;
+    warning: string | null;
+} | null>(null);
+const isLoadingDeactivateInfo = ref(false);
 const formData = ref({
     name: '',
     type: 'local',
@@ -146,8 +157,64 @@ function closeModals() {
     showCreateModal.value = false;
     showEditModal.value = false;
     showDeleteModal.value = false;
+    showDeactivateModal.value = false;
     selectedChannel.value = null;
+    deactivateInfo.value = null;
     formErrors.value = {};
+}
+
+async function checkDeactivation(channel: SalesChannel) {
+    // If channel is already inactive or has no active listings, just update directly
+    if (!channel.is_active || channel.active_listing_count === 0) {
+        return true;
+    }
+
+    // Show deactivation warning modal
+    selectedChannel.value = channel;
+    isLoadingDeactivateInfo.value = true;
+    showDeactivateModal.value = true;
+
+    try {
+        const response = await fetch(`/settings/channels/${channel.id}/deactivate-preflight`);
+        const data = await response.json();
+        deactivateInfo.value = data;
+    } catch (error) {
+        console.error('Failed to fetch deactivation info:', error);
+        deactivateInfo.value = {
+            channel_id: channel.id,
+            channel_name: channel.name,
+            active_listing_count: channel.active_listing_count,
+            is_external: !channel.is_local,
+            warning: `This will end ${channel.active_listing_count} active listing(s) on this channel.`,
+        };
+    } finally {
+        isLoadingDeactivateInfo.value = false;
+    }
+
+    return false;
+}
+
+function confirmDeactivation() {
+    if (!selectedChannel.value || isSubmitting.value) return;
+
+    isSubmitting.value = true;
+    formErrors.value = {};
+
+    router.put(`/settings/channels/${selectedChannel.value.id}`, {
+        name: selectedChannel.value.name,
+        is_active: false,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeModals();
+        },
+        onError: (errors) => {
+            formErrors.value = errors;
+        },
+        onFinish: () => {
+            isSubmitting.value = false;
+        },
+    });
 }
 
 function createChannel() {
@@ -170,8 +237,19 @@ function createChannel() {
     });
 }
 
-function updateChannel() {
+async function updateChannel() {
     if (!selectedChannel.value || isSubmitting.value) return;
+
+    // Check if user is trying to deactivate an active channel with listings
+    const wasActive = selectedChannel.value.is_active;
+    const willBeInactive = !formData.value.is_active;
+
+    if (wasActive && willBeInactive && selectedChannel.value.active_listing_count > 0) {
+        // Close edit modal and show deactivation warning
+        showEditModal.value = false;
+        await checkDeactivation(selectedChannel.value);
+        return;
+    }
 
     isSubmitting.value = true;
     formErrors.value = {};
@@ -589,6 +667,76 @@ function reconnectChannel(channel: SalesChannel) {
                                     class="sm:col-start-2"
                                 >
                                     {{ isSubmitting ? 'Deleting...' : 'Delete' }}
+                                </Button>
+                                <Button variant="outline" @click="closeModals" class="mt-3 sm:col-start-1 sm:mt-0">
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Deactivate Channel Warning Modal -->
+        <Teleport to="body">
+            <div v-if="showDeactivateModal" class="relative z-50">
+                <div class="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 transition-opacity" @click="closeModals"></div>
+
+                <div class="fixed inset-0 z-10 overflow-y-auto">
+                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                        <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                            <div v-if="isLoadingDeactivateInfo" class="flex items-center justify-center py-8">
+                                <div class="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-indigo-600"></div>
+                            </div>
+                            <div v-else>
+                                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/10">
+                                    <ExclamationTriangleIcon class="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div class="mt-3 text-center sm:mt-5">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                                        Deactivate sales channel
+                                    </h3>
+                                    <div class="mt-4 space-y-3 text-left">
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                            You are about to deactivate <span class="font-medium text-gray-900 dark:text-white">{{ deactivateInfo?.channel_name }}</span>.
+                                        </p>
+
+                                        <div v-if="deactivateInfo?.active_listing_count && deactivateInfo.active_listing_count > 0" class="rounded-md bg-amber-50 p-4 dark:bg-amber-500/10">
+                                            <div class="flex">
+                                                <div class="shrink-0">
+                                                    <ExclamationTriangleIcon class="h-5 w-5 text-amber-400" />
+                                                </div>
+                                                <div class="ml-3">
+                                                    <h3 class="text-sm font-medium text-amber-800 dark:text-amber-300">
+                                                        {{ deactivateInfo.active_listing_count }} active listing{{ deactivateInfo.active_listing_count === 1 ? '' : 's' }} will be ended
+                                                    </h3>
+                                                    <div class="mt-2 text-sm text-amber-700 dark:text-amber-400">
+                                                        <p v-if="deactivateInfo.is_external">
+                                                            Items currently listed on this platform will be delisted. This process runs in the background and may take some time depending on the number of listings.
+                                                        </p>
+                                                        <p v-else>
+                                                            All active listings on this channel will be marked as ended.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                            You can reactivate this channel later if needed.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
+                                <Button
+                                    variant="default"
+                                    @click="confirmDeactivation"
+                                    :disabled="isSubmitting || isLoadingDeactivateInfo"
+                                    class="sm:col-start-2"
+                                >
+                                    {{ isSubmitting ? 'Deactivating...' : 'Deactivate Channel' }}
                                 </Button>
                                 <Button variant="outline" @click="closeModals" class="mt-3 sm:col-start-1 sm:mt-0">
                                     Cancel

@@ -317,6 +317,14 @@ function toggleSection(section: keyof typeof sections.value) {
     sections.value[section] = !sections.value[section];
 }
 
+// Track original status for warning when changing from active
+const originalStatus = props.product.status || 'draft';
+
+// Check if status is being changed from active to something else
+const isChangingFromActive = computed(() => {
+    return originalStatus === 'active' && form.status !== 'active';
+});
+
 // Form
 const form = useForm({
     title: props.product.title,
@@ -1805,6 +1813,25 @@ function deleteProduct() {
                                         {{ label }}
                                     </option>
                                 </select>
+
+                                <!-- Warning when changing from active status -->
+                                <div v-if="isChangingFromActive" class="mt-3 rounded-md bg-amber-50 p-3 dark:bg-amber-900/30">
+                                    <div class="flex">
+                                        <div class="shrink-0">
+                                            <svg class="size-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div class="ml-3">
+                                            <h3 class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                                                Listings will be ended
+                                            </h3>
+                                            <p class="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                                                Changing from Active will end all platform listings for this product.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <span
