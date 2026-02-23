@@ -119,16 +119,8 @@ class EmailSettingsController extends Controller
      */
     protected function isSesConfigured(): bool
     {
-        $driver = config('mail.default');
-
-        if ($driver !== 'ses') {
-            return false;
-        }
-
-        $key = config('services.ses.key');
-        $secret = config('services.ses.secret');
-        $region = config('services.ses.region');
-
-        return ! empty($key) && ! empty($secret) && ! empty($region);
+        // If mail driver is SES, assume it's configured
+        // (SES can work with IAM roles without explicit keys)
+        return config('mail.default') === 'ses';
     }
 }
