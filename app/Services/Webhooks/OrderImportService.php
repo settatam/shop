@@ -4,6 +4,7 @@ namespace App\Services\Webhooks;
 
 use App\Enums\Platform;
 use App\Jobs\SyncExternalOrderStatusJob;
+use App\Jobs\SyncOrderReturnsJob;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
@@ -45,6 +46,10 @@ class OrderImportService
 
         SyncExternalOrderStatusJob::dispatch($platformOrder)->delay(now()->addSeconds(60));
 
+        if (in_array($platformOrder->payment_status, ['refunded', 'partially_refunded'])) {
+            SyncOrderReturnsJob::dispatch($platformOrder)->delay(now()->addSeconds(90));
+        }
+
         return $order;
     }
 
@@ -85,6 +90,10 @@ class OrderImportService
 
         if ($platformOrder) {
             SyncExternalOrderStatusJob::dispatch($platformOrder)->delay(now()->addSeconds(60));
+
+            if (in_array($platformOrder->payment_status, ['refunded', 'partially_refunded'])) {
+                SyncOrderReturnsJob::dispatch($platformOrder)->delay(now()->addSeconds(90));
+            }
         }
 
         return $order;
@@ -751,6 +760,7 @@ class OrderImportService
                 'wholesale_value' => $variant?->wholesale_price,
                 'discount' => $item['discount'] ?? 0,
                 'tax' => $item['tax'] ?? 0,
+                'external_item_id' => $item['external_id'] ?? $item['id'] ?? null,
             ]);
 
             // Reduce inventory for matching variant using proper stock management
@@ -968,7 +978,7 @@ class OrderImportService
             return Order::STATUS_CONFIRMED;
         }
 
-        if ($dto->paymentStatus === 'refunded') {
+        if (in_array($dto->paymentStatus, ['refunded', 'partially_refunded'])) {
             return Order::STATUS_REFUNDED;
         }
 

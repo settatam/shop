@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Scout\Searchable;
 
@@ -27,6 +28,7 @@ class OrderItem extends Model
         'discount',
         'tax',
         'shipstation_id',
+        'external_item_id',
         'notes',
     ];
 
@@ -64,6 +66,21 @@ class OrderItem extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function returnItems(): HasMany
+    {
+        return $this->hasMany(ReturnItem::class);
+    }
+
+    public function getIsReturnedAttribute(): bool
+    {
+        return $this->returnItems()->exists();
+    }
+
+    public function getReturnedQuantityAttribute(): int
+    {
+        return (int) $this->returnItems()->sum('quantity');
     }
 
     public function getLineTotalAttribute(): float

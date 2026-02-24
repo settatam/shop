@@ -80,6 +80,11 @@ class SyncExternalOrderStatusJob implements ShouldQueue
         }
 
         $importService->syncOrderFromDto($this->platformOrder, $dto, $marketplace->platform);
+
+        // If the order has refund-related payment status, sync returns
+        if (in_array($dto->paymentStatus, ['refunded', 'partially_refunded'])) {
+            SyncOrderReturnsJob::dispatch($this->platformOrder)->delay(now()->addSeconds(10));
+        }
     }
 
     /**

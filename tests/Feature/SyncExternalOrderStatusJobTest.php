@@ -376,6 +376,8 @@ class SyncExternalOrderStatusJobTest extends TestCase
 
     public function test_refunded_status_can_always_be_set(): void
     {
+        Queue::fake(\App\Jobs\SyncOrderReturnsJob::class);
+
         $marketplace = StoreMarketplace::factory()->shopify()->create();
 
         $order = Order::factory()->create([

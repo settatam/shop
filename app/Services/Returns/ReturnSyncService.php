@@ -168,12 +168,21 @@ class ReturnSyncService
      */
     protected function findOrderItemByExternalLineItemId(Order $order, string $externalLineItemId, ?string $sku = null): ?\App\Models\OrderItem
     {
-        // First, try to find via the platform order's line_items
+        // Direct match via external_item_id (fastest, most reliable)
+        $directMatch = $order->items()
+            ->where('external_item_id', $externalLineItemId)
+            ->first();
+
+        if ($directMatch) {
+            return $directMatch;
+        }
+
+        // Fallback: try to find via the platform order's line_items
         $platformOrder = PlatformOrder::where('order_id', $order->id)->first();
 
         if ($platformOrder && ! empty($platformOrder->line_items)) {
             foreach ($platformOrder->line_items as $lineItem) {
-                $lineItemExternalId = (string) ($lineItem['external_id'] ?? '');
+                $lineItemExternalId = (string) ($lineItem['external_id'] ?? $lineItem['id'] ?? '');
 
                 if ($lineItemExternalId === $externalLineItemId) {
                     // Found the matching line item, now find the order item by SKU

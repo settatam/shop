@@ -120,9 +120,10 @@ class OrderController extends Controller
             'platformOrder.marketplace',
             'items.product.images',
             'items.variant',
+            'items.returnItems',
             'invoice',
             'payments.user',
-            'returns',
+            'returns.items.orderItem',
             'tradeInTransaction.items',
             'notes.user',
         ]);
@@ -939,7 +940,7 @@ class OrderController extends Controller
         }
 
         // Handle refunded orders
-        if ($financialStatus === 'refunded') {
+        if ($financialStatus === 'refunded' || $financialStatus === 'partially_refunded') {
             return Order::STATUS_REFUNDED;
         }
 
@@ -1816,6 +1817,8 @@ class OrderController extends Controller
                 'line_total' => $item->line_total,
                 'line_profit' => $item->line_profit,
                 'notes' => $item->notes,
+                'is_returned' => $item->returnItems->isNotEmpty(),
+                'returned_quantity' => (int) $item->returnItems->sum('quantity'),
                 'product' => $item->product ? [
                     'id' => $item->product->id,
                     'title' => $item->product->title,
@@ -1868,6 +1871,27 @@ class OrderController extends Controller
                 'created_at' => $note->created_at->toISOString(),
                 'updated_at' => $note->updated_at->toISOString(),
             ]),
+            'returns' => $order->returns->map(fn ($return) => [
+                'id' => $return->id,
+                'return_number' => $return->return_number,
+                'status' => $return->status,
+                'type' => $return->type,
+                'refund_amount' => $return->refund_amount,
+                'reason' => $return->reason,
+                'external_return_id' => $return->external_return_id,
+                'created_at' => $return->created_at->toISOString(),
+                'items' => $return->items->map(fn ($item) => [
+                    'id' => $item->id,
+                    'order_item_id' => $item->order_item_id,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'reason' => $item->reason,
+                    'restock' => $item->restock,
+                    'restocked' => $item->restocked,
+                    'order_item_title' => $item->orderItem?->title,
+                ]),
+            ]),
+            'has_returns' => $order->returns->isNotEmpty(),
         ];
     }
 

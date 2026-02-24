@@ -159,6 +159,7 @@ class ShopifyService extends BasePlatformService
             'store_marketplace_id' => $connection->id,
             'product_id' => $product->id,
             'external_listing_id' => $shopifyData['id'],
+            'external_variant_id' => $shopifyData['variants'][0]['id'] ?? null,
             'status' => $shopifyData['status'] === 'active' ? 'active' : 'draft',
             'listing_url' => "https://{$connection->shop_domain}/products/{$shopifyData['handle']}",
             'platform_data' => $shopifyData,
@@ -182,6 +183,7 @@ class ShopifyService extends BasePlatformService
 
         $listing->update([
             'platform_data' => $response['product'],
+            'external_variant_id' => $response['product']['variants'][0]['id'] ?? $listing->external_variant_id,
             'last_synced_at' => now(),
         ]);
 

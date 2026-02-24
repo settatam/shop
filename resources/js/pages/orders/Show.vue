@@ -78,6 +78,8 @@ interface OrderItem {
     line_total: number;
     line_profit?: number;
     notes?: string;
+    is_returned?: boolean;
+    returned_quantity?: number;
     product?: Product;
 }
 
@@ -116,6 +118,29 @@ interface TradeInTransaction {
     final_offer: number;
     status: string;
     items: TradeInItem[];
+}
+
+interface ReturnItemSummary {
+    id: number;
+    order_item_id?: number;
+    quantity: number;
+    unit_price?: number;
+    reason?: string;
+    restock: boolean;
+    restocked: boolean;
+    order_item_title?: string;
+}
+
+interface OrderReturn {
+    id: number;
+    return_number: string;
+    status: string;
+    type?: string;
+    refund_amount: number;
+    reason?: string;
+    external_return_id?: string;
+    created_at: string;
+    items: ReturnItemSummary[];
 }
 
 interface SalesChannel {
@@ -206,6 +231,8 @@ interface Order {
     invoice?: Invoice;
     payments?: Payment[];
     trade_in_transaction?: TradeInTransaction;
+    returns?: OrderReturn[];
+    has_returns?: boolean;
     note_entries: Note[];
 }
 
@@ -888,6 +915,10 @@ function processReturn() {
                                         <p class="text-sm text-gray-500 dark:text-gray-400">
                                             <span v-if="item.sku">SKU: {{ item.sku }}</span>
                                         </p>
+                                        <span v-if="item.is_returned" class="mt-1 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                                            <ArrowUturnLeftIcon class="mr-1 size-3" />
+                                            {{ item.returned_quantity && item.returned_quantity < item.quantity ? `Returned (${item.returned_quantity} of ${item.quantity})` : 'Returned' }}
+                                        </span>
                                         <p v-if="item.notes" class="mt-1 text-sm text-gray-400 dark:text-gray-500">{{ item.notes }}</p>
                                     </div>
 
@@ -1030,6 +1061,60 @@ function processReturn() {
                                 >
                                     View Trade-In Transaction &rarr;
                                 </Link>
+                            </div>
+                        </div>
+
+                        <!-- Returns -->
+                        <div v-if="order.has_returns && order.returns && order.returns.length > 0" class="rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                                <h2 class="flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
+                                    <ArrowUturnLeftIcon class="size-5 text-gray-500 dark:text-gray-400" />
+                                    Returns ({{ order.returns.length }})
+                                </h2>
+                            </div>
+                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <div v-for="ret in order.returns" :key="ret.id" class="p-4">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <Link
+                                                    :href="`/returns/${ret.id}`"
+                                                    class="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                                >
+                                                    {{ ret.return_number }}
+                                                </Link>
+                                                <span :class="[
+                                                    'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                                    ret.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                    ret.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                    ret.status === 'approved' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                    ret.status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                                ]">
+                                                    {{ ret.status }}
+                                                </span>
+                                            </div>
+                                            <p v-if="ret.reason" class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ ret.reason }}</p>
+                                            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                                {{ new Date(ret.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}
+                                            </p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-medium text-red-600 dark:text-red-400">-{{ formatCurrency(ret.refund_amount) }}</p>
+                                        </div>
+                                    </div>
+                                    <!-- Return items -->
+                                    <div v-if="ret.items && ret.items.length > 0" class="mt-3 rounded-md bg-gray-50 p-3 dark:bg-gray-700/50">
+                                        <div v-for="retItem in ret.items" :key="retItem.id" class="flex items-center justify-between py-1 text-sm">
+                                            <span class="text-gray-700 dark:text-gray-300">
+                                                {{ retItem.order_item_title || 'Unknown item' }} × {{ retItem.quantity }}
+                                            </span>
+                                            <span v-if="retItem.unit_price" class="text-gray-500 dark:text-gray-400">
+                                                {{ formatCurrency(retItem.unit_price) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
