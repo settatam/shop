@@ -25,9 +25,14 @@ class DynamicReportMail extends Mailable
     protected ?string $csvFilename = null;
 
     /**
+     * Custom subject line.
+     */
+    protected ?string $customSubject = null;
+
+    /**
      * Create a new message instance.
      *
-     * @param  array{headers?: array<string>, rows?: array<array<mixed>>, html_table?: string}|string  $content
+     * @param  array{headers?: array<string>, rows?: array<array<mixed>>, html_table?: string, tables?: array}|string  $content
      */
     public function __construct(
         public string $reportTitle,
@@ -36,6 +41,16 @@ class DynamicReportMail extends Mailable
         public int $rowCount,
         public Carbon $generatedAt
     ) {}
+
+    /**
+     * Set a custom subject for the email.
+     */
+    public function withSubject(string $subject): self
+    {
+        $this->customSubject = $subject;
+
+        return $this;
+    }
 
     /**
      * Attach a CSV file to the email.
@@ -93,7 +108,7 @@ class DynamicReportMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Report: {$this->reportTitle}",
+            subject: $this->customSubject ?? "Report: {$this->reportTitle}",
         );
     }
 

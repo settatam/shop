@@ -17,6 +17,7 @@ use App\Http\Controllers\Web\LeadSourceController;
 use App\Http\Controllers\Web\NotificationSettingsController;
 use App\Http\Controllers\Web\PrinterSettingsController;
 use App\Http\Controllers\Web\SalesChannelController;
+use App\Http\Controllers\Web\ScheduledReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -116,6 +117,15 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::post('/channels/save', [NotificationSettingsController::class, 'saveChannel'])->name('channels.save');
         Route::post('/channels/toggle', [NotificationSettingsController::class, 'toggleChannel'])->name('channels.toggle');
         Route::get('/logs', [NotificationSettingsController::class, 'logs'])->name('logs');
+
+        // Scheduled Reports
+        Route::get('/scheduled-reports', [ScheduledReportController::class, 'index'])->name('scheduled-reports.index');
+        Route::post('/scheduled-reports', [ScheduledReportController::class, 'store'])->name('scheduled-reports.store');
+        Route::put('/scheduled-reports/{scheduledReport}', [ScheduledReportController::class, 'update'])->name('scheduled-reports.update');
+        Route::delete('/scheduled-reports/{scheduledReport}', [ScheduledReportController::class, 'destroy'])->name('scheduled-reports.destroy');
+        Route::post('/scheduled-reports/{scheduledReport}/toggle', [ScheduledReportController::class, 'toggle'])->name('scheduled-reports.toggle');
+        Route::post('/scheduled-reports/{scheduledReport}/test', [ScheduledReportController::class, 'test'])->name('scheduled-reports.test');
+        Route::get('/scheduled-reports/{scheduledReport}/template', [ScheduledReportController::class, 'editTemplate'])->name('scheduled-reports.template');
     });
 
     // Sales Channels

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\BugReportController;
+use App\Http\Controllers\Api\NotificationTemplateGeneratorController;
 use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ChatController;
@@ -176,6 +177,27 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     Route::get('notifications/{notificationSubscription}/logs', [NotificationSubscriptionController::class, 'logs']);
     Route::apiResource('notifications', NotificationSubscriptionController::class)
         ->parameters(['notifications' => 'notificationSubscription']);
+
+    // AI Template Generator
+    Route::prefix('ai/templates')->group(function () {
+        // Report classes (for dropdown selection)
+        Route::get('report-classes', [NotificationTemplateGeneratorController::class, 'reportClasses']);
+        Route::post('from-class', [NotificationTemplateGeneratorController::class, 'createFromClass']);
+        Route::get('class-structure', [NotificationTemplateGeneratorController::class, 'getClassStructure']);
+
+        // Structure-based (AI-generated)
+        Route::get('fields', [NotificationTemplateGeneratorController::class, 'fields']);
+        Route::post('structure', [NotificationTemplateGeneratorController::class, 'createStructure']);
+        Route::post('structure/modify', [NotificationTemplateGeneratorController::class, 'modifyStructure']);
+        Route::post('structure/generate', [NotificationTemplateGeneratorController::class, 'generateFromStructure']);
+        Route::post('report', [NotificationTemplateGeneratorController::class, 'createReport']);
+        Route::patch('report/{template}', [NotificationTemplateGeneratorController::class, 'updateReport']);
+        Route::post('preview', [NotificationTemplateGeneratorController::class, 'preview']);
+
+        // Legacy (still supported)
+        Route::post('generate', [NotificationTemplateGeneratorController::class, 'generate']);
+        Route::post('generate-report', [NotificationTemplateGeneratorController::class, 'generateReport']);
+    });
 
     // Transactions (Buy)
     Route::post('transactions/{transaction}/items', [TransactionController::class, 'addItem']);

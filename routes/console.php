@@ -59,3 +59,9 @@ Schedule::command('reports:send-legacy-daily')
     ->when(fn () => config('legacy-sync.enabled') && config('legacy-sync.reports.enabled'))
     ->dailyAt(config('legacy-sync.schedule.send_reports_at', '00:00'))
     ->timezone(config('legacy-sync.schedule.timezone', 'America/New_York'));
+
+// Send scheduled reports - runs every minute to check for due reports
+Schedule::command('reports:send-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();

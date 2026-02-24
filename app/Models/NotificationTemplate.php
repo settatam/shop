@@ -23,6 +23,8 @@ class NotificationTemplate extends Model
         'channel',
         'subject',
         'content',
+        'structure',
+        'template_type',
         'available_variables',
         'category',
         'is_system',
@@ -33,6 +35,7 @@ class NotificationTemplate extends Model
     {
         return [
             'available_variables' => 'array',
+            'structure' => 'array',
             'is_system' => 'boolean',
             'is_enabled' => 'boolean',
         ];
