@@ -1080,7 +1080,6 @@ class MigrateLegacyProducts extends Command
             $legacyChannelVariants = DB::connection('legacy')
                 ->table('store_marketplace_product_variants')
                 ->where('store_marketplace_product_id', $legacyListing->id)
-                ->whereNull('deleted_at')
                 ->get();
 
             if ($legacyChannelVariants->isNotEmpty()) {
