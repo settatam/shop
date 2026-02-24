@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\PlatformListing;
 use App\Models\SalesChannel;
 use App\Models\StoreMarketplace;
 use App\Models\Warehouse;
@@ -177,9 +178,17 @@ class SalesChannelController extends Controller
             return back()->with('error', 'Cannot delete a channel that has orders. Deactivate it instead.');
         }
 
+        // Soft delete all platform listings for this channel
+        $deletedListingsCount = PlatformListing::where('sales_channel_id', $salesChannel->id)->delete();
+
         $salesChannel->delete();
 
-        return back()->with('success', 'Sales channel deleted successfully.');
+        $message = 'Sales channel deleted successfully.';
+        if ($deletedListingsCount > 0) {
+            $message .= " {$deletedListingsCount} listing(s) were also removed.";
+        }
+
+        return back()->with('success', $message);
     }
 
     public function reorder(Request $request): RedirectResponse

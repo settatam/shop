@@ -1020,6 +1020,11 @@ class MigrateLegacyProducts extends Command
 
             $newMarketplaceId = $this->marketplaceMap[$legacyListing->store_market_place_id];
 
+            // Find the sales channel linked to this marketplace
+            $salesChannel = \App\Models\SalesChannel::where('store_marketplace_id', $newMarketplaceId)
+                ->where('is_active', true)
+                ->first();
+
             // Check if listing already exists
             $existingListing = DB::table('platform_listings')
                 ->where('store_marketplace_id', $newMarketplaceId)
@@ -1038,6 +1043,7 @@ class MigrateLegacyProducts extends Command
 
             // Create the platform listing
             DB::table('platform_listings')->insert([
+                'sales_channel_id' => $salesChannel?->id,
                 'store_marketplace_id' => $newMarketplaceId,
                 'product_id' => $newProduct->id,
                 'product_variant_id' => $defaultVariant?->id,

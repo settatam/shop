@@ -16,6 +16,10 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/store',
     },
     {
+        title: 'Sales Channels',
+        href: '/settings/channels',
+    },
+    {
         title: 'Email',
         href: '/settings/email',
     },
