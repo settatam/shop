@@ -185,6 +185,15 @@ class OrdersTable extends Table
             $query->whereIn('status', Order::PAID_STATUSES);
         }
 
+        // Apply trade-in filter
+        if (($hasTradeIn = data_get($filter, 'has_trade_in')) !== null && $hasTradeIn !== '') {
+            if ($hasTradeIn === 'yes' || $hasTradeIn === '1' || $hasTradeIn === true) {
+                $query->whereNotNull('trade_in_transaction_id');
+            } else {
+                $query->whereNull('trade_in_transaction_id');
+            }
+        }
+
         return $query;
     }
 

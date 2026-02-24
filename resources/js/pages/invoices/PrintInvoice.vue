@@ -49,6 +49,21 @@ interface Props {
         created_at: string;
         service_fee_value: number | null;
         service_fee_unit: string | null;
+        trade_in_credit: number | null;
+        trade_in_transaction: {
+            id: number;
+            transaction_number: string;
+            final_offer: number;
+            items: {
+                id: number;
+                title: string;
+                description: string | null;
+                buy_price: number;
+                precious_metal: string | null;
+                condition: string | null;
+                dwt: number | null;
+            }[];
+        } | null;
         customer: {
             id: number;
             full_name: string;
@@ -126,9 +141,12 @@ const serviceFee = (() => {
     return value;
 })();
 
+// Filter out $0 payments
+const activePayments = props.invoice.payments?.filter(p => p.amount > 0) || [];
+
 // Get all unique payment methods for display, comma separated
 const paymentMethodsDisplay = (() => {
-    const methods = props.invoice.payments?.map(p => p.payment_method).filter(Boolean) || [];
+    const methods = activePayments.map(p => p.payment_method).filter(Boolean);
     const uniqueMethods = [...new Set(methods)];
     if (uniqueMethods.length === 0) return '-';
     return uniqueMethods.map(method => paymentMethodLabels[method] || method).join(', ');
@@ -313,6 +331,48 @@ const print = () => {
                                         </tr>
                                     </tbody>
 
+                                    <!-- Trade-In Items (before payment summary) -->
+                                    <tbody v-if="invoice.trade_in_transaction">
+                                        <tr>
+                                            <td colspan="5" class="pt-6 pb-2 pl-4 sm:pl-6 md:pl-0">
+                                                <div class="flex justify-between items-center">
+                                                    <span class="text-sm font-medium text-slate-700">Trade-In Items</span>
+                                                    <span class="text-xs text-slate-500">Ref: {{ invoice.trade_in_transaction.transaction_number }}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr v-for="item in invoice.trade_in_transaction.items" :key="'ti-' + item.id" class="border-b border-slate-200">
+                                            <td class="hidden sm:table-cell py-2 px-3"></td>
+                                            <td class="py-2 pl-4 pr-3 text-left sm:pl-6 md:pl-0">
+                                                <div class="font-medium text-slate-700 text-xs">
+                                                    {{ item.title }}
+                                                </div>
+                                                <div v-if="item.description" class="mt-0.5 text-slate-400 text-xs">{{ item.description }}</div>
+                                            </td>
+                                            <td class="hidden px-3 py-2 text-xs text-left text-slate-500 sm:table-cell">
+                                                <span v-if="item.precious_metal">{{ item.precious_metal }}</span>
+                                                <span v-if="item.precious_metal && item.condition"> | </span>
+                                                <span v-if="item.condition">{{ item.condition }}</span>
+                                                <span v-if="(item.precious_metal || item.condition) && item.dwt"> | </span>
+                                                <span v-if="item.dwt">{{ item.dwt }} DWT</span>
+                                            </td>
+                                            <td class="hidden px-3 py-2 text-xs text-right text-slate-500 sm:table-cell">
+                                                1
+                                            </td>
+                                            <td class="py-2 pl-3 pr-4 text-xs text-right text-green-600 sm:pr-6 md:pr-0">
+                                                ${{ formatCurrency(item.buy_price) }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="4" class="pt-2 pr-3 text-xs font-medium text-right text-slate-700">
+                                                Trade-In Total
+                                            </td>
+                                            <td class="pt-2 pl-3 pr-4 text-xs font-medium text-right text-green-600 sm:pr-6 md:pr-0">
+                                                ${{ formatCurrency(invoice.trade_in_transaction.final_offer) }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+
                                     <tfoot>
                                         <!-- Subtotal -->
                                         <tr>
@@ -366,6 +426,19 @@ const print = () => {
                                             </td>
                                         </tr>
 
+                                        <!-- Trade-In Credit -->
+                                        <tr v-if="(invoice.trade_in_credit ?? 0) > 0">
+                                            <th scope="row" colspan="4" class="hidden pt-2 pl-6 pr-3 text-xs font-light text-right text-green-600 sm:table-cell md:pl-0">
+                                                Trade-In Credit
+                                            </th>
+                                            <th scope="row" class="pt-2 pl-4 pr-3 text-xs font-light text-left text-green-600 sm:hidden">
+                                                Trade-In Credit
+                                            </th>
+                                            <td class="pt-2 pl-3 pr-4 text-xs text-right text-green-600 sm:pr-6 md:pr-0">
+                                                -${{ formatCurrency(invoice.trade_in_credit) }}
+                                            </td>
+                                        </tr>
+
                                         <!-- Sales Tax -->
                                         <tr v-if="invoice.sales_tax > 0">
                                             <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
@@ -380,7 +453,7 @@ const print = () => {
                                         </tr>
 
                                         <!-- Payment Modes (if multiple) -->
-                                        <tr v-if="invoice.payments && invoice.payments.length > 1">
+                                        <tr v-if="activePayments.length > 1">
                                             <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-light text-right text-slate-500 sm:table-cell md:pl-0">
                                                 Payment Modes
                                             </th>
@@ -389,7 +462,7 @@ const print = () => {
                                             </th>
                                             <td class="pt-4 pl-3 pr-4 text-xs text-right text-slate-500 sm:pr-6 md:pr-0">
                                                 <table class="w-full">
-                                                    <tr v-for="payment in invoice.payments" :key="payment.id">
+                                                    <tr v-for="payment in activePayments" :key="payment.id">
                                                         <td class="text-xs text-left">{{ paymentMethodLabels[payment.payment_method] || payment.payment_method }}</td>
                                                         <td class="text-xs text-right">
                                                             <template v-if="payment.payment_method === 'store_credit'">

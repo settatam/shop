@@ -3,6 +3,7 @@
 namespace App\Services\Webhooks;
 
 use App\Enums\Platform;
+use App\Jobs\SyncExternalOrderStatusJob;
 use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
@@ -13,6 +14,7 @@ use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
 use App\Notifications\InventoryOversoldNotification;
+use App\Services\Marketplace\DTOs\PlatformOrder as PlatformOrderDto;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -28,7 +30,7 @@ class OrderImportService
         $marketplace = $platformOrder->marketplace;
         $store = $marketplace->store;
 
-        return DB::transaction(function () use ($platformOrder, $marketplace, $store) {
+        $order = DB::transaction(function () use ($platformOrder, $marketplace, $store) {
             $order = $this->createOrder($platformOrder, $store, $marketplace->platform);
             $this->createOrderItems($order, $platformOrder);
             $this->handlePayment($order, $platformOrder);
@@ -40,6 +42,10 @@ class OrderImportService
 
             return $order->fresh(['items', 'customer', 'payments']);
         });
+
+        SyncExternalOrderStatusJob::dispatch($platformOrder)->delay(now()->addSeconds(60));
+
+        return $order;
     }
 
     public function importFromWebhookPayload(
@@ -49,7 +55,9 @@ class OrderImportService
     ): Order {
         $normalizedData = $this->normalizePayload($payload, $platform);
 
-        return DB::transaction(function () use ($normalizedData, $connection, $platform) {
+        $platformOrder = null;
+
+        $order = DB::transaction(function () use ($normalizedData, $connection, $platform, &$platformOrder) {
             $store = $connection->store;
 
             $platformOrder = $this->findOrCreatePlatformOrder(
@@ -74,6 +82,12 @@ class OrderImportService
 
             return $order->fresh(['items', 'customer', 'payments']);
         });
+
+        if ($platformOrder) {
+            SyncExternalOrderStatusJob::dispatch($platformOrder)->delay(now()->addSeconds(60));
+        }
+
+        return $order;
     }
 
     protected function normalizePayload(array $payload, Platform $platform): array
@@ -927,5 +941,96 @@ class OrderImportService
                 $orderNumber
             )
         );
+    }
+
+    /**
+     * Map a DTO's status fields to an Order::STATUS_* constant.
+     */
+    public function mapDtoStatusToOrderStatus(PlatformOrderDto $dto, Platform $platform): string
+    {
+        if ($dto->status === 'cancelled') {
+            return Order::STATUS_CANCELLED;
+        }
+
+        if ($dto->status === 'completed') {
+            if ($dto->fulfillmentStatus === 'fulfilled' && $dto->paymentStatus === 'paid') {
+                return Order::STATUS_COMPLETED;
+            }
+
+            return Order::STATUS_SHIPPED;
+        }
+
+        if ($dto->fulfillmentStatus === 'fulfilled' && $dto->paymentStatus === 'paid') {
+            return Order::STATUS_SHIPPED;
+        }
+
+        if ($dto->paymentStatus === 'paid') {
+            return Order::STATUS_CONFIRMED;
+        }
+
+        if ($dto->paymentStatus === 'refunded') {
+            return Order::STATUS_REFUNDED;
+        }
+
+        return Order::STATUS_PENDING;
+    }
+
+    /**
+     * Sync a PlatformOrder and its linked Order from a connector DTO.
+     */
+    public function syncOrderFromDto(PlatformOrder $platformOrderModel, PlatformOrderDto $dto, Platform $platform): void
+    {
+        $platformOrderModel->update([
+            'status' => $dto->status,
+            'fulfillment_status' => $dto->fulfillmentStatus,
+            'payment_status' => $dto->paymentStatus,
+            'platform_data' => $dto->metadata,
+            'last_synced_at' => now(),
+        ]);
+
+        if (! $platformOrderModel->isImported()) {
+            return;
+        }
+
+        $order = $platformOrderModel->order;
+        $newStatus = $this->mapDtoStatusToOrderStatus($dto, $platform);
+
+        if ($this->isStatusProgression($order->status, $newStatus)) {
+            $order->update(['status' => $newStatus]);
+        }
+    }
+
+    /**
+     * Check if moving from one status to another is a forward progression.
+     *
+     * Terminal statuses (cancelled, refunded) can always be set.
+     * Otherwise, only allow moving forward in the progression.
+     */
+    protected function isStatusProgression(string $currentStatus, string $newStatus): bool
+    {
+        if ($currentStatus === $newStatus) {
+            return false;
+        }
+
+        $terminalStatuses = [Order::STATUS_CANCELLED, Order::STATUS_REFUNDED];
+
+        if (in_array($newStatus, $terminalStatuses, true)) {
+            return true;
+        }
+
+        $progression = [
+            Order::STATUS_DRAFT => 0,
+            Order::STATUS_PENDING => 1,
+            Order::STATUS_CONFIRMED => 2,
+            Order::STATUS_PROCESSING => 3,
+            Order::STATUS_SHIPPED => 4,
+            Order::STATUS_DELIVERED => 5,
+            Order::STATUS_COMPLETED => 6,
+        ];
+
+        $currentIndex = $progression[$currentStatus] ?? -1;
+        $newIndex = $progression[$newStatus] ?? -1;
+
+        return $newIndex > $currentIndex;
     }
 }

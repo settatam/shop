@@ -381,6 +381,7 @@ class InvoiceController extends Controller
             'invoiceable.customer.defaultAddress.state',
             'invoiceable.customer.addresses.state',
             'invoiceable.payments',
+            'invoiceable.tradeInTransaction.items',
             'customer.defaultAddress.state',
             'customer.addresses.state',
             'store',
@@ -462,6 +463,26 @@ class InvoiceController extends Controller
         $total = $invoiceable?->total ?? $invoiceable?->grand_total ?? $invoice->total ?? 0;
         $serviceFeeValue = $invoiceable?->service_fee_value ?? 0;
         $serviceFeeUnit = $invoiceable?->service_fee_unit ?? 'fixed';
+        $tradeInCredit = $invoiceable?->trade_in_credit ?? 0;
+
+        // Build trade-in transaction data if applicable
+        $tradeInTransaction = null;
+        if ($invoiceable instanceof \App\Models\Order && $invoiceable->hasTradeIn() && $invoiceable->tradeInTransaction) {
+            $tradeInTransaction = [
+                'id' => $invoiceable->tradeInTransaction->id,
+                'transaction_number' => $invoiceable->tradeInTransaction->transaction_number,
+                'final_offer' => $invoiceable->tradeInTransaction->final_offer,
+                'items' => $invoiceable->tradeInTransaction->items->map(fn ($item) => [
+                    'id' => $item->id,
+                    'title' => $item->title,
+                    'description' => $item->description,
+                    'buy_price' => $item->buy_price,
+                    'precious_metal' => $item->precious_metal,
+                    'condition' => $item->condition,
+                    'dwt' => $item->dwt,
+                ]),
+            ];
+        }
 
         return [
             'invoice' => [
@@ -489,6 +510,8 @@ class InvoiceController extends Controller
                 ] : null,
                 'service_fee_value' => $serviceFeeValue,
                 'service_fee_unit' => $serviceFeeUnit,
+                'trade_in_credit' => $tradeInCredit,
+                'trade_in_transaction' => $tradeInTransaction,
                 'items' => $items,
                 'payments' => $payments->map(fn ($payment) => [
                     'id' => $payment->id,

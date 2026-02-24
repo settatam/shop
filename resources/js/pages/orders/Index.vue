@@ -40,6 +40,7 @@ function getUrlParams(): WidgetFilter {
     if (params.get('payment_type')) filter.payment_type = params.get('payment_type') || undefined;
     if (params.get('vendor_id')) filter.vendor_id = params.get('vendor_id') || undefined;
     if (params.get('charge_tax')) filter.charge_tax = params.get('charge_tax') || undefined;
+    if (params.get('has_trade_in')) filter.has_trade_in = params.get('has_trade_in') || undefined;
     if (params.get('from_date')) filter.from_date = params.get('from_date') || undefined;
     if (params.get('to_date')) filter.to_date = params.get('to_date') || undefined;
     if (params.get('min_price')) filter.min_price = params.get('min_price') || undefined;
@@ -62,6 +63,7 @@ const filters = ref({
     payment_type: initialParams.payment_type || '',
     vendor_id: initialParams.vendor_id || '',
     charge_tax: initialParams.charge_tax || '',
+    has_trade_in: initialParams.has_trade_in || '',
     from_date: initialParams.from_date || '',
     to_date: initialParams.to_date || '',
     min_price: initialParams.min_price || '',
@@ -79,6 +81,7 @@ const activeFilterCount = computed(() => {
     if (filters.value.payment_type) count++;
     if (filters.value.vendor_id) count++;
     if (filters.value.charge_tax) count++;
+    if (filters.value.has_trade_in) count++;
     if (filters.value.from_date || filters.value.to_date) count++;
     if (filters.value.min_price || filters.value.max_price) count++;
     return count;
@@ -97,6 +100,7 @@ watch(filters, () => {
         payment_type: filters.value.payment_type || undefined,
         vendor_id: filters.value.vendor_id || undefined,
         charge_tax: filters.value.charge_tax || undefined,
+        has_trade_in: filters.value.has_trade_in || undefined,
         from_date: filters.value.from_date || undefined,
         to_date: filters.value.to_date || undefined,
         min_price: filters.value.min_price || undefined,
@@ -131,6 +135,7 @@ function clearFilters() {
         payment_type: '',
         vendor_id: '',
         charge_tax: '',
+        has_trade_in: '',
         from_date: '',
         to_date: '',
         min_price: '',
@@ -289,6 +294,19 @@ function clearFilters() {
                                 <option value="">All</option>
                                 <option value="yes">Yes (Tax Charged)</option>
                                 <option value="no">No (No Tax)</option>
+                            </select>
+                        </div>
+
+                        <!-- Has Trade-In -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trade-In</label>
+                            <select
+                                v-model="filters.has_trade_in"
+                                class="block w-full rounded-md border-0 bg-white pl-3 pr-10 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            >
+                                <option value="">All</option>
+                                <option value="yes">Yes (Has Trade-In)</option>
+                                <option value="no">No (No Trade-In)</option>
                             </select>
                         </div>
                     </div>

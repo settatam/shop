@@ -9,6 +9,7 @@ use App\Services\Marketplace\Connectors\BigCommerceConnector;
 use App\Services\Marketplace\Connectors\ShopifyConnector;
 use App\Services\Marketplace\Connectors\WalmartConnector;
 use App\Services\Marketplace\Contracts\PlatformConnectorInterface;
+use App\Services\Webhooks\OrderImportService;
 use InvalidArgumentException;
 
 class PlatformConnectorManager
@@ -155,6 +156,7 @@ class PlatformConnectorManager
     {
         $connector = $this->getConnectorForMarketplace($marketplace);
         $orders = $connector->getOrders($since);
+        $importService = app(OrderImportService::class);
 
         $synced = 0;
         $errors = 0;
@@ -185,6 +187,11 @@ class PlatformConnectorManager
                         'last_synced_at' => now(),
                     ]
                 );
+
+                // Propagate status changes to linked Order if it exists
+                if ($platformOrder->isImported()) {
+                    $importService->syncOrderFromDto($platformOrder, $order, $marketplace->platform);
+                }
 
                 $results[] = [
                     'external_id' => $order->externalId,
