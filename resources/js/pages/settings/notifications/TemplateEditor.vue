@@ -8,6 +8,8 @@ import {
     ArrowLeftIcon,
     CheckIcon,
     ChevronDownIcon,
+    SparklesIcon,
+    PaperAirplaneIcon,
 } from '@heroicons/vue/24/outline';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 
@@ -109,6 +111,16 @@ const previewContent = ref('');
 const previewSubject = ref('');
 const isLoadingPreview = ref(false);
 const monacoEditorRef = ref<InstanceType<typeof MonacoEditor> | null>(null);
+
+// AI editing
+const aiPrompt = ref('');
+const isAiProcessing = ref(false);
+const aiError = ref('');
+
+// Send test
+const isSendingTest = ref(false);
+const testEmail = ref('');
+const testMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null);
 
 // Available variables grouped by context - use backend data if available
 const variableGroups = computed(() => {
@@ -259,6 +271,90 @@ function saveTemplate() {
 
 function goBack() {
     router.visit('/settings/notifications/templates');
+}
+
+async function applyAiEdit() {
+    if (!aiPrompt.value.trim() || isAiProcessing.value) return;
+
+    isAiProcessing.value = true;
+    aiError.value = '';
+
+    try {
+        const response = await fetch('/api/v1/notification-templates/ai-edit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({
+                content: form.value.content,
+                subject: form.value.subject,
+                prompt: aiPrompt.value,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.content) {
+                form.value.content = data.content;
+            }
+            if (data.subject) {
+                form.value.subject = data.subject;
+            }
+            aiPrompt.value = '';
+            fetchPreview();
+        } else {
+            aiError.value = data.error || 'Failed to apply AI edit';
+        }
+    } catch (error) {
+        aiError.value = 'Failed to connect to AI service';
+    } finally {
+        isAiProcessing.value = false;
+    }
+}
+
+async function sendTestEmail() {
+    if (isSendingTest.value || !testEmail.value) return;
+
+    isSendingTest.value = true;
+    testMessage.value = null;
+
+    try {
+        const response = await fetch('/api/v1/notification-templates/send-test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            body: JSON.stringify({
+                content: form.value.content,
+                subject: form.value.subject,
+                email: testEmail.value,
+                sample_data: props.sampleData,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            testMessage.value = { type: 'success', text: data.message || 'Test email sent!' };
+        } else {
+            testMessage.value = { type: 'error', text: data.error || 'Failed to send test email' };
+        }
+
+        setTimeout(() => {
+            testMessage.value = null;
+        }, 5000);
+    } catch (error) {
+        testMessage.value = { type: 'error', text: 'Failed to send test email' };
+    } finally {
+        isSendingTest.value = false;
+    }
 }
 </script>
 
@@ -437,48 +533,111 @@ function goBack() {
                 <div class="flex min-w-0 flex-1 flex-col">
                     <!-- Editor Toolbar -->
                     <div class="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-2 dark:border-white/10 dark:bg-gray-900">
-                        <div class="flex items-center rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
+                        <div class="flex items-center gap-4">
+                            <div class="flex items-center rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
+                                <button
+                                    type="button"
+                                    :class="[
+                                        'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
+                                        editorMode === 'code'
+                                            ? 'bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white'
+                                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+                                    ]"
+                                    @click="editorMode = 'code'"
+                                >
+                                    <CodeBracketIcon class="h-4 w-4" />
+                                    Code
+                                </button>
+                                <button
+                                    v-if="form.channel === 'email'"
+                                    type="button"
+                                    :class="[
+                                        'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
+                                        editorMode === 'visual'
+                                            ? 'bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white'
+                                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+                                    ]"
+                                    @click="editorMode = 'visual'"
+                                >
+                                    <Squares2X2Icon class="h-4 w-4" />
+                                    Visual
+                                </button>
+                            </div>
+
+                            <!-- AI Edit Input -->
+                            <div class="flex items-center gap-2">
+                                <div class="relative">
+                                    <SparklesIcon class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-purple-500" />
+                                    <input
+                                        v-model="aiPrompt"
+                                        type="text"
+                                        placeholder="Describe changes... (e.g., make it more colorful)"
+                                        class="w-64 rounded-md border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-sm placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-white/10 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
+                                        @keydown.enter="applyAiEdit"
+                                    />
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    :disabled="!aiPrompt.trim() || isAiProcessing"
+                                    class="border-purple-300 text-purple-600 hover:bg-purple-50 dark:border-purple-500/30 dark:text-purple-400"
+                                    @click="applyAiEdit"
+                                >
+                                    <SparklesIcon v-if="!isAiProcessing" class="mr-1.5 h-4 w-4" />
+                                    <div v-else class="mr-1.5 h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                                    {{ isAiProcessing ? 'Applying...' : 'Apply' }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <!-- Send Test Email -->
+                            <div v-if="form.channel === 'email'" class="flex items-center gap-2">
+                                <input
+                                    v-model="testEmail"
+                                    type="email"
+                                    placeholder="test@example.com"
+                                    class="w-44 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-white/10 dark:bg-gray-800 dark:text-white"
+                                />
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    :disabled="!testEmail || isSendingTest"
+                                    @click="sendTestEmail"
+                                >
+                                    <PaperAirplaneIcon v-if="!isSendingTest" class="mr-1.5 h-4 w-4" />
+                                    <div v-else class="mr-1.5 h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent"></div>
+                                    {{ isSendingTest ? 'Sending...' : 'Send Test' }}
+                                </Button>
+                            </div>
+
                             <button
                                 type="button"
                                 :class="[
                                     'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
-                                    editorMode === 'code'
+                                    showPreview
                                         ? 'bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white'
                                         : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
                                 ]"
-                                @click="editorMode = 'code'"
+                                @click="showPreview = !showPreview"
                             >
-                                <CodeBracketIcon class="h-4 w-4" />
-                                Code
-                            </button>
-                            <button
-                                v-if="form.channel === 'email'"
-                                type="button"
-                                :class="[
-                                    'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
-                                    editorMode === 'visual'
-                                        ? 'bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white'
-                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
-                                ]"
-                                @click="editorMode = 'visual'"
-                            >
-                                <Squares2X2Icon class="h-4 w-4" />
-                                Visual
+                                <EyeIcon class="h-4 w-4" />
+                                Preview
                             </button>
                         </div>
-                        <button
-                            type="button"
-                            :class="[
-                                'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
-                                showPreview
-                                    ? 'bg-gray-100 text-gray-900 dark:bg-white/10 dark:text-white'
-                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
-                            ]"
-                            @click="showPreview = !showPreview"
-                        >
-                            <EyeIcon class="h-4 w-4" />
-                            Preview
-                        </button>
+                    </div>
+
+                    <!-- Toast Messages -->
+                    <div v-if="testMessage || aiError" class="shrink-0 px-4 py-2">
+                        <div v-if="testMessage" :class="[
+                            'rounded-md p-3 text-sm',
+                            testMessage.type === 'success' ? 'bg-green-50 text-green-800 dark:bg-green-500/10 dark:text-green-200' : 'bg-red-50 text-red-800 dark:bg-red-500/10 dark:text-red-200'
+                        ]">
+                            {{ testMessage.text }}
+                        </div>
+                        <div v-if="aiError" class="rounded-md bg-red-50 p-3 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-200">
+                            {{ aiError }}
+                        </div>
                     </div>
 
                     <!-- Editor + Preview -->

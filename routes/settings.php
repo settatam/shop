@@ -125,6 +125,7 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::delete('/scheduled-reports/{scheduledReport}', [ScheduledReportController::class, 'destroy'])->name('scheduled-reports.destroy');
         Route::post('/scheduled-reports/{scheduledReport}/toggle', [ScheduledReportController::class, 'toggle'])->name('scheduled-reports.toggle');
         Route::post('/scheduled-reports/{scheduledReport}/test', [ScheduledReportController::class, 'test'])->name('scheduled-reports.test');
+        Route::post('/scheduled-reports/{scheduledReport}/send', [ScheduledReportController::class, 'sendNow'])->name('scheduled-reports.send');
         Route::get('/scheduled-reports/{scheduledReport}/template', [ScheduledReportController::class, 'editTemplate'])->name('scheduled-reports.template');
     });
 

@@ -13,6 +13,7 @@ import {
     ClockIcon,
     EnvelopeIcon,
     SparklesIcon,
+    PaperAirplaneIcon,
 } from '@heroicons/vue/24/outline';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -237,6 +238,7 @@ function toggleEnabled(report: ScheduledReport) {
 }
 
 const testMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null);
+const isSending = ref(false);
 
 async function testReport(report: ScheduledReport) {
     if (isTesting.value) return;
@@ -270,6 +272,42 @@ async function testReport(report: ScheduledReport) {
         testMessage.value = { type: 'error', text: 'Failed to send test report' };
     } finally {
         isTesting.value = false;
+    }
+}
+
+async function sendNow(report: ScheduledReport) {
+    if (isSending.value) return;
+
+    isSending.value = true;
+    testMessage.value = null;
+
+    try {
+        const response = await fetch(`/settings/notifications/scheduled-reports/${report.id}/send`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            testMessage.value = { type: 'success', text: data.message };
+            // Refresh the page to update last_sent_at
+            router.reload({ only: ['scheduledReports'] });
+        } else {
+            testMessage.value = { type: 'error', text: data.error || 'Failed to send report' };
+        }
+
+        setTimeout(() => {
+            testMessage.value = null;
+        }, 5000);
+    } catch (error) {
+        testMessage.value = { type: 'error', text: 'Failed to send report' };
+    } finally {
+        isSending.value = false;
     }
 }
 </script>
@@ -418,6 +456,12 @@ async function testReport(report: ScheduledReport) {
                                                         <SparklesIcon class="mr-3 h-5 w-5 text-gray-400" />
                                                         Edit Template
                                                     </Link>
+                                                </MenuItem>
+                                                <MenuItem v-slot="{ active }">
+                                                    <button @click="sendNow(report)" :disabled="isSending" :class="[active ? 'bg-gray-50 dark:bg-white/5' : '', 'flex w-full items-center px-3 py-2 text-sm text-gray-900 dark:text-white']">
+                                                        <PaperAirplaneIcon class="mr-3 h-5 w-5 text-gray-400" />
+                                                        Send Now
+                                                    </button>
                                                 </MenuItem>
                                                 <MenuItem v-slot="{ active }">
                                                     <button @click="testReport(report)" :disabled="isTesting" :class="[active ? 'bg-gray-50 dark:bg-white/5' : '', 'flex w-full items-center px-3 py-2 text-sm text-gray-900 dark:text-white']">

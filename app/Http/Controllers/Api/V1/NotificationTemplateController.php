@@ -4,16 +4,23 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\NotificationChannel;
+use App\Models\NotificationLog;
 use App\Models\NotificationTemplate;
+use App\Services\AI\AIManager;
 use App\Services\Notifications\NotificationDataPreparer;
+use App\Services\StoreContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class NotificationTemplateController extends Controller
 {
-    public function __construct(protected NotificationDataPreparer $dataPreparer) {}
+    public function __construct(
+        protected NotificationDataPreparer $dataPreparer,
+        protected StoreContext $storeContext,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -209,5 +216,141 @@ class NotificationTemplateController extends Controller
         return response()->json([
             'message' => 'Default templates created successfully',
         ]);
+    }
+
+    /**
+     * Apply AI-powered edits to a template.
+     */
+    public function aiEdit(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'content' => ['required', 'string'],
+            'subject' => ['nullable', 'string'],
+            'prompt' => ['required', 'string', 'max:500'],
+        ]);
+
+        try {
+            $ai = app(AIManager::class);
+
+            $systemPrompt = <<<'PROMPT'
+You are an email template editor. Modify the given HTML/Twig email template based on the user's request.
+
+Rules:
+1. Keep the existing Twig variables ({{ variable }}) intact unless asked to remove them
+2. Maintain proper HTML structure
+3. Apply the requested design changes
+4. Keep inline CSS styles
+5. Return ONLY the modified HTML content, no explanations
+6. If asked to modify the subject, include a line at the start: SUBJECT: new subject here
+
+Current template:
+PROMPT;
+
+            $userPrompt = "Template:\n{$validated['content']}\n\n";
+            if ($validated['subject']) {
+                $userPrompt .= "Current Subject: {$validated['subject']}\n\n";
+            }
+            $userPrompt .= "Requested changes: {$validated['prompt']}\n\nReturn the modified template:";
+
+            $response = $ai->chatWithSystem($systemPrompt, $userPrompt, [
+                'feature' => 'template_ai_edit',
+            ]);
+
+            $result = $response->content;
+
+            // Check if subject was modified
+            $newSubject = null;
+            if (preg_match('/^SUBJECT:\s*(.+?)$/m', $result, $matches)) {
+                $newSubject = trim($matches[1]);
+                $result = preg_replace('/^SUBJECT:\s*.+?\n/m', '', $result);
+            }
+
+            return response()->json([
+                'success' => true,
+                'content' => trim($result),
+                'subject' => $newSubject,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process AI edit: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Send a test email with the current template content.
+     */
+    public function sendTest(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'content' => ['required', 'string'],
+            'subject' => ['nullable', 'string'],
+            'email' => ['required', 'email'],
+            'sample_data' => ['nullable', 'array'],
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No store selected',
+            ], 400);
+        }
+
+        try {
+            // Render the template with sample data
+            $sampleData = $validated['sample_data'] ?? $this->dataPreparer->getSampleData();
+
+            $twig = new \Twig\Environment(new \Twig\Loader\ArrayLoader([
+                'content' => $validated['content'],
+                'subject' => $validated['subject'] ?? 'Template Test',
+            ]), ['autoescape' => false]);
+
+            $renderedContent = $twig->render('content', $sampleData);
+            $renderedSubject = $twig->render('subject', $sampleData);
+
+            // Create mailable
+            $mailable = new \Illuminate\Mail\Mailable;
+            $mailable->subject('[TEST] '.$renderedSubject)
+                ->html($renderedContent);
+
+            // Set from address
+            $fromAddress = $store->email_from_address ?: config('mail.from.address');
+            $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
+            $mailable->from($fromAddress, $fromName);
+
+            if ($store->email_reply_to_address) {
+                $mailable->replyTo($store->email_reply_to_address);
+            }
+
+            // Send email
+            Mail::to($validated['email'])->send($mailable);
+
+            // Log the test email
+            NotificationLog::create([
+                'store_id' => $store->id,
+                'channel' => 'email',
+                'recipient' => $validated['email'],
+                'subject' => '[TEST] '.$renderedSubject,
+                'content' => $renderedContent,
+                'status' => NotificationLog::STATUS_SENT,
+                'metadata' => [
+                    'type' => 'template_test',
+                    'sent_by' => $request->user()->id,
+                ],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Test email sent to {$validated['email']}",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to send test email: '.$e->getMessage(),
+            ], 500);
+        }
     }
 }

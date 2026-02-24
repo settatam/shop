@@ -432,6 +432,101 @@ HTML;
     }
 
     /**
+     * Send report now to all recipients.
+     */
+    public function sendNow(Request $request, ScheduledReport $scheduledReport): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if ($scheduledReport->store_id !== $store->id) {
+            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
+        }
+
+        try {
+            // Generate the report for yesterday
+            $reportDate = Carbon::yesterday($scheduledReport->timezone);
+            $report = $this->reportRegistry->makeReport($scheduledReport->report_type, $store, $reportDate);
+
+            if (! $report) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Report type not found',
+                ], 404);
+            }
+
+            $data = $report->getData();
+            $structure = $report->getStructure();
+
+            // Build email content
+            $structureArray = $structure->toArray();
+            $tables = [];
+            $totalRowCount = 0;
+
+            foreach ($structureArray['tables'] as $table) {
+                $dataKey = $table['data_key'] ?? $table['dataKey'] ?? $table['name'];
+                $tableData = $data[$dataKey] ?? [];
+                $tables[] = [
+                    'heading' => $table['heading'],
+                    'columns' => $table['columns'],
+                    'rows' => $tableData,
+                ];
+
+                if (count($tableData) > $totalRowCount) {
+                    $totalRowCount = count($tableData);
+                }
+            }
+
+            $reportTitle = "{$report->getName()} - {$store->name}";
+            $subject = "{$reportTitle} - {$reportDate->format('M j, Y')}";
+
+            $mailable = (new DynamicReportMail(
+                reportTitle: $reportTitle,
+                description: $report->getDescription(),
+                content: ['tables' => $tables],
+                rowCount: $totalRowCount,
+                generatedAt: $reportDate
+            ))->withSubject($subject);
+
+            // Set from address using store settings
+            $fromAddress = $store->email_from_address ?: config('mail.from.address');
+            $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
+            $mailable->from($fromAddress, $fromName);
+
+            if ($store->email_reply_to_address) {
+                $mailable->replyTo($store->email_reply_to_address);
+            }
+
+            // Send to ALL recipients
+            $sentCount = 0;
+            foreach ($scheduledReport->recipients as $recipient) {
+                Mail::to($recipient)->send($mailable);
+                $sentCount++;
+            }
+
+            // Update last sent timestamp
+            $scheduledReport->update([
+                'last_sent_at' => now(),
+                'last_error' => null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Report sent to {$sentCount} recipient(s)",
+            ]);
+        } catch (\Exception $e) {
+            $scheduledReport->update([
+                'last_failed_at' => now(),
+                'last_error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to send report: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Toggle enabled status.
      */
     public function toggle(ScheduledReport $scheduledReport): JsonResponse

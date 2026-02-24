@@ -165,6 +165,8 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     // Notification Templates
     Route::get('notification-templates/defaults', [NotificationTemplateController::class, 'defaults']);
     Route::post('notification-templates/create-defaults', [NotificationTemplateController::class, 'createDefaults']);
+    Route::post('notification-templates/ai-edit', [NotificationTemplateController::class, 'aiEdit']);
+    Route::post('notification-templates/send-test', [NotificationTemplateController::class, 'sendTest']);
     Route::post('notification-templates/{notificationTemplate}/preview', [NotificationTemplateController::class, 'preview']);
     Route::post('notification-templates/{notificationTemplate}/duplicate', [NotificationTemplateController::class, 'duplicate']);
     Route::apiResource('notification-templates', NotificationTemplateController::class);
