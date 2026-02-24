@@ -765,6 +765,31 @@ class Transaction extends Model
     }
 
     /**
+     * Get the activity slug, detecting deletion of closed transactions.
+     */
+    protected function getActivitySlug(string $action): ?string
+    {
+        // Detect deletion of a closed transaction
+        if ($action === 'delete') {
+            $closedStatuses = [
+                self::STATUS_PAYMENT_PROCESSED,
+                self::STATUS_OFFER_ACCEPTED,
+            ];
+
+            // Check the original status (before deletion)
+            $originalStatus = $this->getOriginal('status') ?? $this->status;
+
+            if (in_array($originalStatus, $closedStatuses, true)) {
+                return Activity::TRANSACTIONS_DELETE_CLOSED;
+            }
+        }
+
+        $map = $this->getActivityMap();
+
+        return $map[$action] ?? null;
+    }
+
+    /**
      * Get attributes that should be logged.
      *
      * @return array<int, string>

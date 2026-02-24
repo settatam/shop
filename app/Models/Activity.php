@@ -98,6 +98,8 @@ class Activity extends Model
 
     public const ORDERS_VIEW_FINANCIALS = 'orders.view_financials';
 
+    public const ORDERS_DELETE_CLOSED = 'orders.delete_closed';
+
     // Transaction Activities
     public const TRANSACTIONS_VIEW = 'transactions.view';
 
@@ -121,6 +123,8 @@ class Activity extends Model
 
     public const TRANSACTIONS_UPDATE_PAYOUT_PREFERENCE = 'transactions.update_payout_preference';
 
+    public const TRANSACTIONS_DELETE_CLOSED = 'transactions.delete_closed';
+
     // Inventory Activities
     public const INVENTORY_VIEW = 'inventory.view';
 
@@ -129,6 +133,8 @@ class Activity extends Model
     public const INVENTORY_TRANSFER = 'inventory.transfer';
 
     public const INVENTORY_VIEW_REPORTS = 'inventory.view_reports';
+
+    public const INVENTORY_QUANTITY_MANUAL_ADJUST = 'inventory.quantity_manual_adjust';
 
     // Warehouse Activities
     public const WAREHOUSES_VIEW = 'warehouses.view';
@@ -357,6 +363,7 @@ class Activity extends Model
             self::ORDERS_EXPORT => ['name' => 'Export Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Export order data'],
             self::ORDERS_MANAGE_SHIPPING => ['name' => 'Manage Shipping', 'category' => self::CATEGORY_ORDERS, 'description' => 'Create shipping labels and tracking'],
             self::ORDERS_VIEW_FINANCIALS => ['name' => 'View Order Financials', 'category' => self::CATEGORY_ORDERS, 'description' => 'View order costs and profits'],
+            self::ORDERS_DELETE_CLOSED => ['name' => 'Closed Sale Deleted', 'category' => self::CATEGORY_ORDERS, 'description' => 'A completed/shipped sale was deleted'],
 
             // Transactions
             self::TRANSACTIONS_VIEW => ['name' => 'View Transactions', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'View buy transactions'],
@@ -370,12 +377,14 @@ class Activity extends Model
             self::TRANSACTIONS_CANCEL => ['name' => 'Cancel Transaction', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Cancel a buy transaction'],
             self::TRANSACTIONS_STATUS_CHANGE => ['name' => 'Change Status', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Change transaction status'],
             self::TRANSACTIONS_UPDATE_PAYOUT_PREFERENCE => ['name' => 'Update Payout Preference', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'Customer updated payout preference'],
+            self::TRANSACTIONS_DELETE_CLOSED => ['name' => 'Closed Transaction Deleted', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'A completed/closed transaction was deleted'],
 
             // Inventory
             self::INVENTORY_VIEW => ['name' => 'View Inventory', 'category' => self::CATEGORY_INVENTORY, 'description' => 'View stock levels'],
             self::INVENTORY_ADJUST => ['name' => 'Adjust Inventory', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Adjust stock quantities'],
             self::INVENTORY_TRANSFER => ['name' => 'Transfer Inventory', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Transfer stock between locations'],
             self::INVENTORY_VIEW_REPORTS => ['name' => 'View Inventory Reports', 'category' => self::CATEGORY_INVENTORY, 'description' => 'View inventory analytics'],
+            self::INVENTORY_QUANTITY_MANUAL_ADJUST => ['name' => 'Manual Quantity Adjustment', 'category' => self::CATEGORY_INVENTORY, 'description' => 'Inventory quantity was manually adjusted'],
 
             // Warehouses
             self::WAREHOUSES_VIEW => ['name' => 'View Warehouses', 'category' => self::CATEGORY_INVENTORY, 'description' => 'View warehouse locations'],

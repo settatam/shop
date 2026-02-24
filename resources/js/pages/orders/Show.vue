@@ -27,6 +27,7 @@ import {
     ArrowPathIcon,
     BuildingStorefrontIcon,
     GlobeAltIcon,
+    ArrowUturnLeftIcon,
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
@@ -454,6 +455,7 @@ function confirmOrder() {
 }
 
 const isSyncing = ref(false);
+const isSyncingReturns = ref(false);
 
 function syncFromMarketplace() {
     if (isSyncing.value) return;
@@ -461,6 +463,15 @@ function syncFromMarketplace() {
     router.post(`/orders/${props.order.id}/sync-from-marketplace`, {}, {
         preserveScroll: true,
         onFinish: () => { isSyncing.value = false; },
+    });
+}
+
+function syncReturnsFromMarketplace() {
+    if (isSyncingReturns.value) return;
+    isSyncingReturns.value = true;
+    router.post(`/orders/${props.order.id}/sync-returns-from-marketplace`, {}, {
+        preserveScroll: true,
+        onFinish: () => { isSyncingReturns.value = false; },
     });
 }
 
@@ -616,6 +627,71 @@ function saveCustomer() {
 function cancelAddingCustomer() {
     isAddingCustomer.value = false;
     selectedCustomer.value = null;
+}
+
+// Return functionality
+interface ReturnItemData {
+    order_item_id: number;
+    quantity: number;
+    reason: string;
+    restock: boolean;
+    maxQuantity: number;
+    title: string;
+}
+
+const showReturnModal = ref(false);
+const returningItem = ref<ReturnItemData | null>(null);
+const returnMethod = ref<'in_store' | 'shipped'>('in_store');
+const returnReason = ref('');
+const isProcessingReturn = ref(false);
+
+const canProcessReturn = computed(() => {
+    // Can process returns on completed, shipped, delivered, or confirmed orders
+    return ['completed', 'shipped', 'delivered', 'confirmed'].includes(props.order.status)
+        && props.order.status !== 'refunded'
+        && props.order.status !== 'cancelled';
+});
+
+function openReturnModal(item: OrderItem) {
+    returningItem.value = {
+        order_item_id: item.id,
+        quantity: item.quantity,
+        reason: '',
+        restock: true,
+        maxQuantity: item.quantity,
+        title: item.title,
+    };
+    returnMethod.value = 'in_store';
+    returnReason.value = '';
+    showReturnModal.value = true;
+}
+
+function closeReturnModal() {
+    showReturnModal.value = false;
+    returningItem.value = null;
+}
+
+function processReturn() {
+    if (isProcessingReturn.value || !returningItem.value) return;
+
+    isProcessingReturn.value = true;
+    router.post(`/orders/${props.order.id}/process-item-return`, {
+        items: [{
+            order_item_id: returningItem.value.order_item_id,
+            quantity: returningItem.value.quantity,
+            reason: returningItem.value.reason || returnReason.value,
+            restock: returningItem.value.restock,
+        }],
+        return_method: returnMethod.value,
+        reason: returnReason.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showReturnModal.value = false;
+            returningItem.value = null;
+        },
+        onFinish: () => { isProcessingReturn.value = false; },
+    });
 }
 </script>
 
@@ -870,17 +946,29 @@ function cancelAddingCustomer() {
 
                                     <!-- View Mode -->
                                     <template v-else>
-                                        <div class="text-right">
-                                            <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.line_total) }}</p>
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                {{ item.quantity }} × {{ formatCurrency(item.price) }}
-                                            </p>
-                                            <p v-if="item.discount > 0" class="text-sm text-green-600 dark:text-green-400">
-                                                -{{ formatCurrency(item.discount) }} discount
-                                            </p>
-                                            <p v-if="item.line_profit !== undefined" class="text-xs text-gray-400">
-                                                Profit: {{ formatCurrency(item.line_profit) }}
-                                            </p>
+                                        <div class="flex items-center gap-4">
+                                            <div class="text-right">
+                                                <p class="font-medium text-gray-900 dark:text-white">{{ formatCurrency(item.line_total) }}</p>
+                                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                    {{ item.quantity }} × {{ formatCurrency(item.price) }}
+                                                </p>
+                                                <p v-if="item.discount > 0" class="text-sm text-green-600 dark:text-green-400">
+                                                    -{{ formatCurrency(item.discount) }} discount
+                                                </p>
+                                                <p v-if="item.line_profit !== undefined" class="text-xs text-gray-400">
+                                                    Profit: {{ formatCurrency(item.line_profit) }}
+                                                </p>
+                                            </div>
+                                            <button
+                                                v-if="canProcessReturn"
+                                                type="button"
+                                                @click="openReturnModal(item)"
+                                                class="inline-flex items-center gap-1 rounded-md bg-orange-100 px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50"
+                                                title="Process return for this item"
+                                            >
+                                                <ArrowUturnLeftIcon class="size-3" />
+                                                Return
+                                            </button>
                                         </div>
                                     </template>
                                 </div>
@@ -1272,15 +1360,28 @@ function cancelAddingCustomer() {
                                 <h2 class="text-lg font-medium text-gray-900 dark:text-white">
                                     {{ formatPlatformName(orderPlatform) }} Order
                                 </h2>
-                                <button
-                                    type="button"
-                                    @click="syncFromMarketplace"
-                                    :disabled="isSyncing"
-                                    class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                                >
-                                    <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncing }" />
-                                    {{ isSyncing ? 'Syncing...' : (order.platform_order ? 'Sync' : 'Fetch Details') }}
-                                </button>
+                                <div class="flex gap-2">
+                                    <button
+                                        type="button"
+                                        @click="syncFromMarketplace"
+                                        :disabled="isSyncing"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                    >
+                                        <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncing }" />
+                                        {{ isSyncing ? 'Syncing...' : (order.platform_order ? 'Sync' : 'Fetch Details') }}
+                                    </button>
+                                    <button
+                                        v-if="order.platform_order"
+                                        type="button"
+                                        @click="syncReturnsFromMarketplace"
+                                        :disabled="isSyncingReturns"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                        title="Check for refunds on the platform and create local returns"
+                                    >
+                                        <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncingReturns }" />
+                                        {{ isSyncingReturns ? 'Syncing...' : 'Sync Returns' }}
+                                    </button>
+                                </div>
                             </div>
 
                             <!-- Show platform order details if available -->
@@ -1365,5 +1466,104 @@ function cancelAddingCustomer() {
             @close="closeShipModal"
             @success="onShipSuccess"
         />
+
+        <!-- Return Item Modal -->
+        <Teleport to="body">
+            <div v-if="showReturnModal" class="fixed inset-0 z-50 overflow-y-auto">
+                <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 transition-opacity" @click="closeReturnModal" />
+                    <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                        <div class="absolute right-0 top-0 pr-4 pt-4">
+                            <button type="button" @click="closeReturnModal" class="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                                <XMarkIcon class="size-6" />
+                            </button>
+                        </div>
+                        <div class="sm:flex sm:items-start">
+                            <div class="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900 sm:mx-0">
+                                <ArrowUturnLeftIcon class="size-6 text-orange-600 dark:text-orange-400" />
+                            </div>
+                            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left flex-1">
+                                <h3 class="text-lg font-semibold leading-6 text-gray-900 dark:text-white">Process Return</h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ returningItem?.title }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="returningItem" class="mt-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity to Return</label>
+                                <input
+                                    v-model.number="returningItem.quantity"
+                                    type="number"
+                                    min="1"
+                                    :max="returningItem.maxQuantity"
+                                    class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 sm:text-sm"
+                                />
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Max: {{ returningItem.maxQuantity }}</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Return Method</label>
+                                <div class="flex gap-4">
+                                    <label class="flex items-center">
+                                        <input v-model="returnMethod" type="radio" value="in_store" class="text-indigo-600 focus:ring-indigo-600" />
+                                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">In-Store</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input v-model="returnMethod" type="radio" value="shipped" class="text-indigo-600 focus:ring-indigo-600" />
+                                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Shipped</span>
+                                    </label>
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    {{ returnMethod === 'in_store' ? 'Items will be restocked when return is completed' : 'Items will be restocked when received' }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reason</label>
+                                <textarea
+                                    v-model="returnReason"
+                                    rows="2"
+                                    placeholder="Customer changed mind, defective item, wrong size..."
+                                    class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 sm:text-sm"
+                                />
+                            </div>
+
+                            <div class="flex items-center">
+                                <input
+                                    v-model="returningItem.restock"
+                                    type="checkbox"
+                                    class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                />
+                                <label class="ml-2 text-sm text-gray-700 dark:text-gray-300">Restock item when received</label>
+                            </div>
+
+                            <div v-if="order.platform_order" class="rounded-md bg-blue-50 dark:bg-blue-900/30 p-3">
+                                <p class="text-sm text-blue-700 dark:text-blue-300">
+                                    <strong>Note:</strong> This will also create a refund on {{ formatPlatformName(orderPlatform) }}.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex gap-3 justify-end">
+                            <button
+                                type="button"
+                                @click="closeReturnModal"
+                                class="rounded-md bg-white dark:bg-gray-700 px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                @click="processReturn"
+                                :disabled="isProcessingReturn"
+                                class="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-500 disabled:opacity-50"
+                            >
+                                {{ isProcessingReturn ? 'Processing...' : 'Process Return' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

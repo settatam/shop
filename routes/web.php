@@ -198,6 +198,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::delete('orders/{order}/items/{item}', [OrderController::class, 'removeItem'])->name('web.orders.remove-item');
         Route::post('orders/{order}/confirm', [OrderController::class, 'confirm'])->name('web.orders.confirm');
         Route::post('orders/{order}/sync-from-marketplace', [OrderController::class, 'syncFromMarketplace'])->name('web.orders.sync-from-marketplace');
+        Route::post('orders/{order}/sync-returns-from-marketplace', [OrderController::class, 'syncReturnsFromMarketplace'])->name('web.orders.sync-returns-from-marketplace');
+        Route::post('orders/{order}/process-item-return', [OrderController::class, 'processItemReturn'])->name('web.orders.process-item-return');
         Route::post('orders/{order}/receive-payment', [OrderController::class, 'receivePayment'])->name('web.orders.receive-payment');
         Route::post('orders/{order}/complete', [OrderController::class, 'complete'])->name('web.orders.complete');
     });

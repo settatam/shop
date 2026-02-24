@@ -8,6 +8,7 @@ use App\Models\ProductReturn;
 use App\Models\ReturnItem;
 use App\Models\ReturnPolicy;
 use App\Services\ActivityLogFormatter;
+use App\Services\Returns\ReturnProcessingService;
 use App\Services\StoreContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ class ReturnController extends Controller
 {
     public function __construct(
         protected StoreContext $storeContext,
+        protected ReturnProcessingService $returnProcessingService,
     ) {}
 
     /**
@@ -113,6 +115,7 @@ class ReturnController extends Controller
             'policies' => $policies,
             'selectedOrder' => $selectedOrder,
             'types' => $this->getTypes(),
+            'returnMethods' => $this->getReturnMethods(),
             'conditions' => $this->getConditions(),
             'reasons' => $this->getReasons(),
         ]);
@@ -172,6 +175,7 @@ class ReturnController extends Controller
             'order_id' => 'required|exists:orders,id',
             'return_policy_id' => 'nullable|exists:return_policies,id',
             'type' => 'required|in:return,exchange',
+            'return_method' => 'nullable|in:in_store,shipped',
             'reason' => 'nullable|string|max:1000',
             'customer_notes' => 'nullable|string|max:1000',
             'internal_notes' => 'nullable|string|max:1000',
@@ -196,6 +200,7 @@ class ReturnController extends Controller
             'customer_id' => $order->customer_id,
             'return_policy_id' => $validated['return_policy_id'] ?? null,
             'type' => $validated['type'],
+            'return_method' => $validated['return_method'] ?? ProductReturn::METHOD_IN_STORE,
             'reason' => $validated['reason'] ?? null,
             'customer_notes' => $validated['customer_notes'] ?? null,
             'internal_notes' => $validated['internal_notes'] ?? null,
@@ -279,6 +284,7 @@ class ReturnController extends Controller
 
     /**
      * Mark items as received.
+     * For shipped returns, this also triggers automatic restocking.
      */
     public function receive(ProductReturn $return): RedirectResponse
     {
@@ -288,13 +294,19 @@ class ReturnController extends Controller
             return back()->with('error', 'Return must be in processing state to mark items received.');
         }
 
-        $return->markAsReceived();
+        $this->returnProcessingService->markAsReceived($return);
 
-        return back()->with('success', 'Items marked as received.');
+        $message = 'Items marked as received.';
+        if ($return->isShipped() && $return->wasRestocked()) {
+            $message .= ' Inventory has been restocked.';
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
      * Complete a return and process refund.
+     * For in-store returns, this also triggers automatic restocking.
      */
     public function complete(Request $request, ProductReturn $return): RedirectResponse
     {
@@ -308,9 +320,18 @@ class ReturnController extends Controller
             'refund_method' => 'required|in:original_payment,store_credit,cash,card',
         ]);
 
-        $return->complete($validated['refund_method'], $return->refund_amount);
+        // Update the refund method before completing
+        $return->update(['refund_method' => $validated['refund_method']]);
 
-        return back()->with('success', 'Return completed. Refund of $'.number_format($return->refund_amount, 2).' processed.');
+        // Complete the return (auto-restocks for in-store returns)
+        $this->returnProcessingService->completeReturn($return);
+
+        $message = 'Return completed. Refund of $'.number_format($return->refund_amount, 2).' processed.';
+        if ($return->isInStore() && $return->wasRestocked()) {
+            $message .= ' Inventory has been restocked.';
+        }
+
+        return back()->with('success', $message);
     }
 
     /**
@@ -440,6 +461,7 @@ class ReturnController extends Controller
             'return_number' => $return->return_number,
             'status' => $return->status,
             'type' => $return->type,
+            'return_method' => $return->return_method,
             'subtotal' => $return->subtotal,
             'restocking_fee' => $return->restocking_fee,
             'refund_amount' => $return->refund_amount,
@@ -447,6 +469,8 @@ class ReturnController extends Controller
             'reason' => $return->reason,
             'customer_notes' => $return->customer_notes,
             'internal_notes' => $return->internal_notes,
+            'items_restocked' => $return->items_restocked,
+            'restocked_at' => $return->restocked_at?->toISOString(),
             'requested_at' => $return->requested_at?->toISOString(),
             'approved_at' => $return->approved_at?->toISOString(),
             'received_at' => $return->received_at?->toISOString(),
@@ -461,6 +485,9 @@ class ReturnController extends Controller
             'is_completed' => $return->isCompleted(),
             'is_rejected' => $return->isRejected(),
             'is_cancelled' => $return->isCancelled(),
+            'is_in_store' => $return->isInStore(),
+            'is_shipped' => $return->isShipped(),
+            'was_restocked' => $return->wasRestocked(),
 
             // Action helpers
             'can_be_approved' => $return->canBeApproved(),
@@ -580,6 +607,19 @@ class ReturnController extends Controller
         return [
             ['value' => ProductReturn::TYPE_RETURN, 'label' => 'Return'],
             ['value' => ProductReturn::TYPE_EXCHANGE, 'label' => 'Exchange'],
+        ];
+    }
+
+    /**
+     * Get available return methods.
+     *
+     * @return array<array<string, string>>
+     */
+    protected function getReturnMethods(): array
+    {
+        return [
+            ['value' => ProductReturn::METHOD_IN_STORE, 'label' => 'In-Store', 'description' => 'Customer returns item in person. Restocked when return is completed.'],
+            ['value' => ProductReturn::METHOD_SHIPPED, 'label' => 'Shipped', 'description' => 'Customer ships item back. Restocked when item is received.'],
         ];
     }
 

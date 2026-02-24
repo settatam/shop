@@ -329,6 +329,100 @@ class ShopifyService extends BasePlatformService
         return $this->importOrder($response['order'], $connection);
     }
 
+    /**
+     * Fetch refunds for an order from Shopify.
+     */
+    public function getOrderRefunds(PlatformOrder $platformOrder): Collection
+    {
+        $connection = $platformOrder->marketplace;
+
+        $response = $this->shopifyRequest(
+            $connection,
+            'GET',
+            "orders/{$platformOrder->external_order_id}/refunds.json"
+        );
+
+        return collect($response['refunds'] ?? []);
+    }
+
+    /**
+     * Create a refund on Shopify for specific line items.
+     *
+     * @param  array  $lineItems  Array of ['line_item_id' => ..., 'quantity' => ..., 'restock_type' => 'return'|'cancel'|'no_restock']
+     * @param  bool  $notify  Whether to notify customer
+     * @param  string|null  $note  Refund note
+     */
+    public function createRefund(
+        PlatformOrder $platformOrder,
+        array $lineItems,
+        bool $notify = true,
+        ?string $note = null
+    ): array {
+        $connection = $platformOrder->marketplace;
+
+        // First calculate the refund to get proper amounts
+        $calculateResponse = $this->shopifyRequest(
+            $connection,
+            'POST',
+            "orders/{$platformOrder->external_order_id}/refunds/calculate.json",
+            [
+                'refund' => [
+                    'refund_line_items' => collect($lineItems)->map(fn ($item) => [
+                        'line_item_id' => $item['line_item_id'],
+                        'quantity' => $item['quantity'],
+                        'restock_type' => $item['restock_type'] ?? 'return',
+                    ])->values()->all(),
+                ],
+            ]
+        );
+
+        $calculatedRefund = $calculateResponse['refund'] ?? [];
+        $transactions = $calculatedRefund['transactions'] ?? [];
+
+        // Create the actual refund
+        $refundData = [
+            'refund' => [
+                'notify' => $notify,
+                'refund_line_items' => collect($lineItems)->map(fn ($item) => [
+                    'line_item_id' => $item['line_item_id'],
+                    'quantity' => $item['quantity'],
+                    'restock_type' => $item['restock_type'] ?? 'return',
+                ])->values()->all(),
+            ],
+        ];
+
+        if ($note) {
+            $refundData['refund']['note'] = $note;
+        }
+
+        // Include transactions from calculation for proper refund amounts
+        if (! empty($transactions)) {
+            $refundData['refund']['transactions'] = collect($transactions)->map(fn ($t) => [
+                'parent_id' => $t['parent_id'],
+                'amount' => $t['amount'],
+                'kind' => 'refund',
+                'gateway' => $t['gateway'],
+            ])->values()->all();
+        }
+
+        $response = $this->shopifyRequest(
+            $connection,
+            'POST',
+            "orders/{$platformOrder->external_order_id}/refunds.json",
+            $refundData
+        );
+
+        return $response['refund'] ?? [];
+    }
+
+    /**
+     * Get Shopify line item IDs for an order.
+     */
+    public function getOrderLineItems(PlatformOrder $platformOrder): Collection
+    {
+        return collect($platformOrder->line_items ?? []);
+    }
+
     public function getCategories(StoreMarketplace $connection): Collection
     {
         $response = $this->shopifyRequest($connection, 'GET', 'custom_collections.json');

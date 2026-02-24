@@ -441,6 +441,143 @@ class OrderController extends Controller
     }
 
     /**
+     * Sync returns from the marketplace (fetch refunds and create local returns).
+     */
+    public function syncReturnsFromMarketplace(Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($order);
+
+        $order->load(['platformOrder.marketplace']);
+
+        if (! $order->platformOrder) {
+            return back()->with('error', 'This order is not linked to a platform order.');
+        }
+
+        $marketplace = $order->platformOrder->marketplace;
+
+        if (! $marketplace) {
+            return back()->with('error', 'Marketplace connection not found.');
+        }
+
+        try {
+            $returnSyncService = app(\App\Services\Returns\ReturnSyncService::class);
+            $platform = $marketplace->platform;
+
+            $platformService = match ($platform->value) {
+                'shopify' => app(\App\Services\Platforms\Shopify\ShopifyService::class),
+                default => throw new \Exception("Platform '{$platform->value}' return sync not supported."),
+            };
+
+            // Fetch refunds from Shopify
+            $refunds = $platformService->getOrderRefunds($order->platformOrder);
+
+            if ($refunds->isEmpty()) {
+                return back()->with('info', 'No refunds found for this order.');
+            }
+
+            $imported = 0;
+            $skipped = 0;
+
+            foreach ($refunds as $refund) {
+                $externalReturnId = (string) ($refund['id'] ?? '');
+
+                // Check if this refund has already been imported
+                $existingReturn = \App\Models\ProductReturn::where('external_return_id', $externalReturnId)
+                    ->where('store_marketplace_id', $marketplace->id)
+                    ->first();
+
+                if ($existingReturn) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                // Import the refund as a return
+                $returnSyncService->importFromWebhook($refund, $marketplace, $platform);
+                $imported++;
+            }
+
+            if ($imported > 0) {
+                return back()->with('success', "Synced {$imported} return(s) from {$marketplace->platform->label()}.".($skipped > 0 ? " ({$skipped} already existed)" : ''));
+            }
+
+            return back()->with('info', "All {$skipped} refund(s) have already been imported.");
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Failed to sync returns: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Process a return for specific order items.
+     * Creates a local return and syncs to platform (Shopify) if applicable.
+     */
+    public function processItemReturn(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorizeOrder($order);
+
+        // Check if order is in a valid state for returns
+        $validStatuses = [
+            Order::STATUS_CONFIRMED,
+            Order::STATUS_SHIPPED,
+            Order::STATUS_DELIVERED,
+            Order::STATUS_COMPLETED,
+        ];
+
+        if (! in_array($order->status, $validStatuses)) {
+            return back()->with('error', 'Returns can only be processed for confirmed, shipped, delivered, or completed orders.');
+        }
+
+        $validated = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.order_item_id' => 'required|exists:order_items,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.reason' => 'nullable|string|max:500',
+            'items.*.restock' => 'boolean',
+            'return_method' => 'nullable|string|in:in_store,shipped',
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        // Verify all items belong to this order
+        $orderItemIds = $order->items->pluck('id')->toArray();
+        foreach ($validated['items'] as $item) {
+            if (! in_array($item['order_item_id'], $orderItemIds)) {
+                return back()->with('error', 'Invalid order item specified.');
+            }
+        }
+
+        try {
+            $returnService = app(\App\Services\Returns\ReturnProcessingService::class);
+
+            $return = $returnService->processItemReturn(
+                $order,
+                $validated['items'],
+                $validated['return_method'] ?? \App\Models\ProductReturn::METHOD_IN_STORE,
+                $validated['reason'] ?? null,
+                auth()->id()
+            );
+
+            // Check if this was synced to a platform
+            $platformMessage = '';
+            if ($return->external_return_id) {
+                $platformMessage = ' Refund created on '.$order->source_platform.'.';
+            } elseif ($return->sync_status === \App\Models\ProductReturn::SYNC_STATUS_FAILED) {
+                $platformMessage = ' Note: Platform sync failed - please process refund manually on '.$order->source_platform.'.';
+            }
+
+            // Check if order was marked as refunded
+            $order->refresh();
+            $orderMessage = '';
+            if ($order->status === Order::STATUS_REFUNDED) {
+                $orderMessage = ' Order marked as fully refunded.';
+            }
+
+            return back()->with('success', 'Return processed successfully.'.$platformMessage.$orderMessage);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Failed to process return: '.$e->getMessage());
+        }
+    }
+
+    /**
      * Fetch order from platform and create/update platform order record.
      */
     protected function fetchAndCreatePlatformOrder(

@@ -30,6 +30,10 @@ class ProductReturn extends Model
 
     public const TYPE_EXCHANGE = 'exchange';
 
+    public const METHOD_IN_STORE = 'in_store';
+
+    public const METHOD_SHIPPED = 'shipped';
+
     public const REFUND_ORIGINAL = 'original_payment';
 
     public const REFUND_STORE_CREDIT = 'store_credit';
@@ -53,6 +57,7 @@ class ProductReturn extends Model
         'return_number',
         'status',
         'type',
+        'return_method',
         'subtotal',
         'restocking_fee',
         'refund_amount',
@@ -69,6 +74,8 @@ class ProductReturn extends Model
         'requested_at',
         'approved_at',
         'received_at',
+        'items_restocked',
+        'restocked_at',
         'completed_at',
     ];
 
@@ -78,10 +85,12 @@ class ProductReturn extends Model
             'subtotal' => 'decimal:2',
             'restocking_fee' => 'decimal:2',
             'refund_amount' => 'decimal:2',
+            'items_restocked' => 'boolean',
             'synced_at' => 'datetime',
             'requested_at' => 'datetime',
             'approved_at' => 'datetime',
             'received_at' => 'datetime',
+            'restocked_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }
@@ -193,6 +202,26 @@ class ProductReturn extends Model
         return $query->where('source_platform', $platform);
     }
 
+    public function scopeInStore($query)
+    {
+        return $query->where('return_method', self::METHOD_IN_STORE);
+    }
+
+    public function scopeShipped($query)
+    {
+        return $query->where('return_method', self::METHOD_SHIPPED);
+    }
+
+    public function scopeNotRestocked($query)
+    {
+        return $query->where('items_restocked', false);
+    }
+
+    public function scopeRestocked($query)
+    {
+        return $query->where('items_restocked', true);
+    }
+
     public function isPending(): bool
     {
         return $this->status === self::STATUS_PENDING;
@@ -231,6 +260,21 @@ class ProductReturn extends Model
     public function isFromExternalPlatform(): bool
     {
         return ! empty($this->source_platform);
+    }
+
+    public function isInStore(): bool
+    {
+        return $this->return_method === self::METHOD_IN_STORE;
+    }
+
+    public function isShipped(): bool
+    {
+        return $this->return_method === self::METHOD_SHIPPED;
+    }
+
+    public function wasRestocked(): bool
+    {
+        return $this->items_restocked;
     }
 
     public function canBeApproved(): bool

@@ -549,6 +549,33 @@ class Order extends Model implements Payable
     }
 
     /**
+     * Get the activity slug, detecting deletion of closed orders.
+     */
+    protected function getActivitySlug(string $action): ?string
+    {
+        // Detect deletion of a closed order/sale
+        if ($action === 'delete') {
+            $closedStatuses = [
+                self::STATUS_COMPLETED,
+                self::STATUS_DELIVERED,
+                self::STATUS_SHIPPED,
+                self::STATUS_CONFIRMED,
+            ];
+
+            // Check the original status (before deletion)
+            $originalStatus = $this->getOriginal('status') ?? $this->status;
+
+            if (in_array($originalStatus, $closedStatuses, true)) {
+                return Activity::ORDERS_DELETE_CLOSED;
+            }
+        }
+
+        $map = $this->getActivityMap();
+
+        return $map[$action] ?? null;
+    }
+
+    /**
      * Sync the invoice totals (subtotal, tax, shipping, discount, total) with the order.
      */
     public function syncInvoiceTotals(): void

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\BelongsToStore;
+use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Inventory extends Model
 {
-    use BelongsToStore, HasFactory;
+    use BelongsToStore, HasFactory, LogsActivity;
 
     protected $table = 'inventory';
 
@@ -100,7 +101,7 @@ class Inventory extends Model
         $this->quantity += $adjustment;
         $this->save();
 
-        return InventoryAdjustment::create([
+        $inventoryAdjustment = InventoryAdjustment::create([
             'store_id' => $this->store_id,
             'inventory_id' => $this->id,
             'user_id' => $userId,
@@ -113,6 +114,22 @@ class Inventory extends Model
             'reason' => $reason,
             'notes' => $notes,
         ]);
+
+        // Log manual quantity adjustments for notifications
+        // Exclude automatic adjustments from sales (type: sale, fulfill, order)
+        $manualTypes = ['manual', 'adjustment', 'count', 'damage', 'loss', 'return', 'correction'];
+        if (in_array($type, $manualTypes, true)) {
+            $this->logActivity('manual_adjust', [
+                'old' => ['quantity' => $quantityBefore],
+                'new' => ['quantity' => $this->quantity],
+                'adjustment' => $adjustment,
+                'type' => $type,
+                'reason' => $reason,
+                'notes' => $notes,
+            ], "Inventory adjusted: {$quantityBefore} → {$this->quantity} ({$type})");
+        }
+
+        return $inventoryAdjustment;
     }
 
     public function reserve(int $quantity): bool
@@ -202,5 +219,54 @@ class Inventory extends Model
     public function scopeForVariant($query, int $variantId)
     {
         return $query->where('product_variant_id', $variantId);
+    }
+
+    /**
+     * Override boot to disable automatic activity logging.
+     * We only want to log manual adjustments, not automatic ones from sales.
+     */
+    public static function bootLogsActivity(): void
+    {
+        // Intentionally empty - we manually log in adjustQuantity() for manual adjustments only
+    }
+
+    /**
+     * Get the activity prefix for this model.
+     */
+    protected function getActivityPrefix(): string
+    {
+        return 'inventory';
+    }
+
+    /**
+     * Get the mapping of actions to activity slugs.
+     */
+    protected function getActivityMap(): array
+    {
+        return [
+            'create' => 'inventory.create',
+            'update' => 'inventory.update',
+            'delete' => 'inventory.delete',
+            'manual_adjust' => Activity::INVENTORY_QUANTITY_MANUAL_ADJUST,
+        ];
+    }
+
+    /**
+     * Get attributes that should be logged.
+     */
+    protected function getLoggableAttributes(): array
+    {
+        return ['id', 'product_variant_id', 'warehouse_id', 'quantity'];
+    }
+
+    /**
+     * Get the identifier for this model in activity descriptions.
+     */
+    protected function getActivityIdentifier(): string
+    {
+        $sku = $this->variant?->sku ?? '';
+        $warehouse = $this->warehouse?->name ?? '';
+
+        return "{$sku} @ {$warehouse}";
     }
 }

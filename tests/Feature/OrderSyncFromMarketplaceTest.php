@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\PlatformOrder;
+use App\Models\ProductReturn;
 use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\State;
@@ -725,5 +726,217 @@ class OrderSyncFromMarketplaceTest extends TestCase
         // Verify basic customer info was updated
         $this->assertEquals('+1234567890', $customer->phone_number);
         $this->assertEquals('Acme Inc', $customer->company_name);
+    }
+
+    public function test_sync_returns_fails_without_platform_order(): void
+    {
+        $this->actingAs($this->user);
+
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'external_marketplace_id' => '7358483726583',
+            'source_platform' => 'shopify',
+        ]);
+
+        $response = $this->withStore()
+            ->post("/orders/{$order->id}/sync-returns-from-marketplace");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error', 'This order is not linked to a platform order.');
+    }
+
+    public function test_sync_returns_imports_refunds_as_returns(): void
+    {
+        $this->actingAs($this->user);
+
+        $marketplace = StoreMarketplace::factory()->shopify()->create([
+            'store_id' => $this->store->id,
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'test-token',
+            'status' => 'active',
+        ]);
+
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'external_marketplace_id' => '7358483726583',
+            'source_platform' => 'shopify',
+            'status' => 'completed',
+        ]);
+
+        $platformOrder = PlatformOrder::create([
+            'store_marketplace_id' => $marketplace->id,
+            'order_id' => $order->id,
+            'external_order_id' => '7358483726583',
+            'external_order_number' => '1001',
+            'status' => 'paid',
+            'fulfillment_status' => 'fulfilled',
+            'total' => 100.00,
+            'currency' => 'USD',
+            'ordered_at' => now(),
+        ]);
+
+        // Mock the Shopify refunds API response
+        Http::fake([
+            'test-store.myshopify.com/admin/api/*/orders/7358483726583/refunds.json' => Http::response([
+                'refunds' => [
+                    [
+                        'id' => 12345678,
+                        'order_id' => 7358483726583,
+                        'note' => 'Customer changed their mind',
+                        'created_at' => now()->toISOString(),
+                        'refund_line_items' => [
+                            [
+                                'line_item_id' => 111,
+                                'quantity' => 1,
+                                'subtotal' => 50.00,
+                                'restock_type' => 'cancel',
+                            ],
+                        ],
+                        'transactions' => [
+                            [
+                                'kind' => 'refund',
+                                'amount' => '50.00',
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        // Verify no returns exist yet
+        $this->assertEquals(0, ProductReturn::where('store_id', $this->store->id)->count());
+
+        $response = $this->withStore()
+            ->post("/orders/{$order->id}/sync-returns-from-marketplace");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        // Verify return was created
+        $this->assertEquals(1, ProductReturn::where('store_id', $this->store->id)->count());
+
+        $return = ProductReturn::where('store_id', $this->store->id)->first();
+        $this->assertEquals('12345678', $return->external_return_id);
+        $this->assertEquals($order->id, $return->order_id);
+        $this->assertEquals($customer->id, $return->customer_id);
+        $this->assertEquals($marketplace->id, $return->store_marketplace_id);
+        $this->assertEquals('Customer changed their mind', $return->reason);
+        $this->assertEquals(50.00, $return->refund_amount);
+    }
+
+    public function test_sync_returns_skips_already_imported_refunds(): void
+    {
+        $this->actingAs($this->user);
+
+        $marketplace = StoreMarketplace::factory()->shopify()->create([
+            'store_id' => $this->store->id,
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'test-token',
+            'status' => 'active',
+        ]);
+
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'external_marketplace_id' => '7358483726583',
+            'source_platform' => 'shopify',
+            'status' => 'completed',
+        ]);
+
+        $platformOrder = PlatformOrder::create([
+            'store_marketplace_id' => $marketplace->id,
+            'order_id' => $order->id,
+            'external_order_id' => '7358483726583',
+            'external_order_number' => '1001',
+            'status' => 'paid',
+            'fulfillment_status' => 'fulfilled',
+            'total' => 100.00,
+            'currency' => 'USD',
+            'ordered_at' => now(),
+        ]);
+
+        // Create an existing return for this refund
+        ProductReturn::factory()->create([
+            'store_id' => $this->store->id,
+            'order_id' => $order->id,
+            'customer_id' => $customer->id,
+            'store_marketplace_id' => $marketplace->id,
+            'external_return_id' => '12345678',
+            'source_platform' => 'shopify',
+        ]);
+
+        // Mock the Shopify refunds API response
+        Http::fake([
+            'test-store.myshopify.com/admin/api/*/orders/7358483726583/refunds.json' => Http::response([
+                'refunds' => [
+                    [
+                        'id' => 12345678,
+                        'order_id' => 7358483726583,
+                        'note' => 'Customer changed their mind',
+                        'created_at' => now()->toISOString(),
+                        'refund_line_items' => [],
+                        'transactions' => [],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->withStore()
+            ->post("/orders/{$order->id}/sync-returns-from-marketplace");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('info');
+
+        // Verify no additional returns were created
+        $this->assertEquals(1, ProductReturn::where('store_id', $this->store->id)->count());
+    }
+
+    public function test_sync_returns_shows_info_when_no_refunds_found(): void
+    {
+        $this->actingAs($this->user);
+
+        $marketplace = StoreMarketplace::factory()->shopify()->create([
+            'store_id' => $this->store->id,
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'test-token',
+            'status' => 'active',
+        ]);
+
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'external_marketplace_id' => '7358483726583',
+            'source_platform' => 'shopify',
+            'status' => 'completed',
+        ]);
+
+        $platformOrder = PlatformOrder::create([
+            'store_marketplace_id' => $marketplace->id,
+            'order_id' => $order->id,
+            'external_order_id' => '7358483726583',
+            'external_order_number' => '1001',
+            'status' => 'paid',
+            'fulfillment_status' => 'fulfilled',
+            'total' => 100.00,
+            'currency' => 'USD',
+            'ordered_at' => now(),
+        ]);
+
+        // Mock empty refunds response
+        Http::fake([
+            'test-store.myshopify.com/admin/api/*/orders/7358483726583/refunds.json' => Http::response([
+                'refunds' => [],
+            ], 200),
+        ]);
+
+        $response = $this->withStore()
+            ->post("/orders/{$order->id}/sync-returns-from-marketplace");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('info', 'No refunds found for this order.');
     }
 }
