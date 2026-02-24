@@ -301,6 +301,33 @@ class BuyItemsTableTest extends TestCase
         $this->assertEquals("/transactions/{$transaction->id}/items/{$item->id}", $result['data']['items'][0]['title']['href']);
     }
 
+    public function test_buy_items_table_filters_uncategorized_items(): void
+    {
+        $category = \App\Models\Category::factory()->create(['store_id' => $this->store->id]);
+
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status_id' => $this->paymentProcessedStatus->id,
+        ]);
+
+        // Create categorized items
+        TransactionItem::factory()->count(2)->create([
+            'transaction_id' => $transaction->id,
+            'category_id' => $category->id,
+        ]);
+
+        // Create uncategorized items
+        TransactionItem::factory()->count(3)->create([
+            'transaction_id' => $transaction->id,
+            'category_id' => null,
+        ]);
+
+        $widget = new BuyItemsTable;
+        $result = $widget->render(['store_id' => $this->store->id, 'parent_category_id' => '0']);
+
+        $this->assertCount(3, $result['data']['items']);
+    }
+
     public function test_buy_items_table_applies_transaction_type_filter(): void
     {
         $inStoreTransaction = Transaction::factory()->create([

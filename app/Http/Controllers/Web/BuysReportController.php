@@ -111,6 +111,23 @@ class BuysReportController extends Controller
         // Find all category IDs that have children (non-leaf)
         $parentIds = $categories->whereNotNull('parent_id')->pluck('parent_id')->unique()->toArray();
 
+        // Helper to find root ancestor of a category
+        $rootCategoryCache = [];
+        $findRootCategoryId = function (int $categoryId) use ($categories, &$rootCategoryCache, &$findRootCategoryId): ?int {
+            if (isset($rootCategoryCache[$categoryId])) {
+                return $rootCategoryCache[$categoryId];
+            }
+            $category = $categories->get($categoryId);
+            if (! $category) {
+                return null;
+            }
+            if (! $category->parent_id) {
+                return $rootCategoryCache[$categoryId] = $categoryId;
+            }
+
+            return $rootCategoryCache[$categoryId] = $findRootCategoryId($category->parent_id);
+        };
+
         // Build breakdown by category
         $breakdown = [];
 
@@ -128,6 +145,7 @@ class BuysReportController extends Controller
                         'category_name' => $category?->name ?? 'Uncategorized',
                         'is_leaf' => $categoryId === 0 || ! in_array($categoryId, $parentIds),
                         'parent_id' => $category?->parent_id,
+                        'root_category_id' => $categoryId === 0 ? null : $findRootCategoryId($categoryId),
                         'items_count' => 0,
                         'transactions_count' => 0,
                         'transaction_ids' => [],

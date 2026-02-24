@@ -196,6 +196,11 @@ class BuyItemsTable extends Table
         if ($subcategoryId) {
             // If subcategory is selected, filter by that specific category
             $query->where('category_id', $subcategoryId);
+        } elseif ($parentCategoryId === '0' || $parentCategoryId === 0) {
+            // Uncategorized items
+            $query->where(function ($q) {
+                $q->whereNull('category_id')->orWhere('category_id', 0);
+            });
         } elseif ($parentCategoryId) {
             // If only parent category is selected, include parent and all its children
             $childCategoryIds = Category::where('parent_id', $parentCategoryId)

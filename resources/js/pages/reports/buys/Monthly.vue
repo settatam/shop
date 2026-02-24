@@ -40,6 +40,8 @@ interface CategoryBreakdownRow {
     category_id: number;
     category_name: string;
     is_leaf: boolean;
+    parent_id: number | null;
+    root_category_id: number | null;
     items_count: number;
     transactions_count: number;
     total_purchase: number;
@@ -213,6 +215,13 @@ function viewBuys(row: MonthRow): void {
     router.visit(
         `/transactions?date_from=${row.start_date}&date_to=${row.end_date}&status=payment_processed`,
     );
+}
+
+function viewCategoryBuys(row: CategoryBreakdownRow): void {
+    const fromDate = `${startYear.value}-${String(startMonth.value).padStart(2, '0')}-01`;
+    const endDate = new Date(endYear.value, endMonth.value, 0);
+    const toDate = `${endYear.value}-${String(endMonth.value).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    router.visit(`/buys/items?parent_category_id=${row.category_id}&from_date=${fromDate}&to_date=${toDate}`);
 }
 </script>
 
@@ -490,7 +499,8 @@ function viewBuys(row: MonthRow): void {
                         <tr
                             v-for="row in categoryBreakdown"
                             :key="row.category_id"
-                            class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                            class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                            @click="viewCategoryBuys(row)"
                         >
                             <td
                                 class="px-4 py-3 text-sm text-gray-900 dark:text-white"
@@ -500,7 +510,7 @@ function viewBuys(row: MonthRow): void {
                                     class="mr-1 text-gray-400"
                                     >📁</span
                                 >
-                                {{ row.category_name }}
+                                <span class="hover:underline">{{ row.category_name }}</span>
                             </td>
                             <td
                                 class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"

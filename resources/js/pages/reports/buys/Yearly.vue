@@ -170,6 +170,13 @@ function viewBuys(row: YearRow): void {
         `/transactions?date_from=${row.start_date}&date_to=${row.end_date}&status=payment_processed`,
     );
 }
+
+function viewCategoryBuys(row: CategoryBreakdownRow): void {
+    const currentYear = new Date().getFullYear();
+    const fromDate = `${currentYear - 4}-01-01`;
+    const toDate = `${currentYear}-12-31`;
+    router.visit(`/buys/items?parent_category_id=${row.category_id}&from_date=${fromDate}&to_date=${toDate}`);
+}
 </script>
 
 <template>
@@ -346,7 +353,8 @@ function viewBuys(row: YearRow): void {
                             <tr
                                 v-for="row in categoryBreakdown"
                                 :key="row.category_id"
-                                class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+                                @click="viewCategoryBuys(row)"
                             >
                                 <td
                                     class="px-4 py-3 text-sm text-gray-900 dark:text-white"
@@ -356,7 +364,7 @@ function viewBuys(row: YearRow): void {
                                         class="mr-1 text-gray-400"
                                         >📁</span
                                     >
-                                    {{ row.category_name }}
+                                    <span class="hover:underline">{{ row.category_name }}</span>
                                 </td>
                                 <td
                                     class="px-4 py-3 text-right text-sm text-gray-900 dark:text-white"
