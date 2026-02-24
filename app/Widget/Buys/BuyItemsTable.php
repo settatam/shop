@@ -175,17 +175,17 @@ class BuyItemsTable extends Table
             $query->where('buy_price', '<=', $maxAmount);
         }
 
-        // Apply from date filter
+        // Apply from date filter (use payment_processed_at to match report date filtering)
         if ($fromDate = data_get($filter, 'from_date')) {
             $query->whereHas('transaction', function ($q) use ($fromDate) {
-                $q->whereDate('created_at', '>=', $fromDate);
+                $q->whereDate('payment_processed_at', '>=', $fromDate);
             });
         }
 
-        // Apply to date filter
+        // Apply to date filter (use payment_processed_at to match report date filtering)
         if ($toDate = data_get($filter, 'to_date')) {
             $query->whereHas('transaction', function ($q) use ($toDate) {
-                $q->whereDate('created_at', '<=', $toDate);
+                $q->whereDate('payment_processed_at', '<=', $toDate);
             });
         }
 
