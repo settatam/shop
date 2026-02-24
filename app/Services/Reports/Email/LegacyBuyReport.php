@@ -157,6 +157,11 @@ class LegacyBuyReport extends AbstractReport
         if (count($rows) > 0) {
             $totals = $this->buysService->calculateDailyBuysTotals($transactions);
 
+            // Calculate overall profit percentage from totals
+            $totalProfitPct = $totals['estimated_value'] > 0
+                ? ($totals['profit'] / $totals['estimated_value']) * 100
+                : 0;
+
             $rows[] = [
                 'id' => null,
                 'date' => 'Totals',
@@ -173,7 +178,9 @@ class LegacyBuyReport extends AbstractReport
                 'profit' => $totals['profit'] > 0
                     ? $this->formatCurrency($totals['profit'])
                     : ['data' => 0, 'formatted' => '-'],
-                'profit_pct' => ['data' => 0, 'formatted' => '-'],
+                'profit_pct' => $totalProfitPct > 0
+                    ? $this->formatPercentage($totalProfitPct)
+                    : ['data' => 0, 'formatted' => '-'],
                 'user' => '',
                 '_is_total' => true,
             ];
@@ -218,6 +225,16 @@ class LegacyBuyReport extends AbstractReport
         if (count($data) > 0) {
             $totals = $this->buysService->calculateAggregatedTotals($dailyData);
 
+            // Calculate overall profit percentage from totals
+            $totalProfitPct = $totals['estimated_value'] > 0
+                ? ($totals['profit'] / $totals['estimated_value']) * 100
+                : 0;
+
+            // Calculate overall average buy price
+            $avgBuyPrice = $totals['buys_count'] > 0
+                ? $totals['purchase_amt'] / $totals['buys_count']
+                : 0;
+
             $data[] = [
                 'date' => 'Totals',
                 'buys_count' => $totals['buys_count'],
@@ -228,8 +245,10 @@ class LegacyBuyReport extends AbstractReport
                 'profit' => $totals['profit'] > 0
                     ? $this->formatCurrency($totals['profit'])
                     : ['data' => 0, 'formatted' => '-'],
-                'profit_pct' => ['data' => 0, 'formatted' => '-'],
-                'avg_buy_price' => ['data' => 0, 'formatted' => '-'],
+                'profit_pct' => $totalProfitPct > 0
+                    ? $this->formatPercentage($totalProfitPct)
+                    : ['data' => 0, 'formatted' => '-'],
+                'avg_buy_price' => $this->formatCurrency($avgBuyPrice),
                 '_is_total' => true,
             ];
         }
@@ -270,6 +289,16 @@ class LegacyBuyReport extends AbstractReport
         if (count($data) > 0) {
             $totals = $this->buysService->calculateAggregatedTotals($monthlyData);
 
+            // Calculate overall profit percentage from totals
+            $totalProfitPct = $totals['estimated_value'] > 0
+                ? ($totals['profit'] / $totals['estimated_value']) * 100
+                : 0;
+
+            // Calculate overall average buy price
+            $avgBuyPrice = $totals['buys_count'] > 0
+                ? $totals['purchase_amt'] / $totals['buys_count']
+                : 0;
+
             $data[] = [
                 'month' => 'Total (13 Months)',
                 'buys_count' => $totals['buys_count'],
@@ -280,8 +309,10 @@ class LegacyBuyReport extends AbstractReport
                 'profit' => $totals['profit'] > 0
                     ? $this->formatCurrency($totals['profit'])
                     : ['data' => 0, 'formatted' => '-'],
-                'profit_pct' => ['data' => 0, 'formatted' => '-'],
-                'avg_buy_price' => ['data' => 0, 'formatted' => '-'],
+                'profit_pct' => $totalProfitPct > 0
+                    ? $this->formatPercentage($totalProfitPct)
+                    : ['data' => 0, 'formatted' => '-'],
+                'avg_buy_price' => $this->formatCurrency($avgBuyPrice),
                 '_is_total' => true,
             ];
         }

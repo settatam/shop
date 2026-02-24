@@ -232,6 +232,11 @@ class LegacySalesReport extends AbstractReport
         if (count($data) > 0) {
             $totals = $this->salesService->calculateAggregatedTotals($dailyData);
 
+            // Calculate overall profit percentage from totals
+            $totalProfitPct = $totals['total_sales_price'] > 0
+                ? ($totals['gross_profit'] / $totals['total_sales_price']) * 100
+                : 0;
+
             $data[] = [
                 'date' => 'Total',
                 'sales_count' => $totals['sales_count'],
@@ -242,7 +247,7 @@ class LegacySalesReport extends AbstractReport
                 'total_service_fee' => $this->formatCurrency($totals['total_service_fee']),
                 'total_paid' => $this->formatCurrency($totals['total_paid']),
                 'gross_profit' => $this->formatCurrency($totals['gross_profit']),
-                'profit_pct' => ['data' => 0, 'formatted' => '-'],
+                'profit_pct' => $this->formatPercentage($totalProfitPct),
                 '_is_total' => true,
             ];
         }
@@ -280,6 +285,11 @@ class LegacySalesReport extends AbstractReport
         if (count($data) > 0) {
             $totals = $this->salesService->calculateAggregatedTotals($monthlyData);
 
+            // Calculate overall profit percentage from totals
+            $totalProfitPct = $totals['total_sales_price'] > 0
+                ? ($totals['gross_profit'] / $totals['total_sales_price']) * 100
+                : 0;
+
             $data[] = [
                 'month' => 'Total (13 Months)',
                 'sales_count' => $totals['sales_count'],
@@ -290,7 +300,7 @@ class LegacySalesReport extends AbstractReport
                 'total_service_fee' => $this->formatCurrency($totals['total_service_fee']),
                 'total_paid' => $this->formatCurrency($totals['total_paid']),
                 'gross_profit' => $this->formatCurrency($totals['gross_profit']),
-                'profit_pct' => ['data' => 0, 'formatted' => '-'],
+                'profit_pct' => $this->formatPercentage($totalProfitPct),
                 '_is_total' => true,
             ];
         }
