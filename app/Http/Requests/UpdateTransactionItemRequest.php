@@ -24,7 +24,9 @@ class UpdateTransactionItemRequest extends FormRequest
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'quantity' => ['sometimes', 'integer', 'min:1'],
             'price' => ['nullable', 'numeric', 'min:0'],
-            'buy_price' => ['nullable', 'numeric', 'min:0'],
+            'buy_price' => $this->route('transaction')->isPaymentProcessed()
+                ? ['prohibited']
+                : ['nullable', 'numeric', 'min:0'],
             'dwt' => ['nullable', 'numeric', 'min:0'],
             'precious_metal' => ['nullable', 'string', Rule::in([
                 TransactionItem::METAL_GOLD_10K,

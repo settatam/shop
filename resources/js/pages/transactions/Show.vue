@@ -1556,7 +1556,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         min="0"
                                                         :value="inlineEditingPrices[item.id]?.price ?? ''"
                                                         @input="(e) => { inlineEditingPrices[item.id].price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'price'); }"
-                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                                         :class="{ 'opacity-50': inlineUpdating[item.id] }"
                                                     />
                                                     <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
@@ -1572,9 +1572,10 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         step="0.01"
                                                         min="0"
                                                         :value="inlineEditingPrices[item.id]?.buy_price ?? ''"
+                                                        :disabled="transaction.status === 'payment_processed'"
                                                         @input="(e) => { inlineEditingPrices[item.id].buy_price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'buy_price'); }"
-                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                        :class="{ 'opacity-50': inlineUpdating[item.id] }"
+                                                        class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        :class="{ 'opacity-50': inlineUpdating[item.id], 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
                                                     />
                                                     <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
                                                         <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
@@ -1776,7 +1777,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         min="0"
                                                         :value="inlineEditingPrices[item.id]?.price ?? ''"
                                                         @input="(e) => { inlineEditingPrices[item.id].price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'price'); }"
-                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                                         :class="{ 'opacity-50': inlineUpdating[item.id] }"
                                                     />
                                                     <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
@@ -1792,9 +1793,10 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         step="0.01"
                                                         min="0"
                                                         :value="inlineEditingPrices[item.id]?.buy_price ?? ''"
+                                                        :disabled="transaction.status === 'payment_processed'"
                                                         @input="(e) => { inlineEditingPrices[item.id].buy_price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'buy_price'); }"
-                                                        class="w-24 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                        :class="{ 'opacity-50': inlineUpdating[item.id] }"
+                                                        class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                                        :class="{ 'opacity-50': inlineUpdating[item.id], 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
                                                     />
                                                     <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
                                                         <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />

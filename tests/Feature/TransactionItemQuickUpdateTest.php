@@ -154,4 +154,98 @@ class TransactionItemQuickUpdateTest extends TestCase
         $response->assertJsonPath('success', true);
         $this->assertEquals(170, $response->json('transaction.total_buy_price')); // 120 + 50
     }
+
+    public function test_cannot_quick_update_buy_price_when_payment_processed(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'price' => 100.00,
+            'buy_price' => 80.00,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->patchJson("/transactions/{$transaction->id}/items/{$item->id}/quick-update", [
+                'buy_price' => 120.00,
+            ]);
+
+        $response->assertUnprocessable();
+        $response->assertJsonValidationErrors(['buy_price']);
+
+        $item->refresh();
+        $this->assertEquals(80.00, $item->buy_price);
+    }
+
+    public function test_can_quick_update_price_when_payment_processed(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'price' => 100.00,
+            'buy_price' => 80.00,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->patchJson("/transactions/{$transaction->id}/items/{$item->id}/quick-update", [
+                'price' => 200.00,
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'item' => [
+                'price' => 200.00,
+            ],
+        ]);
+
+        $item->refresh();
+        $this->assertEquals(200.00, $item->price);
+        $this->assertEquals(80.00, $item->buy_price); // Should remain unchanged
+    }
+
+    public function test_cannot_full_update_buy_price_when_payment_processed(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'title' => 'Gold Ring',
+            'price' => 100.00,
+            'buy_price' => 80.00,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->put("/transactions/{$transaction->id}/items/{$item->id}", [
+                'title' => 'Gold Ring',
+                'buy_price' => 120.00,
+            ]);
+
+        $response->assertSessionHasErrors(['buy_price']);
+
+        $item->refresh();
+        $this->assertEquals(80.00, $item->buy_price);
+    }
+
+    public function test_can_full_update_other_fields_when_payment_processed(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->create(['store_id' => $this->store->id]);
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'title' => 'Gold Ring',
+            'price' => 100.00,
+            'buy_price' => 80.00,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->put("/transactions/{$transaction->id}/items/{$item->id}", [
+                'title' => 'Updated Gold Ring',
+                'price' => 200.00,
+            ]);
+
+        $response->assertRedirect();
+
+        $item->refresh();
+        $this->assertEquals('Updated Gold Ring', $item->title);
+        $this->assertEquals(200.00, $item->price);
+        $this->assertEquals(80.00, $item->buy_price); // Should remain unchanged
+    }
 }

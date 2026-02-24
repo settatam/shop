@@ -199,7 +199,9 @@ class TransactionItemController extends Controller
 
         $validated = $request->validate([
             'price' => ['nullable', 'numeric', 'min:0'],
-            'buy_price' => ['nullable', 'numeric', 'min:0'],
+            'buy_price' => $transaction->isPaymentProcessed()
+                ? ['prohibited']
+                : ['nullable', 'numeric', 'min:0'],
         ]);
 
         $this->transactionService->updateItem($item, $validated);
