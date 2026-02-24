@@ -396,7 +396,15 @@ class OrderController extends Controller
                     $this->updateOrderFromPlatformData($order, $order->platformOrder->platform_data);
                 }
 
-                return back()->with('success', 'Order synced from '.$marketplace->platform->label().'.');
+                // Automatically sync refunds/returns
+                $returnMessage = $this->syncReturnsForOrder($order, $marketplace, $platformService);
+
+                $successMessage = 'Order synced from '.$marketplace->platform->label().'.';
+                if ($returnMessage) {
+                    $successMessage .= ' '.$returnMessage;
+                }
+
+                return back()->with('success', $successMessage);
             } catch (\Throwable $e) {
                 return back()->with('error', 'Failed to sync order: '.$e->getMessage());
             }
@@ -434,9 +442,75 @@ class OrderController extends Controller
                 $platformService
             );
 
-            return back()->with('success', 'Order synced from '.$marketplace->platform->label().'.');
+            // Automatically sync refunds/returns
+            $order->load('platformOrder');
+            $returnMessage = $this->syncReturnsForOrder($order, $marketplace, $platformService);
+
+            $successMessage = 'Order synced from '.$marketplace->platform->label().'.';
+            if ($returnMessage) {
+                $successMessage .= ' '.$returnMessage;
+            }
+
+            return back()->with('success', $successMessage);
         } catch (\Throwable $e) {
             return back()->with('error', 'Failed to sync order: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Sync refunds/returns for an order and return a message about what was synced.
+     */
+    protected function syncReturnsForOrder(Order $order, StoreMarketplace $marketplace, $platformService): ?string
+    {
+        if (! $order->platformOrder) {
+            return null;
+        }
+
+        try {
+            $returnSyncService = app(\App\Services\Returns\ReturnSyncService::class);
+
+            // Fetch refunds from the platform
+            $refunds = $platformService->getOrderRefunds($order->platformOrder);
+
+            if ($refunds->isEmpty()) {
+                return null;
+            }
+
+            $imported = 0;
+            $skipped = 0;
+
+            foreach ($refunds as $refund) {
+                $externalReturnId = (string) ($refund['id'] ?? '');
+
+                // Check if this refund has already been imported
+                $existingReturn = \App\Models\ProductReturn::where('external_return_id', $externalReturnId)
+                    ->where('store_marketplace_id', $marketplace->id)
+                    ->first();
+
+                if ($existingReturn) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                // Import the refund as a return
+                $returnSyncService->importFromWebhook($refund, $marketplace, $marketplace->platform);
+                $imported++;
+            }
+
+            if ($imported > 0) {
+                return "Imported {$imported} refund(s).".($skipped > 0 ? " ({$skipped} already existed)" : '');
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            // Log the error but don't fail the order sync
+            \Illuminate\Support\Facades\Log::warning('Failed to sync returns for order', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
         }
     }
 

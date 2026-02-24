@@ -23,7 +23,21 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('webhooks')->withoutMiddleware(['web', 'csrf'])->group(function () {
-    // Shopify webhooks
+    // Shopify webhooks - specific action endpoints
+    Route::post('shopify/{connectionId}/order-created', [ShopifyWebhookController::class, 'orderCreated'])
+        ->name('webhooks.shopify.order-created');
+    Route::post('shopify/{connectionId}/order-paid', [ShopifyWebhookController::class, 'orderPaid'])
+        ->name('webhooks.shopify.order-paid');
+    Route::post('shopify/{connectionId}/order-cancelled', [ShopifyWebhookController::class, 'orderCancelled'])
+        ->name('webhooks.shopify.order-cancelled');
+    Route::post('shopify/{connectionId}/order-updated', [ShopifyWebhookController::class, 'orderUpdated'])
+        ->name('webhooks.shopify.order-updated');
+    Route::post('shopify/{connectionId}/order-fulfilled', [ShopifyWebhookController::class, 'orderFulfilled'])
+        ->name('webhooks.shopify.order-fulfilled');
+    Route::post('shopify/{connectionId}/refund-created', [ShopifyWebhookController::class, 'refundCreated'])
+        ->name('webhooks.shopify.refund-created');
+
+    // Shopify webhooks - generic handler (legacy/fallback)
     Route::post('shopify/{connectionId}', [ShopifyWebhookController::class, 'handle'])
         ->name('webhooks.shopify');
 

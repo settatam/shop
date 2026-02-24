@@ -455,7 +455,6 @@ function confirmOrder() {
 }
 
 const isSyncing = ref(false);
-const isSyncingReturns = ref(false);
 
 function syncFromMarketplace() {
     if (isSyncing.value) return;
@@ -463,15 +462,6 @@ function syncFromMarketplace() {
     router.post(`/orders/${props.order.id}/sync-from-marketplace`, {}, {
         preserveScroll: true,
         onFinish: () => { isSyncing.value = false; },
-    });
-}
-
-function syncReturnsFromMarketplace() {
-    if (isSyncingReturns.value) return;
-    isSyncingReturns.value = true;
-    router.post(`/orders/${props.order.id}/sync-returns-from-marketplace`, {}, {
-        preserveScroll: true,
-        onFinish: () => { isSyncingReturns.value = false; },
     });
 }
 
@@ -564,6 +554,20 @@ const serviceFeeAmount = computed(() => {
         return subtotalAfterDiscount * value / 100;
     }
     return value;
+});
+
+const totalPayments = computed(() => {
+    if (!props.order.payments) return 0;
+    return props.order.payments
+        .filter(p => p.amount > 0)
+        .reduce((sum, p) => sum + Number(p.amount), 0);
+});
+
+const totalRefunds = computed(() => {
+    if (!props.order.payments) return 0;
+    return Math.abs(props.order.payments
+        .filter(p => p.amount < 0)
+        .reduce((sum, p) => sum + Number(p.amount), 0));
 });
 
 function formatPaymentMethod(method: string): string {
@@ -1029,24 +1033,45 @@ function processReturn() {
                             </div>
                         </div>
 
-                        <!-- Payment History -->
+                        <!-- Payment & Refund History -->
                         <div v-if="order.payments && order.payments.length > 0" class="rounded-lg bg-white shadow dark:bg-gray-800">
                             <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                                 <h2 class="flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
                                     <CreditCardIcon class="size-5 text-gray-500 dark:text-gray-400" />
-                                    Payments ({{ order.payments.length }})
+                                    Payments & Refunds ({{ order.payments.length }})
                                 </h2>
                             </div>
                             <div class="divide-y divide-gray-200 dark:divide-gray-700">
                                 <div v-for="payment in order.payments" :key="payment.id" class="p-4">
                                     <div class="flex items-start justify-between">
                                         <div class="flex items-center gap-3">
-                                            <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                                                <BanknotesIcon class="size-5 text-green-600 dark:text-green-400" />
+                                            <!-- Green icon for payments, red for refunds -->
+                                            <div
+                                                :class="[
+                                                    'flex size-10 shrink-0 items-center justify-center rounded-full',
+                                                    payment.amount < 0
+                                                        ? 'bg-red-100 dark:bg-red-900'
+                                                        : 'bg-green-100 dark:bg-green-900'
+                                                ]"
+                                            >
+                                                <ArrowUturnLeftIcon
+                                                    v-if="payment.amount < 0"
+                                                    class="size-5 text-red-600 dark:text-red-400"
+                                                />
+                                                <BanknotesIcon
+                                                    v-else
+                                                    class="size-5 text-green-600 dark:text-green-400"
+                                                />
                                             </div>
                                             <div>
-                                                <p class="font-medium text-gray-900 dark:text-white">
-                                                    {{ formatCurrency(payment.amount) }}
+                                                <p :class="[
+                                                    'font-medium',
+                                                    payment.amount < 0
+                                                        ? 'text-red-600 dark:text-red-400'
+                                                        : 'text-gray-900 dark:text-white'
+                                                ]">
+                                                    {{ payment.amount < 0 ? '-' : '' }}{{ formatCurrency(Math.abs(payment.amount)) }}
+                                                    <span v-if="payment.amount < 0" class="ml-1 text-xs font-normal text-red-500 dark:text-red-400">(Refund)</span>
                                                 </p>
                                                 <p class="text-sm text-gray-500 dark:text-gray-400">
                                                     {{ formatPaymentMethod(payment.payment_method) }}
@@ -1056,9 +1081,13 @@ function processReturn() {
                                         <div class="text-right">
                                             <span :class="[
                                                 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                                                payment.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                                                payment.amount < 0
+                                                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                                    : payment.status === 'completed'
+                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
                                             ]">
-                                                {{ payment.status }}
+                                                {{ payment.amount < 0 ? 'Refunded' : payment.status }}
                                             </span>
                                             <p v-if="payment.paid_at" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                                 {{ formatDate(payment.paid_at) }}
@@ -1066,7 +1095,7 @@ function processReturn() {
                                         </div>
                                     </div>
                                     <div v-if="payment.reference || payment.notes || payment.user" class="mt-2 ml-13 space-y-1">
-                                        <p v-if="payment.reference" class="text-sm text-gray-500 dark:text-gray-400">
+                                        <p v-if="payment.reference && !payment.reference.startsWith('refund_')" class="text-sm text-gray-500 dark:text-gray-400">
                                             <span class="font-medium">Ref:</span> {{ payment.reference }}
                                         </p>
                                         <p v-if="payment.notes" class="text-sm text-gray-500 dark:text-gray-400">
@@ -1079,9 +1108,24 @@ function processReturn() {
                                 </div>
                             </div>
                             <div class="border-t border-gray-200 bg-gray-50 px-6 py-3 dark:border-gray-700 dark:bg-gray-700/50">
-                                <div class="flex justify-between text-sm">
-                                    <span class="font-medium text-gray-700 dark:text-gray-300">Total Paid</span>
-                                    <span class="font-medium text-green-600 dark:text-green-400">{{ formatCurrency(order.total_paid ?? 0) }}</span>
+                                <div class="flex flex-col gap-1">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-500 dark:text-gray-400">Total Payments</span>
+                                        <span class="font-medium text-green-600 dark:text-green-400">{{ formatCurrency(totalPayments) }}</span>
+                                    </div>
+                                    <div v-if="totalRefunds > 0" class="flex justify-between text-sm">
+                                        <span class="text-gray-500 dark:text-gray-400">Total Refunds</span>
+                                        <span class="font-medium text-red-600 dark:text-red-400">-{{ formatCurrency(totalRefunds) }}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Net Paid</span>
+                                        <span :class="[
+                                            'font-medium',
+                                            (order.total_paid ?? 0) >= 0
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-red-600 dark:text-red-400'
+                                        ]">{{ formatCurrency(order.total_paid ?? 0) }}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1366,20 +1410,10 @@ function processReturn() {
                                         @click="syncFromMarketplace"
                                         :disabled="isSyncing"
                                         class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                        title="Sync order status, refunds, and returns from the platform"
                                     >
                                         <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncing }" />
                                         {{ isSyncing ? 'Syncing...' : (order.platform_order ? 'Sync' : 'Fetch Details') }}
-                                    </button>
-                                    <button
-                                        v-if="order.platform_order"
-                                        type="button"
-                                        @click="syncReturnsFromMarketplace"
-                                        :disabled="isSyncingReturns"
-                                        class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                                        title="Check for refunds on the platform and create local returns"
-                                    >
-                                        <ArrowPathIcon class="size-3.5" :class="{ 'animate-spin': isSyncingReturns }" />
-                                        {{ isSyncingReturns ? 'Syncing...' : 'Sync Returns' }}
                                     </button>
                                 </div>
                             </div>

@@ -119,6 +119,7 @@ abstract class BaseWebhookController extends Controller
     protected function shouldProcessEvent(string $eventType): bool
     {
         $processableEvents = [
+            // Order events
             'orders/create',
             'orders/updated',
             'orders/paid',
@@ -133,6 +134,12 @@ abstract class BaseWebhookController extends Controller
             'store/order/created',
             'store/order/updated',
             'store/order/statusUpdated',
+            // Refund/Return events
+            'refunds/create',
+            'refunds/updated',
+            'refund.created',
+            'refund.updated',
+            'order.refunded',
         ];
 
         foreach ($processableEvents as $event) {
@@ -141,6 +148,6 @@ abstract class BaseWebhookController extends Controller
             }
         }
 
-        return str_contains(strtolower($eventType), 'order');
+        return str_contains(strtolower($eventType), 'order') || str_contains(strtolower($eventType), 'refund');
     }
 }

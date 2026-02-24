@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Warehouse;
 use Illuminate\Console\Command;
@@ -47,6 +48,8 @@ class MigrateLegacyOrders extends Command
     protected int $paymentCount = 0;
 
     protected int $invoiceCount = 0;
+
+    protected int $tradeInCount = 0;
 
     public function handle(): int
     {
@@ -550,8 +553,14 @@ class MigrateLegacyOrders extends Command
                 $totalPaid = $this->migrateOrderPayments($legacyOrder, $newOrderId, $customerId, $userId);
             }
 
-            // Create invoice for this order
-            $this->createOrderInvoice($legacyOrder, $newOrderId, $customerId, $userId, $totalPaid);
+            // Migrate trade-ins linked to this order
+            $tradeInCredit = $this->migrateOrderTradeIns($legacyOrder, $newOrderId, $customerId, $userId);
+            if ($tradeInCredit > 0) {
+                $totalPaid += $tradeInCredit;
+            }
+
+            // Create invoice for this order (includes trade-in credit)
+            $this->createOrderInvoice($legacyOrder, $newOrderId, $customerId, $userId, $totalPaid, $tradeInCredit);
 
             // Create platform order if this came from a marketplace (Shopify, etc.)
             if ($legacyOrder->external_marketplace_id) {
@@ -566,7 +575,7 @@ class MigrateLegacyOrders extends Command
             }
         }
 
-        $this->line("  Created {$orderCount} orders with {$itemCount} items, {$this->invoiceCount} invoices, {$this->paymentCount} payments, skipped {$skipped} existing, synced {$synced} deletes");
+        $this->line("  Created {$orderCount} orders with {$itemCount} items, {$this->invoiceCount} invoices, {$this->paymentCount} payments, {$this->tradeInCount} trade-ins, skipped {$skipped} existing, synced {$synced} deletes");
     }
 
     protected function migrateOrderItems(int $legacyOrderId, int $newOrderId, int $legacyStoreId): int
@@ -757,7 +766,126 @@ class MigrateLegacyOrders extends Command
         return $totalPaid;
     }
 
-    protected function createOrderInvoice(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId, float $totalPaid): void
+    /**
+     * Migrate trade-ins linked to an order from the legacy order_tradeins table.
+     *
+     * Links the existing Transaction (already imported as a buy) to the Order
+     * and creates a store credit payment to reflect the trade-in on the invoice.
+     */
+    protected function migrateOrderTradeIns(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId): float
+    {
+        $legacyTradeIns = DB::connection('legacy')
+            ->table('order_tradeins')
+            ->where('order_id', $legacyOrder->id)
+            ->get();
+
+        if ($legacyTradeIns->isEmpty()) {
+            return 0;
+        }
+
+        // Calculate total trade-in credit from all items
+        $tradeInCredit = $legacyTradeIns->sum('total');
+
+        if ($tradeInCredit <= 0) {
+            return 0;
+        }
+
+        // Get the transaction_id from the first trade-in record (all items for an order share the same transaction)
+        $legacyTransactionId = $legacyTradeIns->first()->transaction_id;
+
+        if (! $legacyTransactionId) {
+            $this->warn("  Order #{$newOrderId}: Trade-in found but no transaction_id linked");
+
+            return 0;
+        }
+
+        // Find the Transaction in the new system (IDs are preserved from migration)
+        $transaction = Transaction::find($legacyTransactionId);
+
+        if (! $transaction) {
+            $this->warn("  Order #{$newOrderId}: Transaction #{$legacyTransactionId} not found - trade-in skipped");
+
+            return 0;
+        }
+
+        // Link the Transaction to the Order (bidirectional)
+        DB::table('orders')
+            ->where('id', $newOrderId)
+            ->update([
+                'trade_in_transaction_id' => $transaction->id,
+                'trade_in_credit' => $tradeInCredit,
+            ]);
+
+        // Link the Order on the Transaction side
+        if (! $transaction->order_id) {
+            DB::table('transactions')
+                ->where('id', $transaction->id)
+                ->update([
+                    'order_id' => $newOrderId,
+                    'source' => Transaction::SOURCE_TRADE_IN,
+                ]);
+        }
+
+        // Store immutable trade-in item snapshots in order_trade_ins
+        foreach ($legacyTradeIns as $legacyTradeIn) {
+            $existingSnapshot = DB::table('order_trade_ins')
+                ->where('order_id', $newOrderId)
+                ->where('transaction_id', $transaction->id)
+                ->where('title', $legacyTradeIn->title)
+                ->exists();
+
+            if (! $existingSnapshot) {
+                DB::table('order_trade_ins')->insert([
+                    'order_id' => $newOrderId,
+                    'transaction_id' => $transaction->id,
+                    'transaction_item_id' => $legacyTradeIn->transaction_item_id,
+                    'title' => $legacyTradeIn->title ?? 'Trade-in Item',
+                    'description' => $legacyTradeIn->description,
+                    'price' => $this->toDecimal($legacyTradeIn->price),
+                    'cost' => $this->toDecimal($legacyTradeIn->cost),
+                    'quantity' => (int) ($legacyTradeIn->quantity ?: 1),
+                    'total' => $this->toDecimal($legacyTradeIn->total),
+                    'created_at' => $legacyTradeIn->created_at ?? $legacyOrder->created_at,
+                    'updated_at' => $legacyTradeIn->updated_at ?? $legacyOrder->updated_at,
+                ]);
+            }
+        }
+
+        // Create a store credit payment for the trade-in amount
+        $existingTradeInPayment = DB::table('payments')
+            ->where('order_id', $newOrderId)
+            ->where('payment_method', Payment::METHOD_STORE_CREDIT)
+            ->where('reference', 'trade_in_'.$transaction->id)
+            ->exists();
+
+        if (! $existingTradeInPayment) {
+            DB::table('payments')->insert([
+                'store_id' => $this->newStore->id,
+                'payable_type' => Order::class,
+                'payable_id' => $newOrderId,
+                'order_id' => $newOrderId,
+                'customer_id' => $customerId,
+                'user_id' => $userId,
+                'payment_method' => Payment::METHOD_STORE_CREDIT,
+                'status' => Payment::STATUS_COMPLETED,
+                'amount' => $tradeInCredit,
+                'currency' => 'USD',
+                'reference' => 'trade_in_'.$transaction->id,
+                'notes' => 'Trade-in credit from Transaction #'.$transaction->transaction_number,
+                'paid_at' => $legacyTradeIns->first()->created_at ?? $legacyOrder->created_at,
+                'created_at' => $legacyTradeIns->first()->created_at ?? $legacyOrder->created_at,
+                'updated_at' => $legacyTradeIns->first()->updated_at ?? $legacyOrder->updated_at,
+            ]);
+
+            $this->paymentCount++;
+        }
+
+        $this->tradeInCount++;
+
+        return $tradeInCredit;
+    }
+
+    protected function createOrderInvoice(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId, float $totalPaid, float $tradeInCredit = 0): void
     {
         $orderTotal = $this->toDecimal($legacyOrder->total);
         $balanceDue = max(0, $orderTotal - $totalPaid);
@@ -768,6 +896,12 @@ class MigrateLegacyOrders extends Command
             $totalPaid > 0 => Invoice::STATUS_PARTIAL,
             default => Invoice::STATUS_PENDING,
         };
+
+        // Build invoice notes for trade-in
+        $invoiceNotes = null;
+        if ($tradeInCredit > 0) {
+            $invoiceNotes = 'Includes trade-in credit of $'.number_format($tradeInCredit, 2);
+        }
 
         // Use DB::table to preserve timestamps
         $invoiceId = DB::table('invoices')->insertGetId([
@@ -788,7 +922,7 @@ class MigrateLegacyOrders extends Command
             'currency' => 'USD',
             'due_date' => $legacyOrder->created_at ? date('Y-m-d', strtotime($legacyOrder->created_at.' +30 days')) : null,
             'paid_at' => $balanceDue <= 0 ? $legacyOrder->updated_at : null,
-            'notes' => null,
+            'notes' => $invoiceNotes,
             'created_at' => $legacyOrder->created_at,
             'updated_at' => $legacyOrder->updated_at,
         ]);
@@ -998,6 +1132,11 @@ class MigrateLegacyOrders extends Command
         $this->line("Total order items in store: {$itemCount}");
         $this->line("Total payments in store: {$paymentCount}");
         $this->line("Total invoices in store: {$invoiceCount}");
+
+        $tradeInOrderCount = Order::where('store_id', $this->newStore->id)
+            ->whereNotNull('trade_in_transaction_id')
+            ->count();
+        $this->line("Orders with trade-ins: {$tradeInOrderCount}");
 
         $platformOrderCount = DB::table('platform_orders')
             ->whereIn('order_id', Order::where('store_id', $this->newStore->id)->pluck('id'))

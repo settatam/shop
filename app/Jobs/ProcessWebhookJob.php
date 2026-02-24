@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\WebhookLog;
+use App\Services\Returns\ReturnSyncService;
 use App\Services\Webhooks\OrderImportService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -22,14 +23,16 @@ class ProcessWebhookJob implements ShouldQueue
         public WebhookLog $webhookLog
     ) {}
 
-    public function handle(OrderImportService $orderImportService): void
+    public function handle(OrderImportService $orderImportService, ReturnSyncService $returnSyncService): void
     {
         $this->webhookLog->markAsProcessing();
 
         try {
             $eventType = strtolower($this->webhookLog->event_type);
 
-            if ($this->isOrderEvent($eventType)) {
+            if ($this->isRefundEvent($eventType)) {
+                $this->processRefundWebhook($returnSyncService);
+            } elseif ($this->isOrderEvent($eventType)) {
                 $this->processOrderWebhook($orderImportService);
             } else {
                 $this->webhookLog->markAsSkipped("Unhandled event type: {$eventType}");
@@ -39,7 +42,6 @@ class ProcessWebhookJob implements ShouldQueue
 
             $this->webhookLog->markAsCompleted([
                 'processed_event' => $eventType,
-                'order_created' => true,
             ]);
         } catch (Throwable $e) {
             $this->webhookLog->markAsFailed($e->getMessage());
@@ -77,6 +79,25 @@ class ProcessWebhookJob implements ShouldQueue
         return str_contains($eventType, 'order');
     }
 
+    protected function isRefundEvent(string $eventType): bool
+    {
+        $refundEvents = [
+            'refunds/create',
+            'refunds/updated',
+            'refund.created',
+            'refund.updated',
+            'order.refunded',
+        ];
+
+        foreach ($refundEvents as $event) {
+            if (str_contains($eventType, $event) || str_contains($event, $eventType)) {
+                return true;
+            }
+        }
+
+        return str_contains($eventType, 'refund');
+    }
+
     protected function processOrderWebhook(OrderImportService $orderImportService): void
     {
         $marketplace = $this->webhookLog->marketplace;
@@ -99,6 +120,33 @@ class ProcessWebhookJob implements ShouldQueue
             'response' => [
                 'order_id' => $order->id,
                 'status' => $order->status,
+            ],
+        ]);
+    }
+
+    protected function processRefundWebhook(ReturnSyncService $returnSyncService): void
+    {
+        $marketplace = $this->webhookLog->marketplace;
+
+        if (! $marketplace) {
+            throw new \RuntimeException('No store marketplace found for webhook');
+        }
+
+        $payload = $this->webhookLog->payload;
+        $platform = $this->webhookLog->platform;
+
+        $return = $returnSyncService->importFromWebhook(
+            $payload,
+            $marketplace,
+            $platform
+        );
+
+        $this->webhookLog->update([
+            'external_id' => (string) ($payload['id'] ?? ''),
+            'response' => [
+                'return_id' => $return?->id,
+                'return_number' => $return?->return_number,
+                'status' => $return?->status,
             ],
         ]);
     }

@@ -365,4 +365,205 @@ class ReturnProcessingTest extends TestCase
             'return_method' => ProductReturn::METHOD_SHIPPED,
         ]);
     }
+
+    public function test_webhook_refund_import_matches_order_items_via_platform_order(): void
+    {
+        $marketplace = StoreMarketplace::factory()->shopify()->create([
+            'store_id' => $this->store->id,
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'test-token',
+            'status' => 'active',
+        ]);
+
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'WEBHOOK-SKU-001',
+        ]);
+
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'status' => Order::STATUS_COMPLETED,
+            'source_platform' => 'shopify',
+        ]);
+
+        // Create platform order with line_items that include external_id
+        $platformOrder = PlatformOrder::create([
+            'store_marketplace_id' => $marketplace->id,
+            'order_id' => $order->id,
+            'external_order_id' => '9001',
+            'external_order_number' => '2001',
+            'status' => 'paid',
+            'total' => 100.00,
+            'subtotal' => 100.00,
+            'ordered_at' => now(),
+            'line_items' => [
+                [
+                    'external_id' => '987654321',
+                    'sku' => 'WEBHOOK-SKU-001',
+                    'title' => 'Test Product from Webhook',
+                    'quantity' => 1,
+                    'price' => '100.00',
+                ],
+            ],
+        ]);
+
+        $orderItem = OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'sku' => 'WEBHOOK-SKU-001',
+            'title' => 'Test Product from Webhook',
+            'quantity' => 1,
+            'price' => 100.00,
+        ]);
+
+        // Simulate importing a refund via webhook using ReturnSyncService
+        $returnSyncService = app(\App\Services\Returns\ReturnSyncService::class);
+
+        // Mock the ShopifyReturnSyncer to return normalized data
+        $normalizedData = [
+            'external_return_id' => 'refund_12345',
+            'external_order_id' => '9001',
+            'status' => 'completed',
+            'refund_amount' => 100.00,
+            'items' => [
+                [
+                    'external_line_item_id' => '987654321',
+                    'sku' => 'WEBHOOK-SKU-001',
+                    'quantity' => 1,
+                    'unit_price' => 100.00,
+                    'restock' => true,
+                ],
+            ],
+        ];
+
+        // Use reflection to call the protected createReturnFromPayload method
+        $reflection = new \ReflectionClass($returnSyncService);
+        $method = $reflection->getMethod('createReturnFromPayload');
+        $method->setAccessible(true);
+
+        $return = $method->invoke(
+            $returnSyncService,
+            $normalizedData,
+            $marketplace,
+            \App\Enums\Platform::Shopify
+        );
+
+        // Verify the return was created and linked correctly
+        $this->assertNotNull($return);
+        $this->assertEquals('refund_12345', $return->external_return_id);
+        $this->assertEquals($order->id, $return->order_id);
+
+        // Verify the return item was linked to the correct order item
+        $returnItem = $return->items()->first();
+        $this->assertNotNull($returnItem);
+        $this->assertEquals($orderItem->id, $returnItem->order_item_id);
+        $this->assertEquals($variant->id, $returnItem->product_variant_id);
+    }
+
+    public function test_webhook_refund_import_creates_refund_payment_record(): void
+    {
+        $marketplace = StoreMarketplace::factory()->shopify()->create([
+            'store_id' => $this->store->id,
+            'shop_domain' => 'test-store.myshopify.com',
+            'access_token' => 'test-token',
+            'status' => 'active',
+        ]);
+
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'REFUND-SKU-001',
+        ]);
+
+        $order = Order::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'status' => Order::STATUS_COMPLETED,
+            'source_platform' => 'shopify',
+        ]);
+
+        // Create platform order
+        PlatformOrder::create([
+            'store_marketplace_id' => $marketplace->id,
+            'order_id' => $order->id,
+            'external_order_id' => '9002',
+            'external_order_number' => '2002',
+            'status' => 'paid',
+            'total' => 75.00,
+            'subtotal' => 75.00,
+            'ordered_at' => now(),
+            'line_items' => [
+                [
+                    'external_id' => '111222333',
+                    'sku' => 'REFUND-SKU-001',
+                    'title' => 'Test Refund Product',
+                    'quantity' => 1,
+                    'price' => '75.00',
+                ],
+            ],
+        ]);
+
+        OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'sku' => 'REFUND-SKU-001',
+            'quantity' => 1,
+            'price' => 75.00,
+        ]);
+
+        $returnSyncService = app(\App\Services\Returns\ReturnSyncService::class);
+
+        $normalizedData = [
+            'external_return_id' => 'refund_99999',
+            'external_order_id' => '9002',
+            'status' => 'completed',
+            'refund_amount' => 75.00,
+            'items' => [
+                [
+                    'external_line_item_id' => '111222333',
+                    'sku' => 'REFUND-SKU-001',
+                    'quantity' => 1,
+                    'unit_price' => 75.00,
+                    'restock' => true,
+                ],
+            ],
+        ];
+
+        $reflection = new \ReflectionClass($returnSyncService);
+        $method = $reflection->getMethod('createReturnFromPayload');
+        $method->setAccessible(true);
+
+        $return = $method->invoke(
+            $returnSyncService,
+            $normalizedData,
+            $marketplace,
+            \App\Enums\Platform::Shopify
+        );
+
+        // Verify the return was created
+        $this->assertNotNull($return);
+        $this->assertEquals(75.00, $return->refund_amount);
+
+        // Verify a refund payment was created with negative amount
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'amount' => -75.00,
+            'reference' => 'refund_refund_99999',
+            'status' => 'completed',
+        ]);
+
+        // Verify the payment note mentions the return
+        $payment = \App\Models\Payment::where('order_id', $order->id)
+            ->where('amount', -75.00)
+            ->first();
+
+        $this->assertNotNull($payment);
+        $this->assertStringContainsString('Refund from shopify', $payment->notes);
+    }
 }

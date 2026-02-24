@@ -91,7 +91,40 @@ class ReturnSyncService
 
         $return->calculateTotals();
 
+        // Create a refund payment record if there's a refund amount
+        if ($return->refund_amount > 0 && $order) {
+            $this->createRefundPayment($return, $order, $data);
+        }
+
         return $return->fresh(['items', 'order', 'customer']);
+    }
+
+    /**
+     * Create a refund payment record for the return.
+     */
+    protected function createRefundPayment(ProductReturn $return, Order $order, array $data): void
+    {
+        // Check if a refund payment already exists for this return
+        $existingRefund = \App\Models\Payment::where('order_id', $order->id)
+            ->where('reference', 'refund_'.$return->external_return_id)
+            ->first();
+
+        if ($existingRefund) {
+            return;
+        }
+
+        \App\Models\Payment::create([
+            'store_id' => $return->store_id,
+            'order_id' => $order->id,
+            'customer_id' => $return->customer_id,
+            'payment_method' => \App\Models\Payment::METHOD_EXTERNAL,
+            'status' => \App\Models\Payment::STATUS_COMPLETED,
+            'amount' => -abs($return->refund_amount), // Negative amount for refund
+            'currency' => $order->currency ?? 'USD',
+            'reference' => 'refund_'.$return->external_return_id,
+            'notes' => 'Refund from '.$return->source_platform.' - Return #'.$return->return_number,
+            'paid_at' => $data['refunded_at'] ?? now(),
+        ]);
     }
 
     protected function findRelatedOrder(?string $externalOrderId, StoreMarketplace $marketplace): ?Order
@@ -112,9 +145,11 @@ class ReturnSyncService
         $orderItem = null;
 
         if ($order && isset($itemData['external_line_item_id'])) {
-            $orderItem = $order->items()
-                ->whereJsonContains('metadata->external_line_item_id', $itemData['external_line_item_id'])
-                ->first();
+            $orderItem = $this->findOrderItemByExternalLineItemId(
+                $order,
+                $itemData['external_line_item_id'],
+                $itemData['sku'] ?? null
+            );
         }
 
         $return->items()->create([
@@ -126,6 +161,52 @@ class ReturnSyncService
             'reason' => $itemData['reason'] ?? null,
             'restock' => $itemData['restock'] ?? true,
         ]);
+    }
+
+    /**
+     * Find an order item by matching the external line item ID through the platform order's line_items.
+     */
+    protected function findOrderItemByExternalLineItemId(Order $order, string $externalLineItemId, ?string $sku = null): ?\App\Models\OrderItem
+    {
+        // First, try to find via the platform order's line_items
+        $platformOrder = PlatformOrder::where('order_id', $order->id)->first();
+
+        if ($platformOrder && ! empty($platformOrder->line_items)) {
+            foreach ($platformOrder->line_items as $lineItem) {
+                $lineItemExternalId = (string) ($lineItem['external_id'] ?? '');
+
+                if ($lineItemExternalId === $externalLineItemId) {
+                    // Found the matching line item, now find the order item by SKU
+                    $lineItemSku = $lineItem['sku'] ?? null;
+
+                    if ($lineItemSku) {
+                        $orderItem = $order->items()->where('sku', $lineItemSku)->first();
+                        if ($orderItem) {
+                            return $orderItem;
+                        }
+                    }
+
+                    // Try matching by title as fallback
+                    $lineItemTitle = $lineItem['title'] ?? null;
+                    if ($lineItemTitle) {
+                        $orderItem = $order->items()->where('title', $lineItemTitle)->first();
+                        if ($orderItem) {
+                            return $orderItem;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: try matching by SKU directly if provided
+        if ($sku) {
+            $orderItem = $order->items()->where('sku', $sku)->first();
+            if ($orderItem) {
+                return $orderItem;
+            }
+        }
+
+        return null;
     }
 
     protected function mapStatus(string $externalStatus): string

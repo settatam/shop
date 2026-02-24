@@ -190,6 +190,11 @@ class Order extends Model implements Payable
         return $this->belongsTo(Transaction::class, 'trade_in_transaction_id');
     }
 
+    public function tradeIns(): HasMany
+    {
+        return $this->hasMany(OrderTradeIn::class);
+    }
+
     public function hasTradeIn(): bool
     {
         return $this->trade_in_transaction_id !== null;
