@@ -687,23 +687,27 @@ class MigrateLegacyProducts extends Command
             $fieldName = Str::snake($legacyField->name);
             $fieldType = $this->mapFieldType($legacyField->type ?? 'text');
 
-            // Create the field
-            $newField = ProductTemplateField::create([
-                'product_template_id' => $newTemplate->id,
-                'name' => $fieldName,
-                'canonical_name' => $legacyField->name, // Store original name for matching
-                'label' => $legacyField->label ?? Str::title(str_replace('_', ' ', $fieldName)),
-                'type' => $fieldType,
-                'placeholder' => $legacyField->placeholder ?? null,
-                'help_text' => $legacyField->help_text ?? null,
-                'default_value' => $legacyField->default_value ?? null,
-                'is_required' => (bool) ($legacyField->is_required ?? false),
-                'is_searchable' => (bool) ($legacyField->is_searchable ?? true),
-                'is_filterable' => (bool) ($legacyField->is_filterable ?? false),
-                'show_in_listing' => (bool) ($legacyField->show_in_listing ?? true),
-                'sort_order' => $legacyField->sort_order ?? 0,
-                'group_name' => $legacyField->group_name ?? null,
-            ]);
+            // Create the field (or find existing)
+            $newField = ProductTemplateField::firstOrCreate(
+                [
+                    'product_template_id' => $newTemplate->id,
+                    'name' => $fieldName,
+                ],
+                [
+                    'canonical_name' => $legacyField->name, // Store original name for matching
+                    'label' => $legacyField->label ?? Str::title(str_replace('_', ' ', $fieldName)),
+                    'type' => $fieldType,
+                    'placeholder' => $legacyField->placeholder ?? null,
+                    'help_text' => $legacyField->help_text ?? null,
+                    'default_value' => $legacyField->default_value ?? null,
+                    'is_required' => (bool) ($legacyField->is_required ?? false),
+                    'is_searchable' => (bool) ($legacyField->is_searchable ?? true),
+                    'is_filterable' => (bool) ($legacyField->is_filterable ?? false),
+                    'show_in_listing' => (bool) ($legacyField->show_in_listing ?? true),
+                    'sort_order' => $legacyField->sort_order ?? 0,
+                    'group_name' => $legacyField->group_name ?? null,
+                ]
+            );
 
             // Store mappings
             $this->templateFieldMap[$legacyField->id] = $newField->id;
@@ -772,22 +776,26 @@ class MigrateLegacyProducts extends Command
                     $this->templateFieldOptionsMap[$existingTemplate->id][$canonicalName] = $options;
                 }
             } else {
-                // Create missing field
+                // Create missing field (or find existing)
                 $fieldName = Str::snake($legacyField->name);
                 $fieldType = $this->mapFieldType($legacyField->type ?? 'text');
 
-                $newField = ProductTemplateField::create([
-                    'product_template_id' => $existingTemplate->id,
-                    'name' => $fieldName,
-                    'canonical_name' => $legacyField->name,
-                    'label' => $legacyField->label ?? Str::title(str_replace('_', ' ', $fieldName)),
-                    'type' => $fieldType,
-                    'placeholder' => $legacyField->placeholder ?? null,
-                    'is_required' => (bool) ($legacyField->is_required ?? false),
-                    'is_searchable' => (bool) ($legacyField->is_searchable ?? true),
-                    'show_in_listing' => (bool) ($legacyField->show_in_listing ?? true),
-                    'sort_order' => $legacyField->sort_order ?? 0,
-                ]);
+                $newField = ProductTemplateField::firstOrCreate(
+                    [
+                        'product_template_id' => $existingTemplate->id,
+                        'name' => $fieldName,
+                    ],
+                    [
+                        'canonical_name' => $legacyField->name,
+                        'label' => $legacyField->label ?? Str::title(str_replace('_', ' ', $fieldName)),
+                        'type' => $fieldType,
+                        'placeholder' => $legacyField->placeholder ?? null,
+                        'is_required' => (bool) ($legacyField->is_required ?? false),
+                        'is_searchable' => (bool) ($legacyField->is_searchable ?? true),
+                        'show_in_listing' => (bool) ($legacyField->show_in_listing ?? true),
+                        'sort_order' => $legacyField->sort_order ?? 0,
+                    ]
+                );
 
                 $this->templateFieldMap[$legacyField->id] = $newField->id;
                 $this->templateFieldNameMap[$existingTemplate->id][$canonicalName] = $newField->id;
