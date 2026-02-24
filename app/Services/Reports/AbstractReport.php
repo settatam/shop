@@ -53,6 +53,14 @@ abstract class AbstractReport
     abstract public function getSlug(): string;
 
     /**
+     * Get a description of the report.
+     */
+    public function getDescription(): string
+    {
+        return "Report for {$this->store->name} - {$this->reportDate->format('M j, Y')}";
+    }
+
+    /**
      * Define the report structure.
      */
     abstract protected function defineStructure(): ReportStructure;
