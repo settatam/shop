@@ -481,7 +481,7 @@ class MigrateLegacyProductsTest extends TestCase
         $this->assertEquals('inactive', $lv2->status);
     }
 
-    public function test_in_store_listing_creates_variant_rows_for_all_product_variants(): void
+    public function test_missing_listing_created_as_not_listed_with_all_variants(): void
     {
         // Create product as draft first
         $product = Product::factory()->create([
@@ -491,30 +491,30 @@ class MigrateLegacyProductsTest extends TestCase
 
         $variant1 = ProductVariant::factory()->create([
             'product_id' => $product->id,
-            'sku' => 'INSTORE-001',
+            'sku' => 'MISSING-001',
             'price' => 100.00,
             'quantity' => 5,
         ]);
 
         $variant2 = ProductVariant::factory()->create([
             'product_id' => $product->id,
-            'sku' => 'INSTORE-002',
+            'sku' => 'MISSING-002',
             'price' => 150.00,
             'quantity' => 3,
         ]);
 
-        // Create local channel after product
-        $inStoreChannel = SalesChannel::factory()->local()->active()->create([
+        // Create channel after product — no auto-listing
+        $channel = SalesChannel::factory()->active()->create([
             'store_id' => $this->store->id,
-            'code' => 'in_store_'.uniqid(),
+            'code' => 'missing_channel_'.uniqid(),
+            'is_local' => false,
         ]);
 
-        // Simulate createInStoreListings behavior
+        // Simulate ensureMissingListings: create as not_listed
         $listing = PlatformListing::create([
-            'sales_channel_id' => $inStoreChannel->id,
+            'sales_channel_id' => $channel->id,
             'product_id' => $product->id,
-            'status' => PlatformListing::STATUS_LISTED,
-            'published_at' => now(),
+            'status' => PlatformListing::STATUS_NOT_LISTED,
         ]);
 
         foreach ($product->variants as $variant) {
@@ -528,17 +528,22 @@ class MigrateLegacyProductsTest extends TestCase
             ]);
         }
 
+        $this->assertEquals(PlatformListing::STATUS_NOT_LISTED, $listing->status);
+        $this->assertNull($listing->published_at);
+
         $listingVariants = PlatformListingVariant::where('platform_listing_id', $listing->id)->get();
         $this->assertCount(2, $listingVariants);
         $this->assertDatabaseHas('platform_listing_variants', [
             'platform_listing_id' => $listing->id,
             'product_variant_id' => $variant1->id,
-            'sku' => 'INSTORE-001',
+            'sku' => 'MISSING-001',
+            'status' => 'active',
         ]);
         $this->assertDatabaseHas('platform_listing_variants', [
             'platform_listing_id' => $listing->id,
             'product_variant_id' => $variant2->id,
-            'sku' => 'INSTORE-002',
+            'sku' => 'MISSING-002',
+            'status' => 'active',
         ]);
     }
 

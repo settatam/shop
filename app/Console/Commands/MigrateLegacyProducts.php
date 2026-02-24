@@ -199,9 +199,9 @@ class MigrateLegacyProducts extends Command
             // Migrate products
             $this->migrateProducts($legacyStoreId, $newStore, $isDryRun, $limit, $skipDeleted, $syncDeletes);
 
-            // Create "In Store" listings for active products
+            // Ensure every product has a listing on every active channel
             if (! $isDryRun) {
-                $this->createInStoreListings($newStore);
+                $this->ensureMissingListings($newStore);
             }
 
             if ($isDryRun) {
@@ -1940,59 +1940,59 @@ class MigrateLegacyProducts extends Command
     }
 
     /**
-     * Create "In Store" listings for all active products that don't have one.
-     * This is needed because products created via DB::table() bypass the booted() event.
+     * Ensure every product has a listing on every active channel.
+     * Missing listings are created as 'not_listed' with all product variants.
      */
-    protected function createInStoreListings(Store $newStore): void
+    protected function ensureMissingListings(Store $newStore): void
     {
-        $this->info('Creating "In Store" listings for active products...');
+        $this->info('Ensuring all products have listings on all active channels...');
 
-        // Get the default In Store channel
-        $inStoreChannel = \App\Models\SalesChannel::where('store_id', $newStore->id)
-            ->where('is_local', true)
+        $activeChannels = \App\Models\SalesChannel::where('store_id', $newStore->id)
             ->where('is_active', true)
-            ->first();
+            ->get();
 
-        if (! $inStoreChannel) {
-            $this->warn('  No active "In Store" channel found - skipping');
+        if ($activeChannels->isEmpty()) {
+            $this->warn('  No active channels found - skipping');
 
             return;
         }
 
-        // Get active products without an In Store listing
-        $activeProducts = Product::where('store_id', $newStore->id)
-            ->where('status', Product::STATUS_ACTIVE)
-            ->whereDoesntHave('platformListings', function ($query) use ($inStoreChannel) {
-                $query->where('sales_channel_id', $inStoreChannel->id);
-            })
-            ->get();
-
+        $products = Product::where('store_id', $newStore->id)->get();
         $created = 0;
-        foreach ($activeProducts as $product) {
-            $listing = PlatformListing::create([
-                'sales_channel_id' => $inStoreChannel->id,
-                'store_marketplace_id' => null,
-                'product_id' => $product->id,
-                'status' => PlatformListing::STATUS_LISTED,
-                'published_at' => now(),
-            ]);
 
-            // Create listing variants for all product variants
-            foreach ($product->variants as $variant) {
-                PlatformListingVariant::create([
-                    'platform_listing_id' => $listing->id,
-                    'product_variant_id' => $variant->id,
-                    'price' => $variant->price,
-                    'quantity' => $variant->quantity,
-                    'sku' => $variant->sku,
-                    'status' => 'active',
+        foreach ($products as $product) {
+            foreach ($activeChannels as $channel) {
+                $existingListing = PlatformListing::where('sales_channel_id', $channel->id)
+                    ->where('product_id', $product->id)
+                    ->first();
+
+                if ($existingListing) {
+                    continue;
+                }
+
+                $listing = PlatformListing::create([
+                    'sales_channel_id' => $channel->id,
+                    'store_marketplace_id' => $channel->store_marketplace_id,
+                    'product_id' => $product->id,
+                    'status' => PlatformListing::STATUS_NOT_LISTED,
                 ]);
-            }
 
-            $created++;
+                foreach ($product->variants as $variant) {
+                    PlatformListingVariant::create([
+                        'platform_listing_id' => $listing->id,
+                        'product_variant_id' => $variant->id,
+                        'price' => $variant->price,
+                        'quantity' => $variant->quantity,
+                        'sku' => $variant->sku,
+                        'status' => 'active',
+                    ]);
+                }
+
+                $created++;
+            }
         }
 
-        $this->line("  Created {$created} 'In Store' listings");
+        $this->line("  Created {$created} missing listings");
     }
 
     protected function cleanupExistingProducts(Store $newStore): void
