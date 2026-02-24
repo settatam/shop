@@ -50,7 +50,7 @@ class ScheduledReportTest extends TestCase
 
     public function test_can_create_scheduled_report(): void
     {
-        $response = $this->postJson('/settings/notifications/scheduled-reports', [
+        $response = $this->post('/settings/notifications/scheduled-reports', [
             'report_type' => 'daily_sales',
             'name' => 'My Daily Sales',
             'recipients' => ['test@example.com'],
@@ -60,8 +60,7 @@ class ScheduledReportTest extends TestCase
             'is_enabled' => true,
         ]);
 
-        $response->assertOk()
-            ->assertJson(['success' => true]);
+        $response->assertRedirect();
 
         $this->assertDatabaseHas('scheduled_reports', [
             'store_id' => $this->store->id,
@@ -75,15 +74,14 @@ class ScheduledReportTest extends TestCase
 
     public function test_can_create_daily_report_without_schedule_days(): void
     {
-        $response = $this->postJson('/settings/notifications/scheduled-reports', [
+        $response = $this->post('/settings/notifications/scheduled-reports', [
             'report_type' => 'daily_buy',
             'recipients' => ['test@example.com'],
             'schedule_time' => '09:00',
             'timezone' => 'America/New_York',
         ]);
 
-        $response->assertOk()
-            ->assertJson(['success' => true]);
+        $response->assertRedirect();
 
         $report = ScheduledReport::first();
         $this->assertNull($report->schedule_days);
@@ -100,15 +98,15 @@ class ScheduledReportTest extends TestCase
 
     public function test_validates_report_type_exists(): void
     {
-        $response = $this->postJson('/settings/notifications/scheduled-reports', [
+        $response = $this->post('/settings/notifications/scheduled-reports', [
             'report_type' => 'nonexistent_report',
             'recipients' => ['test@example.com'],
             'schedule_time' => '08:00',
             'timezone' => 'America/New_York',
         ]);
 
-        $response->assertUnprocessable()
-            ->assertJson(['success' => false, 'error' => 'Invalid report type']);
+        $response->assertRedirect();
+        $response->assertSessionHasErrors('report_type');
     }
 
     public function test_can_update_scheduled_report(): void
@@ -122,13 +120,12 @@ class ScheduledReportTest extends TestCase
             'is_enabled' => true,
         ]);
 
-        $response = $this->putJson("/settings/notifications/scheduled-reports/{$report->id}", [
+        $response = $this->put("/settings/notifications/scheduled-reports/{$report->id}", [
             'recipients' => ['new@example.com', 'another@example.com'],
             'schedule_time' => '10:00',
         ]);
 
-        $response->assertOk()
-            ->assertJson(['success' => true]);
+        $response->assertRedirect();
 
         $report->refresh();
         $this->assertEquals(['new@example.com', 'another@example.com'], $report->recipients);
@@ -165,10 +162,9 @@ class ScheduledReportTest extends TestCase
             'is_enabled' => true,
         ]);
 
-        $response = $this->deleteJson("/settings/notifications/scheduled-reports/{$report->id}");
+        $response = $this->delete("/settings/notifications/scheduled-reports/{$report->id}");
 
-        $response->assertOk()
-            ->assertJson(['success' => true]);
+        $response->assertRedirect();
 
         $this->assertDatabaseMissing('scheduled_reports', ['id' => $report->id]);
     }

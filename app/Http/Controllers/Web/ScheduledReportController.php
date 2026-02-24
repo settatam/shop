@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Mail\DynamicReportMail;
+use App\Models\NotificationLog;
 use App\Models\NotificationTemplate;
 use App\Models\ScheduledReport;
 use App\Services\Reports\ReportRegistry;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class ScheduledReportController extends Controller
 {
@@ -72,7 +74,7 @@ class ScheduledReportController extends Controller
     /**
      * Store a new scheduled report.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request): RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
@@ -90,13 +92,10 @@ class ScheduledReportController extends Controller
 
         // Verify report type exists
         if (! $this->reportRegistry->exists($validated['report_type'])) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Invalid report type',
-            ], 422);
+            return back()->withErrors(['report_type' => 'Invalid report type']);
         }
 
-        $scheduledReport = ScheduledReport::create([
+        ScheduledReport::create([
             'store_id' => $store->id,
             'report_type' => $validated['report_type'],
             'name' => $validated['name'] ?? null,
@@ -107,24 +106,18 @@ class ScheduledReportController extends Controller
             'is_enabled' => $validated['is_enabled'] ?? true,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Scheduled report created successfully',
-            'data' => [
-                'id' => $scheduledReport->id,
-            ],
-        ]);
+        return back()->with('success', 'Scheduled report created successfully');
     }
 
     /**
      * Update a scheduled report.
      */
-    public function update(Request $request, ScheduledReport $scheduledReport): JsonResponse
+    public function update(Request $request, ScheduledReport $scheduledReport): RedirectResponse|SymfonyResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
         if ($scheduledReport->store_id !== $store->id) {
-            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
+            abort(403);
         }
 
         $validated = $request->validate([
@@ -141,37 +134,28 @@ class ScheduledReportController extends Controller
 
         // Verify report type exists if provided
         if (isset($validated['report_type']) && ! $this->reportRegistry->exists($validated['report_type'])) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Invalid report type',
-            ], 422);
+            return back()->withErrors(['report_type' => 'Invalid report type']);
         }
 
         $scheduledReport->update($validated);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Scheduled report updated successfully',
-        ]);
+        return back()->with('success', 'Scheduled report updated successfully');
     }
 
     /**
      * Delete a scheduled report.
      */
-    public function destroy(ScheduledReport $scheduledReport): JsonResponse
+    public function destroy(ScheduledReport $scheduledReport): RedirectResponse|SymfonyResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
         if ($scheduledReport->store_id !== $store->id) {
-            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
+            abort(403);
         }
 
         $scheduledReport->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Scheduled report deleted successfully',
-        ]);
+        return back()->with('success', 'Scheduled report deleted successfully');
     }
 
     /**
@@ -249,6 +233,21 @@ class ScheduledReportController extends Controller
             }
 
             Mail::to($testRecipient)->send($mailable);
+
+            // Log the test notification
+            NotificationLog::create([
+                'store_id' => $store->id,
+                'channel' => 'email',
+                'recipient' => $testRecipient,
+                'subject' => $subject,
+                'content' => $mailable->render(),
+                'status' => NotificationLog::STATUS_SENT,
+                'metadata' => [
+                    'type' => 'scheduled_report_test',
+                    'report_type' => $scheduledReport->report_type,
+                    'scheduled_report_id' => $scheduledReport->id,
+                ],
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -496,10 +495,29 @@ HTML;
                 $mailable->replyTo($store->email_reply_to_address);
             }
 
-            // Send to ALL recipients
+            // Send to ALL recipients and log each
             $sentCount = 0;
+            $renderedContent = $mailable->render();
+
             foreach ($scheduledReport->recipients as $recipient) {
                 Mail::to($recipient)->send($mailable);
+
+                // Log the notification
+                NotificationLog::create([
+                    'store_id' => $store->id,
+                    'channel' => 'email',
+                    'recipient' => $recipient,
+                    'subject' => $subject,
+                    'content' => $renderedContent,
+                    'status' => NotificationLog::STATUS_SENT,
+                    'metadata' => [
+                        'type' => 'scheduled_report',
+                        'report_type' => $scheduledReport->report_type,
+                        'scheduled_report_id' => $scheduledReport->id,
+                        'sent_manually' => true,
+                    ],
+                ]);
+
                 $sentCount++;
             }
 
