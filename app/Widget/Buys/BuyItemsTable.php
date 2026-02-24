@@ -432,15 +432,23 @@ class BuyItemsTable extends Table
             ->toArray();
 
         // Get all categories grouped by parent_id for subcategory lookup
-        $subcategoriesByParent = Category::where('store_id', $storeId)
+        $childCategories = Category::where('store_id', $storeId)
             ->whereNotNull('parent_id')
             ->orderBy('name')
-            ->get(['id', 'name', 'parent_id'])
+            ->get(['id', 'name', 'parent_id']);
+
+        $subcategoriesByParent = $childCategories
             ->groupBy('parent_id')
             ->map(fn ($cats) => $cats->map(fn ($cat) => [
                 'value' => (string) $cat->id,
                 'label' => $cat->name,
             ])->toArray())
+            ->toArray();
+
+        // Map of category_id => parent_id for reconstructing category chains
+        $categoryParentMap = $childCategories
+            ->pluck('parent_id', 'id')
+            ->map(fn ($parentId) => (string) $parentId)
             ->toArray();
 
         // Get transaction statuses
@@ -466,6 +474,7 @@ class BuyItemsTable extends Table
                 'payment_methods' => $paymentMethods,
                 'parent_categories' => $parentCategories,
                 'subcategories_by_parent' => $subcategoriesByParent,
+                'category_parent_map' => $categoryParentMap,
                 'statuses' => $statuses,
                 'types' => $types,
             ],

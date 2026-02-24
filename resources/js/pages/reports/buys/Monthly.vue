@@ -221,7 +221,17 @@ function viewCategoryBuys(row: CategoryBreakdownRow): void {
     const fromDate = `${startYear.value}-${String(startMonth.value).padStart(2, '0')}-01`;
     const endDate = new Date(endYear.value, endMonth.value, 0);
     const toDate = `${endYear.value}-${String(endMonth.value).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-    router.visit(`/buys/items?parent_category_id=${row.category_id}&from_date=${fromDate}&to_date=${toDate}`);
+
+    const params = new URLSearchParams({ from_date: fromDate, to_date: toDate });
+    if (row.category_id === 0) {
+        params.set('parent_category_id', '0');
+    } else if (!row.parent_id) {
+        params.set('parent_category_id', String(row.category_id));
+    } else {
+        params.set('parent_category_id', String(row.root_category_id));
+        params.set('subcategory_id', String(row.category_id));
+    }
+    router.visit(`/buys/items?${params.toString()}`);
 }
 </script>
 

@@ -326,6 +326,7 @@ class BuysReportCategoryFilterTest extends TestCase
                 ->has('category_id')
                 ->has('category_name')
                 ->has('parent_id')
+                ->has('root_category_id')
                 ->has('is_leaf')
                 ->has('items_count')
                 ->has('transactions_count')

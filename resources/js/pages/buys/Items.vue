@@ -5,7 +5,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
 import { DatePicker } from '@/components/ui/date-picker';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { XMarkIcon, PlusIcon } from '@heroicons/vue/20/solid';
 
 interface FilterOption {
@@ -43,11 +43,14 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, upda
 const selectedType = ref<string>(initialParams.transaction_type as string || '');
 const selectedPaymentMethod = ref<string>(initialParams.payment_method as string || '');
 const selectedParentCategory = ref<string>(initialParams.parent_category_id as string || '');
-const selectedSubcategory = ref<string>(initialParams.subcategory_id as string || '');
 const minAmount = ref<string>(initialParams.min_amount as string || '');
 const maxAmount = ref<string>(initialParams.max_amount as string || '');
 const fromDate = ref<string>(initialParams.from_date as string || '');
 const toDate = ref<string>(initialParams.to_date as string || '');
+
+// Category chain: each entry is a selected category at that depth (below the root parent)
+const categoryChain = ref<string[]>([]);
+const chainInitialized = ref(false);
 
 // Reference to DataTable for clearing selection
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
@@ -57,37 +60,112 @@ const availableTypes = computed<FilterOption[]>(() => data.value?.filters?.avail
 const availablePaymentMethods = computed<FilterOption[]>(() => data.value?.filters?.available?.payment_methods || []);
 const availableParentCategories = computed<FilterOption[]>(() => data.value?.filters?.available?.parent_categories || []);
 const subcategoriesByParent = computed<Record<string, FilterOption[]>>(() => data.value?.filters?.available?.subcategories_by_parent || {});
+const categoryParentMap = computed<Record<string, string>>(() => data.value?.filters?.available?.category_parent_map || {});
 
-// Get subcategories for the selected parent category
-const availableSubcategories = computed<FilterOption[]>(() => {
-    if (!selectedParentCategory.value) return [];
-    return subcategoriesByParent.value[selectedParentCategory.value] || [];
+// Get children for a given category ID
+function getChildrenOf(categoryId: string): FilterOption[] {
+    return subcategoriesByParent.value[categoryId] || [];
+}
+
+// Build category chain levels: each level shows children of the previous selection
+const categoryLevels = computed<FilterOption[][]>(() => {
+    const levels: FilterOption[][] = [];
+    if (!selectedParentCategory.value) return levels;
+
+    // Level 0: children of the root parent
+    const firstChildren = getChildrenOf(selectedParentCategory.value);
+    if (firstChildren.length === 0) return levels;
+    levels.push(firstChildren);
+
+    // Subsequent levels: children of the selected category at each level
+    for (let i = 0; i < categoryChain.value.length; i++) {
+        const selectedAtLevel = categoryChain.value[i];
+        if (!selectedAtLevel) break;
+        const children = getChildrenOf(selectedAtLevel);
+        if (children.length === 0) break;
+        levels.push(children);
+    }
+
+    return levels;
 });
+
+// The deepest selected category in the chain (used as subcategory_id for filtering)
+const deepestSelectedCategory = computed<string>(() => {
+    for (let i = categoryChain.value.length - 1; i >= 0; i--) {
+        if (categoryChain.value[i]) return categoryChain.value[i];
+    }
+    return '';
+});
+
+// Build the category chain from a subcategory_id by walking up the parent map
+function buildChainFromSubcategory(subcategoryId: string): void {
+    if (!subcategoryId || !categoryParentMap.value || !Object.keys(categoryParentMap.value).length) return;
+
+    // Walk up from the subcategory to the root parent to build the path
+    const path: string[] = [];
+    let currentId = subcategoryId;
+
+    while (currentId && categoryParentMap.value[currentId]) {
+        path.unshift(currentId);
+        currentId = categoryParentMap.value[currentId];
+    }
+
+    // currentId is now the root parent (not in categoryParentMap because it has no parent)
+    if (currentId && currentId !== subcategoryId) {
+        selectedParentCategory.value = currentId;
+        categoryChain.value = path;
+    }
+}
 
 // Load widget on mount
 onMounted(() => {
     loadWidget();
 });
 
-// Clear subcategory when parent category changes
-watch(selectedParentCategory, () => {
-    selectedSubcategory.value = '';
+// Once data loads, initialize the category chain from URL params
+watch(data, (newData) => {
+    if (newData && !chainInitialized.value) {
+        chainInitialized.value = true;
+        const subcategoryId = initialParams.subcategory_id as string;
+        if (subcategoryId) {
+            buildChainFromSubcategory(subcategoryId);
+        }
+    }
 });
 
-// Watch filter changes
-watch([selectedType, selectedPaymentMethod, selectedParentCategory, selectedSubcategory, minAmount, maxAmount, fromDate, toDate], () => {
-    updateFilter({
-        transaction_type: selectedType.value || undefined,
-        payment_method: selectedPaymentMethod.value || undefined,
-        parent_category_id: selectedParentCategory.value || undefined,
-        subcategory_id: selectedSubcategory.value || undefined,
-        min_amount: minAmount.value || undefined,
-        max_amount: maxAmount.value || undefined,
-        from_date: fromDate.value || undefined,
-        to_date: toDate.value || undefined,
-        page: 1,
-    });
+// When parent category changes, clear the chain
+watch(selectedParentCategory, (newVal, oldVal) => {
+    if (chainInitialized.value && oldVal !== undefined) {
+        categoryChain.value = [];
+    }
 });
+
+// Handle category selection at a specific level
+function onCategoryLevelChange(level: number, value: string): void {
+    // Update the selection at this level
+    categoryChain.value[level] = value;
+    // Clear all deeper selections
+    categoryChain.value = categoryChain.value.slice(0, level + 1);
+}
+
+// Watch all filter changes and push to widget
+watch(
+    [selectedType, selectedPaymentMethod, selectedParentCategory, deepestSelectedCategory, minAmount, maxAmount, fromDate, toDate],
+    () => {
+        if (!chainInitialized.value) return;
+        updateFilter({
+            transaction_type: selectedType.value || undefined,
+            payment_method: selectedPaymentMethod.value || undefined,
+            parent_category_id: selectedParentCategory.value || undefined,
+            subcategory_id: deepestSelectedCategory.value || undefined,
+            min_amount: minAmount.value || undefined,
+            max_amount: maxAmount.value || undefined,
+            from_date: fromDate.value || undefined,
+            to_date: toDate.value || undefined,
+            page: 1,
+        });
+    },
+);
 
 function handlePageChange(page: number) {
     setPage(page);
@@ -109,7 +187,7 @@ function clearFilters() {
     selectedType.value = '';
     selectedPaymentMethod.value = '';
     selectedParentCategory.value = '';
-    selectedSubcategory.value = '';
+    categoryChain.value = [];
     minAmount.value = '';
     maxAmount.value = '';
     fromDate.value = '';
@@ -117,7 +195,7 @@ function clearFilters() {
 }
 
 const hasActiveFilters = computed(() => {
-    return selectedType.value || selectedPaymentMethod.value || selectedParentCategory.value || selectedSubcategory.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
+    return selectedType.value || selectedPaymentMethod.value || selectedParentCategory.value || minAmount.value || maxAmount.value || fromDate.value || toDate.value;
 });
 </script>
 
@@ -193,16 +271,17 @@ const hasActiveFilters = computed(() => {
                     </select>
                 </div>
 
-                <!-- Subcategory (appears when parent is selected) -->
-                <div v-if="availableSubcategories.length > 0">
+                <!-- Cascading subcategory levels -->
+                <div v-for="(options, level) in categoryLevels" :key="level">
                     <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subcategory</label>
                     <select
-                        v-model="selectedSubcategory"
+                        :value="categoryChain[level] || ''"
                         class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @change="onCategoryLevelChange(level, ($event.target as HTMLSelectElement).value)"
                     >
                         <option value="">All Subcategories</option>
-                        <option v-for="subcategory in availableSubcategories" :key="subcategory.value" :value="subcategory.value">
-                            {{ subcategory.label }}
+                        <option v-for="option in options" :key="option.value" :value="option.value">
+                            {{ option.label }}
                         </option>
                     </select>
                 </div>

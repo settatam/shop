@@ -301,6 +301,56 @@ class BuyItemsTableTest extends TestCase
         $this->assertEquals("/transactions/{$transaction->id}/items/{$item->id}", $result['data']['items'][0]['title']['href']);
     }
 
+    public function test_buy_items_table_returns_category_parent_map(): void
+    {
+        $parentCategory = \App\Models\Category::factory()->create([
+            'store_id' => $this->store->id,
+            'parent_id' => null,
+        ]);
+        $childCategory = \App\Models\Category::factory()->withParent($parentCategory)->create();
+
+        $widget = new BuyItemsTable;
+        $result = $widget->render(['store_id' => $this->store->id]);
+
+        $filters = $result['filters']['available'];
+        $this->assertArrayHasKey('category_parent_map', $filters);
+        $this->assertEquals((string) $parentCategory->id, $filters['category_parent_map'][$childCategory->id]);
+    }
+
+    public function test_buy_items_table_filters_by_subcategory_exact_match(): void
+    {
+        $parentCategory = \App\Models\Category::factory()->create([
+            'store_id' => $this->store->id,
+            'parent_id' => null,
+        ]);
+        $childCategory = \App\Models\Category::factory()->withParent($parentCategory)->create();
+
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status_id' => $this->paymentProcessedStatus->id,
+        ]);
+
+        // Items in parent category
+        TransactionItem::factory()->count(2)->create([
+            'transaction_id' => $transaction->id,
+            'category_id' => $parentCategory->id,
+        ]);
+
+        // Items in child category
+        TransactionItem::factory()->count(3)->create([
+            'transaction_id' => $transaction->id,
+            'category_id' => $childCategory->id,
+        ]);
+
+        $widget = new BuyItemsTable;
+        $result = $widget->render([
+            'store_id' => $this->store->id,
+            'subcategory_id' => (string) $childCategory->id,
+        ]);
+
+        $this->assertCount(3, $result['data']['items']);
+    }
+
     public function test_buy_items_table_filters_uncategorized_items(): void
     {
         $category = \App\Models\Category::factory()->create(['store_id' => $this->store->id]);

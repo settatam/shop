@@ -39,6 +39,8 @@ interface CategoryBreakdownRow {
     category_id: number;
     category_name: string;
     is_leaf: boolean;
+    parent_id: number | null;
+    root_category_id: number | null;
     items_count: number;
     transactions_count: number;
     total_purchase: number;
@@ -175,7 +177,17 @@ function viewCategoryBuys(row: CategoryBreakdownRow): void {
     const currentYear = new Date().getFullYear();
     const fromDate = `${currentYear - 4}-01-01`;
     const toDate = `${currentYear}-12-31`;
-    router.visit(`/buys/items?parent_category_id=${row.category_id}&from_date=${fromDate}&to_date=${toDate}`);
+
+    const params = new URLSearchParams({ from_date: fromDate, to_date: toDate });
+    if (row.category_id === 0) {
+        params.set('parent_category_id', '0');
+    } else if (!row.parent_id) {
+        params.set('parent_category_id', String(row.category_id));
+    } else {
+        params.set('parent_category_id', String(row.root_category_id));
+        params.set('subcategory_id', String(row.category_id));
+    }
+    router.visit(`/buys/items?${params.toString()}`);
 }
 </script>
 
