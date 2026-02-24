@@ -1130,8 +1130,7 @@ class MigrateLegacyProducts extends Command
 
         $query = DB::connection('legacy')
             ->table('products')
-            ->where('store_id', $legacyStoreId)
-            ->whereNotNull('vendor_id'); // Skip products without vendors
+            ->where('store_id', $legacyStoreId);
 
         if ($skipDeleted) {
             $query->whereNull('deleted_at');
