@@ -348,7 +348,7 @@ async function testReport(report: ScheduledReport) {
                 </div>
 
                 <!-- Scheduled Reports List -->
-                <div v-if="scheduledReports.length > 0" class="overflow-hidden rounded-lg border border-gray-200 dark:border-white/10">
+                <div v-if="scheduledReports.length > 0" class="overflow-visible rounded-lg border border-gray-200 dark:border-white/10">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-white/10">
                         <thead class="bg-gray-50 dark:bg-white/5">
                             <tr>
