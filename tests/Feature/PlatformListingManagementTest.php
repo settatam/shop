@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\Activity;
 use App\Models\ActivityLog;
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\Store;
@@ -547,5 +549,329 @@ class PlatformListingManagementTest extends TestCase
         \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SyncProductInventoryJob::class, function ($job) use ($product) {
             return $job->product->id === $product->id && $job->triggerReason === 'manual_sync';
         });
+    }
+
+    // ── Variant-aware tests ──────────────────────────────────────────
+
+    public function test_listing_creates_variant_rows_for_each_product_variant(): void
+    {
+        $this->actingAs($this->user);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        // Delete auto-created listings
+        PlatformListing::where('product_id', $product->id)->forceDelete();
+
+        // Create 3 variants
+        $v1 = ProductVariant::factory()->create(['product_id' => $product->id, 'price' => 10.00, 'quantity' => 5]);
+        $v2 = ProductVariant::factory()->create(['product_id' => $product->id, 'price' => 20.00, 'quantity' => 10]);
+        $v3 = ProductVariant::factory()->create(['product_id' => $product->id, 'price' => 30.00, 'quantity' => 15]);
+
+        $listing = $product->ensureListingExists($this->localChannel);
+
+        $this->assertNotNull($listing);
+        $this->assertEquals(3, $listing->listingVariants()->count());
+
+        // Verify each variant row exists
+        foreach ([$v1, $v2, $v3] as $variant) {
+            $this->assertDatabaseHas('platform_listing_variants', [
+                'platform_listing_id' => $listing->id,
+                'product_variant_id' => $variant->id,
+            ]);
+        }
+    }
+
+    public function test_effective_title_returns_override_when_set(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'title' => 'Original Product Title',
+        ]);
+
+        // Use the auto-created listing for the external channel
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $this->externalChannel->id)
+            ->first();
+
+        // Without override, falls back to product title
+        $this->assertEquals('Original Product Title', $listing->getEffectiveTitle());
+
+        // With override
+        $listing->update(['title' => 'Platform Override Title']);
+        $this->assertEquals('Platform Override Title', $listing->getEffectiveTitle());
+    }
+
+    public function test_effective_description_returns_override_when_set(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'description' => 'Original Description',
+        ]);
+
+        // Use the auto-created listing for the external channel
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $this->externalChannel->id)
+            ->first();
+
+        $this->assertEquals('Original Description', $listing->getEffectiveDescription());
+
+        $listing->update(['description' => 'Override Description']);
+        $this->assertEquals('Override Description', $listing->getEffectiveDescription());
+    }
+
+    public function test_listing_variant_effective_price_returns_override(): void
+    {
+        $variant = ProductVariant::factory()->create(['price' => 25.00]);
+
+        $listing = PlatformListing::factory()->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $listingVariant = PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant->id,
+            'price' => null,
+        ]);
+
+        // Falls back to product variant price
+        $this->assertEquals(25.00, $listingVariant->getEffectivePrice());
+
+        // With override
+        $listingVariant->update(['price' => 35.00]);
+        $this->assertEquals(35.00, $listingVariant->getEffectivePrice());
+    }
+
+    public function test_listing_variant_effective_sku_returns_override(): void
+    {
+        $variant = ProductVariant::factory()->create(['sku' => 'ORIG-SKU-001']);
+
+        $listing = PlatformListing::factory()->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $listingVariant = PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant->id,
+            'sku' => null,
+        ]);
+
+        $this->assertEquals('ORIG-SKU-001', $listingVariant->getEffectiveSku());
+
+        $listingVariant->update(['sku' => 'PLAT-SKU-001']);
+        $this->assertEquals('PLAT-SKU-001', $listingVariant->getEffectiveSku());
+    }
+
+    public function test_listing_variant_effective_quantity_returns_override(): void
+    {
+        $variant = ProductVariant::factory()->create(['quantity' => 50]);
+
+        $listing = PlatformListing::factory()->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $listingVariant = PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => null,
+        ]);
+
+        $this->assertEquals(50, $listingVariant->getEffectiveQuantity());
+
+        $listingVariant->update(['quantity' => 75]);
+        $this->assertEquals(75, $listingVariant->getEffectiveQuantity());
+    }
+
+    public function test_sync_listing_variants_creates_missing_variant_rows(): void
+    {
+        $this->actingAs($this->user);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        // Delete auto-created listings
+        PlatformListing::where('product_id', $product->id)->forceDelete();
+
+        // Start with 1 variant
+        $v1 = ProductVariant::factory()->create(['product_id' => $product->id]);
+
+        $listing = $product->ensureListingExists($this->localChannel);
+        $this->assertEquals(1, $listing->listingVariants()->count());
+
+        // Add 2 more variants to the product
+        $v2 = ProductVariant::factory()->create(['product_id' => $product->id]);
+        $v3 = ProductVariant::factory()->create(['product_id' => $product->id]);
+
+        // Sync should add the missing variants
+        $product->syncListingVariants($listing);
+
+        $this->assertEquals(3, $listing->listingVariants()->count());
+
+        $this->assertDatabaseHas('platform_listing_variants', [
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $v2->id,
+        ]);
+        $this->assertDatabaseHas('platform_listing_variants', [
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $v3->id,
+        ]);
+    }
+
+    public function test_unique_constraint_one_listing_per_product_per_channel(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        // Product auto-creates a listing for the external channel, so trying to create another should fail
+        $this->assertDatabaseHas('platform_listings', [
+            'product_id' => $product->id,
+            'sales_channel_id' => $this->externalChannel->id,
+        ]);
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+
+        PlatformListing::factory()->create([
+            'product_id' => $product->id,
+            'sales_channel_id' => $this->externalChannel->id,
+        ]);
+    }
+
+    public function test_listing_effective_price_uses_first_variant(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 99.99,
+        ]);
+
+        // Use the auto-created listing for the external channel
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $this->externalChannel->id)
+            ->first();
+
+        $listing->update(['platform_price' => null]);
+
+        PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant->id,
+            'price' => 149.99,
+        ]);
+
+        $listing->load('listingVariants');
+        $this->assertEquals(149.99, $listing->getEffectivePrice());
+    }
+
+    public function test_listing_with_overrides_factory_state(): void
+    {
+        $listing = PlatformListing::factory()->withOverrides([
+            'title' => 'Custom Title',
+            'description' => 'Custom Desc',
+        ])->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $this->assertEquals('Custom Title', $listing->title);
+        $this->assertEquals('Custom Desc', $listing->description);
+    }
+
+    public function test_listing_with_category_factory_state(): void
+    {
+        $listing = PlatformListing::factory()->withCategory('cat_999')->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $this->assertEquals('cat_999', $listing->platform_category_id);
+    }
+
+    public function test_listing_with_attributes_factory_state(): void
+    {
+        $listing = PlatformListing::factory()->withAttributes(['Color' => 'Red', 'Size' => 'Large'])->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $this->assertEquals(['Color' => 'Red', 'Size' => 'Large'], $listing->attributes);
+    }
+
+    public function test_platform_listing_variant_belongs_to_listing(): void
+    {
+        $listing = PlatformListing::factory()->create([
+            'sales_channel_id' => $this->localChannel->id,
+        ]);
+
+        $variant = PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+        ]);
+
+        $this->assertEquals($listing->id, $variant->listing->id);
+    }
+
+    public function test_platform_listing_variant_belongs_to_product_variant(): void
+    {
+        $productVariant = ProductVariant::factory()->create();
+
+        $listingVariant = PlatformListingVariant::factory()->create([
+            'product_variant_id' => $productVariant->id,
+        ]);
+
+        $this->assertEquals($productVariant->id, $listingVariant->productVariant->id);
+    }
+
+    public function test_listing_has_many_listing_variants(): void
+    {
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $this->externalChannel->id)
+            ->first();
+
+        $v1 = ProductVariant::factory()->create(['product_id' => $product->id]);
+        $v2 = ProductVariant::factory()->create(['product_id' => $product->id]);
+
+        PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $v1->id,
+        ]);
+        PlatformListingVariant::factory()->create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $v2->id,
+        ]);
+
+        $listing->load('listingVariants');
+        $this->assertEquals(2, $listing->listingVariants->count());
+    }
+
+    public function test_ensure_listing_exists_syncs_variants_on_existing_listing(): void
+    {
+        $this->actingAs($this->user);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        // Delete auto-created listings
+        PlatformListing::where('product_id', $product->id)->forceDelete();
+
+        // Create 1 variant, then create listing
+        $v1 = ProductVariant::factory()->create(['product_id' => $product->id]);
+        $listing = $product->ensureListingExists($this->localChannel);
+        $this->assertEquals(1, $listing->listingVariants()->count());
+
+        // Add another variant
+        $v2 = ProductVariant::factory()->create(['product_id' => $product->id]);
+
+        // Call ensureListingExists again — should sync the new variant
+        $listing = $product->ensureListingExists($this->localChannel);
+        $this->assertEquals(2, $listing->listingVariants()->count());
     }
 }

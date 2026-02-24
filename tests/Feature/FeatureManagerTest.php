@@ -34,8 +34,8 @@ class FeatureManagerTest extends TestCase
         $this->assertContains('dashboard', $features);
         $this->assertContains('products', $features);
         $this->assertContains('orders', $features);
-        $this->assertNotContains('repairs', $features);
-        $this->assertNotContains('memos', $features);
+        $this->assertContains('repairs', $features);
+        $this->assertContains('memos', $features);
     }
 
     public function test_pawn_shop_edition_has_extended_features(): void

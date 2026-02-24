@@ -64,22 +64,35 @@ abstract class BaseAdapter implements PlatformAdapterContract
 
     /**
      * Build product data for the platform from a listing.
+     * Uses listing overrides with product fallbacks, and includes variant data.
      */
     protected function buildProductData(PlatformListing $listing): array
     {
         $product = $listing->product;
-        $variant = $product?->variants?->first();
+        $listing->loadMissing('listingVariants.productVariant');
 
         return [
-            'title' => $product?->title,
-            'description' => $product?->description,
-            'price' => $listing->platform_price ?? $variant?->price ?? 0,
+            'title' => $listing->getEffectiveTitle(),
+            'description' => $listing->getEffectiveDescription(),
+            'price' => $listing->getEffectivePrice(),
             'quantity' => $listing->platform_quantity ?? $product?->total_quantity ?? 0,
-            'sku' => $variant?->sku,
-            'barcode' => $variant?->barcode,
+            'images' => $listing->getEffectiveImages(),
+            'category' => $listing->platform_category_id ?? $product?->category?->name,
+            'attributes' => $listing->attributes ?? [],
+            'platform_settings' => $listing->platform_settings ?? [],
             'weight' => $product?->weight,
-            'images' => $product?->images?->pluck('url')->toArray() ?? [],
-            'category' => $product?->category?->name,
+            'variants' => $listing->listingVariants->map(fn ($lv) => [
+                'sku' => $lv->getEffectiveSku(),
+                'barcode' => $lv->getEffectiveBarcode(),
+                'price' => $lv->getEffectivePrice(),
+                'compare_at_price' => (float) ($lv->compare_at_price ?? $lv->productVariant?->product?->compare_at_price ?? 0),
+                'quantity' => $lv->getEffectiveQuantity(),
+                'option1' => $lv->productVariant?->option1_value,
+                'option2' => $lv->productVariant?->option2_value,
+                'option3' => $lv->productVariant?->option3_value,
+                'external_variant_id' => $lv->external_variant_id,
+                'external_inventory_item_id' => $lv->external_inventory_item_id,
+            ])->all(),
         ];
     }
 }

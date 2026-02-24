@@ -8,8 +8,10 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\PlatformOrder;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\ShippingLabel;
 use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\User;
@@ -1083,19 +1085,25 @@ class MigrateLegacyOrders extends Command
     {
         $this->warn('Cleaning up existing orders...');
 
-        $orderIds = Order::where('store_id', $this->newStore->id)->pluck('id');
+        $orderIds = Order::withTrashed()->where('store_id', $this->newStore->id)->pluck('id');
 
-        // Delete payments linked to orders
-        Payment::where('payable_type', Order::class)->whereIn('payable_id', $orderIds)->forceDelete();
+        // Delete payments linked to orders (including soft-deleted)
+        Payment::withTrashed()->where('payable_type', Order::class)->whereIn('payable_id', $orderIds)->forceDelete();
 
-        // Delete invoices linked to orders
-        Invoice::where('invoiceable_type', Order::class)->whereIn('invoiceable_id', $orderIds)->forceDelete();
+        // Delete invoices linked to orders (including soft-deleted)
+        Invoice::withTrashed()->where('invoiceable_type', Order::class)->whereIn('invoiceable_id', $orderIds)->forceDelete();
 
-        // Delete order items
-        OrderItem::whereIn('order_id', $orderIds)->forceDelete();
+        // Delete shipping labels linked to orders (polymorphic, no FK cascade)
+        ShippingLabel::withTrashed()->where('shippable_type', Order::class)->whereIn('shippable_id', $orderIds)->forceDelete();
 
-        // Delete orders
-        Order::where('store_id', $this->newStore->id)->forceDelete();
+        // Delete platform orders (FK is set null, not cascade)
+        PlatformOrder::withTrashed()->whereIn('order_id', $orderIds)->forceDelete();
+
+        // Delete order items (including soft-deleted)
+        OrderItem::withTrashed()->whereIn('order_id', $orderIds)->forceDelete();
+
+        // Delete orders (including soft-deleted)
+        Order::withTrashed()->where('store_id', $this->newStore->id)->forceDelete();
 
         $this->line('  Cleanup complete');
     }

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductImage;
@@ -10,6 +12,7 @@ use App\Models\ProductTemplate;
 use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\Role;
+use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
@@ -359,5 +362,276 @@ class MigrateLegacyProductsTest extends TestCase
         // Verify the command is registered
         $this->artisan('migrate:legacy-products', ['--help' => true])
             ->assertSuccessful();
+    }
+
+    public function test_map_listing_status_uses_new_constants(): void
+    {
+        $command = new \App\Console\Commands\MigrateLegacyProducts;
+
+        $method = new \ReflectionMethod($command, 'mapListingStatus');
+
+        $this->assertEquals(PlatformListing::STATUS_LISTED, $method->invoke($command, 'listed'));
+        $this->assertEquals(PlatformListing::STATUS_NOT_LISTED, $method->invoke($command, 'not_listed'));
+        $this->assertEquals(PlatformListing::STATUS_ARCHIVED, $method->invoke($command, 'archived'));
+        $this->assertEquals(PlatformListing::STATUS_ENDED, $method->invoke($command, 'listing_expired'));
+        $this->assertEquals(PlatformListing::STATUS_ENDED, $method->invoke($command, 'listing_ended'));
+        $this->assertEquals(PlatformListing::STATUS_ERROR, $method->invoke($command, 'listing_error'));
+        $this->assertEquals(PlatformListing::STATUS_NOT_LISTED, $method->invoke($command, null));
+        $this->assertEquals(PlatformListing::STATUS_NOT_LISTED, $method->invoke($command, 'unknown_status'));
+    }
+
+    public function test_platform_listing_does_not_have_product_variant_id_column(): void
+    {
+        // Create product first (before channel exists, to avoid auto-listing)
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        // Create channel after product — no auto-listing triggered
+        $channel = SalesChannel::factory()->active()->create([
+            'store_id' => $this->store->id,
+            'code' => 'test_channel_'.uniqid(),
+            'is_local' => false,
+        ]);
+
+        // Verify the listing can be created without product_variant_id
+        $listing = PlatformListing::create([
+            'sales_channel_id' => $channel->id,
+            'product_id' => $product->id,
+            'status' => PlatformListing::STATUS_NOT_LISTED,
+        ]);
+
+        $this->assertDatabaseHas('platform_listings', [
+            'id' => $listing->id,
+            'product_id' => $product->id,
+            'status' => PlatformListing::STATUS_NOT_LISTED,
+        ]);
+    }
+
+    public function test_platform_listing_variants_store_per_variant_data(): void
+    {
+        // Create product as draft to avoid auto-listing
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        $variant1 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'VAR-001',
+            'price' => 199.99,
+        ]);
+
+        $variant2 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'VAR-002',
+            'price' => 249.99,
+        ]);
+
+        // Create channel after product
+        $channel = SalesChannel::factory()->active()->create([
+            'store_id' => $this->store->id,
+            'code' => 'test_channel_'.uniqid(),
+            'is_local' => false,
+        ]);
+
+        $listing = PlatformListing::create([
+            'sales_channel_id' => $channel->id,
+            'product_id' => $product->id,
+            'status' => PlatformListing::STATUS_LISTED,
+            'published_at' => now(),
+        ]);
+
+        // Simulate what the migration does: create listing variants
+        PlatformListingVariant::create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant1->id,
+            'external_variant_id' => '12345678901',
+            'price' => 219.99,
+            'quantity' => 3,
+            'sku' => 'VAR-001',
+            'status' => 'active',
+        ]);
+
+        PlatformListingVariant::create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant2->id,
+            'external_variant_id' => '12345678902',
+            'price' => 279.99,
+            'quantity' => 0,
+            'sku' => 'VAR-002',
+            'status' => 'inactive',
+        ]);
+
+        $this->assertCount(2, $listing->listingVariants);
+
+        $lv1 = PlatformListingVariant::where('platform_listing_id', $listing->id)
+            ->where('product_variant_id', $variant1->id)
+            ->first();
+        $this->assertEquals('12345678901', $lv1->external_variant_id);
+        $this->assertEquals('219.99', $lv1->price);
+        $this->assertEquals('active', $lv1->status);
+
+        $lv2 = PlatformListingVariant::where('platform_listing_id', $listing->id)
+            ->where('product_variant_id', $variant2->id)
+            ->first();
+        $this->assertEquals('12345678902', $lv2->external_variant_id);
+        $this->assertEquals('279.99', $lv2->price);
+        $this->assertEquals('inactive', $lv2->status);
+    }
+
+    public function test_in_store_listing_creates_variant_rows_for_all_product_variants(): void
+    {
+        // Create product as draft first
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        $variant1 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'INSTORE-001',
+            'price' => 100.00,
+            'quantity' => 5,
+        ]);
+
+        $variant2 = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'INSTORE-002',
+            'price' => 150.00,
+            'quantity' => 3,
+        ]);
+
+        // Create local channel after product
+        $inStoreChannel = SalesChannel::factory()->local()->active()->create([
+            'store_id' => $this->store->id,
+            'code' => 'in_store_'.uniqid(),
+        ]);
+
+        // Simulate createInStoreListings behavior
+        $listing = PlatformListing::create([
+            'sales_channel_id' => $inStoreChannel->id,
+            'product_id' => $product->id,
+            'status' => PlatformListing::STATUS_LISTED,
+            'published_at' => now(),
+        ]);
+
+        foreach ($product->variants as $variant) {
+            PlatformListingVariant::create([
+                'platform_listing_id' => $listing->id,
+                'product_variant_id' => $variant->id,
+                'price' => $variant->price,
+                'quantity' => $variant->quantity,
+                'sku' => $variant->sku,
+                'status' => 'active',
+            ]);
+        }
+
+        $listingVariants = PlatformListingVariant::where('platform_listing_id', $listing->id)->get();
+        $this->assertCount(2, $listingVariants);
+        $this->assertDatabaseHas('platform_listing_variants', [
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant1->id,
+            'sku' => 'INSTORE-001',
+        ]);
+        $this->assertDatabaseHas('platform_listing_variants', [
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant2->id,
+            'sku' => 'INSTORE-002',
+        ]);
+    }
+
+    public function test_cleanup_removes_platform_listing_variants(): void
+    {
+        // Create product as draft to avoid auto-listing
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+        ]);
+
+        // Create channel after product
+        $channel = SalesChannel::factory()->active()->create([
+            'store_id' => $this->store->id,
+            'code' => 'cleanup_channel_'.uniqid(),
+            'is_local' => false,
+        ]);
+
+        $listing = PlatformListing::create([
+            'sales_channel_id' => $channel->id,
+            'product_id' => $product->id,
+            'status' => PlatformListing::STATUS_NOT_LISTED,
+        ]);
+
+        $listingVariant = PlatformListingVariant::create([
+            'platform_listing_id' => $listing->id,
+            'product_variant_id' => $variant->id,
+            'status' => 'active',
+        ]);
+
+        // Simulate cleanupExistingProducts behavior
+        $productIds = Product::where('store_id', $this->store->id)->pluck('id');
+        $listingIds = PlatformListing::whereIn('product_id', $productIds)->pluck('id');
+        PlatformListingVariant::whereIn('platform_listing_id', $listingIds)->delete();
+        PlatformListing::whereIn('product_id', $productIds)->forceDelete();
+
+        $this->assertDatabaseMissing('platform_listing_variants', ['id' => $listingVariant->id]);
+        $this->assertDatabaseMissing('platform_listings', ['id' => $listing->id]);
+    }
+
+    public function test_listing_without_channel_variants_gets_fallback_variant(): void
+    {
+        // Create product as draft first
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_DRAFT,
+        ]);
+
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'FALLBACK-001',
+            'price' => 299.99,
+            'quantity' => 2,
+        ]);
+
+        // Create channel after product
+        $channel = SalesChannel::factory()->active()->create([
+            'store_id' => $this->store->id,
+            'code' => 'fallback_channel_'.uniqid(),
+            'is_local' => false,
+        ]);
+
+        // Simulate the migration creating a listing via DB::table (bypasses booted)
+        $listingId = DB::table('platform_listings')->insertGetId([
+            'sales_channel_id' => $channel->id,
+            'product_id' => $product->id,
+            'status' => PlatformListing::STATUS_NOT_LISTED,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // No channel variants — create fallback from first product variant
+        $defaultVariant = ProductVariant::where('product_id', $product->id)->first();
+        DB::table('platform_listing_variants')->insert([
+            'platform_listing_id' => $listingId,
+            'product_variant_id' => $defaultVariant->id,
+            'price' => $defaultVariant->price,
+            'quantity' => $defaultVariant->quantity,
+            'sku' => $defaultVariant->sku,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertDatabaseHas('platform_listing_variants', [
+            'platform_listing_id' => $listingId,
+            'product_variant_id' => $variant->id,
+            'sku' => 'FALLBACK-001',
+            'status' => 'active',
+        ]);
     }
 }

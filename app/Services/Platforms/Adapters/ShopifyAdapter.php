@@ -51,6 +51,9 @@ class ShopifyAdapter extends BaseAdapter
             $productId = $shopifyProduct['id'] ?? null;
             $handle = $shopifyProduct['handle'] ?? null;
 
+            // Update listing variants with external IDs from Shopify response
+            $this->syncVariantExternalIds($listing, $shopifyProduct['variants'] ?? []);
+
             $listingUrl = $handle
                 ? "https://{$this->marketplace->shop_domain}/products/{$handle}"
                 : null;
@@ -124,23 +127,25 @@ class ShopifyAdapter extends BaseAdapter
         }
 
         try {
-            // Get variant ID first
-            $product = $this->getShopifyProduct($listing->external_listing_id);
-            $variantId = $product['variants'][0]['id'] ?? null;
+            $listing->loadMissing('listingVariants');
 
-            if (! $variantId) {
-                return PlatformAdapterResult::failure('No variant found');
-            }
+            // Update all listing variants that have external IDs
+            foreach ($listing->listingVariants as $listingVariant) {
+                $variantId = $listingVariant->external_variant_id;
+                if (! $variantId) {
+                    continue;
+                }
 
-            $response = $this->apiRequest('PUT', "/variants/{$variantId}.json", [
-                'variant' => [
-                    'id' => $variantId,
-                    'price' => number_format($price, 2, '.', ''),
-                ],
-            ]);
+                $response = $this->apiRequest('PUT', "/variants/{$variantId}.json", [
+                    'variant' => [
+                        'id' => $variantId,
+                        'price' => number_format($listingVariant->getEffectivePrice(), 2, '.', ''),
+                    ],
+                ]);
 
-            if (! $response->successful()) {
-                return PlatformAdapterResult::failure('Failed to update price: '.$response->body());
+                if (! $response->successful()) {
+                    return PlatformAdapterResult::failure('Failed to update price: '.$response->body());
+                }
             }
 
             return PlatformAdapterResult::success('Price updated', ['price' => $price]);
@@ -156,14 +161,9 @@ class ShopifyAdapter extends BaseAdapter
         }
 
         try {
-            $product = $this->getShopifyProduct($listing->external_listing_id);
-            $inventoryItemId = $product['variants'][0]['inventory_item_id'] ?? null;
+            $listing->loadMissing('listingVariants.productVariant');
 
-            if (! $inventoryItemId) {
-                return PlatformAdapterResult::failure('No inventory item found');
-            }
-
-            // Get location ID
+            // Get location ID once
             $locationsResponse = $this->apiRequest('GET', '/locations.json');
             $locationId = $locationsResponse->json('locations.0.id');
 
@@ -171,14 +171,25 @@ class ShopifyAdapter extends BaseAdapter
                 return PlatformAdapterResult::failure('No location found');
             }
 
-            $response = $this->apiRequest('POST', '/inventory_levels/set.json', [
-                'location_id' => $locationId,
-                'inventory_item_id' => $inventoryItemId,
-                'available' => $quantity,
-            ]);
+            // Update inventory for each listing variant that has an inventory item ID
+            foreach ($listing->listingVariants as $listingVariant) {
+                $inventoryItemId = $listingVariant->external_inventory_item_id;
+                if (! $inventoryItemId) {
+                    continue;
+                }
 
-            if (! $response->successful()) {
-                return PlatformAdapterResult::failure('Failed to update inventory: '.$response->body());
+                $response = $this->apiRequest('POST', '/inventory_levels/set.json', [
+                    'location_id' => $locationId,
+                    'inventory_item_id' => $inventoryItemId,
+                    'available' => $listingVariant->getEffectiveQuantity(),
+                ]);
+
+                if (! $response->successful()) {
+                    $this->log('Failed to update inventory for variant', [
+                        'variant_id' => $listingVariant->id,
+                        'error' => $response->body(),
+                    ]);
+                }
             }
 
             return PlatformAdapterResult::success('Inventory updated', ['quantity' => $quantity]);
@@ -211,10 +222,10 @@ class ShopifyAdapter extends BaseAdapter
 
             $variant = $product['variants'][0] ?? [];
             $status = match ($product['status'] ?? 'draft') {
-                'active' => PlatformListing::STATUS_ACTIVE,
-                'draft' => PlatformListing::STATUS_DRAFT,
+                'active' => PlatformListing::STATUS_LISTED,
+                'draft' => PlatformListing::STATUS_NOT_LISTED,
                 'archived' => PlatformListing::STATUS_ENDED,
-                default => PlatformListing::STATUS_DRAFT,
+                default => PlatformListing::STATUS_NOT_LISTED,
             };
 
             return PlatformAdapterResult::success('Refreshed from Shopify', [
@@ -240,6 +251,12 @@ class ShopifyAdapter extends BaseAdapter
             return PlatformAdapterResult::failure('Failed to update: '.$response->body());
         }
 
+        // Sync variant external IDs from response
+        $shopifyProduct = $response->json('product');
+        if ($shopifyProduct) {
+            $this->syncVariantExternalIds($listing, $shopifyProduct['variants'] ?? []);
+        }
+
         $this->log('Product updated', ['shopify_id' => $listing->external_listing_id]);
 
         return PlatformAdapterResult::success('Product updated on Shopify');
@@ -260,16 +277,47 @@ class ShopifyAdapter extends BaseAdapter
             'title' => $data['title'],
             'body_html' => $data['description'],
             'status' => 'active',
-            'variants' => [
+        ];
+
+        // Build multi-variant payload
+        $variants = $data['variants'] ?? [];
+        if (! empty($variants)) {
+            $shopifyData['variants'] = array_map(function ($variant) {
+                $shopifyVariant = [
+                    'price' => number_format($variant['price'], 2, '.', ''),
+                    'sku' => $variant['sku'],
+                    'barcode' => $variant['barcode'],
+                    'inventory_management' => 'shopify',
+                    'inventory_quantity' => $variant['quantity'],
+                ];
+
+                if ($variant['option1'] ?? null) {
+                    $shopifyVariant['option1'] = $variant['option1'];
+                }
+                if ($variant['option2'] ?? null) {
+                    $shopifyVariant['option2'] = $variant['option2'];
+                }
+                if ($variant['option3'] ?? null) {
+                    $shopifyVariant['option3'] = $variant['option3'];
+                }
+
+                // Include external variant ID for updates
+                if ($variant['external_variant_id'] ?? null) {
+                    $shopifyVariant['id'] = $variant['external_variant_id'];
+                }
+
+                return $shopifyVariant;
+            }, $variants);
+        } else {
+            // Fallback: single variant from listing-level data
+            $shopifyData['variants'] = [
                 [
                     'price' => number_format($data['price'], 2, '.', ''),
-                    'sku' => $data['sku'],
-                    'barcode' => $data['barcode'],
                     'inventory_management' => 'shopify',
                     'inventory_quantity' => $data['quantity'],
                 ],
-            ],
-        ];
+            ];
+        }
 
         // Add images if available
         if (! empty($data['images'])) {
@@ -277,6 +325,39 @@ class ShopifyAdapter extends BaseAdapter
         }
 
         return $shopifyData;
+    }
+
+    /**
+     * Match Shopify response variants to listing variants by SKU and update external IDs.
+     *
+     * @param  array<array<string, mixed>>  $shopifyVariants
+     */
+    protected function syncVariantExternalIds(PlatformListing $listing, array $shopifyVariants): void
+    {
+        $listing->loadMissing('listingVariants');
+
+        foreach ($shopifyVariants as $shopifyVariant) {
+            $sku = $shopifyVariant['sku'] ?? null;
+            $externalVariantId = (string) ($shopifyVariant['id'] ?? '');
+            $inventoryItemId = (string) ($shopifyVariant['inventory_item_id'] ?? '');
+
+            // Match by SKU
+            $listingVariant = $listing->listingVariants
+                ->first(fn ($lv) => $lv->getEffectiveSku() === $sku);
+
+            // If no SKU match and only one variant, match by position
+            if (! $listingVariant && $listing->listingVariants->count() === 1 && count($shopifyVariants) === 1) {
+                $listingVariant = $listing->listingVariants->first();
+            }
+
+            if ($listingVariant) {
+                $listingVariant->update([
+                    'external_variant_id' => $externalVariantId,
+                    'external_inventory_item_id' => $inventoryItemId,
+                    'platform_data' => $shopifyVariant,
+                ]);
+            }
+        }
     }
 
     protected function apiRequest(string $method, string $endpoint, array $data = []): \Illuminate\Http\Client\Response

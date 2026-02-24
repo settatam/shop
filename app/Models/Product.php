@@ -150,6 +150,7 @@ class Product extends Model
     /**
      * Ensure a listing exists for the given channel.
      * Creates one if it doesn't exist with appropriate default status.
+     * Also ensures listing variants are in sync with product variants.
      */
     public function ensureListingExists(SalesChannel $channel): PlatformListing
     {
@@ -158,6 +159,9 @@ class Product extends Model
             ->first();
 
         if ($existingListing) {
+            // Ensure variants are in sync (new variants added to product get listing variants)
+            $this->syncListingVariants($existingListing);
+
             // If product just became active and this is a local channel, list it
             if ($this->status === self::STATUS_ACTIVE && $channel->is_local && $existingListing->isNotListed()) {
                 $existingListing->markAsListed();
@@ -176,19 +180,46 @@ class Product extends Model
 
         $defaultVariant = $this->variants()->first();
 
-        return PlatformListing::create([
+        $listing = PlatformListing::create([
             'sales_channel_id' => $channel->id,
             'store_marketplace_id' => $channel->store_marketplace_id,
             'product_id' => $this->id,
             'status' => $status,
             'platform_price' => $defaultVariant?->price ?? 0,
-            'platform_quantity' => $defaultVariant?->quantity ?? 0,
-            'platform_data' => [
-                'title' => $this->title,
-                'description' => $this->description,
-            ],
+            'platform_quantity' => $this->total_quantity,
             'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
         ]);
+
+        // Create variant rows for each product variant
+        foreach ($this->variants as $variant) {
+            $listing->listingVariants()->create([
+                'product_variant_id' => $variant->id,
+                'price' => $variant->price,
+                'quantity' => $variant->quantity,
+            ]);
+        }
+
+        return $listing;
+    }
+
+    /**
+     * Sync listing variants to match product variants.
+     * Creates missing listing variants for newly added product variants.
+     */
+    public function syncListingVariants(PlatformListing $listing): void
+    {
+        $existingVariantIds = $listing->listingVariants()->pluck('product_variant_id')->toArray();
+        $productVariants = $this->variants()->get();
+
+        foreach ($productVariants as $variant) {
+            if (! in_array($variant->id, $existingVariantIds)) {
+                $listing->listingVariants()->create([
+                    'product_variant_id' => $variant->id,
+                    'price' => $variant->price,
+                    'quantity' => $variant->quantity,
+                ]);
+            }
+        }
     }
 
     /**
@@ -246,19 +277,26 @@ class Product extends Model
 
         $defaultVariant = $this->variants()->first();
 
-        return PlatformListing::create([
+        $listing = PlatformListing::create([
             'sales_channel_id' => $channel->id,
             'store_marketplace_id' => $channel->store_marketplace_id,
             'product_id' => $this->id,
             'status' => $normalizedStatus,
             'platform_price' => $defaultVariant?->price ?? 0,
-            'platform_quantity' => $defaultVariant?->quantity ?? 0,
-            'platform_data' => [
-                'title' => $this->title,
-                'description' => $this->description,
-            ],
+            'platform_quantity' => $this->total_quantity,
             'published_at' => $normalizedStatus === PlatformListing::STATUS_LISTED ? now() : null,
         ]);
+
+        // Create variant rows for each product variant
+        foreach ($this->variants as $variant) {
+            $listing->listingVariants()->create([
+                'product_variant_id' => $variant->id,
+                'price' => $variant->price,
+                'quantity' => $variant->quantity,
+            ]);
+        }
+
+        return $listing;
     }
 
     /**

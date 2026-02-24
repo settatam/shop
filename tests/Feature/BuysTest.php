@@ -188,7 +188,7 @@ class BuysTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->get('/widgets/view?type=Buys%5CBuyItemsTable&category_id='.$category1->id);
+            ->get('/widgets/view?type=Buys%5CBuyItemsTable&parent_category_id='.$category1->id);
 
         $response->assertStatus(200);
         $data = $response->json();

@@ -66,6 +66,8 @@ class Store extends Model
         'buy_id_suffix',
         'repair_id_prefix',
         'repair_id_suffix',
+        'appraisal_id_prefix',
+        'appraisal_id_suffix',
         'memo_id_prefix',
         'memo_id_suffix',
         'gift_card_should_expire',

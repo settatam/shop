@@ -276,7 +276,7 @@ class BuyItemsTableTest extends TestCase
         $filters = $result['filters']['available'];
 
         $this->assertArrayHasKey('payment_methods', $filters);
-        $this->assertArrayHasKey('categories', $filters);
+        $this->assertArrayHasKey('parent_categories', $filters);
         $this->assertArrayHasKey('statuses', $filters);
         $this->assertArrayHasKey('types', $filters);
     }

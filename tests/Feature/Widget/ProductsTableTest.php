@@ -75,7 +75,7 @@ class ProductsTableTest extends TestCase
 
         // Verify all returned products have no category
         foreach ($result['data']['items'] as $item) {
-            $this->assertEquals('-', $item['category']['data']);
+            $this->assertEquals('-', $item['product_type']['data']);
         }
     }
 

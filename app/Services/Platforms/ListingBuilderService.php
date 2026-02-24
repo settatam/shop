@@ -5,7 +5,6 @@ namespace App\Services\Platforms;
 use App\Enums\Platform;
 use App\Models\PlatformListing;
 use App\Models\Product;
-use App\Models\ProductPlatformOverride;
 use App\Models\StoreMarketplace;
 
 class ListingBuilderService
@@ -22,21 +21,33 @@ class ListingBuilderService
      */
     public function buildListing(Product $product, StoreMarketplace $marketplace): array
     {
-        $product->load(['attributeValues.field', 'template.fields', 'template.platformMappings', 'platformOverrides', 'images', 'variants']);
+        $product->load(['attributeValues.field', 'template.fields', 'template.platformMappings', 'images', 'variants']);
         $platform = $marketplace->platform;
 
-        // Start with base product data
-        $listing = $this->getBaseProductData($product);
+        // Get the PlatformListing (which now holds override data)
+        $platformListing = $this->getExistingListing($product, $marketplace);
 
-        // Apply platform-specific overrides
-        $override = $this->getOverride($product, $marketplace);
-        if ($override) {
-            $listing = $this->applyOverrides($listing, $override);
+        // Start with base product data, incorporating listing overrides
+        $listing = $this->getBaseProductData($product, $platformListing);
+
+        // Merge listing-level attributes
+        if ($platformListing?->attributes) {
+            $listing['attributes'] = array_merge($listing['attributes'] ?? [], $platformListing->attributes);
         }
 
         // Transform template attributes using field mappings
         $transformedAttributes = $this->fieldMappingService->transformAttributes($product, $platform);
         $listing['attributes'] = array_merge($listing['attributes'] ?? [], $transformedAttributes);
+
+        // Apply platform category from listing
+        if ($platformListing?->platform_category_id) {
+            $listing['platform_category_id'] = $platformListing->platform_category_id;
+        }
+
+        // Include platform settings
+        if ($platformListing?->platform_settings) {
+            $listing['platform_settings'] = $platformListing->platform_settings;
+        }
 
         // Apply platform-specific transformations
         $listing = $this->applyPlatformTransformations($listing, $platform, $product);
@@ -82,10 +93,19 @@ class ListingBuilderService
             $errors[] = 'At least one product image is required';
         }
 
-        // Check pricing
-        $variant = $product->variants->first();
-        if (! $variant || ! $variant->price) {
-            $errors[] = 'Product price is required';
+        // Check pricing — from listing variants or product variants
+        $platformListing = $this->getExistingListing($product, $marketplace);
+        if ($platformListing) {
+            $platformListing->loadMissing('listingVariants');
+            $hasPrice = $platformListing->listingVariants->contains(fn ($lv) => $lv->getEffectivePrice() > 0);
+            if (! $hasPrice) {
+                $errors[] = 'At least one variant must have a price';
+            }
+        } else {
+            $variant = $product->variants->first();
+            if (! $variant || ! $variant->price) {
+                $errors[] = 'Product price is required';
+            }
         }
 
         // Check platform-specific required fields
@@ -126,29 +146,79 @@ class ListingBuilderService
     }
 
     /**
-     * Get the override for a product on a marketplace.
+     * Get the listing override data for a product on a marketplace.
+     * Now reads directly from PlatformListing.
+     *
+     * @return array<string, mixed>|null
      */
-    public function getOverride(Product $product, StoreMarketplace $marketplace): ?ProductPlatformOverride
+    public function getOverride(Product $product, StoreMarketplace $marketplace): ?array
     {
-        return ProductPlatformOverride::where('product_id', $product->id)
-            ->where('store_marketplace_id', $marketplace->id)
-            ->first();
+        $listing = $this->getExistingListing($product, $marketplace);
+        if (! $listing) {
+            return null;
+        }
+
+        // Return override data if any override fields are set
+        if ($listing->title || $listing->description || $listing->attributes || $listing->platform_category_id) {
+            return [
+                'title' => $listing->title,
+                'description' => $listing->description,
+                'attributes' => $listing->attributes,
+                'platform_category_id' => $listing->platform_category_id,
+                'platform_settings' => $listing->platform_settings,
+                'metafield_overrides' => $listing->metafield_overrides,
+                'images' => $listing->images,
+            ];
+        }
+
+        return null;
     }
 
     /**
-     * Create or update an override for a product on a marketplace.
+     * Save override data to the PlatformListing.
      *
      * @param  array<string, mixed>  $data
      */
-    public function saveOverride(Product $product, StoreMarketplace $marketplace, array $data): ProductPlatformOverride
+    public function saveOverride(Product $product, StoreMarketplace $marketplace, array $data): PlatformListing
     {
-        return ProductPlatformOverride::updateOrCreate(
-            [
-                'product_id' => $product->id,
-                'store_marketplace_id' => $marketplace->id,
-            ],
-            $data
-        );
+        $listing = $this->getExistingListing($product, $marketplace);
+
+        if (! $listing) {
+            // Create the listing if it doesn't exist
+            $listing = $product->ensureListingExists(
+                \App\Models\SalesChannel::where('store_marketplace_id', $marketplace->id)->first()
+                    ?? \App\Models\SalesChannel::where('store_id', $product->store_id)->first()
+            );
+        }
+
+        // Map override data to PlatformListing columns
+        $updateData = [];
+        $listingFields = ['title', 'description', 'images', 'attributes', 'platform_category_id', 'platform_category_options', 'platform_settings', 'metafield_overrides'];
+
+        foreach ($listingFields as $field) {
+            if (array_key_exists($field, $data)) {
+                $updateData[$field] = $data[$field];
+            }
+        }
+
+        // Handle legacy field names
+        if (array_key_exists('category_id', $data) && ! array_key_exists('platform_category_id', $data)) {
+            $updateData['platform_category_id'] = $data['category_id'];
+        }
+
+        if (array_key_exists('price', $data) && $data['price'] !== null) {
+            $updateData['platform_price'] = $data['price'];
+        }
+
+        if (array_key_exists('quantity', $data) && $data['quantity'] !== null) {
+            $updateData['platform_quantity'] = $data['quantity'];
+        }
+
+        if (! empty($updateData)) {
+            $listing->update($updateData);
+        }
+
+        return $listing;
     }
 
     /**
@@ -174,25 +244,29 @@ class ListingBuilderService
     }
 
     /**
-     * Get base product data for listing.
+     * Get base product data for listing, incorporating listing overrides.
      *
      * @return array<string, mixed>
      */
-    protected function getBaseProductData(Product $product): array
+    protected function getBaseProductData(Product $product, ?PlatformListing $listing = null): array
     {
         $variant = $product->variants->first();
-        $images = $product->images->pluck('url')->toArray();
 
+        // Images: listing override > product images > legacy images
+        $images = $listing?->images;
+        if (empty($images)) {
+            $images = $product->images->pluck('url')->toArray();
+        }
         if (empty($images)) {
             $images = $product->legacyImages->pluck('url')->toArray();
         }
 
-        return [
-            'title' => $product->title,
-            'description' => $product->description,
-            'price' => $variant?->price,
+        $data = [
+            'title' => $listing?->title ?? $product->title,
+            'description' => $listing?->description ?? $product->description,
+            'price' => $listing?->platform_price ?? $variant?->price,
             'compare_at_price' => $variant?->compare_at_price ?? $product->compare_at_price,
-            'quantity' => $variant?->quantity ?? $product->quantity ?? 0,
+            'quantity' => $listing?->platform_quantity ?? $variant?->quantity ?? $product->quantity ?? 0,
             'sku' => $variant?->sku,
             'barcode' => $variant?->barcode,
             'weight' => $product->weight,
@@ -200,51 +274,29 @@ class ListingBuilderService
             'images' => $images,
             'condition' => $product->condition ?? 'new',
             'brand' => $product->brand?->name,
-            'category' => $product->category?->name,
+            'category' => $listing?->platform_category_id ?? $product->category?->name,
             'upc' => $product->upc,
             'ean' => $product->ean,
             'mpn' => $product->mpn,
             'attributes' => [],
         ];
-    }
 
-    /**
-     * Apply overrides to listing data.
-     *
-     * @param  array<string, mixed>  $listing
-     * @return array<string, mixed>
-     */
-    protected function applyOverrides(array $listing, ProductPlatformOverride $override): array
-    {
-        if ($override->title) {
-            $listing['title'] = $override->title;
+        // Include variant-level data from listing variants
+        if ($listing) {
+            $listing->loadMissing('listingVariants.productVariant');
+            $data['variants'] = $listing->listingVariants->map(fn ($lv) => [
+                'sku' => $lv->getEffectiveSku(),
+                'barcode' => $lv->getEffectiveBarcode(),
+                'price' => $lv->getEffectivePrice(),
+                'compare_at_price' => (float) ($lv->compare_at_price ?? 0),
+                'quantity' => $lv->getEffectiveQuantity(),
+                'option1' => $lv->productVariant?->option1_value,
+                'option2' => $lv->productVariant?->option2_value,
+                'option3' => $lv->productVariant?->option3_value,
+            ])->all();
         }
 
-        if ($override->description) {
-            $listing['description'] = $override->description;
-        }
-
-        if ($override->price !== null) {
-            $listing['price'] = $override->price;
-        }
-
-        if ($override->compare_at_price !== null) {
-            $listing['compare_at_price'] = $override->compare_at_price;
-        }
-
-        if ($override->quantity !== null) {
-            $listing['quantity'] = $override->quantity;
-        }
-
-        if ($override->category_id) {
-            $listing['platform_category_id'] = $override->category_id;
-        }
-
-        if ($override->attributes) {
-            $listing['attributes'] = array_merge($listing['attributes'] ?? [], $override->attributes);
-        }
-
-        return $listing;
+        return $data;
     }
 
     /**
@@ -340,6 +392,7 @@ class ListingBuilderService
 
         // Get custom metafield configs if mapping exists
         $customMetafieldConfigs = $platformMapping?->getEnabledMetafields() ?? [];
+        $allMetafieldMappings = $platformMapping?->metafield_mappings ?? [];
         $excludedFields = $platformMapping?->excluded_metafields ?? [];
 
         // Build metafields for ALL non-private template fields
@@ -351,6 +404,11 @@ class ListingBuilderService
 
             // Skip explicitly excluded fields
             if (in_array($field->name, $excludedFields)) {
+                continue;
+            }
+
+            // Skip fields explicitly disabled in metafield mappings
+            if (isset($allMetafieldMappings[$field->name]) && empty($allMetafieldMappings[$field->name]['enabled'])) {
                 continue;
             }
 

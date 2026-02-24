@@ -6,6 +6,7 @@ use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PlatformListing extends Model
@@ -64,10 +65,16 @@ class PlatformListing extends Model
         'store_marketplace_id',
         'sales_channel_id',
         'product_id',
-        'product_variant_id',
         'external_listing_id',
-        'external_variant_id',
         'status',
+        'title',
+        'description',
+        'images',
+        'attributes',
+        'platform_category_id',
+        'platform_category_options',
+        'platform_settings',
+        'metafield_overrides',
         'listing_url',
         'platform_price',
         'platform_quantity',
@@ -83,6 +90,11 @@ class PlatformListing extends Model
         return [
             'platform_price' => 'decimal:2',
             'platform_data' => 'array',
+            'images' => 'array',
+            'attributes' => 'array',
+            'platform_category_options' => 'array',
+            'platform_settings' => 'array',
+            'metafield_overrides' => 'array',
             'category_mapping' => 'array',
             'last_synced_at' => 'datetime',
             'published_at' => 'datetime',
@@ -209,9 +221,48 @@ class PlatformListing extends Model
         return $this->belongsTo(Product::class);
     }
 
-    public function variant(): BelongsTo
+    public function listingVariants(): HasMany
     {
-        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+        return $this->hasMany(PlatformListingVariant::class, 'platform_listing_id');
+    }
+
+    /**
+     * Get effective title — falls back to Product title.
+     */
+    public function getEffectiveTitle(): string
+    {
+        return $this->title ?? $this->product?->title ?? '';
+    }
+
+    /**
+     * Get effective description — falls back to Product description.
+     */
+    public function getEffectiveDescription(): ?string
+    {
+        return $this->description ?? $this->product?->description;
+    }
+
+    /**
+     * Get effective images — falls back to Product images.
+     *
+     * @return array<string>
+     */
+    public function getEffectiveImages(): array
+    {
+        return $this->images ?? $this->product?->images?->pluck('url')->toArray() ?? [];
+    }
+
+    /**
+     * Get effective price — from first listing variant or listing-level platform_price.
+     */
+    public function getEffectivePrice(): float
+    {
+        $firstVariant = $this->listingVariants->first();
+        if ($firstVariant) {
+            return $firstVariant->getEffectivePrice();
+        }
+
+        return (float) ($this->platform_price ?? $this->product?->variants?->first()?->price ?? 0);
     }
 
     public function isPublished(): bool

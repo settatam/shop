@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Widget\Repairs;
+namespace App\Widget\Appraisals;
 
 use App\Models\Repair;
 use App\Services\StoreContext;
@@ -8,9 +8,9 @@ use App\Widget\Table;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 
-class RepairsTable extends Table
+class AppraisalsTable extends Table
 {
-    protected string $title = 'Repairs';
+    protected string $title = 'Appraisals';
 
     protected string $component = 'DataTable';
 
@@ -18,7 +18,7 @@ class RepairsTable extends Table
 
     protected bool $isSearchable = true;
 
-    protected string $noDataMessage = 'No repairs found. Create your first repair order to get started.';
+    protected string $noDataMessage = 'No appraisals found. Create your first appraisal to get started.';
 
     /**
      * Define the table fields/columns.
@@ -30,7 +30,7 @@ class RepairsTable extends Table
         return [
             [
                 'key' => 'repair_number',
-                'label' => 'Repair #',
+                'label' => 'Appraisal #',
                 'sortable' => true,
             ],
             [
@@ -45,7 +45,7 @@ class RepairsTable extends Table
             ],
             [
                 'key' => 'vendor',
-                'label' => 'Repair Vendor',
+                'label' => 'Vendor',
                 'sortable' => false,
             ],
             [
@@ -72,7 +72,7 @@ class RepairsTable extends Table
     }
 
     /**
-     * Build the query for fetching repairs.
+     * Build the query for fetching appraisals.
      *
      * @param  array<string, mixed>|null  $filter
      */
@@ -84,9 +84,7 @@ class RepairsTable extends Table
             ->with(['customer', 'vendor', 'items'])
             ->withCount('items')
             ->where('store_id', $storeId)
-            ->where(function ($q) {
-                $q->where('is_appraisal', false)->orWhereNull('is_appraisal');
-            });
+            ->where('is_appraisal', true);
 
         // Apply search filter
         if ($term = data_get($filter, 'term')) {
@@ -162,16 +160,16 @@ class RepairsTable extends Table
         return [
             'count' => $this->paginatedData->count(),
             'total' => $this->paginatedData->total(),
-            'items' => $this->paginatedData->map(fn (Repair $repair) => $this->formatRepair($repair))->toArray(),
+            'items' => $this->paginatedData->map(fn (Repair $repair) => $this->formatAppraisal($repair))->toArray(),
         ];
     }
 
     /**
-     * Format a repair for display.
+     * Format an appraisal for display.
      *
      * @return array<string, mixed>
      */
-    protected function formatRepair(Repair $repair): array
+    protected function formatAppraisal(Repair $repair): array
     {
         $statusColors = [
             Repair::STATUS_PENDING => 'warning',
@@ -201,7 +199,7 @@ class RepairsTable extends Table
             ],
             'repair_number' => [
                 'type' => 'link',
-                'href' => "/repairs/{$repair->id}",
+                'href' => "/appraisals/{$repair->id}",
                 'data' => $repair->repair_number,
                 'class' => 'font-mono text-sm font-medium',
             ],
@@ -218,7 +216,7 @@ class RepairsTable extends Table
             'vendor' => [
                 'type' => 'link',
                 'href' => $repair->vendor ? "/vendors/{$repair->vendor->id}" : null,
-                'data' => $repair->vendor?->display_name ?? $repair->vendor?->name ?? 'No Vendor',
+                'data' => $repair->vendor?->display_name ?? $repair->vendor?->name ?? 'N/A',
                 'class' => $repair->vendor ? '' : 'text-gray-400 italic',
             ],
             'items_count' => [
@@ -250,7 +248,7 @@ class RepairsTable extends Table
      */
     public function title(?array $filter): string
     {
-        return 'Repairs';
+        return 'Appraisals';
     }
 
     /**
@@ -276,14 +274,14 @@ class RepairsTable extends Table
                 'label' => 'Delete Selected',
                 'icon' => 'TrashIcon',
                 'variant' => 'danger',
-                'confirm' => 'Are you sure you want to delete the selected repairs? Only pending repairs can be deleted.',
+                'confirm' => 'Are you sure you want to delete the selected appraisals? Only pending appraisals can be deleted.',
             ],
             [
                 'key' => 'cancel',
                 'label' => 'Cancel Selected',
                 'icon' => 'XCircleIcon',
                 'variant' => 'warning',
-                'confirm' => 'Are you sure you want to cancel the selected repairs?',
+                'confirm' => 'Are you sure you want to cancel the selected appraisals?',
             ],
         ];
     }

@@ -82,14 +82,21 @@ interface Props {
     warehouses: Warehouse[];
     defaultWarehouseId: number | null;
     defaultTaxRate: number;
+    isAppraisal?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    isAppraisal: false,
+});
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Repairs', href: '/repairs' },
-    { title: 'New Repair', href: '/repairs/create' },
-];
+const entityLabel = computed(() => props.isAppraisal ? 'Appraisals' : 'Repairs');
+const entitySingular = computed(() => props.isAppraisal ? 'Appraisal' : 'Repair');
+const basePath = computed(() => props.isAppraisal ? '/appraisals' : '/repairs');
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: entityLabel.value, href: basePath.value },
+    { title: `New ${entitySingular.value}`, href: `${basePath.value}/create` },
+]);
 
 // Wizard steps
 const steps = [
@@ -156,7 +163,7 @@ const formData = ref({
     shipping_cost: 0,
     discount: 0,
     description: '',
-    is_appraisal: false,
+    is_appraisal: props.isAppraisal,
 });
 
 // Customer search
@@ -230,7 +237,7 @@ const searchCustomers = debounce(async (query: string) => {
     }
     isSearchingCustomers.value = true;
     try {
-        const response = await fetch(`/repairs/search-customers?query=${encodeURIComponent(query)}`);
+        const response = await fetch(`${basePath.value}/search-customers?query=${encodeURIComponent(query)}`);
         const data = await response.json();
         customerResults.value = data.customers;
     } finally {
@@ -295,7 +302,7 @@ const searchVendors = debounce(async (query: string) => {
     }
     isSearchingVendors.value = true;
     try {
-        const response = await fetch(`/repairs/search-vendors?query=${encodeURIComponent(query)}`);
+        const response = await fetch(`${basePath.value}/search-vendors?query=${encodeURIComponent(query)}`);
         const data = await response.json();
         vendorResults.value = data.vendors;
     } finally {
@@ -451,7 +458,7 @@ async function submit() {
         is_appraisal: formData.value.is_appraisal,
     };
 
-    router.post('/repairs', payload, {
+    router.post(basePath.value, payload, {
         onError: (errs) => {
             errors.value = errs;
         },
@@ -463,7 +470,7 @@ async function submit() {
 </script>
 
 <template>
-    <Head title="New Repair" />
+    <Head :title="`New ${entitySingular}`" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
@@ -878,7 +885,7 @@ async function submit() {
                                 <!-- Step 5: Review -->
                                 <div v-else-if="currentStep === 5" class="space-y-6">
                                     <div>
-                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Review & Create Repair</h2>
+                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Review & Create {{ entitySingular }}</h2>
                                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Review the details and create the repair order.</p>
                                     </div>
 
@@ -959,7 +966,7 @@ async function submit() {
                                     >
                                         <CheckIcon v-if="!isSubmitting" class="size-4" />
                                         <span v-if="isSubmitting">Creating...</span>
-                                        <span v-else>Create Repair</span>
+                                        <span v-else>Create {{ entitySingular }}</span>
                                     </button>
                                 </div>
                             </div>

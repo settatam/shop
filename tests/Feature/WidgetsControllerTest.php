@@ -27,7 +27,7 @@ class WidgetsControllerTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create();
-        $this->store = Store::factory()->create(['user_id' => $this->user->id]);
+        $this->store = Store::factory()->create(['user_id' => $this->user->id, 'step' => 2]);
 
         $role = Role::factory()->owner()->create(['store_id' => $this->store->id]);
         StoreUser::factory()->owner()->create([

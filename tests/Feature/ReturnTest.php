@@ -355,6 +355,19 @@ class ReturnTest extends TestCase
 
         $newVariant = ProductVariant::factory()->create();
 
+        $warehouse = Warehouse::factory()->create([
+            'store_id' => $this->store->id,
+            'is_default' => true,
+        ]);
+
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $newVariant->id,
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
+
         $response = $this->postJson("/api/v1/returns/{$return->id}/exchange", [
             'items' => [
                 [

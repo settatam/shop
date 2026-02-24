@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\PlatformOrder;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -67,8 +68,14 @@ class SyncShopifyProductIdsTest extends TestCase
 
         $this->assertNotNull($listing);
         $this->assertEquals('777888', $listing->external_listing_id);
-        $this->assertEquals('999111', $listing->external_variant_id);
-        $this->assertEquals($variant->id, $listing->product_variant_id);
+
+        // Variant external IDs now live on platform_listing_variants
+        $listingVariant = PlatformListingVariant::where('platform_listing_id', $listing->id)
+            ->where('product_variant_id', $variant->id)
+            ->first();
+
+        $this->assertNotNull($listingVariant);
+        $this->assertEquals('999111', $listingVariant->external_variant_id);
     }
 
     public function test_command_updates_existing_listing(): void
@@ -82,13 +89,20 @@ class SyncShopifyProductIdsTest extends TestCase
             'sku' => 'EXISTING-SKU',
         ]);
 
-        $listing = PlatformListing::factory()->create([
-            'store_marketplace_id' => $this->marketplace->id,
-            'product_id' => $product->id,
-            'product_variant_id' => $variant->id,
-            'external_listing_id' => null,
-            'external_variant_id' => null,
-        ]);
+        // Get the auto-created listing for this marketplace's channel, or create one
+        $listing = PlatformListing::where('store_marketplace_id', $this->marketplace->id)
+            ->where('product_id', $product->id)
+            ->first();
+
+        if (! $listing) {
+            $listing = PlatformListing::factory()->create([
+                'store_marketplace_id' => $this->marketplace->id,
+                'product_id' => $product->id,
+                'external_listing_id' => null,
+            ]);
+        } else {
+            $listing->update(['external_listing_id' => null]);
+        }
 
         Http::fake([
             '*/admin/api/*/products.json*' => Http::response([
@@ -113,7 +127,14 @@ class SyncShopifyProductIdsTest extends TestCase
 
         $listing->refresh();
         $this->assertEquals('111222', $listing->external_listing_id);
-        $this->assertEquals('333444', $listing->external_variant_id);
+
+        // Variant external IDs now live on platform_listing_variants
+        $listingVariant = PlatformListingVariant::where('platform_listing_id', $listing->id)
+            ->where('product_variant_id', $variant->id)
+            ->first();
+
+        $this->assertNotNull($listingVariant);
+        $this->assertEquals('333444', $listingVariant->external_variant_id);
     }
 
     public function test_command_skips_variants_without_sku(): void

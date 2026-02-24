@@ -235,14 +235,21 @@ interface Props {
     statuses: Status[];
     paymentMethods: PaymentMethod[];
     activityLogs?: ActivityDay[];
+    isAppraisal?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    isAppraisal: false,
+});
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Repairs', href: '/repairs' },
-    { title: props.repair.repair_number, href: `/repairs/${props.repair.id}` },
-];
+const entityLabel = computed(() => props.isAppraisal ? 'Appraisals' : 'Repairs');
+const entitySingular = computed(() => props.isAppraisal ? 'Appraisal' : 'Repair');
+const basePath = computed(() => props.isAppraisal ? '/appraisals' : '/repairs');
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: entityLabel.value, href: basePath.value },
+    { title: props.repair.repair_number, href: `${basePath.value}/${props.repair.id}` },
+]);
 
 // Payment modal
 const showPaymentModal = ref(false);
@@ -264,7 +271,7 @@ const debouncedSearchVendors = useDebounceFn(async (query: string) => {
     }
     isSearchingVendors.value = true;
     try {
-        const response = await fetch(`/repairs/search-vendors?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`${basePath.value}/search-vendors?q=${encodeURIComponent(query)}`);
         const data = await response.json();
         vendorResults.value = data.vendors || [];
     } catch (error) {
@@ -279,7 +286,7 @@ watch(vendorQuery, (value) => {
 });
 
 function selectVendor(vendor: Vendor) {
-    router.patch(`/repairs/${props.repair.id}`, {
+    router.patch(`${basePath.value}/${props.repair.id}`, {
         vendor_id: vendor.id,
     }, {
         preserveScroll: true,
@@ -292,7 +299,7 @@ function selectVendor(vendor: Vendor) {
 }
 
 function clearVendor() {
-    router.patch(`/repairs/${props.repair.id}`, {
+    router.patch(`${basePath.value}/${props.repair.id}`, {
         vendor_id: null,
     }, {
         preserveScroll: true,
@@ -344,7 +351,7 @@ function changeStatus(newStatus: string) {
     if (newStatus === props.repair.status) return;
 
     isProcessing.value = true;
-    router.post(`/repairs/${props.repair.id}/change-status`, {
+    router.post(`${basePath.value}/${props.repair.id}/change-status`, {
         status: newStatus,
     }, {
         preserveScroll: true,
@@ -371,7 +378,7 @@ function formatCurrency(amount: number): string {
 function sendToVendor() {
     if (isProcessing.value) return;
     isProcessing.value = true;
-    router.post(`/repairs/${props.repair.id}/send-to-vendor`, {}, {
+    router.post(`${basePath.value}/${props.repair.id}/send-to-vendor`, {}, {
         preserveScroll: true,
         onFinish: () => { isProcessing.value = false; },
     });
@@ -380,7 +387,7 @@ function sendToVendor() {
 function markReceived() {
     if (isProcessing.value) return;
     isProcessing.value = true;
-    router.post(`/repairs/${props.repair.id}/mark-received`, {}, {
+    router.post(`${basePath.value}/${props.repair.id}/mark-received`, {}, {
         preserveScroll: true,
         onFinish: () => { isProcessing.value = false; },
     });
@@ -389,7 +396,7 @@ function markReceived() {
 function markCompleted() {
     if (isProcessing.value) return;
     isProcessing.value = true;
-    router.post(`/repairs/${props.repair.id}/mark-completed`, {}, {
+    router.post(`${basePath.value}/${props.repair.id}/mark-completed`, {}, {
         preserveScroll: true,
         onFinish: () => { isProcessing.value = false; },
     });
@@ -399,7 +406,7 @@ function cancelRepair() {
     if (isProcessing.value) return;
     if (!confirm('Are you sure you want to cancel this repair?')) return;
     isProcessing.value = true;
-    router.post(`/repairs/${props.repair.id}/cancel`, {}, {
+    router.post(`${basePath.value}/${props.repair.id}/cancel`, {}, {
         preserveScroll: true,
         onFinish: () => { isProcessing.value = false; },
     });
@@ -409,7 +416,7 @@ function deleteRepair() {
     if (isProcessing.value) return;
     if (!confirm('Are you sure you want to delete this repair? This action cannot be undone.')) return;
     isProcessing.value = true;
-    router.delete(`/repairs/${props.repair.id}`, {
+    router.delete(`${basePath.value}/${props.repair.id}`, {
         onFinish: () => { isProcessing.value = false; },
     });
 }
@@ -446,7 +453,7 @@ function downloadInvoice() {
 }
 
 function printPackingSlip() {
-    window.open(`/repairs/${props.repair.id}/packing-slip/stream`, '_blank');
+    window.open(`${basePath.value}/${props.repair.id}/packing-slip/stream`, '_blank');
 }
 
 const profit = computed(() => props.repair.customer_total - props.repair.vendor_total);
@@ -466,7 +473,7 @@ function onVendorPaymentSaved() {
 </script>
 
 <template>
-    <Head :title="`Repair ${repair.repair_number}`" />
+    <Head :title="`${entitySingular} ${repair.repair_number}`" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
@@ -751,7 +758,7 @@ function onVendorPaymentSaved() {
                         <!-- Vendor -->
                         <div v-if="repair.vendor" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <div class="flex items-center justify-between mb-4">
-                                <h2 class="text-lg font-medium text-gray-900 dark:text-white">Repair Vendor</h2>
+                                <h2 class="text-lg font-medium text-gray-900 dark:text-white">{{ isAppraisal ? 'Vendor' : 'Repair Vendor' }}</h2>
                                 <div class="flex items-center gap-2">
                                     <button
                                         type="button"
@@ -924,7 +931,7 @@ function onVendorPaymentSaved() {
                                 <div v-if="repair.repair_days !== null && repair.repair_days !== undefined" class="flex items-start gap-3">
                                     <ClockIcon class="size-5 shrink-0 text-gray-400" />
                                     <div>
-                                        <dt class="text-sm text-gray-500 dark:text-gray-400">Repair Duration</dt>
+                                        <dt class="text-sm text-gray-500 dark:text-gray-400">{{ isAppraisal ? 'Appraisal Duration' : 'Repair Duration' }}</dt>
                                         <dd class="text-gray-900 dark:text-white">{{ repair.repair_days }} days</dd>
                                     </div>
                                 </div>

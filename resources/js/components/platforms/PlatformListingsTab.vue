@@ -31,13 +31,14 @@ interface PlatformListing {
     platform: string;
     platform_label: string;
     platform_product_id: string | null;
-    status: 'active' | 'inactive' | 'pending' | 'error' | 'not_for_sale' | 'unlisted' | 'draft';
+    status: 'listed' | 'not_listed' | 'ended' | 'pending' | 'error' | 'archived' | 'active' | 'draft' | 'unlisted';
     listing_url: string | null;
     price: number | null;
     quantity: number | null;
     last_synced_at: string | null;
     error_message: string | null;
     is_local: boolean;
+    variant_count?: number;
     marketplace: {
         id: number;
         name: string;
@@ -106,7 +107,7 @@ function needsSync(listing: PlatformListing): boolean {
 
 // Count listings that need sync
 const listingsNeedingSync = computed(() => {
-    return props.listings.filter(l => l.status === 'active' && needsSync(l)).length;
+    return props.listings.filter(l => (l.status === 'active' || l.status === 'listed') && needsSync(l)).length;
 });
 
 // Platform icon mapping
@@ -126,14 +127,17 @@ const unconnectedMarketplaces = computed(() => {
 function getStatusColor(status: string): string {
     switch (status) {
         case 'active':
+        case 'listed':
             return 'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20';
         case 'pending':
             return 'bg-yellow-50 text-yellow-700 ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20';
         case 'error':
             return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20';
         case 'unlisted':
+        case 'ended':
             return 'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-400 dark:ring-orange-500/20';
         case 'draft':
+        case 'not_listed':
             return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20';
         default:
             return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20';
@@ -143,12 +147,14 @@ function getStatusColor(status: string): string {
 function getStatusIcon(status: string) {
     switch (status) {
         case 'active':
+        case 'listed':
             return CheckCircleIcon;
         case 'pending':
             return ClockIcon;
         case 'error':
             return ExclamationCircleIcon;
         case 'unlisted':
+        case 'ended':
             return ExclamationTriangleIcon;
         default:
             return ClockIcon;
@@ -202,7 +208,7 @@ async function syncAllListings() {
     syncingAll.value = true;
     try {
         // Sync all active listings in parallel
-        const activeListings = props.listings.filter(l => l.status === 'active');
+        const activeListings = props.listings.filter(l => l.status === 'active' || l.status === 'listed');
         await Promise.all(
             activeListings.map(listing =>
                 axios.post(`/products/${props.productId}/listings/${listing.marketplace.id}/sync`)
@@ -411,7 +417,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                     <div class="flex items-center gap-2">
                         <!-- Relist button for unlisted items -->
                         <Button
-                            v-if="listing.status === 'unlisted'"
+                            v-if="listing.status === 'unlisted' || listing.status === 'ended'"
                             variant="default"
                             size="sm"
                             :disabled="relisting === listing.id"
@@ -422,7 +428,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                         </Button>
 
                         <Button
-                            v-if="listing.listing_url && listing.status === 'active'"
+                            v-if="listing.listing_url && listing.status === 'active' || listing.status === 'listed'"
                             variant="ghost"
                             size="sm"
                             @click="viewOnPlatform(listing)"
@@ -442,7 +448,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     Edit Listing Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="listing.status === 'active'"
+                                    v-if="listing.status === 'active' || listing.status === 'listed'"
                                     @click="syncListing(listing)"
                                     :disabled="syncing === listing.id"
                                 >
@@ -450,7 +456,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     {{ syncing === listing.id ? 'Syncing...' : 'Sync Now' }}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="listing.status === 'unlisted'"
+                                    v-if="listing.status === 'unlisted' || listing.status === 'ended'"
                                     class="text-green-600 dark:text-green-400"
                                     @click="relistListing(listing)"
                                     :disabled="relisting === listing.id"
@@ -459,7 +465,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     {{ relisting === listing.id ? 'Relisting...' : 'Relist' }}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="listing.status === 'active'"
+                                    v-if="listing.status === 'active' || listing.status === 'listed'"
                                     class="text-orange-600 dark:text-orange-400"
                                     @click="unpublishListing(listing)"
                                     :disabled="unpublishing === listing.id"

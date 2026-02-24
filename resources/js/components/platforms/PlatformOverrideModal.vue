@@ -114,9 +114,8 @@ async function saveOverride() {
             title: form.title || null,
             description: form.description || null,
             price: form.price,
-            compare_at_price: form.compare_at_price,
             quantity: form.quantity,
-            category_id: form.category_id || null,
+            platform_category_id: form.category_id || null,
             attributes: Object.keys(form.attributes).length > 0 ? form.attributes : null,
         });
         emit('saved');

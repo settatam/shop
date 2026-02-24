@@ -7,7 +7,6 @@ use App\Models\Activity;
 use App\Models\ActivityLog;
 use App\Models\PlatformListing;
 use App\Models\Product;
-use App\Models\ProductPlatformOverride;
 use App\Models\StoreMarketplace;
 use App\Services\Platforms\ListingBuilderService;
 use App\Services\Platforms\PlatformManager;
@@ -43,14 +42,10 @@ class ProductPlatformController extends Controller
             'brand',
         ]);
 
-        // Get existing override if any
-        $override = ProductPlatformOverride::where('product_id', $product->id)
-            ->where('store_marketplace_id', $marketplace->id)
-            ->first();
-
-        // Get existing listing if any
+        // Get existing listing (which now holds override data)
         $listing = PlatformListing::where('product_id', $product->id)
             ->where('store_marketplace_id', $marketplace->id)
+            ->with('listingVariants')
             ->first();
 
         // Build preview data
@@ -63,10 +58,10 @@ class ProductPlatformController extends Controller
         $platformFields = $this->getPlatformFields($marketplace);
 
         // Get all images with selection state
-        $images = $this->getImagesWithState($product, $override);
+        $images = $this->getImagesWithState($product, $listing);
 
         // Get metafields configuration (for Shopify-like platforms)
-        $metafields = $this->getMetafieldsConfig($product, $marketplace, $override, $preview);
+        $metafields = $this->getMetafieldsConfig($product, $marketplace, $listing, $preview);
 
         return Inertia::render('products/platforms/Show', [
             'product' => [
@@ -93,22 +88,27 @@ class ProductPlatformController extends Controller
                 'published_at' => $listing->published_at?->toIso8601String(),
                 'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
                 'last_error' => $listing->last_error,
+                'variants' => $listing->listingVariants->map(fn ($lv) => [
+                    'id' => $lv->id,
+                    'product_variant_id' => $lv->product_variant_id,
+                    'price' => $lv->getEffectivePrice(),
+                    'quantity' => $lv->getEffectiveQuantity(),
+                    'sku' => $lv->getEffectiveSku(),
+                    'external_variant_id' => $lv->external_variant_id,
+                    'status' => $lv->status,
+                ]),
             ] : null,
-            'override' => $override ? [
-                'id' => $override->id,
-                'title' => $override->title,
-                'description' => $override->description,
-                'price' => $override->price,
-                'compare_at_price' => $override->compare_at_price,
-                'quantity' => $override->quantity,
-                'category_id' => $override->category_id,
-                'attributes' => $override->attributes,
-                'excluded_image_ids' => $override->excluded_image_ids ?? [],
-                'image_order' => $override->image_order ?? [],
-                'excluded_metafields' => $override->excluded_metafields ?? [],
-                'custom_metafields' => $override->custom_metafields ?? [],
-                'attribute_overrides' => $override->attribute_overrides ?? [],
-                'platform_settings' => $override->platform_settings ?? [],
+            'override' => $listing ? [
+                'id' => $listing->id,
+                'title' => $listing->title,
+                'description' => $listing->description,
+                'price' => $listing->platform_price,
+                'quantity' => $listing->platform_quantity,
+                'platform_category_id' => $listing->platform_category_id,
+                'attributes' => $listing->attributes,
+                'images' => $listing->images,
+                'metafield_overrides' => $listing->metafield_overrides ?? [],
+                'platform_settings' => $listing->platform_settings ?? [],
             ] : null,
             'preview' => $preview,
             'templateFields' => $templateFields,
@@ -146,13 +146,7 @@ class ProductPlatformController extends Controller
             'platform_settings' => ['nullable', 'array'],
         ]);
 
-        $override = ProductPlatformOverride::updateOrCreate(
-            [
-                'product_id' => $product->id,
-                'store_marketplace_id' => $marketplace->id,
-            ],
-            $validated
-        );
+        $listing = $this->listingBuilder->saveOverride($product, $marketplace, $validated);
 
         // Refresh preview with new overrides
         $preview = $this->listingBuilder->previewListing($product, $marketplace);
@@ -160,7 +154,16 @@ class ProductPlatformController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Platform listing saved',
-            'override' => $override,
+            'override' => [
+                'id' => $listing->id,
+                'title' => $listing->title,
+                'description' => $listing->description,
+                'price' => $listing->platform_price,
+                'quantity' => $listing->platform_quantity,
+                'attributes' => $listing->attributes,
+                'platform_category_id' => $listing->platform_category_id,
+                'platform_settings' => $listing->platform_settings,
+            ],
             'preview' => $preview,
         ]);
     }
@@ -279,7 +282,7 @@ class ProductPlatformController extends Controller
             ], 404);
         }
 
-        if ($listing->status !== PlatformListing::STATUS_UNLISTED) {
+        if ($listing->status !== PlatformListing::STATUS_ENDED) {
             return response()->json([
                 'success' => false,
                 'message' => 'This listing is not in unlisted status',
@@ -331,14 +334,7 @@ class ProductPlatformController extends Controller
         // Apply temporary overrides from request for preview
         $tempOverride = $request->input('override', []);
         if (! empty($tempOverride)) {
-            // Save temporarily for preview
-            $override = ProductPlatformOverride::updateOrCreate(
-                [
-                    'product_id' => $product->id,
-                    'store_marketplace_id' => $marketplace->id,
-                ],
-                $tempOverride
-            );
+            $this->listingBuilder->saveOverride($product, $marketplace, $tempOverride);
         }
 
         $preview = $this->listingBuilder->previewListing($product, $marketplace);
@@ -543,10 +539,10 @@ class ProductPlatformController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    protected function getImagesWithState(Product $product, ?ProductPlatformOverride $override): array
+    protected function getImagesWithState(Product $product, ?PlatformListing $listing): array
     {
-        $excludedIds = $override?->excluded_image_ids ?? [];
-        $imageOrder = $override?->image_order ?? [];
+        $excludedIds = $listing?->platform_settings['excluded_image_ids'] ?? [];
+        $imageOrder = $listing?->platform_settings['image_order'] ?? [];
 
         $images = $product->images->map(fn ($img) => [
             'id' => $img->id,
@@ -589,15 +585,16 @@ class ProductPlatformController extends Controller
     protected function getMetafieldsConfig(
         Product $product,
         StoreMarketplace $marketplace,
-        ?ProductPlatformOverride $override,
+        ?PlatformListing $listing,
         array $preview
     ): array {
         if (! $this->platformSupportsMetafields($marketplace)) {
             return [];
         }
 
-        $excludedMetafields = $override?->excluded_metafields ?? [];
-        $customMetafields = $override?->custom_metafields ?? [];
+        $metafieldOverrides = $listing?->metafield_overrides ?? [];
+        $excludedMetafields = $metafieldOverrides['excluded'] ?? [];
+        $customMetafields = $metafieldOverrides['custom'] ?? [];
 
         // Get metafields from preview
         $previewMetafields = $preview['listing']['metafields'] ?? [];

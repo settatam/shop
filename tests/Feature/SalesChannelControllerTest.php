@@ -57,6 +57,9 @@ class SalesChannelControllerTest extends TestCase
     {
         $this->actingAs($this->user);
 
+        // Delete any auto-created channels to start fresh
+        SalesChannel::where('store_id', $this->store->id)->delete();
+
         // Create a connected marketplace (not an app)
         $connectedMarketplace = StoreMarketplace::factory()->shopify()->create([
             'store_id' => $this->store->id,
@@ -169,6 +172,9 @@ class SalesChannelControllerTest extends TestCase
     public function test_index_shows_local_channel_with_warehouse(): void
     {
         $this->actingAs($this->user);
+
+        // Delete any auto-created channels to start fresh
+        SalesChannel::where('store_id', $this->store->id)->delete();
 
         $warehouse = Warehouse::factory()->create([
             'store_id' => $this->store->id,

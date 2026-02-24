@@ -115,16 +115,20 @@ class Repair extends Model implements Payable
         static::creating(function (Repair $repair) {
             // Set temporary value to satisfy NOT NULL constraint
             if (empty($repair->repair_number)) {
-                $repair->repair_number = 'REP-TEMP';
+                $repair->repair_number = $repair->is_appraisal ? 'APR-TEMP' : 'REP-TEMP';
             }
         });
 
         static::created(function (Repair $repair) {
             // Generate repair_number from store prefix/suffix
-            if ($repair->repair_number === 'REP-TEMP') {
+            if (in_array($repair->repair_number, ['REP-TEMP', 'APR-TEMP'])) {
                 $store = $repair->store;
-                $prefix = $store?->repair_id_prefix ?? 'REP';
-                $suffix = $store?->repair_id_suffix ?? '';
+                $prefix = $repair->is_appraisal
+                    ? ($store?->appraisal_id_prefix ?? 'APR')
+                    : ($store?->repair_id_prefix ?? 'REP');
+                $suffix = $repair->is_appraisal
+                    ? ($store?->appraisal_id_suffix ?? '')
+                    : ($store?->repair_id_suffix ?? '');
                 $repair->repair_number = "{$prefix}-{$repair->id}{$suffix}";
                 $repair->saveQuietly();
                 $repair->searchable(); // Manually sync to Scout after saveQuietly
@@ -540,7 +544,7 @@ class Repair extends Model implements Payable
      */
     protected function getActivityPrefix(): string
     {
-        return 'repairs';
+        return $this->is_appraisal ? 'appraisals' : 'repairs';
     }
 
     /**

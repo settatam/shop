@@ -66,6 +66,11 @@ class ProductVariant extends Model
         return $this->hasMany(Inventory::class);
     }
 
+    public function listingVariants(): HasMany
+    {
+        return $this->hasMany(PlatformListingVariant::class, 'product_variant_id');
+    }
+
     public function vendors(): BelongsToMany
     {
         return $this->belongsToMany(Vendor::class, 'product_vendor')

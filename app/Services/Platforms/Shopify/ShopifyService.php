@@ -147,32 +147,67 @@ class ShopifyService extends BasePlatformService
 
     public function pushProduct(Product $product, StoreMarketplace $connection): PlatformListing
     {
-        $shopifyProduct = $this->mapToShopifyProduct($product);
+        $product->load('variants');
+
+        // Find or create the listing
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('store_marketplace_id', $connection->id)
+            ->first();
+
+        $shopifyProduct = $this->mapToShopifyProduct($product, $listing);
 
         $response = $this->shopifyRequest($connection, 'POST', 'products.json', [
             'product' => $shopifyProduct,
         ]);
 
         $shopifyData = $response['product'];
+        $status = $shopifyData['status'] === 'active'
+            ? PlatformListing::STATUS_LISTED
+            : PlatformListing::STATUS_NOT_LISTED;
 
-        return PlatformListing::create([
-            'store_marketplace_id' => $connection->id,
-            'product_id' => $product->id,
-            'external_listing_id' => $shopifyData['id'],
-            'external_variant_id' => $shopifyData['variants'][0]['id'] ?? null,
-            'status' => $shopifyData['status'] === 'active' ? 'active' : 'draft',
-            'listing_url' => "https://{$connection->shop_domain}/products/{$shopifyData['handle']}",
-            'platform_data' => $shopifyData,
-            'last_synced_at' => now(),
-            'published_at' => $shopifyData['status'] === 'active' ? now() : null,
-        ]);
+        if ($listing) {
+            $listing->update([
+                'external_listing_id' => $shopifyData['id'],
+                'status' => $status,
+                'listing_url' => "https://{$connection->shop_domain}/products/{$shopifyData['handle']}",
+                'platform_data' => $shopifyData,
+                'last_synced_at' => now(),
+                'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+            ]);
+        } else {
+            $listing = PlatformListing::create([
+                'store_marketplace_id' => $connection->id,
+                'product_id' => $product->id,
+                'external_listing_id' => $shopifyData['id'],
+                'status' => $status,
+                'listing_url' => "https://{$connection->shop_domain}/products/{$shopifyData['handle']}",
+                'platform_data' => $shopifyData,
+                'last_synced_at' => now(),
+                'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+            ]);
+
+            // Create listing variants
+            foreach ($product->variants as $variant) {
+                $listing->listingVariants()->create([
+                    'product_variant_id' => $variant->id,
+                    'price' => $variant->price,
+                    'quantity' => $variant->quantity,
+                ]);
+            }
+        }
+
+        // Match Shopify variants to listing variants by SKU and update external IDs
+        $this->syncVariantExternalIds($listing, $shopifyData['variants'] ?? []);
+
+        return $listing;
     }
 
     public function updateListing(PlatformListing $listing): PlatformListing
     {
         $product = $listing->product;
+        $product->load('variants');
         $connection = $listing->marketplace;
-        $shopifyProduct = $this->mapToShopifyProduct($product);
+        $shopifyProduct = $this->mapToShopifyProduct($product, $listing);
 
         $response = $this->shopifyRequest(
             $connection,
@@ -183,9 +218,11 @@ class ShopifyService extends BasePlatformService
 
         $listing->update([
             'platform_data' => $response['product'],
-            'external_variant_id' => $response['product']['variants'][0]['id'] ?? $listing->external_variant_id,
             'last_synced_at' => now(),
         ]);
+
+        // Sync variant external IDs
+        $this->syncVariantExternalIds($listing, $response['product']['variants'] ?? []);
 
         return $listing;
     }
@@ -217,7 +254,7 @@ class ShopifyService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_UNLISTED,
+            'status' => PlatformListing::STATUS_ENDED,
             'last_synced_at' => now(),
         ]);
 
@@ -240,7 +277,7 @@ class ShopifyService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_ACTIVE,
+            'status' => PlatformListing::STATUS_LISTED,
             'published_at' => now(),
             'last_synced_at' => now(),
         ]);
@@ -250,21 +287,25 @@ class ShopifyService extends BasePlatformService
 
     public function syncInventory(StoreMarketplace $connection): void
     {
-        $listings = $connection->listings()->with('variant')->get();
+        $listings = $connection->listings()->with('listingVariants.productVariant')->get();
+        $locationId = $this->getDefaultLocationId($connection);
 
         foreach ($listings as $listing) {
-            if (! $listing->variant) {
-                continue;
-            }
+            foreach ($listing->listingVariants as $listingVariant) {
+                $inventoryItemId = $listingVariant->external_inventory_item_id;
+                if (! $inventoryItemId) {
+                    continue;
+                }
 
-            try {
-                $this->shopifyRequest($connection, 'POST', 'inventory_levels/set.json', [
-                    'location_id' => $this->getDefaultLocationId($connection),
-                    'inventory_item_id' => $listing->platform_data['variants'][0]['inventory_item_id'] ?? null,
-                    'available' => $listing->variant->quantity,
-                ]);
-            } catch (\Throwable $e) {
-                // Log but continue
+                try {
+                    $this->shopifyRequest($connection, 'POST', 'inventory_levels/set.json', [
+                        'location_id' => $locationId,
+                        'inventory_item_id' => $inventoryItemId,
+                        'available' => $listingVariant->getEffectiveQuantity(),
+                    ]);
+                } catch (\Throwable $e) {
+                    // Log but continue
+                }
             }
         }
     }
@@ -536,17 +577,54 @@ class ShopifyService extends BasePlatformService
         ];
     }
 
-    protected function mapToShopifyProduct(Product $product): array
+    protected function mapToShopifyProduct(Product $product, ?PlatformListing $listing = null): array
     {
         $shopifyProduct = [
-            'title' => $product->title,
-            'body_html' => $product->description,
+            'title' => $listing?->getEffectiveTitle() ?? $product->title,
+            'body_html' => $listing?->getEffectiveDescription() ?? $product->description,
             'handle' => $product->handle,
             'vendor' => $product->brand?->name,
-            'product_type' => $product->category?->name,
+            'product_type' => $listing?->platform_category_id ?? $product->category?->name,
             'status' => $product->is_published ? 'active' : 'draft',
         ];
 
+        // Build variants from listing variants if available
+        if ($listing) {
+            $listing->loadMissing('listingVariants.productVariant');
+
+            if ($listing->listingVariants->isNotEmpty()) {
+                $shopifyProduct['variants'] = $listing->listingVariants->map(function ($lv) {
+                    $variant = [
+                        'sku' => $lv->getEffectiveSku(),
+                        'price' => $lv->getEffectivePrice(),
+                        'inventory_quantity' => $lv->getEffectiveQuantity(),
+                        'barcode' => $lv->getEffectiveBarcode(),
+                        'inventory_management' => 'shopify',
+                    ];
+
+                    if ($lv->productVariant?->option1_value) {
+                        $variant['option1'] = $lv->productVariant->option1_value;
+                    }
+                    if ($lv->productVariant?->option2_value) {
+                        $variant['option2'] = $lv->productVariant->option2_value;
+                    }
+                    if ($lv->productVariant?->option3_value) {
+                        $variant['option3'] = $lv->productVariant->option3_value;
+                    }
+
+                    // Include external variant ID for updates
+                    if ($lv->external_variant_id) {
+                        $variant['id'] = $lv->external_variant_id;
+                    }
+
+                    return $variant;
+                })->all();
+
+                return $shopifyProduct;
+            }
+        }
+
+        // Fallback: build from product variants directly
         if ($product->has_variants) {
             $shopifyProduct['variants'] = $product->variants->map(fn ($v) => [
                 'sku' => $v->sku,
@@ -556,15 +634,50 @@ class ShopifyService extends BasePlatformService
                 'option1' => $v->option1_value,
                 'option2' => $v->option2_value,
                 'option3' => $v->option3_value,
+                'inventory_management' => 'shopify',
             ])->all();
         } else {
             $shopifyProduct['variants'] = [[
                 'price' => $product->variants->first()?->price ?? 0,
                 'inventory_quantity' => $product->quantity,
+                'inventory_management' => 'shopify',
             ]];
         }
 
         return $shopifyProduct;
+    }
+
+    /**
+     * Match Shopify response variants to listing variants by SKU and update external IDs.
+     *
+     * @param  array<array<string, mixed>>  $shopifyVariants
+     */
+    protected function syncVariantExternalIds(PlatformListing $listing, array $shopifyVariants): void
+    {
+        $listing->loadMissing('listingVariants');
+
+        foreach ($shopifyVariants as $shopifyVariant) {
+            $sku = $shopifyVariant['sku'] ?? null;
+            $externalVariantId = (string) ($shopifyVariant['id'] ?? '');
+            $inventoryItemId = (string) ($shopifyVariant['inventory_item_id'] ?? '');
+
+            // Match by SKU
+            $listingVariant = $listing->listingVariants
+                ->first(fn ($lv) => $lv->getEffectiveSku() === $sku);
+
+            // If no SKU match and only one variant, match by position
+            if (! $listingVariant && $listing->listingVariants->count() === 1 && count($shopifyVariants) === 1) {
+                $listingVariant = $listing->listingVariants->first();
+            }
+
+            if ($listingVariant) {
+                $listingVariant->update([
+                    'external_variant_id' => $externalVariantId,
+                    'external_inventory_item_id' => $inventoryItemId,
+                    'platform_data' => $shopifyVariant,
+                ]);
+            }
+        }
     }
 
     protected function importOrder(array $shopifyOrder, StoreMarketplace $connection): PlatformOrder

@@ -31,7 +31,7 @@ class PlatformListingController extends Controller
     {
         $this->authorize('view', $product);
 
-        $product->load(['platformListings.marketplace', 'platformOverrides.marketplace']);
+        $product->load(['platformListings.marketplace', 'platformListings.listingVariants']);
 
         $store = $this->storeContext->getCurrentStore();
         $marketplaces = StoreMarketplace::where('store_id', $store->id)
@@ -42,9 +42,9 @@ class PlatformListingController extends Controller
         $listings = $product->platformListings->map(fn ($listing) => [
             'id' => $listing->id,
             'marketplace_id' => $listing->store_marketplace_id,
-            'marketplace_name' => $listing->marketplace->name ?: ucfirst($listing->marketplace->platform->value),
-            'platform' => $listing->marketplace->platform->value,
-            'platform_label' => $listing->marketplace->platform->label(),
+            'marketplace_name' => $listing->marketplace?->name ?: ucfirst($listing->marketplace?->platform?->value ?? 'unknown'),
+            'platform' => $listing->marketplace?->platform?->value,
+            'platform_label' => $listing->marketplace?->platform?->label(),
             'status' => $listing->status,
             'listing_url' => $listing->listing_url,
             'external_listing_id' => $listing->external_listing_id,
@@ -53,19 +53,21 @@ class PlatformListingController extends Controller
             'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
             'published_at' => $listing->published_at?->toIso8601String(),
             'last_error' => $listing->last_error,
+            'variant_count' => $listing->listingVariants->count(),
         ]);
 
-        $overrides = $product->platformOverrides->keyBy('store_marketplace_id')
-            ->map(fn ($override) => [
-                'id' => $override->id,
-                'title' => $override->title,
-                'description' => $override->description,
-                'price' => $override->price,
-                'compare_at_price' => $override->compare_at_price,
-                'quantity' => $override->quantity,
-                'attributes' => $override->attributes,
-                'category_id' => $override->category_id,
-                'is_active' => $override->is_active,
+        // Overrides now come from PlatformListing directly
+        $overrides = $product->platformListings
+            ->filter(fn ($l) => $l->store_marketplace_id !== null)
+            ->keyBy('store_marketplace_id')
+            ->map(fn ($listing) => [
+                'id' => $listing->id,
+                'title' => $listing->title,
+                'description' => $listing->description,
+                'price' => $listing->platform_price,
+                'quantity' => $listing->platform_quantity,
+                'attributes' => $listing->attributes,
+                'platform_category_id' => $listing->platform_category_id,
             ]);
 
         $availableMarketplaces = $marketplaces->map(fn ($m) => [
@@ -217,7 +219,7 @@ class PlatformListingController extends Controller
             ], 404);
         }
 
-        if ($listing->status !== PlatformListing::STATUS_UNLISTED) {
+        if ($listing->status !== PlatformListing::STATUS_ENDED) {
             return response()->json([
                 'success' => false,
                 'message' => 'This listing is not in unlisted status',
@@ -260,6 +262,7 @@ class PlatformListingController extends Controller
 
     /**
      * Update platform override for a product.
+     * Overrides are now stored directly on the PlatformListing.
      */
     public function updateOverride(Request $request, Product $product, StoreMarketplace $marketplace): JsonResponse
     {
@@ -269,28 +272,25 @@ class PlatformListingController extends Controller
             'title' => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string'],
             'price' => ['nullable', 'numeric', 'min:0'],
-            'compare_at_price' => ['nullable', 'numeric', 'min:0'],
             'quantity' => ['nullable', 'integer', 'min:0'],
             'attributes' => ['nullable', 'array'],
-            'category_id' => ['nullable', 'string', 'max:255'],
-            'is_active' => ['nullable', 'boolean'],
+            'platform_category_id' => ['nullable', 'string', 'max:255'],
+            'platform_settings' => ['nullable', 'array'],
         ]);
 
-        $override = $this->listingBuilder->saveOverride($product, $marketplace, $validated);
+        $listing = $this->listingBuilder->saveOverride($product, $marketplace, $validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Override saved successfully',
             'override' => [
-                'id' => $override->id,
-                'title' => $override->title,
-                'description' => $override->description,
-                'price' => $override->price,
-                'compare_at_price' => $override->compare_at_price,
-                'quantity' => $override->quantity,
-                'attributes' => $override->attributes,
-                'category_id' => $override->category_id,
-                'is_active' => $override->is_active,
+                'id' => $listing->id,
+                'title' => $listing->title,
+                'description' => $listing->description,
+                'price' => $listing->platform_price,
+                'quantity' => $listing->platform_quantity,
+                'attributes' => $listing->attributes,
+                'platform_category_id' => $listing->platform_category_id,
             ],
         ]);
     }

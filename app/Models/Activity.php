@@ -36,6 +36,8 @@ class Activity extends Model
 
     public const CATEGORY_LAYAWAYS = 'layaways';
 
+    public const CATEGORY_APPRAISALS = 'appraisals';
+
     public const CATEGORY_LISTINGS = 'listings';
 
     // Product Activities
@@ -248,6 +250,21 @@ class Activity extends Model
 
     public const REPAIRS_CANCEL = 'repairs.cancel';
 
+    // Appraisal Activities
+    public const APPRAISALS_VIEW = 'appraisals.view';
+
+    public const APPRAISALS_CREATE = 'appraisals.create';
+
+    public const APPRAISALS_UPDATE = 'appraisals.update';
+
+    public const APPRAISALS_DELETE = 'appraisals.delete';
+
+    public const APPRAISALS_COMPLETE = 'appraisals.complete';
+
+    public const APPRAISALS_PAYMENT_RECEIVED = 'appraisals.payment_received';
+
+    public const APPRAISALS_CANCEL = 'appraisals.cancel';
+
     // Layaway Activities
     public const LAYAWAYS_VIEW = 'layaways.view';
 
@@ -447,6 +464,15 @@ class Activity extends Model
             self::MEMOS_PAYMENT_RECEIVED => ['name' => 'Payment Received', 'category' => self::CATEGORY_MEMOS, 'description' => 'Record payment received for memo'],
             self::MEMOS_CANCEL => ['name' => 'Cancel Memo', 'category' => self::CATEGORY_MEMOS, 'description' => 'Cancel a memo'],
 
+            // Appraisals
+            self::APPRAISALS_VIEW => ['name' => 'View Appraisals', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'View appraisal listings and details'],
+            self::APPRAISALS_CREATE => ['name' => 'Create Appraisal', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'Create a new appraisal'],
+            self::APPRAISALS_UPDATE => ['name' => 'Update Appraisal', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'Update appraisal details'],
+            self::APPRAISALS_DELETE => ['name' => 'Delete Appraisal', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'Delete an appraisal'],
+            self::APPRAISALS_COMPLETE => ['name' => 'Complete Appraisal', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'Mark appraisal as completed'],
+            self::APPRAISALS_PAYMENT_RECEIVED => ['name' => 'Payment Received', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'Record payment received for appraisal'],
+            self::APPRAISALS_CANCEL => ['name' => 'Cancel Appraisal', 'category' => self::CATEGORY_APPRAISALS, 'description' => 'Cancel an appraisal'],
+
             // Repairs
             self::REPAIRS_VIEW => ['name' => 'View Repairs', 'category' => self::CATEGORY_REPAIRS, 'description' => 'View repair listings and details'],
             self::REPAIRS_CREATE => ['name' => 'Create Repair', 'category' => self::CATEGORY_REPAIRS, 'description' => 'Create a new repair order'],
@@ -535,11 +561,12 @@ class Activity extends Model
         return [
             'sales' => [
                 'name' => 'Sales',
-                'description' => 'Orders, layaways, repairs, and customer management',
+                'description' => 'Orders, layaways, repairs, appraisals, and customer management',
                 'categories' => [
                     self::CATEGORY_ORDERS,
                     self::CATEGORY_LAYAWAYS,
                     self::CATEGORY_REPAIRS,
+                    self::CATEGORY_APPRAISALS,
                     self::CATEGORY_CUSTOMERS,
                 ],
             ],
@@ -596,6 +623,7 @@ class Activity extends Model
             self::CATEGORY_REPORTS => 'Reports',
             self::CATEGORY_MEMOS => 'Consignment Memos',
             self::CATEGORY_REPAIRS => 'Repairs',
+            self::CATEGORY_APPRAISALS => 'Appraisals',
             self::CATEGORY_VENDORS => 'Vendors',
             self::CATEGORY_BUCKETS => 'Buckets',
             self::CATEGORY_LAYAWAYS => 'Layaways',

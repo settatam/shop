@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\Platform;
 use App\Models\OrderItem;
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\PlatformOrder;
 use App\Models\ProductVariant;
 use App\Models\StoreMarketplace;
@@ -146,6 +147,7 @@ class SyncShopifyProductIds extends Command
 
         foreach ($variants as $shopifyVariant) {
             $shopifyVariantId = (string) $shopifyVariant['id'];
+            $inventoryItemId = (string) ($shopifyVariant['inventory_item_id'] ?? '');
             $sku = $shopifyVariant['sku'] ?? null;
 
             if (empty($sku)) {
@@ -176,35 +178,53 @@ class SyncShopifyProductIds extends Command
                 continue;
             }
 
+            // Find or create the PlatformListing (product-level)
             $listing = PlatformListing::where('store_marketplace_id', $marketplace->id)
                 ->where('product_id', $variant->product_id)
-                ->where(function ($query) use ($variant) {
-                    $query->where('product_variant_id', $variant->id)
-                        ->orWhereNull('product_variant_id');
-                })
                 ->first();
 
             if ($listing) {
                 $listing->update([
                     'external_listing_id' => $shopifyProductId,
-                    'external_variant_id' => $shopifyVariantId,
-                    'product_variant_id' => $variant->id,
                 ]);
-                $this->updated++;
-                $this->line("  Updated listing #{$listing->id}: SKU '{$sku}' -> product {$shopifyProductId}, variant {$shopifyVariantId}");
             } else {
-                PlatformListing::create([
+                $listing = PlatformListing::create([
                     'store_marketplace_id' => $marketplace->id,
                     'product_id' => $variant->product_id,
-                    'product_variant_id' => $variant->id,
                     'external_listing_id' => $shopifyProductId,
-                    'external_variant_id' => $shopifyVariantId,
                     'status' => PlatformListing::STATUS_LISTED,
                     'last_synced_at' => now(),
                 ]);
                 $this->created++;
-                $this->line("  Created listing: SKU '{$sku}' -> product {$shopifyProductId}, variant {$shopifyVariantId}");
             }
+
+            // Find or create the PlatformListingVariant (variant-level)
+            $listingVariant = PlatformListingVariant::where('platform_listing_id', $listing->id)
+                ->where('product_variant_id', $variant->id)
+                ->first();
+
+            if ($listingVariant) {
+                $listingVariant->update([
+                    'external_variant_id' => $shopifyVariantId,
+                    'external_inventory_item_id' => $inventoryItemId,
+                    'platform_data' => $shopifyVariant,
+                ]);
+                $this->updated++;
+            } else {
+                PlatformListingVariant::create([
+                    'platform_listing_id' => $listing->id,
+                    'product_variant_id' => $variant->id,
+                    'external_variant_id' => $shopifyVariantId,
+                    'external_inventory_item_id' => $inventoryItemId,
+                    'price' => $variant->price,
+                    'quantity' => $variant->quantity,
+                    'sku' => $variant->sku,
+                    'platform_data' => $shopifyVariant,
+                ]);
+                $this->created++;
+            }
+
+            $this->line("  Synced: SKU '{$sku}' -> listing #{$listing->id}, variant {$shopifyVariantId}, inventory {$inventoryItemId}");
         }
     }
 

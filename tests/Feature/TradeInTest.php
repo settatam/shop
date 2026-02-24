@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
@@ -133,6 +134,13 @@ class TradeInTest extends TestCase
             'product_id' => $product->id,
             'price' => 4000.00,
         ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
 
         $data = [
             'store_user_id' => $this->storeUser->id,
@@ -194,6 +202,13 @@ class TradeInTest extends TestCase
             'product_id' => $product->id,
             'price' => 2000.00,
         ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
 
         $data = [
             'store_user_id' => $this->storeUser->id,
@@ -243,6 +258,13 @@ class TradeInTest extends TestCase
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'price' => 1000.00,
+        ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
         ]);
 
         $data = [
@@ -303,6 +325,13 @@ class TradeInTest extends TestCase
             'product_id' => $product->id,
             'price' => 1000.00,
         ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
 
         $data = [
             'store_user_id' => $this->storeUser->id,
@@ -350,6 +379,13 @@ class TradeInTest extends TestCase
         $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'price' => 2000.00,
+        ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
         ]);
 
         $response = $this->post('/orders', [

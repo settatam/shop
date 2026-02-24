@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Models\Category;
 use App\Models\Image;
 use App\Models\Inventory;
+use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\ProductTemplate;
@@ -279,9 +281,14 @@ class MigrateLegacyProducts extends Command
             ->delete();
         $this->line("  Deleted {$tagCount} tag associations");
 
-        // 5. Delete platform listings
-        $listingCount = \App\Models\PlatformListing::whereIn('product_id', $productIds)->count();
-        \App\Models\PlatformListing::whereIn('product_id', $productIds)->forceDelete();
+        // 5. Delete platform listing variants, then platform listings
+        $listingIds = PlatformListing::whereIn('product_id', $productIds)->pluck('id');
+        $listingVariantCount = PlatformListingVariant::whereIn('platform_listing_id', $listingIds)->count();
+        PlatformListingVariant::whereIn('platform_listing_id', $listingIds)->delete();
+        $this->line("  Deleted {$listingVariantCount} platform listing variants");
+
+        $listingCount = PlatformListing::whereIn('product_id', $productIds)->count();
+        PlatformListing::whereIn('product_id', $productIds)->forceDelete();
         $this->line("  Deleted {$listingCount} platform listings");
 
         // 6. Delete product variants
@@ -1046,20 +1053,15 @@ class MigrateLegacyProducts extends Command
             // Map listing status
             $status = $this->mapListingStatus($legacyListing->listing_status);
 
-            // Get the default variant for this product
-            $defaultVariant = \App\Models\ProductVariant::where('product_id', $newProduct->id)->first();
-
             // Create the platform listing
-            DB::table('platform_listings')->insert([
+            $listingId = DB::table('platform_listings')->insertGetId([
                 'sales_channel_id' => $salesChannel?->id,
                 'store_marketplace_id' => $newMarketplaceId,
                 'product_id' => $newProduct->id,
-                'product_variant_id' => $defaultVariant?->id,
                 'external_listing_id' => $legacyListing->external_marketplace_id,
-                'external_variant_id' => null,
                 'status' => $status,
                 'listing_url' => $legacyListing->external_marketplace_url,
-                'platform_price' => null, // Will be set from variant price
+                'platform_price' => null,
                 'platform_quantity' => null,
                 'platform_data' => $legacyListing->marketplace_response ? json_encode([
                     'legacy_response' => $legacyListing->marketplace_response,
@@ -1069,10 +1071,53 @@ class MigrateLegacyProducts extends Command
                 'category_mapping' => null,
                 'last_error' => null,
                 'last_synced_at' => $legacyListing->updated_at,
-                'published_at' => $status === 'active' ? $legacyListing->listing_start_date : null,
+                'published_at' => $status === PlatformListing::STATUS_LISTED ? $legacyListing->listing_start_date : null,
                 'created_at' => $legacyListing->created_at,
                 'updated_at' => $legacyListing->updated_at,
             ]);
+
+            // Migrate channel variants into platform_listing_variants
+            $legacyChannelVariants = DB::connection('legacy')
+                ->table('store_marketplace_product_variants')
+                ->where('store_marketplace_product_id', $legacyListing->id)
+                ->whereNull('deleted_at')
+                ->get();
+
+            if ($legacyChannelVariants->isNotEmpty()) {
+                foreach ($legacyChannelVariants as $channelVariant) {
+                    $newVariantId = $this->variantMap[$channelVariant->product_variant_id] ?? null;
+                    if (! $newVariantId) {
+                        continue;
+                    }
+
+                    DB::table('platform_listing_variants')->insert([
+                        'platform_listing_id' => $listingId,
+                        'product_variant_id' => $newVariantId,
+                        'external_variant_id' => $channelVariant->external_marketplace_id,
+                        'price' => $channelVariant->price,
+                        'quantity' => $channelVariant->quantity ?? null,
+                        'sku' => $channelVariant->sku ?? null,
+                        'status' => $channelVariant->should_list ? 'active' : 'inactive',
+                        'created_at' => $channelVariant->created_at,
+                        'updated_at' => $channelVariant->updated_at,
+                    ]);
+                }
+            } else {
+                // No channel variants — create at least one from the product's first variant
+                $defaultVariant = ProductVariant::where('product_id', $newProduct->id)->first();
+                if ($defaultVariant) {
+                    DB::table('platform_listing_variants')->insert([
+                        'platform_listing_id' => $listingId,
+                        'product_variant_id' => $defaultVariant->id,
+                        'price' => $defaultVariant->price,
+                        'quantity' => $defaultVariant->quantity,
+                        'sku' => $defaultVariant->sku,
+                        'status' => 'active',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
 
             $this->listingCount++;
         }
@@ -1084,17 +1129,16 @@ class MigrateLegacyProducts extends Command
     protected function mapListingStatus(?string $legacyStatus): string
     {
         if (! $legacyStatus) {
-            return 'draft';
+            return PlatformListing::STATUS_NOT_LISTED;
         }
 
         return match (strtolower($legacyStatus)) {
-            'listed' => 'active',
-            'not_listed' => 'draft',
-            'archived' => 'archived',
-            'listing_expired' => 'expired',
-            'listing_ended' => 'ended',
-            'listing_error' => 'error',
-            default => 'draft',
+            'listed' => PlatformListing::STATUS_LISTED,
+            'not_listed' => PlatformListing::STATUS_NOT_LISTED,
+            'archived' => PlatformListing::STATUS_ARCHIVED,
+            'listing_expired', 'listing_ended' => PlatformListing::STATUS_ENDED,
+            'listing_error' => PlatformListing::STATUS_ERROR,
+            default => PlatformListing::STATUS_NOT_LISTED,
         };
     }
 
@@ -1926,22 +1970,26 @@ class MigrateLegacyProducts extends Command
 
         $created = 0;
         foreach ($activeProducts as $product) {
-            $defaultVariant = $product->variants()->first();
-
-            \App\Models\PlatformListing::create([
+            $listing = PlatformListing::create([
                 'sales_channel_id' => $inStoreChannel->id,
                 'store_marketplace_id' => null,
                 'product_id' => $product->id,
-                'product_variant_id' => $defaultVariant?->id,
-                'status' => \App\Models\PlatformListing::STATUS_ACTIVE,
-                'platform_price' => $defaultVariant?->price ?? 0,
-                'platform_quantity' => $defaultVariant?->quantity ?? 0,
-                'platform_data' => [
-                    'title' => $product->title,
-                    'description' => $product->description,
-                ],
+                'status' => PlatformListing::STATUS_LISTED,
                 'published_at' => now(),
             ]);
+
+            // Create listing variants for all product variants
+            foreach ($product->variants as $variant) {
+                PlatformListingVariant::create([
+                    'platform_listing_id' => $listing->id,
+                    'product_variant_id' => $variant->id,
+                    'price' => $variant->price,
+                    'quantity' => $variant->quantity,
+                    'sku' => $variant->sku,
+                    'status' => 'active',
+                ]);
+            }
+
             $created++;
         }
 
@@ -1952,19 +2000,38 @@ class MigrateLegacyProducts extends Command
     {
         $this->warn('Cleaning up existing products...');
 
-        $productIds = Product::where('store_id', $newStore->id)->pluck('id');
+        $productIds = Product::withTrashed()->where('store_id', $newStore->id)->pluck('id');
+        $variantIds = ProductVariant::withTrashed()->whereIn('product_id', $productIds)->pluck('id');
 
         // Delete in order of dependencies
+
+        // 1. Inventory records (via variant IDs)
+        Inventory::whereIn('product_variant_id', $variantIds)->delete();
+
+        // 2. Product attribute values
         ProductAttributeValue::whereIn('product_id', $productIds)->delete();
+
+        // 3. Polymorphic images
         Image::where('imageable_type', 'App\\Models\\Product')
             ->whereIn('imageable_id', $productIds)
             ->delete();
 
-        // Delete platform listings for these products
-        \App\Models\PlatformListing::whereIn('product_id', $productIds)->forceDelete();
+        // 4. Tags (taggables pivot table)
+        DB::table('taggables')
+            ->where('taggable_type', 'App\\Models\\Product')
+            ->whereIn('taggable_id', $productIds)
+            ->delete();
 
-        ProductVariant::whereIn('product_id', $productIds)->forceDelete();
-        Product::where('store_id', $newStore->id)->forceDelete();
+        // 5. Platform listing variants, then platform listings
+        $listingIds = PlatformListing::whereIn('product_id', $productIds)->pluck('id');
+        PlatformListingVariant::whereIn('platform_listing_id', $listingIds)->delete();
+        PlatformListing::whereIn('product_id', $productIds)->forceDelete();
+
+        // 6. Product variants (including soft-deleted)
+        ProductVariant::withTrashed()->whereIn('product_id', $productIds)->forceDelete();
+
+        // 7. Products (including soft-deleted)
+        Product::withTrashed()->where('store_id', $newStore->id)->forceDelete();
 
         $this->line('  Cleanup complete');
     }

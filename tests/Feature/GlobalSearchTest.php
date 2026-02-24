@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Search\GlobalSearchService;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 class GlobalSearchTest extends TestCase
@@ -23,6 +24,9 @@ class GlobalSearchTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Use collection driver so Scout searches work without MeiliSearch
+        config(['scout.driver' => 'collection']);
 
         $this->user = User::factory()->create();
         $this->store = Store::factory()->create(['user_id' => $this->user->id]);
@@ -39,7 +43,7 @@ class GlobalSearchTest extends TestCase
 
     public function test_search_returns_correct_structure_with_has_more(): void
     {
-        $this->actingAs($this->user);
+        Passport::actingAs($this->user);
 
         // Create 7 products with "rolex" in the title
         for ($i = 1; $i <= 7; $i++) {
@@ -74,7 +78,7 @@ class GlobalSearchTest extends TestCase
 
     public function test_search_returns_null_view_all_url_when_all_results_shown(): void
     {
-        $this->actingAs($this->user);
+        Passport::actingAs($this->user);
 
         // Create 3 products with "omega" in the title
         for ($i = 1; $i <= 3; $i++) {

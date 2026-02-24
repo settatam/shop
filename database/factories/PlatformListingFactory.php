@@ -84,4 +84,26 @@ class PlatformListingFactory extends Factory
             'last_error' => $message,
         ]);
     }
+
+    public function withOverrides(array $overrides = []): static
+    {
+        return $this->state(fn (array $attributes) => array_merge([
+            'title' => 'Override Title',
+            'description' => 'Override Description',
+        ], $overrides));
+    }
+
+    public function withCategory(string $categoryId = 'cat_123'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'platform_category_id' => $categoryId,
+        ]);
+    }
+
+    public function withAttributes(array $attributes = []): static
+    {
+        return $this->state(fn () => [
+            'attributes' => ! empty($attributes) ? $attributes : ['Brand' => 'Test Brand', 'Material' => 'Gold'],
+        ]);
+    }
 }

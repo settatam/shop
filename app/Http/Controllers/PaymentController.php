@@ -34,6 +34,8 @@ class PaymentController extends Controller
         'orders' => Order::class,
         'repair' => Repair::class,
         'repairs' => Repair::class,
+        'appraisal' => Repair::class,
+        'appraisals' => Repair::class,
     ];
 
     public function __construct(
@@ -187,8 +189,6 @@ class PaymentController extends Controller
         // Create checkout with the gateway
         $gateway = $this->gatewayFactory->makeTerminal($terminal->gateway);
         $timeout = config('payment-gateways.terminal.default_timeout', 300);
-
-
 
         $result = $gateway->createCheckout($terminal, $amount, [
             'timeout' => $timeout,

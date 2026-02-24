@@ -314,7 +314,7 @@ class TransactionService
         // Log activity with detailed changes
         ActivityLog::log(
             activity: 'item_updated',
-            subject: $item,
+            subject: $item->transaction,
             properties: [
                 'transaction_id' => $item->transaction_id,
                 'title' => $item->title,
@@ -382,7 +382,7 @@ class TransactionService
         // Log activity
         ActivityLog::log(
             activity: 'item_reviewed',
-            subject: $item,
+            subject: $item->transaction,
             properties: [
                 'transaction_id' => $item->transaction_id,
                 'title' => $item->title,

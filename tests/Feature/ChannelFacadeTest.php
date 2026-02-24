@@ -51,10 +51,16 @@ class ChannelFacadeTest extends TestCase
 
     public function test_channel_listing_returns_listing_manager(): void
     {
-        $listing = PlatformListing::factory()->create([
-            'product_id' => $this->product->id,
-            'sales_channel_id' => $this->channel->id,
-        ]);
+        $listing = PlatformListing::where('product_id', $this->product->id)
+            ->where('sales_channel_id', $this->channel->id)
+            ->first();
+
+        if (! $listing) {
+            $listing = PlatformListing::factory()->create([
+                'product_id' => $this->product->id,
+                'sales_channel_id' => $this->channel->id,
+            ]);
+        }
 
         $manager = Channel::listing($listing);
 
@@ -64,10 +70,16 @@ class ChannelFacadeTest extends TestCase
 
     public function test_channel_listing_accepts_id(): void
     {
-        $listing = PlatformListing::factory()->create([
-            'product_id' => $this->product->id,
-            'sales_channel_id' => $this->channel->id,
-        ]);
+        $listing = PlatformListing::where('product_id', $this->product->id)
+            ->where('sales_channel_id', $this->channel->id)
+            ->first();
+
+        if (! $listing) {
+            $listing = PlatformListing::factory()->create([
+                'product_id' => $this->product->id,
+                'sales_channel_id' => $this->channel->id,
+            ]);
+        }
 
         $manager = Channel::listing($listing->id);
 
@@ -134,10 +146,7 @@ class ChannelFacadeTest extends TestCase
 
     public function test_listing_manager_publish_for_local_channel(): void
     {
-        $listing = PlatformListing::factory()->notListed()->create([
-            'product_id' => $this->product->id,
-            'sales_channel_id' => $this->channel->id,
-        ]);
+        $listing = $this->getOrCreateListing(PlatformListing::STATUS_NOT_LISTED);
 
         $result = Channel::listing($listing)->publish();
 
@@ -151,10 +160,7 @@ class ChannelFacadeTest extends TestCase
 
     public function test_listing_manager_unpublish(): void
     {
-        $listing = PlatformListing::factory()->listed()->create([
-            'product_id' => $this->product->id,
-            'sales_channel_id' => $this->channel->id,
-        ]);
+        $listing = $this->getOrCreateListing(PlatformListing::STATUS_LISTED);
 
         $result = Channel::listing($listing)->unpublish();
 
@@ -166,10 +172,7 @@ class ChannelFacadeTest extends TestCase
 
     public function test_listing_manager_update_inventory(): void
     {
-        $listing = PlatformListing::factory()->listed()->create([
-            'product_id' => $this->product->id,
-            'sales_channel_id' => $this->channel->id,
-        ]);
+        $listing = $this->getOrCreateListing(PlatformListing::STATUS_LISTED);
 
         $result = Channel::listing($listing)->updateInventory(25);
 
@@ -181,10 +184,7 @@ class ChannelFacadeTest extends TestCase
 
     public function test_listing_manager_update_price(): void
     {
-        $listing = PlatformListing::factory()->listed()->create([
-            'product_id' => $this->product->id,
-            'sales_channel_id' => $this->channel->id,
-        ]);
+        $listing = $this->getOrCreateListing(PlatformListing::STATUS_LISTED);
 
         $result = Channel::listing($listing)->updatePrice(99.99);
 
@@ -192,5 +192,30 @@ class ChannelFacadeTest extends TestCase
 
         $listing->refresh();
         $this->assertEquals(99.99, $listing->platform_price);
+    }
+
+    private function getOrCreateListing(string $status): PlatformListing
+    {
+        $listing = PlatformListing::where('product_id', $this->product->id)
+            ->where('sales_channel_id', $this->channel->id)
+            ->first();
+
+        if ($listing) {
+            $listing->update([
+                'status' => $status,
+                'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+                'last_synced_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+            ]);
+
+            return $listing->fresh();
+        }
+
+        return PlatformListing::factory()->create([
+            'product_id' => $this->product->id,
+            'sales_channel_id' => $this->channel->id,
+            'status' => $status,
+            'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+            'last_synced_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
+        ]);
     }
 }

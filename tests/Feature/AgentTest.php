@@ -70,7 +70,7 @@ class AgentTest extends TestCase
     {
         $agents = Agent::all();
 
-        $this->assertCount(3, $agents);
+        $this->assertCount(7, $agents);
         $this->assertTrue($agents->contains('slug', 'dead-stock'));
         $this->assertTrue($agents->contains('slug', 'auto-pricing'));
         $this->assertTrue($agents->contains('slug', 'new-item-researcher'));
@@ -81,7 +81,7 @@ class AgentTest extends TestCase
         $registry = app(AgentRegistry::class);
         $agents = $registry->getAllAgents();
 
-        $this->assertCount(3, $agents);
+        $this->assertCount(7, $agents);
     }
 
     public function test_agent_registry_can_get_agent_by_slug(): void

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\TaxonomyController;
 use App\Http\Controllers\InvitationController;
+use App\Http\Controllers\Web\AppraisalController;
 use App\Http\Controllers\Web\BucketsController;
 use App\Http\Controllers\Web\BuysController;
 use App\Http\Controllers\Web\BuysReportController;
@@ -528,8 +529,33 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('repair-vendor-payments/{payment}/attachment', [RepairVendorPaymentController::class, 'downloadAttachment'])->name('web.repair-vendor-payments.attachment');
     });
 
+    // Appraisal management - static routes must come before dynamic routes
+    Route::middleware('permission:appraisals.create')->group(function () {
+        Route::get('appraisals/create', [AppraisalController::class, 'createWizard'])->name('web.appraisals.create-wizard');
+        Route::post('appraisals', [AppraisalController::class, 'storeFromWizard'])->name('web.appraisals.store');
+    });
+    Route::middleware('permission:appraisals.view')->group(function () {
+        Route::get('appraisals', [AppraisalController::class, 'index'])->name('web.appraisals.index');
+        Route::get('appraisals/search-customers', [AppraisalController::class, 'searchCustomers'])->name('web.appraisals.search-customers');
+        Route::get('appraisals/search-vendors', [AppraisalController::class, 'searchVendors'])->name('web.appraisals.search-vendors');
+        Route::get('appraisals/{repair}', [AppraisalController::class, 'show'])->name('web.appraisals.show');
+    });
+    Route::middleware('permission:appraisals.update')->group(function () {
+        Route::patch('appraisals/{repair}', [AppraisalController::class, 'update'])->name('web.appraisals.update');
+        Route::post('appraisals/{repair}/send-to-vendor', [AppraisalController::class, 'sendToVendor'])->name('web.appraisals.send-to-vendor');
+        Route::post('appraisals/{repair}/mark-received', [AppraisalController::class, 'markReceived'])->name('web.appraisals.mark-received');
+        Route::post('appraisals/{repair}/mark-completed', [AppraisalController::class, 'markCompleted'])->name('web.appraisals.mark-completed');
+        Route::post('appraisals/{repair}/receive-payment', [AppraisalController::class, 'receivePayment'])->name('web.appraisals.receive-payment');
+        Route::post('appraisals/{repair}/change-status', [AppraisalController::class, 'changeStatus'])->name('web.appraisals.change-status');
+        Route::patch('appraisals/{repair}/items/{item}', [AppraisalController::class, 'updateItem'])->name('web.appraisals.update-item');
+        Route::delete('appraisals/{repair}/items/{item}', [AppraisalController::class, 'removeItem'])->name('web.appraisals.remove-item');
+        Route::post('appraisals/bulk-action', [AppraisalController::class, 'bulkAction'])->name('web.appraisals.bulk-action');
+    });
+    Route::post('appraisals/{repair}/cancel', [AppraisalController::class, 'cancel'])->name('web.appraisals.cancel')->middleware('permission:appraisals.cancel');
+    Route::delete('appraisals/{repair}', [AppraisalController::class, 'destroy'])->name('web.appraisals.destroy')->middleware('permission:appraisals.delete');
+
     // Generic Payment Routes - defined explicitly for each model type to avoid route conflicts
-    foreach (['memos', 'repairs', 'orders', 'layaways'] as $type) {
+    foreach (['memos', 'repairs', 'appraisals', 'orders', 'layaways'] as $type) {
         Route::prefix("{$type}/{id}/payment")->where(['id' => '[0-9]+'])->group(function () use ($type) {
             Route::get('summary', [\App\Http\Controllers\PaymentController::class, 'summary'])
                 ->name("{$type}.payment.summary")

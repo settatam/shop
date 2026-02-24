@@ -33,9 +33,9 @@ return [
                 'vendors',
                 'invoices',
                 'payments',
-                //'labels',
+                // 'labels',
                 'reports',
-                //'tags',
+                // 'tags',
                 'integrations',
                 'settings',
                 'marketplaces',
@@ -67,6 +67,7 @@ return [
                 'buys',
                 'vendors',
                 'repairs', // Item repairs
+                'appraisals', // Item appraisals
                 'memos', // Memo tracking
                 'invoices',
                 'payments',
@@ -112,6 +113,7 @@ return [
                 'buys',
                 'vendors',
                 'repairs', // Item repairs
+                'appraisals', // Item appraisals
                 'memos', // Memo tracking
                 'invoices',
                 'payments',
@@ -159,6 +161,7 @@ return [
                 'buys',
                 'vendors',
                 'repairs',
+                'appraisals',
                 'memos',
                 'invoices',
                 'payments',
@@ -210,6 +213,7 @@ return [
                 'buys',
                 'vendors',
                 'repairs',
+                'appraisals',
                 'memos',
                 'invoices',
                 'payments',
@@ -300,6 +304,7 @@ return [
         'buys' => 'buys',
         'vendors' => 'vendors',
         'repairs' => 'repairs',
+        'appraisals' => 'appraisals',
         'memos' => 'memos',
         'invoices' => 'invoices',
         'payments' => 'payments',

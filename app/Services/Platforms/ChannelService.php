@@ -87,6 +87,7 @@ class ChannelService
 
     /**
      * Ensure a product has listings for all active channels.
+     * Uses Product::ensureListingExists() which also creates variant rows.
      *
      * @return \Illuminate\Database\Eloquent\Collection<PlatformListing>
      */
@@ -96,19 +97,12 @@ class ChannelService
             $product = Product::findOrFail($product);
         }
 
-        $storeId = $product->store_id;
-        $activeChannels = SalesChannel::where('store_id', $storeId)
+        $activeChannels = SalesChannel::where('store_id', $product->store_id)
             ->where('is_active', true)
             ->get();
 
         foreach ($activeChannels as $channel) {
-            PlatformListing::firstOrCreate([
-                'product_id' => $product->id,
-                'sales_channel_id' => $channel->id,
-            ], [
-                'store_id' => $storeId,
-                'status' => 'draft',
-            ]);
+            $product->ensureListingExists($channel);
         }
 
         return $this->listingsFor($product);

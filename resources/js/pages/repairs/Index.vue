@@ -4,7 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { useWidget, type WidgetFilter } from '@/composables/useWidget';
 import DataTable from '@/components/widgets/DataTable.vue';
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { PlusIcon } from '@heroicons/vue/20/solid';
 
 interface Status {
@@ -20,13 +20,20 @@ interface Vendor {
 interface Props {
     statuses: Status[];
     vendors: Vendor[];
+    isAppraisal?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    isAppraisal: false,
+});
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Repairs', href: '/repairs' },
-];
+const entityLabel = computed(() => props.isAppraisal ? 'Appraisals' : 'Repairs');
+const entitySingular = computed(() => props.isAppraisal ? 'Appraisal' : 'Repair');
+const basePath = computed(() => props.isAppraisal ? '/appraisals' : '/repairs');
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: entityLabel.value, href: basePath.value },
+]);
 
 // Get URL query params
 function getUrlParams(): WidgetFilter {
@@ -42,7 +49,8 @@ function getUrlParams(): WidgetFilter {
 const initialParams = getUrlParams();
 
 // Widget setup with initial filter from URL
-const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget('Repairs\\RepairsTable', initialParams);
+const widgetType = props.isAppraisal ? 'Appraisals\\AppraisalsTable' : 'Repairs\\RepairsTable';
+const { data, loading, loadWidget, setPage, setSort, setSearch, updateFilter } = useWidget(widgetType, initialParams);
 
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status || '');
@@ -89,24 +97,24 @@ function handleBulkActionSuccess() {
 </script>
 
 <template>
-    <Head title="Repairs" />
+    <Head :title="entityLabel" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-4 p-4">
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Repairs</h1>
+                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ entityLabel }}</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Manage repair orders for customer items
+                        {{ isAppraisal ? 'Manage appraisals for customer items' : 'Manage repair orders for customer items' }}
                     </p>
                 </div>
                 <Link
-                    href="/repairs/create"
+                    :href="`${basePath}/create`"
                     class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                 >
                     <PlusIcon class="-ml-0.5 size-5" aria-hidden="true" />
-                    New Repair
+                    New {{ entitySingular }}
                 </Link>
             </div>
 
@@ -157,7 +165,7 @@ function handleBulkActionSuccess() {
                 ref="dataTableRef"
                 :data="data"
                 :loading="loading"
-                bulk-action-url="/repairs/bulk-action"
+                :bulk-action-url="`${basePath}/bulk-action`"
                 @page-change="handlePageChange"
                 @sort-change="handleSortChange"
                 @search="handleSearch"
