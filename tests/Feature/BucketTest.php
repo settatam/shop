@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Bucket;
 use App\Models\BucketItem;
+use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Store;
@@ -11,6 +12,7 @@ use App\Models\StoreUser;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\BucketService;
 use App\Services\Orders\OrderCreationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -540,10 +542,24 @@ class BucketTest extends TestCase
             'title' => 'Test Product',
         ]);
 
-        $product->variants()->create([
+        $variant = $product->variants()->create([
             'sku' => 'TEST-SKU',
             'price' => 50.00,
             'quantity' => 10,
+        ]);
+
+        // Stock validation checks Inventory records, not variant.quantity
+        $warehouse = Warehouse::factory()->create([
+            'store_id' => $this->store->id,
+            'is_default' => true,
+        ]);
+
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
         ]);
 
         $storeUser = StoreUser::where('store_id', $this->store->id)->first();

@@ -54,7 +54,7 @@ class AdvancedProductSearchTest extends TestCase
         $this->actingAs($this->user);
 
         // JSON request returns 422 for validation errors
-        $response = $this->getJson('/products/advanced-search?query=a');
+        $response = $this->getJson('/products/advanced-search/modal?query=a');
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['query']);
@@ -70,7 +70,7 @@ class AdvancedProductSearchTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/products/advanced-search?query=Diamond Ring');
+        $response = $this->getJson('/products/advanced-search/modal?query=Diamond Ring');
 
         $response->assertStatus(200);
         $response->assertJsonStructure([
@@ -94,7 +94,7 @@ class AdvancedProductSearchTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/products/advanced-search?query=Vintage');
+        $response = $this->getJson('/products/advanced-search/modal?query=Vintage');
 
         $response->assertStatus(200);
         $response->assertJsonStructure([
@@ -118,7 +118,7 @@ class AdvancedProductSearchTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/products/advanced-search?query=Silver');
+        $response = $this->getJson('/products/advanced-search/modal?query=Silver');
 
         $response->assertStatus(200);
         $response->assertJsonStructure([
@@ -145,7 +145,7 @@ class AdvancedProductSearchTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/products/advanced-search?query=Store');
+        $response = $this->getJson('/products/advanced-search/modal?query=Store');
 
         $response->assertStatus(200);
         // Should only return items from the current store (uses SQL fallback in tests)
@@ -165,7 +165,7 @@ class AdvancedProductSearchTest extends TestCase
 
         $this->actingAs($this->user);
 
-        $response = $this->get('/products/advanced-search?query=Product&limit=3');
+        $response = $this->getJson('/products/advanced-search/modal?query=Product&limit=3');
 
         $response->assertStatus(200);
         $data = $response->json();

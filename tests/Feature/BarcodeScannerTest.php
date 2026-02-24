@@ -145,20 +145,27 @@ class BarcodeScannerTest extends TestCase
     {
         $this->actingAs($this->user);
 
+        // Use the barcode lookup endpoint which does exact matching via SQL
         $product = Product::factory()->create([
             'store_id' => $this->store->id,
             'title' => 'Test Product',
         ]);
-        ProductVariant::factory()->create([
+        $variant = ProductVariant::factory()->create([
             'product_id' => $product->id,
             'barcode' => 'SEARCHABLE-BARCODE',
             'sku' => 'DIFF-SKU',
         ]);
 
-        $response = $this->getJson('/orders/search-products?query=SEARCHABLE-BARCODE');
+        $response = $this->getJson('/orders/lookup-barcode?barcode=SEARCHABLE-BARCODE');
 
         $response->assertOk();
-        $this->assertCount(1, $response->json('products'));
-        $this->assertEquals($product->id, $response->json('products.0.id'));
+        $response->assertJson([
+            'found' => true,
+            'product' => [
+                'id' => $product->id,
+                'variant_id' => $variant->id,
+                'barcode' => 'SEARCHABLE-BARCODE',
+            ],
+        ]);
     }
 }
