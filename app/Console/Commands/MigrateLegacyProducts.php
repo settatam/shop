@@ -1012,7 +1012,7 @@ class MigrateLegacyProducts extends Command
 
     /**
      * Migrate platform listings (store_marketplace_products) for a product.
-     * These represent products published to external platforms like Shopify, eBay, etc.
+     * Queries the legacy marketplace directly to find the matching sales channel by platform type.
      */
     protected function migrateProductListings(object $legacyProduct, Product $newProduct): void
     {
@@ -1028,21 +1028,29 @@ class MigrateLegacyProducts extends Command
         }
 
         foreach ($legacyListings as $legacyListing) {
-            // Skip if no marketplace mapping
-            if (! isset($this->marketplaceMap[$legacyListing->store_market_place_id])) {
+            // Query the legacy marketplace directly to get the platform
+            $legacyMarketplace = DB::connection('legacy')
+                ->table('store_market_places')
+                ->find($legacyListing->store_market_place_id);
+
+            if (! $legacyMarketplace) {
                 continue;
             }
 
-            $newMarketplaceId = $this->marketplaceMap[$legacyListing->store_market_place_id];
+            $platform = strtolower($legacyMarketplace->marketplace);
 
-            // Find the sales channel linked to this marketplace
-            $salesChannel = \App\Models\SalesChannel::where('store_marketplace_id', $newMarketplaceId)
-                ->where('is_active', true)
+            // Find the sales channel by platform type for this store
+            $salesChannel = \App\Models\SalesChannel::where('store_id', $newProduct->store_id)
+                ->where('type', $platform)
                 ->first();
 
-            // Check if listing already exists
+            if (! $salesChannel) {
+                continue;
+            }
+
+            // Check if listing already exists for this channel + product
             $existingListing = DB::table('platform_listings')
-                ->where('store_marketplace_id', $newMarketplaceId)
+                ->where('sales_channel_id', $salesChannel->id)
                 ->where('product_id', $newProduct->id)
                 ->first();
 
@@ -1055,8 +1063,8 @@ class MigrateLegacyProducts extends Command
 
             // Create the platform listing
             $listingId = DB::table('platform_listings')->insertGetId([
-                'sales_channel_id' => $salesChannel?->id,
-                'store_marketplace_id' => $newMarketplaceId,
+                'sales_channel_id' => $salesChannel->id,
+                'store_marketplace_id' => $salesChannel->store_marketplace_id,
                 'product_id' => $newProduct->id,
                 'external_listing_id' => $legacyListing->external_marketplace_id,
                 'status' => $status,
@@ -1084,14 +1092,14 @@ class MigrateLegacyProducts extends Command
 
             if ($legacyChannelVariants->isNotEmpty()) {
                 foreach ($legacyChannelVariants as $channelVariant) {
-                    $newVariantId = $this->variantMap[$channelVariant->product_variant_id] ?? null;
-                    if (! $newVariantId) {
+                    // IDs are preserved during migration — verify the variant exists
+                    if (! ProductVariant::where('id', $channelVariant->product_variant_id)->exists()) {
                         continue;
                     }
 
                     DB::table('platform_listing_variants')->insert([
                         'platform_listing_id' => $listingId,
-                        'product_variant_id' => $newVariantId,
+                        'product_variant_id' => $channelVariant->product_variant_id,
                         'external_variant_id' => $channelVariant->external_marketplace_id,
                         'price' => $channelVariant->price,
                         'quantity' => $channelVariant->quantity ?? null,
@@ -1237,7 +1245,7 @@ class MigrateLegacyProducts extends Command
                 }
 
                 // Migrate platform listings for existing products (if not skipped)
-                if (! $this->option('skip-listings') && ! empty($this->marketplaceMap) && ! $isDryRun) {
+                if (! $this->option('skip-listings') && ! $isDryRun) {
                     $this->migrateProductListings($legacyProduct, $existingProduct);
                 }
 
@@ -1394,7 +1402,7 @@ class MigrateLegacyProducts extends Command
             $this->migrateProductTags($legacyProduct, $newProduct);
 
             // Migrate platform listings (store_marketplace_products)
-            if (! $this->option('skip-listings') && ! empty($this->marketplaceMap)) {
+            if (! $this->option('skip-listings')) {
                 $this->migrateProductListings($legacyProduct, $newProduct);
             }
 
