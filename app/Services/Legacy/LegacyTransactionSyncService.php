@@ -2,8 +2,12 @@
 
 namespace App\Services\Legacy;
 
+use App\Models\Legacy\LegacyStatusUpdate;
+use App\Models\Legacy\LegacyStore;
+use App\Models\Legacy\LegacyTransaction;
+use App\Models\Legacy\LegacyTransactionItem;
+use App\Models\Legacy\LegacyUser;
 use App\Models\Transaction;
-use App\Models\TransactionWarehouse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +37,18 @@ class LegacyTransactionSyncService
     ];
 
     /**
+     * Cache for legacy store ID lookups.
+     *
+     * @var array<string, int|null>
+     */
+    protected array $storeIdCache = [];
+
+    /**
+     * Cache for the system user ID.
+     */
+    protected ?int $systemUserIdCache = null;
+
+    /**
      * Sync a transaction and its items to the legacy database.
      */
     public function sync(Transaction $transaction): void
@@ -41,17 +57,17 @@ class LegacyTransactionSyncService
             return;
         }
 
-        $legacyStoreIds = TransactionWarehouse::getLegacyStoreIds($transaction->store_id);
+        $legacyStoreId = $this->getLegacyStoreId($transaction);
 
-        if (empty($legacyStoreIds)) {
+        if ($legacyStoreId === null) {
             return;
         }
 
-        if (! $this->transactionExistsInLegacy($transaction->id)) {
+        if (! LegacyTransaction::where('id', $transaction->id)->exists()) {
             return;
         }
 
-        $this->syncTransactionStatus($transaction, $legacyStoreIds[0]);
+        $this->syncTransactionStatus($transaction, $legacyStoreId);
         $this->syncTransactionItems($transaction);
     }
 
@@ -60,10 +76,7 @@ class LegacyTransactionSyncService
      */
     public function transactionExistsInLegacy(int $transactionId): bool
     {
-        return DB::connection('legacy')
-            ->table('transactions')
-            ->where('id', $transactionId)
-            ->exists();
+        return LegacyTransaction::where('id', $transactionId)->exists();
     }
 
     /**
@@ -71,28 +84,52 @@ class LegacyTransactionSyncService
      */
     protected function syncTransactionStatus(Transaction $transaction, int $legacyStoreId): void
     {
-        $data = [
-            'final_offer' => $transaction->final_offer,
-            'preliminary_offer' => $transaction->preliminary_offer,
-            'est_value' => $transaction->estimated_value,
-            'is_accepted' => in_array($transaction->status, [
-                Transaction::STATUS_OFFER_ACCEPTED,
-                Transaction::STATUS_PAYMENT_PROCESSED,
-            ], true),
-            'is_declined' => $transaction->status === Transaction::STATUS_OFFER_DECLINED,
-            'updated_at' => now(),
-        ];
+        $legacyTransaction = LegacyTransaction::find($transaction->id);
+
+        if (! $legacyTransaction) {
+            return;
+        }
+
+        $previousStatusId = $legacyTransaction->status_id;
+
+        $legacyTransaction->final_offer = $transaction->final_offer;
+        $legacyTransaction->preliminary_offer = $transaction->preliminary_offer;
+        $legacyTransaction->est_value = $transaction->estimated_value;
+        $legacyTransaction->is_accepted = in_array($transaction->status, [
+            Transaction::STATUS_OFFER_ACCEPTED,
+            Transaction::STATUS_PAYMENT_PROCESSED,
+        ], true);
+        $legacyTransaction->is_declined = $transaction->status === Transaction::STATUS_OFFER_DECLINED;
 
         $statusId = $this->mapStatusToLegacyId($transaction->status, $legacyStoreId);
 
         if ($statusId !== null) {
-            $data['status_id'] = $statusId;
+            $legacyTransaction->status_id = $statusId;
         }
 
-        DB::connection('legacy')
-            ->table('transactions')
-            ->where('id', $transaction->id)
-            ->update($data);
+        $legacyTransaction->save();
+
+        // Create activity and status update if status changed
+        if ($statusId !== null && $statusId !== $previousStatusId) {
+            $systemUserId = $this->getSystemUserId();
+
+            $legacyTransaction->activities()->create([
+                'activity' => 'status_updated',
+                'description' => "Status updated from {$previousStatusId} to {$statusId}",
+                'user_id' => $systemUserId,
+                'creatable_id' => $systemUserId,
+                'creatable_type' => 'App\Models\User',
+            ]);
+
+            LegacyStatusUpdate::create([
+                'store_id' => $legacyStoreId,
+                'user_id' => $systemUserId,
+                'updateable_id' => $legacyTransaction->id,
+                'updateable_type' => 'App\Models\Transaction',
+                'previous_status' => (string) $previousStatusId,
+                'current_status' => (string) $statusId,
+            ]);
+        }
     }
 
     /**
@@ -101,31 +138,107 @@ class LegacyTransactionSyncService
     protected function syncTransactionItems(Transaction $transaction): void
     {
         $transaction->loadMissing('items');
+        $legacyTransaction = LegacyTransaction::find($transaction->id);
+
+        if (! $legacyTransaction) {
+            return;
+        }
+
+        $systemUserId = $this->getSystemUserId();
 
         foreach ($transaction->items as $item) {
-            $exists = DB::connection('legacy')
-                ->table('transaction_items')
-                ->where('id', $item->id)
-                ->exists();
+            $legacyItem = LegacyTransactionItem::find($item->id);
 
-            if (! $exists) {
+            if (! $legacyItem) {
                 continue;
             }
 
-            DB::connection('legacy')
-                ->table('transaction_items')
-                ->where('id', $item->id)
-                ->update([
-                    'title' => $item->title,
-                    'price' => $item->price,
-                    'buy_price' => $item->buy_price,
-                    'dwt' => $item->dwt,
-                    'description' => $item->description,
-                    'precious_metal' => $item->precious_metal,
-                    'quantity' => $item->quantity,
-                    'updated_at' => now(),
+            $legacyItem->title = $item->title;
+            $legacyItem->price = $item->price;
+            $legacyItem->buy_price = $item->buy_price;
+            $legacyItem->dwt = $item->dwt;
+            $legacyItem->description = $item->description;
+            $legacyItem->precious_metal = $item->precious_metal;
+            $legacyItem->quantity = $item->quantity;
+
+            // Check if item was reviewed in the new system
+            if ($item->reviewed_at !== null) {
+                $legacyItem->reviewed_date_time = $item->reviewed_at;
+                $legacyItem->reviewed_by = $item->reviewed_by;
+            }
+
+            $dirty = $legacyItem->getDirty();
+
+            // Log price change activity on both transaction and item
+            if (isset($dirty['buy_price']) || isset($dirty['price'])) {
+                $legacyTransaction->activities()->create([
+                    'activity' => 'updated_transaction_item_amount',
+                    'description' => "Item {$item->id} amount updated",
+                    'user_id' => $systemUserId,
+                    'creatable_id' => $systemUserId,
+                    'creatable_type' => 'App\Models\User',
                 ]);
+
+                $legacyItem->activities()->create([
+                    'activity' => 'updated_transaction_item_amount',
+                    'description' => "Item {$item->id} amount updated",
+                    'user_id' => $systemUserId,
+                    'creatable_id' => $systemUserId,
+                    'creatable_type' => 'App\Models\User',
+                ]);
+            }
+
+            // Log reviewed activity on the item
+            if (isset($dirty['reviewed_date_time'])) {
+                $legacyItem->activities()->create([
+                    'activity' => 'transaction_item_reviewed',
+                    'description' => "Item {$item->id} Reviewed by System",
+                    'user_id' => $systemUserId,
+                    'creatable_id' => $systemUserId,
+                    'creatable_type' => 'App\Models\User',
+                ]);
+            }
+
+            $legacyItem->save();
         }
+
+        // Recalculate final_offer from items
+        $legacyTransaction->calculateOfferFromItems();
+    }
+
+    /**
+     * Get the legacy store ID by matching store name.
+     */
+    protected function getLegacyStoreId(Transaction $transaction): ?int
+    {
+        $transaction->loadMissing('store');
+        $storeName = $transaction->store?->name;
+
+        if ($storeName === null) {
+            return null;
+        }
+
+        if (array_key_exists($storeName, $this->storeIdCache)) {
+            return $this->storeIdCache[$storeName];
+        }
+
+        $this->storeIdCache[$storeName] = LegacyStore::where('name', $storeName)->value('id');
+
+        return $this->storeIdCache[$storeName];
+    }
+
+    /**
+     * Get the legacy system user ID.
+     */
+    protected function getSystemUserId(): ?int
+    {
+        if ($this->systemUserIdCache !== null) {
+            return $this->systemUserIdCache;
+        }
+
+        $this->systemUserIdCache = LegacyUser::where('username', 'system')->value('id');
+
+        return $this->systemUserIdCache;
     }
 
     /**

@@ -21,6 +21,8 @@ class LegacyTransactionSyncTest extends TestCase
 
     protected int $legacyStoreId = 43;
 
+    protected int $systemUserId = 1;
+
     protected bool $legacyConnectionConfigured = false;
 
     protected function setUp(): void
@@ -34,7 +36,6 @@ class LegacyTransactionSyncTest extends TestCase
 
         config([
             'legacy-sync.enabled' => true,
-            'legacy-sync.store_mapping' => [$this->legacyStoreId => $this->store->id],
         ]);
     }
 
@@ -63,6 +64,12 @@ class LegacyTransactionSyncTest extends TestCase
 
     protected function createLegacyTables(): void
     {
+        Schema::connection('legacy')->create('stores', function ($table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+
         Schema::connection('legacy')->create('transactions', function ($table) {
             $table->id();
             $table->unsignedBigInteger('store_id');
@@ -86,6 +93,8 @@ class LegacyTransactionSyncTest extends TestCase
             $table->decimal('dwt', 8, 4)->nullable();
             $table->string('precious_metal')->nullable();
             $table->integer('quantity')->default(1);
+            $table->dateTime('reviewed_date_time')->nullable();
+            $table->unsignedBigInteger('reviewed_by')->nullable();
             $table->timestamps();
         });
 
@@ -97,6 +106,61 @@ class LegacyTransactionSyncTest extends TestCase
             $table->timestamps();
             $table->softDeletes();
         });
+
+        Schema::connection('legacy')->create('store_activities', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('activity');
+            $table->unsignedBigInteger('activityable_id');
+            $table->string('activityable_type');
+            $table->unsignedBigInteger('creatable_id')->nullable();
+            $table->string('creatable_type')->nullable();
+            $table->text('description')->nullable();
+            $table->json('meta')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::connection('legacy')->create('status_updates', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('store_id');
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('updateable_id');
+            $table->string('updateable_type');
+            $table->string('previous_status');
+            $table->string('current_status');
+            $table->timestamps();
+        });
+
+        Schema::connection('legacy')->create('users', function ($table) {
+            $table->id();
+            $table->string('username');
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+            $table->timestamps();
+        });
+
+        $this->seedLegacyData();
+    }
+
+    protected function seedLegacyData(): void
+    {
+        // Seed legacy store with matching name
+        DB::connection('legacy')->table('stores')->insert([
+            'id' => $this->legacyStoreId,
+            'name' => $this->store->name,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Seed system user
+        DB::connection('legacy')->table('users')->insert([
+            'id' => $this->systemUserId,
+            'username' => 'system',
+            'first_name' => 'System',
+            'last_name' => 'User',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $this->seedLegacyStatuses();
     }
@@ -146,9 +210,9 @@ class LegacyTransactionSyncTest extends TestCase
     /**
      * Insert an item directly in the legacy database.
      */
-    protected function createLegacyItem(int $id, int $transactionId): void
+    protected function createLegacyItem(int $id, int $transactionId, array $overrides = []): void
     {
-        DB::connection('legacy')->table('transaction_items')->insert([
+        DB::connection('legacy')->table('transaction_items')->insert(array_merge([
             'id' => $id,
             'transaction_id' => $transactionId,
             'title' => 'Legacy Item',
@@ -157,7 +221,7 @@ class LegacyTransactionSyncTest extends TestCase
             'quantity' => 1,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ], $overrides));
     }
 
     // ---------------------------------------------------------------
@@ -185,7 +249,6 @@ class LegacyTransactionSyncTest extends TestCase
             ->first();
 
         $this->assertEquals(1, $legacyTxn->status_id); // 'Pending Offer' status_id
-        $this->assertEquals(200.00, (float) $legacyTxn->final_offer);
         $this->assertEquals(180.00, (float) $legacyTxn->preliminary_offer);
         $this->assertEquals(250.00, (float) $legacyTxn->est_value);
         $this->assertFalse((bool) $legacyTxn->is_accepted);
@@ -351,7 +414,7 @@ class LegacyTransactionSyncTest extends TestCase
         $this->assertEquals(60, $legacyTxn->status_id);
     }
 
-    public function test_does_not_sync_when_store_not_mapped(): void
+    public function test_does_not_sync_when_store_not_in_legacy(): void
     {
         $unmappedStore = Store::factory()->create();
         $transaction = Transaction::factory()->create([
@@ -551,5 +614,218 @@ class LegacyTransactionSyncTest extends TestCase
                 "Status '{$newStatus}' should map to legacy status_id {$expectedLegacyStatusId}, got {$legacyTxn->status_id}"
             );
         }
+    }
+
+    // ---------------------------------------------------------------
+    // Activity logging tests
+    // ---------------------------------------------------------------
+
+    public function test_creates_activity_when_item_price_changes(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'buy_price' => 150.00,
+            'price' => 300.00,
+        ]);
+
+        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyItem($item->id, $transaction->id, [
+            'buy_price' => 50.00,
+            'price' => 100.00,
+        ]);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->sync($transaction);
+
+        // Should have activity on the transaction
+        $transactionActivities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activityable_type', 'App\Models\Transaction')
+            ->where('activityable_id', $transaction->id)
+            ->where('activity', 'updated_transaction_item_amount')
+            ->get();
+
+        $this->assertCount(1, $transactionActivities);
+
+        // Should have activity on the item
+        $itemActivities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activityable_type', 'App\Models\TransactionItem')
+            ->where('activityable_id', $item->id)
+            ->where('activity', 'updated_transaction_item_amount')
+            ->get();
+
+        $this->assertCount(1, $itemActivities);
+    }
+
+    public function test_creates_activity_when_item_reviewed(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'reviewed_at' => now(),
+            'reviewed_by' => 1,
+        ]);
+
+        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyItem($item->id, $transaction->id);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->sync($transaction);
+
+        $activities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activityable_type', 'App\Models\TransactionItem')
+            ->where('activityable_id', $item->id)
+            ->where('activity', 'transaction_item_reviewed')
+            ->get();
+
+        $this->assertCount(1, $activities);
+        $this->assertStringContainsString("Item {$item->id} Reviewed by System", $activities->first()->description);
+
+        // Verify reviewed_date_time was set on legacy item
+        $legacyItem = DB::connection('legacy')
+            ->table('transaction_items')
+            ->where('id', $item->id)
+            ->first();
+
+        $this->assertNotNull($legacyItem->reviewed_date_time);
+    }
+
+    public function test_creates_status_update_on_status_change(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_OFFER_ACCEPTED,
+        ]);
+
+        $this->createLegacyTransaction($transaction->id, 60);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->sync($transaction);
+
+        // Should have a status_updated activity
+        $activities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activityable_type', 'App\Models\Transaction')
+            ->where('activityable_id', $transaction->id)
+            ->where('activity', 'status_updated')
+            ->get();
+
+        $this->assertCount(1, $activities);
+
+        // Should have a status_updates record
+        $statusUpdates = DB::connection('legacy')
+            ->table('status_updates')
+            ->where('updateable_id', $transaction->id)
+            ->where('updateable_type', 'App\Models\Transaction')
+            ->get();
+
+        $this->assertCount(1, $statusUpdates);
+        $this->assertEquals('60', $statusUpdates->first()->previous_status);
+        $this->assertEquals('9', $statusUpdates->first()->current_status); // Offer Accepted = 9
+        $this->assertEquals($this->legacyStoreId, $statusUpdates->first()->store_id);
+    }
+
+    public function test_recalculates_final_offer_after_item_sync(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        $item1 = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'buy_price' => 100.50,
+        ]);
+
+        $item2 = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'buy_price' => 200.75,
+        ]);
+
+        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyItem($item1->id, $transaction->id);
+        $this->createLegacyItem($item2->id, $transaction->id);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->sync($transaction);
+
+        $legacyTxn = DB::connection('legacy')
+            ->table('transactions')
+            ->where('id', $transaction->id)
+            ->first();
+
+        // final_offer should be recalculated from items: 100.50 + 200.75 = 301.25
+        $this->assertEquals(301.25, (float) $legacyTxn->final_offer);
+    }
+
+    public function test_does_not_create_activity_when_no_price_change(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        $item = TransactionItem::factory()->create([
+            'transaction_id' => $transaction->id,
+            'title' => 'Updated Title',
+            'buy_price' => 50.00,
+            'price' => 100.00,
+        ]);
+
+        $this->createLegacyTransaction($transaction->id);
+        // Legacy item already has the same buy_price and price
+        $this->createLegacyItem($item->id, $transaction->id, [
+            'buy_price' => 50.00,
+            'price' => 100.00,
+        ]);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->sync($transaction);
+
+        // Should NOT have price change activity
+        $priceActivities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activity', 'updated_transaction_item_amount')
+            ->count();
+
+        $this->assertEquals(0, $priceActivities);
+    }
+
+    public function test_does_not_create_status_activity_when_status_unchanged(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        // Legacy transaction already at status_id 1 (Pending Offer)
+        $this->createLegacyTransaction($transaction->id, 1);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->sync($transaction);
+
+        $statusActivities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('activity', 'status_updated')
+            ->count();
+
+        $this->assertEquals(0, $statusActivities);
+
+        $statusUpdates = DB::connection('legacy')
+            ->table('status_updates')
+            ->count();
+
+        $this->assertEquals(0, $statusUpdates);
     }
 }

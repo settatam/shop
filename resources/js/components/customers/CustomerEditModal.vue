@@ -33,6 +33,7 @@ interface Customer {
     zip?: string | null;
     lead_source_id?: number | null;
     addresses?: Address[];
+    primary_address?: { address: string | null; address2: string | null; city: string | null; state_id: number | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
 }
 
 interface Props {
@@ -82,11 +83,12 @@ watch(
             form.phone_number = props.customer.phone_number || '';
             form.company_name = props.customer.company_name || '';
             form.lead_source_id = props.customer.lead_source_id || null;
-            form.address = props.customer.address || '';
-            form.address2 = props.customer.address2 || '';
-            form.city = props.customer.city || '';
-            form.state = props.customer.state || '';
-            form.zip = props.customer.zip || '';
+            const pa = props.customer.primary_address;
+            form.address = pa?.address || props.customer.address || '';
+            form.address2 = pa?.address2 || props.customer.address2 || '';
+            form.city = pa?.city || props.customer.city || '';
+            form.state = pa?.state_abbreviation || props.customer.state || '';
+            form.zip = pa?.zip || props.customer.zip || '';
             selectedAddress.value = props.selectedAddressId || null;
         }
     },

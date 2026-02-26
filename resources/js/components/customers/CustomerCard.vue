@@ -18,6 +18,11 @@ interface Customer {
     email?: string | null;
     phone?: string | null;
     phone_number?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    primary_address?: { address: string | null; city: string | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
     lead_source?: LeadSource | null;
     leadSource?: LeadSource | null;
 }
@@ -51,6 +56,20 @@ const customerName = computed(() => {
 // Get phone with fallback for different field names
 const customerPhone = computed(() => {
     return props.customer.phone || props.customer.phone_number || null;
+});
+
+// Get address with fallback: primary_address > direct customer fields
+const customerAddress = computed(() => {
+    if (props.customer.primary_address?.one_line_address) {
+        return props.customer.primary_address.one_line_address;
+    }
+    const parts = [
+        props.customer.address,
+        props.customer.city,
+        props.customer.state,
+        props.customer.zip,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : null;
 });
 
 // Get lead source (handle both camelCase and snake_case)
@@ -103,6 +122,9 @@ const leadSource = computed(() => {
             </p>
             <p v-if="customerPhone" class="text-sm text-gray-500 dark:text-gray-400">
                 {{ customerPhone }}
+            </p>
+            <p v-if="customerAddress" class="text-sm text-gray-500 dark:text-gray-400 truncate">
+                {{ customerAddress }}
             </p>
 
             <!-- Lead Source -->

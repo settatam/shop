@@ -1704,19 +1704,55 @@ class TransactionController extends Controller
                 'phone' => $transaction->shippingAddress->phone,
                 'one_line_address' => $transaction->shippingAddress->one_line_address,
             ] : null,
-            'customer' => $transaction->customer ? [
-                'id' => $transaction->customer->id,
-                'first_name' => $transaction->customer->first_name,
-                'last_name' => $transaction->customer->last_name,
-                'full_name' => $transaction->customer->full_name,
-                'email' => $transaction->customer->email,
-                'phone_number' => $transaction->customer->phone_number,
-                'address' => $transaction->customer->address,
-                'address2' => $transaction->customer->address2,
-                'city' => $transaction->customer->city,
-                'zip' => $transaction->customer->zip,
-                'has_addresses' => $transaction->customer->addresses->isNotEmpty(),
-            ] : null,
+            'customer' => $transaction->customer ? (function () use ($transaction) {
+                $customer = $transaction->customer;
+                $primaryAddress = $customer->addresses->firstWhere('is_default', true)
+                    ?? $customer->addresses->first();
+
+                return [
+                    'id' => $customer->id,
+                    'first_name' => $customer->first_name,
+                    'last_name' => $customer->last_name,
+                    'full_name' => $customer->full_name,
+                    'email' => $customer->email,
+                    'phone_number' => $customer->phone_number,
+                    'company_name' => $customer->company_name,
+                    'address' => $customer->address,
+                    'address2' => $customer->address2,
+                    'city' => $customer->city,
+                    'state' => $customer->state,
+                    'zip' => $customer->zip,
+                    'lead_source_id' => $customer->lead_source_id,
+                    'lead_source' => $customer->leadSource ? [
+                        'id' => $customer->leadSource->id,
+                        'name' => $customer->leadSource->name,
+                    ] : null,
+                    'has_addresses' => $customer->addresses->isNotEmpty(),
+                    'addresses' => $customer->addresses->map(fn ($addr) => [
+                        'id' => $addr->id,
+                        'full_name' => $addr->full_name,
+                        'address' => $addr->address,
+                        'address2' => $addr->address2,
+                        'city' => $addr->city,
+                        'state_id' => $addr->state_id,
+                        'zip' => $addr->zip,
+                        'phone' => $addr->phone,
+                        'is_default' => $addr->is_default,
+                        'is_shipping' => $addr->is_shipping,
+                        'formatted_address' => $addr->formatted_address,
+                        'one_line_address' => $addr->one_line_address,
+                    ])->values(),
+                    'primary_address' => $primaryAddress ? [
+                        'address' => $primaryAddress->address,
+                        'address2' => $primaryAddress->address2,
+                        'city' => $primaryAddress->city,
+                        'state_id' => $primaryAddress->state_id,
+                        'state_abbreviation' => $primaryAddress->state_abbreviation,
+                        'zip' => $primaryAddress->zip,
+                        'one_line_address' => $primaryAddress->one_line_address,
+                    ] : null,
+                ];
+            })() : null,
             'user' => $transaction->user ? [
                 'id' => $transaction->user->id,
                 'name' => $transaction->user->name,

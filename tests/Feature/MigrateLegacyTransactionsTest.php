@@ -242,6 +242,21 @@ class MigrateLegacyTransactionsTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::connection('legacy')->create('activities', function ($table) {
+            $table->id();
+            $table->string('activityable_type');
+            $table->unsignedBigInteger('activityable_id');
+            $table->string('name')->nullable();
+            $table->string('status')->nullable();
+            $table->text('notes')->nullable();
+            $table->decimal('offer', 10, 2)->nullable();
+            $table->boolean('is_status')->default(0);
+            $table->boolean('is_tag')->default(0);
+            $table->boolean('is_from_admin')->default(0);
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->timestamps();
+        });
+
         Schema::connection('legacy')->create('shipping_labels', function ($table) {
             $table->id();
             $table->string('shippable_type');
@@ -1138,5 +1153,275 @@ class MigrateLegacyTransactionsTest extends TestCase
         $item2 = TransactionItem::where('sku', 'ZERO-PRICE')->first();
         $this->assertEquals(0, $item2->price);
         $this->assertEquals(0, $item2->buy_price);
+    }
+
+    public function test_transaction_id_option_reimports_single_transaction(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'preliminary_offer' => 100.00,
+            'final_offer' => 150.00,
+            'is_in_house' => false,
+            'pub_note' => 'Original note',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // First import
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        $this->assertDatabaseCount('transactions', 1);
+        $this->assertDatabaseHas('transactions', [
+            'id' => $legacyTransactionId,
+            'customer_notes' => 'Original note',
+        ]);
+
+        // Update legacy transaction
+        DB::connection('legacy')->table('transactions')
+            ->where('id', $legacyTransactionId)
+            ->update(['pub_note' => 'Updated note', 'final_offer' => 200.00]);
+
+        // Re-import single transaction
+        $this->artisan('migrate:legacy-transactions', [
+            'store_id' => $this->store->id,
+            '--transaction-id' => $legacyTransactionId,
+        ])->assertSuccessful();
+
+        // Verify transaction was updated (not duplicated)
+        $this->assertDatabaseCount('transactions', 1);
+        $this->assertDatabaseHas('transactions', [
+            'id' => $legacyTransactionId,
+            'customer_notes' => 'Updated note',
+            'final_offer' => 200.00,
+        ]);
+    }
+
+    public function test_transaction_id_option_creates_new_if_not_exists(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction (never imported before)
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'pub_note' => 'Brand new',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Import just this one transaction
+        $this->artisan('migrate:legacy-transactions', [
+            'store_id' => $this->store->id,
+            '--transaction-id' => $legacyTransactionId,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseCount('transactions', 1);
+        $this->assertDatabaseHas('transactions', [
+            'id' => $legacyTransactionId,
+            'customer_notes' => 'Brand new',
+        ]);
+    }
+
+    public function test_transaction_id_option_fails_for_nonexistent_transaction(): void
+    {
+        $this->artisan('migrate:legacy-transactions', [
+            'store_id' => $this->store->id,
+            '--transaction-id' => 999999,
+        ])->assertFailed();
+    }
+
+    public function test_transaction_id_option_updates_existing_items(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction with item
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $legacyItemId = DB::connection('legacy')->table('transaction_items')->insertGetId([
+            'transaction_id' => $legacyTransactionId,
+            'sku' => 'ITEM-001',
+            'title' => 'Original Title',
+            'price' => 100.00,
+            'buy_price' => 80.00,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // First import
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('transaction_items', [
+            'id' => $legacyItemId,
+            'title' => 'Original Title',
+            'price' => 100.00,
+        ]);
+
+        // Update legacy item
+        DB::connection('legacy')->table('transaction_items')
+            ->where('id', $legacyItemId)
+            ->update(['title' => 'Updated Title', 'price' => 200.00]);
+
+        // Re-import
+        $this->artisan('migrate:legacy-transactions', [
+            'store_id' => $this->store->id,
+            '--transaction-id' => $legacyTransactionId,
+        ])->assertSuccessful();
+
+        // Verify item was updated, not duplicated
+        $this->assertDatabaseCount('transaction_items', 1);
+        $this->assertDatabaseHas('transaction_items', [
+            'id' => $legacyItemId,
+            'title' => 'Updated Title',
+            'price' => 200.00,
+        ]);
+    }
+
+    public function test_transaction_id_option_updates_customer_on_reimport(): void
+    {
+        // Create legacy customer
+        $legacyCustomerId = DB::connection('legacy')->table('customers')->insertGetId([
+            'store_id' => $this->store->id,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'john.reimport@example.com',
+            'phone_number' => '555-0001',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create legacy transaction
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $legacyCustomerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // First import
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('customers', [
+            'email' => 'john.reimport@example.com',
+            'phone_number' => '555-0001',
+        ]);
+
+        // Update legacy customer
+        DB::connection('legacy')->table('customers')
+            ->where('id', $legacyCustomerId)
+            ->update(['phone_number' => '555-9999', 'last_name' => 'Smith']);
+
+        // Re-import
+        $this->artisan('migrate:legacy-transactions', [
+            'store_id' => $this->store->id,
+            '--transaction-id' => $legacyTransactionId,
+        ])->assertSuccessful();
+
+        // Verify customer was updated
+        $this->assertDatabaseCount('customers', 1);
+        $this->assertDatabaseHas('customers', [
+            'email' => 'john.reimport@example.com',
+            'phone_number' => '555-9999',
+            'last_name' => 'Smith',
+        ]);
+    }
+
+    public function test_shipping_address_failure_does_not_crash_import(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Create a legacy address with an extremely long value that might fail validation
+        // We'll use a mock approach: insert a valid address, then corrupt the addresses table
+        DB::connection('legacy')->table('addresses')->insert([
+            'addressable_type' => 'App\\Models\\Transaction',
+            'addressable_id' => $legacyTransactionId,
+            'first_name' => 'Test',
+            'last_name' => 'User',
+            'address' => str_repeat('A', 500),
+            'city' => 'Test City',
+            'state_id' => 1,
+            'zip' => '12345',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The migration should succeed even if the address part has issues
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        // Transaction should still be created
+        $this->assertDatabaseHas('transactions', [
+            'id' => $legacyTransactionId,
+            'store_id' => $this->store->id,
+        ]);
+    }
+
+    public function test_transaction_id_reimports_soft_deleted_transaction(): void
+    {
+        $customerId = $this->createLegacyCustomer();
+
+        // Create legacy transaction
+        $legacyTransactionId = DB::connection('legacy')->table('transactions')->insertGetId([
+            'store_id' => $this->store->id,
+            'customer_id' => $customerId,
+            'status_id' => 60,
+            'is_in_house' => true,
+            'pub_note' => 'Will be deleted',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // First import
+        $this->artisan('migrate:legacy-transactions', ['store_id' => $this->store->id])
+            ->assertSuccessful();
+
+        // Soft-delete the transaction
+        Transaction::find($legacyTransactionId)->delete();
+        $this->assertSoftDeleted('transactions', ['id' => $legacyTransactionId]);
+
+        // Update legacy data
+        DB::connection('legacy')->table('transactions')
+            ->where('id', $legacyTransactionId)
+            ->update(['pub_note' => 'Restored and updated']);
+
+        // Re-import should restore and update
+        $this->artisan('migrate:legacy-transactions', [
+            'store_id' => $this->store->id,
+            '--transaction-id' => $legacyTransactionId,
+        ])->assertSuccessful();
+
+        // Verify transaction is restored and updated
+        $transaction = Transaction::find($legacyTransactionId);
+        $this->assertNotNull($transaction);
+        $this->assertNull($transaction->deleted_at);
+        $this->assertEquals('Restored and updated', $transaction->customer_notes);
     }
 }

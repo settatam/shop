@@ -29,7 +29,8 @@ class MigrateLegacyTransactions extends Command
                             {--skip-images : Skip migrating images}
                             {--skip-activities : Skip migrating activities}
                             {--skip-category-mapping : Skip using category mappings (set category_id to null)}
-                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
+                            {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}
+                            {--transaction-id= : Re-import a single legacy transaction by ID (updates existing, creates missing elements)}';
 
     protected $description = 'Migrate legacy transactions from shopmata-new database for a specific store';
 
@@ -179,6 +180,8 @@ class MigrateLegacyTransactions extends Command
 
     protected bool $dryRun = false;
 
+    protected bool $reimport = false;
+
     protected int $legacyStoreId;
 
     protected int $newStoreId;
@@ -204,6 +207,41 @@ class MigrateLegacyTransactions extends Command
             $this->info('Please ensure you have configured the "legacy" database connection in config/database.php');
 
             return self::FAILURE;
+        }
+
+        // Handle single transaction re-import
+        if ($this->option('transaction-id')) {
+            $this->reimport = true;
+            $transactionId = (int) $this->option('transaction-id');
+
+            $legacyTransaction = DB::connection('legacy')
+                ->table('transactions')
+                ->where('id', $transactionId)
+                ->first();
+
+            if (! $legacyTransaction) {
+                $this->error("Legacy transaction #{$transactionId} not found.");
+
+                return self::FAILURE;
+            }
+
+            $this->info("Re-importing transaction #{$transactionId}...");
+
+            try {
+                $result = $this->migrateTransaction($legacyTransaction);
+                $this->info("Transaction #{$transactionId} re-imported successfully ({$result}).");
+            } catch (\Exception $e) {
+                $this->error("Failed to re-import transaction #{$transactionId}: {$e->getMessage()}");
+                Log::error('Failed to re-import transaction', [
+                    'legacy_id' => $transactionId,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                return self::FAILURE;
+            }
+
+            return self::SUCCESS;
         }
 
         // Handle fresh option - delete all existing transaction data for this store
@@ -390,7 +428,7 @@ class MigrateLegacyTransactions extends Command
         // Check if already migrated by ID (preserving original IDs)
         $existing = Transaction::withTrashed()->find($legacyTransaction->id);
 
-        if ($existing) {
+        if ($existing && ! $this->reimport) {
             // Sync soft-delete status if enabled
             if ($syncDeletes && $legacyTransaction->deleted_at && ! $existing->deleted_at) {
                 if (! $this->dryRun) {
@@ -505,9 +543,17 @@ class MigrateLegacyTransactions extends Command
         // Add ID to preserve original
         $transactionData['id'] = $legacyTransaction->id;
 
-        // Use DB::table to preserve exact timestamps and original ID
-        DB::table('transactions')->insert($transactionData);
-        $transaction = Transaction::find($legacyTransaction->id);
+        if ($this->reimport && $existing) {
+            // Update existing transaction and restore if soft-deleted
+            DB::table('transactions')
+                ->where('id', $legacyTransaction->id)
+                ->update(array_merge($transactionData, ['deleted_at' => null]));
+            $transaction = Transaction::find($legacyTransaction->id);
+        } else {
+            // Use DB::table to preserve exact timestamps and original ID
+            DB::table('transactions')->insert($transactionData);
+            $transaction = Transaction::find($legacyTransaction->id);
+        }
 
         // Migrate items
         $this->migrateTransactionItems($legacyTransaction->id, $transaction);
@@ -530,8 +576,8 @@ class MigrateLegacyTransactions extends Command
 
     protected function migrateCustomer(int $legacyCustomerId): ?int
     {
-        // Check cache first
-        if (isset($this->customerMap[$legacyCustomerId])) {
+        // Check cache first (skip cache when reimporting so customer data gets refreshed)
+        if (isset($this->customerMap[$legacyCustomerId]) && ! $this->reimport) {
             return $this->customerMap[$legacyCustomerId];
         }
 
@@ -558,7 +604,15 @@ class MigrateLegacyTransactions extends Command
                 ->first();
         }
 
-        if ($existingCustomer) {
+        if ($existingCustomer && ! $this->reimport) {
+            $this->customerMap[$legacyCustomerId] = $existingCustomer->id;
+
+            return $existingCustomer->id;
+        }
+
+        if ($existingCustomer && $this->reimport) {
+            // Update existing customer with legacy data
+            $this->updateCustomerFromLegacy($existingCustomer, $legacyCustomer);
             $this->customerMap[$legacyCustomerId] = $existingCustomer->id;
 
             return $existingCustomer->id;
@@ -566,7 +620,14 @@ class MigrateLegacyTransactions extends Command
 
         // Check if customer with this ID already exists (from another store migration)
         $existingById = Customer::withTrashed()->find($legacyCustomerId);
-        if ($existingById) {
+        if ($existingById && ! $this->reimport) {
+            $this->customerMap[$legacyCustomerId] = $existingById->id;
+
+            return $existingById->id;
+        }
+
+        if ($existingById && $this->reimport) {
+            $this->updateCustomerFromLegacy($existingById, $legacyCustomer);
             $this->customerMap[$legacyCustomerId] = $existingById->id;
 
             return $existingById->id;
@@ -625,6 +686,39 @@ class MigrateLegacyTransactions extends Command
         return $legacyCustomerId;
     }
 
+    protected function updateCustomerFromLegacy(Customer $customer, object $legacyCustomer): void
+    {
+        if ($this->dryRun) {
+            return;
+        }
+
+        $legacyState = null;
+        if ($legacyCustomer->state_id ?? null) {
+            $legacyState = DB::connection('legacy')
+                ->table('states')
+                ->where('id', $legacyCustomer->state_id)
+                ->first();
+        }
+
+        $legacyData = (array) $legacyCustomer;
+
+        Customer::withoutGlobalScopes()
+            ->where('id', $customer->id)
+            ->update([
+                'first_name' => $legacyCustomer->first_name,
+                'last_name' => $legacyCustomer->last_name,
+                'company_name' => $legacyCustomer->company_name ?? null,
+                'email' => $legacyCustomer->email,
+                'phone_number' => $legacyCustomer->phone_number ?? null,
+                'address' => $legacyData['street_address'] ?? $legacyData['address'] ?? null,
+                'address2' => $legacyData['street_address2'] ?? $legacyData['address2'] ?? null,
+                'city' => $legacyCustomer->city ?? null,
+                'state' => $legacyState?->code ?? ($legacyCustomer->state ?? null),
+                'state_id' => $legacyCustomer->state_id ?? null,
+                'zip' => $legacyCustomer->zip ?? null,
+            ]);
+    }
+
     protected function migrateCustomerAddress(int $legacyCustomerId, Customer $customer): void
     {
         $legacyAddress = DB::connection('legacy')
@@ -637,34 +731,39 @@ class MigrateLegacyTransactions extends Command
             return;
         }
 
-        // Get state
-        $legacyState = null;
-        if ($legacyAddress->state_id) {
-            $legacyState = DB::connection('legacy')
-                ->table('states')
-                ->where('id', $legacyAddress->state_id)
-                ->first();
-        }
+        try {
+            // Get state
+            $legacyState = null;
+            if ($legacyAddress->state_id) {
+                $legacyState = DB::connection('legacy')
+                    ->table('states')
+                    ->where('id', $legacyAddress->state_id)
+                    ->first();
+            }
 
-        // Use DB insert to preserve exact timestamps
-        DB::table('addresses')->insert([
-            'store_id' => $this->newStoreId,
-            'addressable_type' => Customer::class,
-            'addressable_id' => $customer->id,
-            'type' => 'primary',
-            'first_name' => $legacyAddress->first_name ?? null,
-            'last_name' => $legacyAddress->last_name ?? null,
-            'address' => $legacyAddress->address,
-            'address2' => $legacyAddress->address2,
-            'city' => $legacyAddress->city,
-            'state_id' => $legacyAddress->state_id,
-            'zip' => $legacyAddress->zip,
-            'country_id' => 1, // US
-            'phone' => $legacyAddress->phone ?? null,
-            'is_default' => true,
-            'created_at' => $legacyAddress->created_at,
-            'updated_at' => $legacyAddress->updated_at,
-        ]);
+            // Use DB insert to preserve exact timestamps
+            DB::table('addresses')->insert([
+                'store_id' => $this->newStoreId,
+                'addressable_type' => Customer::class,
+                'addressable_id' => $customer->id,
+                'type' => 'primary',
+                'first_name' => $legacyAddress->first_name ?? null,
+                'last_name' => $legacyAddress->last_name ?? null,
+                'address' => $legacyAddress->address,
+                'address2' => $legacyAddress->address2,
+                'city' => $legacyAddress->city,
+                'state_id' => $legacyAddress->state_id,
+                'zip' => $legacyAddress->zip,
+                'country_id' => 1, // US
+                'phone' => $legacyAddress->phone ?? null,
+                'is_default' => true,
+                'created_at' => $legacyAddress->created_at,
+                'updated_at' => $legacyAddress->updated_at,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("Failed to migrate customer address for legacy customer #{$legacyCustomerId}: {$e->getMessage()}");
+            $this->warn("  Warning: Failed to migrate customer address for customer #{$legacyCustomerId}: {$e->getMessage()}");
+        }
     }
 
     protected function migrateShippingAddress(object $legacyTransaction, Transaction $transaction): void
@@ -680,36 +779,41 @@ class MigrateLegacyTransactions extends Command
             return;
         }
 
-        // Get state
-        $legacyState = null;
-        if ($legacyAddress->state_id) {
-            $legacyState = DB::connection('legacy')
-                ->table('states')
-                ->where('id', $legacyAddress->state_id)
-                ->first();
+        try {
+            // Get state
+            $legacyState = null;
+            if ($legacyAddress->state_id) {
+                $legacyState = DB::connection('legacy')
+                    ->table('states')
+                    ->where('id', $legacyAddress->state_id)
+                    ->first();
+            }
+
+            // Use DB insert to preserve exact timestamps
+            $addressId = DB::table('addresses')->insertGetId([
+                'store_id' => $this->newStoreId,
+                'addressable_type' => Transaction::class,
+                'addressable_id' => $transaction->id,
+                'type' => 'shipping',
+                'first_name' => $legacyAddress->first_name ?? null,
+                'last_name' => $legacyAddress->last_name ?? null,
+                'address' => $legacyAddress->address,
+                'address2' => $legacyAddress->address2,
+                'city' => $legacyAddress->city,
+                'state_id' => $legacyAddress->state_id,
+                'zip' => $legacyAddress->zip,
+                'country_id' => 1, // US
+                'phone' => $legacyAddress->phone ?? null,
+                'is_shipping' => true,
+                'created_at' => $legacyAddress->created_at,
+                'updated_at' => $legacyAddress->updated_at,
+            ]);
+
+            $transaction->update(['shipping_address_id' => $addressId]);
+        } catch (\Exception $e) {
+            Log::warning("Failed to migrate shipping address for transaction #{$legacyTransaction->id}: {$e->getMessage()}");
+            $this->warn("  Warning: Failed to migrate shipping address for transaction #{$legacyTransaction->id}: {$e->getMessage()}");
         }
-
-        // Use DB insert to preserve exact timestamps
-        $addressId = DB::table('addresses')->insertGetId([
-            'store_id' => $this->newStoreId,
-            'addressable_type' => Transaction::class,
-            'addressable_id' => $transaction->id,
-            'type' => 'shipping',
-            'first_name' => $legacyAddress->first_name ?? null,
-            'last_name' => $legacyAddress->last_name ?? null,
-            'address' => $legacyAddress->address,
-            'address2' => $legacyAddress->address2,
-            'city' => $legacyAddress->city,
-            'state_id' => $legacyAddress->state_id,
-            'zip' => $legacyAddress->zip,
-            'country_id' => 1, // US
-            'phone' => $legacyAddress->phone ?? null,
-            'is_shipping' => true,
-            'created_at' => $legacyAddress->created_at,
-            'updated_at' => $legacyAddress->updated_at,
-        ]);
-
-        $transaction->update(['shipping_address_id' => $addressId]);
     }
 
     protected function migrateTransactionItems(int $legacyTransactionId, Transaction $transaction): void
@@ -726,7 +830,7 @@ class MigrateLegacyTransactions extends Command
 
             // Check if transaction item with this ID already exists
             $existingItem = TransactionItem::find($legacyItem->id);
-            if ($existingItem) {
+            if ($existingItem && ! $this->reimport) {
                 continue;
             }
 
@@ -745,9 +849,7 @@ class MigrateLegacyTransactions extends Command
                 'template_values' => [], // Will be populated by migrateTransactionItemMetas
             ];
 
-            // Use DB insert to preserve exact timestamps and original ID
-            DB::table('transaction_items')->insert([
-                'id' => $legacyItem->id, // Preserve original ID
+            $itemData = [
                 'transaction_id' => $transaction->id,
                 'category_id' => $categoryId,
                 'sku' => $legacyItem->sku,
@@ -765,9 +867,18 @@ class MigrateLegacyTransactions extends Command
                 'attributes' => json_encode($attributes),
                 'created_at' => $legacyItem->created_at,
                 'updated_at' => $legacyItem->updated_at,
-            ]);
+            ];
 
-            $item = TransactionItem::find($legacyItem->id);
+            if ($existingItem && $this->reimport) {
+                DB::table('transaction_items')
+                    ->where('id', $legacyItem->id)
+                    ->update($itemData);
+                $item = TransactionItem::find($legacyItem->id);
+            } else {
+                $itemData['id'] = $legacyItem->id;
+                DB::table('transaction_items')->insert($itemData);
+                $item = TransactionItem::find($legacyItem->id);
+            }
 
             // Migrate template attribute values from legacy metas table
             $this->migrateTransactionItemMetas($legacyItem, $item, $templateId);

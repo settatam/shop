@@ -86,6 +86,17 @@ interface Customer {
     full_name: string;
     email: string | null;
     phone_number: string | null;
+    company_name?: string | null;
+    address?: string | null;
+    address2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    lead_source_id?: number | null;
+    lead_source?: { id: number; name: string } | null;
+    has_addresses?: boolean;
+    addresses?: Array<{ id: number; formatted_address?: string; is_default?: boolean; one_line_address?: string; [key: string]: any }>;
+    primary_address?: { address: string | null; address2: string | null; city: string | null; state_id: number | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
 }
 
 interface User {

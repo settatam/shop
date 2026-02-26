@@ -15,28 +15,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Store ID Mappings
-    |--------------------------------------------------------------------------
-    |
-    | Maps legacy store IDs to new store IDs.
-    | Format: 'legacy_store_id' => 'new_store_id'
-    |
-    | Configure via LEGACY_STORE_MAPPING env variable as comma-separated pairs:
-    | LEGACY_STORE_MAPPING="43:43,44:1,63:3"
-    |
-    */
-
-    'store_mapping' => collect(explode(',', env('LEGACY_STORE_MAPPING', '')))
-        ->filter()
-        ->mapWithKeys(function ($pair) {
-            $parts = explode(':', $pair);
-
-            return count($parts) === 2 ? [(int) $parts[0] => (int) $parts[1]] : [];
-        })
-        ->toArray(),
-
-    /*
-    |--------------------------------------------------------------------------
     | Sync Enabled
     |--------------------------------------------------------------------------
     |
