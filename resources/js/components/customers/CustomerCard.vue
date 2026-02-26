@@ -22,7 +22,7 @@ interface Customer {
     city?: string | null;
     state?: string | null;
     zip?: string | null;
-    primary_address?: { address: string | null; city: string | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
+    primary_address?: { address: string | null; address2?: string | null; city: string | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
     lead_source?: LeadSource | null;
     leadSource?: LeadSource | null;
 }
@@ -58,18 +58,16 @@ const customerPhone = computed(() => {
     return props.customer.phone || props.customer.phone_number || null;
 });
 
-// Get address with fallback: primary_address > direct customer fields
-const customerAddress = computed(() => {
-    if (props.customer.primary_address?.one_line_address) {
-        return props.customer.primary_address.one_line_address;
+// Get address lines with fallback: primary_address > direct customer fields
+const addressLines = computed(() => {
+    const pa = props.customer.primary_address;
+    if (pa) {
+        const cityStateZip = [pa.city, pa.state_abbreviation, pa.zip].filter(Boolean).join(', ');
+        return [pa.address, pa.address2, cityStateZip].filter(Boolean) as string[];
     }
-    const parts = [
-        props.customer.address,
-        props.customer.city,
-        props.customer.state,
-        props.customer.zip,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : null;
+    const cityStateZip = [props.customer.city, props.customer.state, props.customer.zip].filter(Boolean).join(', ');
+    const lines = [props.customer.address, cityStateZip].filter(Boolean) as string[];
+    return lines.length > 0 ? lines : [];
 });
 
 // Get lead source (handle both camelCase and snake_case)
@@ -123,9 +121,9 @@ const leadSource = computed(() => {
             <p v-if="customerPhone" class="text-sm text-gray-500 dark:text-gray-400">
                 {{ customerPhone }}
             </p>
-            <p v-if="customerAddress" class="text-sm text-gray-500 dark:text-gray-400 truncate">
-                {{ customerAddress }}
-            </p>
+            <div v-if="addressLines.length" class="text-sm text-gray-500 dark:text-gray-400">
+                <p v-for="(line, i) in addressLines" :key="i">{{ line }}</p>
+            </div>
 
             <!-- Lead Source -->
             <div v-if="!compact" class="mt-2 flex items-center gap-2">

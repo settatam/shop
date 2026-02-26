@@ -1731,10 +1731,13 @@ class TransactionController extends Controller
                     'addresses' => $customer->addresses->map(fn ($addr) => [
                         'id' => $addr->id,
                         'full_name' => $addr->full_name,
+                        'nickname' => $addr->nickname,
+                        'type' => $addr->type,
                         'address' => $addr->address,
                         'address2' => $addr->address2,
                         'city' => $addr->city,
                         'state_id' => $addr->state_id,
+                        'state_abbreviation' => $addr->state_abbreviation,
                         'zip' => $addr->zip,
                         'phone' => $addr->phone,
                         'is_default' => $addr->is_default,
