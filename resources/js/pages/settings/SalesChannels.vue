@@ -308,7 +308,7 @@ function getChannelDescription(channel: SalesChannel): string {
 
 function reconnectChannel(channel: SalesChannel) {
     if (channel.store_marketplace) {
-        router.visit(`/integrations/${channel.store_marketplace.platform}/connect`);
+        window.location.href = `/settings/marketplaces/connect/${channel.store_marketplace.platform}?name=${encodeURIComponent(channel.name)}`;
     }
 }
 </script>
