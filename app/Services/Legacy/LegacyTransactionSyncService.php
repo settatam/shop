@@ -94,7 +94,7 @@ class LegacyTransactionSyncService
 
         $legacyTransaction->final_offer = $transaction->final_offer;
         $legacyTransaction->preliminary_offer = $transaction->preliminary_offer;
-        $legacyTransaction->est_value = $transaction->estimated_value;
+        $legacyTransaction->estimated_value = $transaction->estimated_value;
         $legacyTransaction->is_accepted = in_array($transaction->status, [
             Transaction::STATUS_OFFER_ACCEPTED,
             Transaction::STATUS_PAYMENT_PROCESSED,

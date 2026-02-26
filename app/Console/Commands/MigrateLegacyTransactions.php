@@ -512,7 +512,7 @@ class MigrateLegacyTransactions extends Command
             'source' => null, // All legacy transactions are in-store
             'preliminary_offer' => $legacyTransaction->preliminary_offer ?? 0,
             'final_offer' => $legacyTransaction->final_offer ?? 0,
-            'estimated_value' => $legacyTransaction->est_value ?? 0,
+            'estimated_value' => $legacyTransaction->estimated_value ?? 0,
             'payment_method' => $paymentMethods,
             'payment_details' => json_encode([
                 'legacy_id' => $legacyTransaction->id,

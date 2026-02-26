@@ -76,7 +76,7 @@ class LegacyTransactionSyncTest extends TestCase
             $table->unsignedBigInteger('status_id')->default(60);
             $table->decimal('preliminary_offer', 10, 2)->nullable();
             $table->decimal('final_offer', 10, 2)->nullable();
-            $table->decimal('est_value', 10, 2)->nullable();
+            $table->decimal('estimated_value', 10, 2)->nullable();
             $table->boolean('is_accepted')->default(false);
             $table->boolean('is_declined')->default(false);
             $table->timestamps();
@@ -250,7 +250,7 @@ class LegacyTransactionSyncTest extends TestCase
 
         $this->assertEquals(1, $legacyTxn->status_id); // 'Pending Offer' status_id
         $this->assertEquals(180.00, (float) $legacyTxn->preliminary_offer);
-        $this->assertEquals(250.00, (float) $legacyTxn->est_value);
+        $this->assertEquals(250.00, (float) $legacyTxn->estimated_value);
         $this->assertFalse((bool) $legacyTxn->is_accepted);
         $this->assertFalse((bool) $legacyTxn->is_declined);
     }

@@ -72,7 +72,7 @@ class MigrateLegacyTransactionsTest extends TestCase
             $table->unsignedBigInteger('status_id')->default(60);
             $table->decimal('preliminary_offer', 10, 2)->nullable();
             $table->decimal('final_offer', 10, 2)->nullable();
-            $table->decimal('est_value', 10, 2)->nullable();
+            $table->decimal('estimated_value', 10, 2)->nullable();
             $table->string('bin_location')->nullable();
             $table->boolean('is_in_house')->default(false);
             $table->text('pub_note')->nullable();
