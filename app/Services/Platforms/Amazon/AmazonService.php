@@ -181,7 +181,7 @@ class AmazonService extends BasePlatformService
         $sku = $product->variants->first()?->sku ?? $product->handle;
         $marketplaceId = $connection->credentials['marketplace_ids'][0] ?? 'ATVPDKIKX0DER';
 
-        $listingData = $this->mapToAmazonListing($product);
+        $listingData = $this->mapToAmazonListing($product, $connection);
 
         $response = $this->amazonRequest(
             $connection,
@@ -214,7 +214,7 @@ class AmazonService extends BasePlatformService
 
         $sku = $listing->external_listing_id;
         $marketplaceId = $connection->credentials['marketplace_ids'][0] ?? 'ATVPDKIKX0DER';
-        $listingData = $this->mapToAmazonListing($product);
+        $listingData = $this->mapToAmazonListing($product, $connection);
 
         $this->amazonRequest(
             $connection,
@@ -527,34 +527,40 @@ class AmazonService extends BasePlatformService
         ];
     }
 
-    protected function mapToAmazonListing(Product $product): array
+    protected function mapToAmazonListing(Product $product, ?StoreMarketplace $connection = null): array
     {
         $variant = $product->variants->first();
+        $settings = $connection?->settings ?? [];
+        $languageTag = $settings['language_tag'] ?? 'en_US';
+        $fulfillmentChannel = $settings['fulfillment_channel'] ?? 'DEFAULT';
+        $priceMarkup = ($settings['price_markup'] ?? 0) / 100;
+        $basePrice = $variant?->price ?? 0;
+        $adjustedPrice = $basePrice + ($basePrice * $priceMarkup);
 
         return [
             'productType' => $product->category?->external_id ?? 'PRODUCT',
             'attributes' => [
-                'item_name' => [['value' => $product->title, 'language_tag' => 'en_US']],
+                'item_name' => [['value' => $product->title, 'language_tag' => $languageTag]],
                 'brand' => [['value' => $product->brand?->name ?? 'Generic']],
-                'bullet_point' => $this->getBulletPoints($product),
-                'product_description' => [['value' => $product->description ?? '', 'language_tag' => 'en_US']],
+                'bullet_point' => $this->getBulletPoints($product, $languageTag),
+                'product_description' => [['value' => $product->description ?? '', 'language_tag' => $languageTag]],
                 'purchasable_offer' => [[
                     'currency' => 'USD',
-                    'our_price' => [['schedule' => [['value_with_tax' => $variant?->price ?? 0]]]],
+                    'our_price' => [['schedule' => [['value_with_tax' => $adjustedPrice]]]],
                 ]],
                 'fulfillment_availability' => [[
-                    'fulfillment_channel_code' => 'DEFAULT',
+                    'fulfillment_channel_code' => $fulfillmentChannel,
                     'quantity' => $variant?->quantity ?? 0,
                 ]],
             ],
         ];
     }
 
-    protected function getBulletPoints(Product $product): array
+    protected function getBulletPoints(Product $product, string $languageTag = 'en_US'): array
     {
         $points = [];
         if ($product->short_description) {
-            $points[] = ['value' => $product->short_description, 'language_tag' => 'en_US'];
+            $points[] = ['value' => $product->short_description, 'language_tag' => $languageTag];
         }
 
         return $points;

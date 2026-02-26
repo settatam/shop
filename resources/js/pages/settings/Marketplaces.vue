@@ -32,6 +32,7 @@ import {
     XCircleIcon,
     LinkIcon,
     ArrowTopRightOnSquareIcon,
+    Cog6ToothIcon,
 } from '@heroicons/vue/20/solid';
 import axios from 'axios';
 
@@ -301,6 +302,12 @@ function formatDate(dateString: string | null) {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
+                                    <DropdownMenuItem as-child>
+                                        <a :href="`/settings/marketplaces/${connection.id}/settings`">
+                                            <Cog6ToothIcon class="h-4 w-4 mr-2" />
+                                            Settings
+                                        </a>
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem @click="testConnection(connection)">
                                         <LinkIcon class="h-4 w-4 mr-2" />
                                         Test Connection

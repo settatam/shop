@@ -3,8 +3,10 @@
 namespace App\Services\Platforms;
 
 use App\Enums\Platform;
+use App\Models\CategoryPlatformMapping;
 use App\Models\Product;
 use App\Models\ProductTemplate;
+use App\Models\StoreMarketplace;
 use App\Models\TemplatePlatformMapping;
 use App\Services\AI\AIManager;
 use Illuminate\Support\Facades\Log;
@@ -337,6 +339,40 @@ class FieldMappingService
         return TemplatePlatformMapping::where('product_template_id', $template->id)
             ->where('platform', $platformValue)
             ->first();
+    }
+
+    /**
+     * Get effective mappings for a product, merging template-level and category-level field mappings.
+     * Category-level mappings take precedence over template-level mappings.
+     *
+     * @return array{field_mappings: array<string, string>, default_values: array<string, mixed>}
+     */
+    public function getEffectiveMappings(
+        Product $product,
+        StoreMarketplace $marketplace,
+        ?CategoryPlatformMapping $categoryMapping = null
+    ): array {
+        $platformValue = $marketplace->platform instanceof Platform ? $marketplace->platform->value : $marketplace->platform;
+        $template = $product->getTemplate();
+
+        // Start with template-level mappings
+        $templateMapping = $template ? $this->getMappings($template, $platformValue) : null;
+        $fieldMappings = $templateMapping?->field_mappings ?? [];
+        $defaultValues = $templateMapping?->default_values ?? [];
+
+        // Merge category-level overrides (category takes precedence)
+        if ($categoryMapping) {
+            $categoryFieldMappings = $categoryMapping->getEffectiveFieldMappings();
+            $categoryDefaultValues = $categoryMapping->getEffectiveDefaultValues();
+
+            $fieldMappings = array_merge($fieldMappings, $categoryFieldMappings);
+            $defaultValues = array_merge($defaultValues, $categoryDefaultValues);
+        }
+
+        return [
+            'field_mappings' => $fieldMappings,
+            'default_values' => $defaultValues,
+        ];
     }
 
     /**

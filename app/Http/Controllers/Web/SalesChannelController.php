@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\PlatformListing;
 use App\Models\SalesChannel;
@@ -73,11 +74,16 @@ class SalesChannelController extends Controller
             'channels' => $channels,
             'warehouses' => $warehouses,
             'marketplaces' => $marketplaces,
-            'channelTypes' => collect(SalesChannel::TYPES)->map(fn ($type) => [
-                'value' => $type,
-                'label' => SalesChannel::getTypeLabel($type),
-                'is_local' => $type === SalesChannel::TYPE_LOCAL,
-            ]),
+            'channelTypes' => collect(SalesChannel::TYPES)->map(function ($type) {
+                $platformEnum = Platform::tryFrom($type);
+
+                return [
+                    'value' => $type,
+                    'label' => SalesChannel::getTypeLabel($type),
+                    'is_local' => $type === SalesChannel::TYPE_LOCAL,
+                    'requires_oauth' => $platformEnum?->requiresOAuth() ?? false,
+                ];
+            }),
         ]);
     }
 

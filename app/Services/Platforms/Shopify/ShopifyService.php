@@ -154,7 +154,7 @@ class ShopifyService extends BasePlatformService
             ->where('store_marketplace_id', $connection->id)
             ->first();
 
-        $shopifyProduct = $this->mapToShopifyProduct($product, $listing);
+        $shopifyProduct = $this->mapToShopifyProduct($product, $listing, $connection);
 
         $response = $this->shopifyRequest($connection, 'POST', 'products.json', [
             'product' => $shopifyProduct,
@@ -207,7 +207,7 @@ class ShopifyService extends BasePlatformService
         $product = $listing->product;
         $product->load('variants');
         $connection = $listing->marketplace;
-        $shopifyProduct = $this->mapToShopifyProduct($product, $listing);
+        $shopifyProduct = $this->mapToShopifyProduct($product, $listing, $connection);
 
         $response = $this->shopifyRequest(
             $connection,
@@ -577,29 +577,36 @@ class ShopifyService extends BasePlatformService
         ];
     }
 
-    protected function mapToShopifyProduct(Product $product, ?PlatformListing $listing = null): array
+    protected function mapToShopifyProduct(Product $product, ?PlatformListing $listing = null, ?StoreMarketplace $connection = null): array
     {
+        $settings = $connection?->settings ?? [];
+        $defaultStatus = $settings['default_product_status'] ?? null;
+
         $shopifyProduct = [
             'title' => $listing?->getEffectiveTitle() ?? $product->title,
             'body_html' => $listing?->getEffectiveDescription() ?? $product->description,
             'handle' => $product->handle,
             'vendor' => $product->brand?->name,
             'product_type' => $listing?->platform_category_id ?? $product->category?->name,
-            'status' => $product->is_published ? 'active' : 'draft',
+            'status' => $defaultStatus ?? ($product->is_published ? 'active' : 'draft'),
         ];
+
+        $priceMarkup = ($settings['price_markup'] ?? 0) / 100;
+        $inventoryManagement = ($settings['inventory_tracking'] ?? 'shopify') === 'not_managed' ? null : 'shopify';
 
         // Build variants from listing variants if available
         if ($listing) {
             $listing->loadMissing('listingVariants.productVariant');
 
             if ($listing->listingVariants->isNotEmpty()) {
-                $shopifyProduct['variants'] = $listing->listingVariants->map(function ($lv) {
+                $shopifyProduct['variants'] = $listing->listingVariants->map(function ($lv) use ($priceMarkup, $inventoryManagement) {
+                    $basePrice = $lv->getEffectivePrice();
                     $variant = [
                         'sku' => $lv->getEffectiveSku(),
-                        'price' => $lv->getEffectivePrice(),
+                        'price' => $basePrice + ($basePrice * $priceMarkup),
                         'inventory_quantity' => $lv->getEffectiveQuantity(),
                         'barcode' => $lv->getEffectiveBarcode(),
-                        'inventory_management' => 'shopify',
+                        'inventory_management' => $inventoryManagement,
                     ];
 
                     if ($lv->productVariant?->option1_value) {
@@ -628,19 +635,20 @@ class ShopifyService extends BasePlatformService
         if ($product->has_variants) {
             $shopifyProduct['variants'] = $product->variants->map(fn ($v) => [
                 'sku' => $v->sku,
-                'price' => $v->price,
+                'price' => $v->price + ($v->price * $priceMarkup),
                 'inventory_quantity' => $v->quantity,
                 'barcode' => $v->barcode,
                 'option1' => $v->option1_value,
                 'option2' => $v->option2_value,
                 'option3' => $v->option3_value,
-                'inventory_management' => 'shopify',
+                'inventory_management' => $inventoryManagement,
             ])->all();
         } else {
+            $basePrice = $product->variants->first()?->price ?? 0;
             $shopifyProduct['variants'] = [[
-                'price' => $product->variants->first()?->price ?? 0,
+                'price' => $basePrice + ($basePrice * $priceMarkup),
                 'inventory_quantity' => $product->quantity,
-                'inventory_management' => 'shopify',
+                'inventory_management' => $inventoryManagement,
             ]];
         }
 

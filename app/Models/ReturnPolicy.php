@@ -23,6 +23,8 @@ class ReturnPolicy extends Model
         'require_receipt',
         'require_original_packaging',
         'excluded_conditions',
+        'return_shipping_cost_payer',
+        'refund_method',
         'is_default',
         'is_active',
     ];
@@ -38,6 +40,8 @@ class ReturnPolicy extends Model
             'require_receipt' => 'boolean',
             'require_original_packaging' => 'boolean',
             'excluded_conditions' => 'array',
+            'return_shipping_cost_payer' => 'string',
+            'refund_method' => 'string',
             'is_default' => 'boolean',
             'is_active' => 'boolean',
         ];

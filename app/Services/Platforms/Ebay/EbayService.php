@@ -466,9 +466,67 @@ class EbayService extends BasePlatformService
         };
     }
 
+    /**
+     * Fetch business policies (return, payment, fulfillment) from eBay Account API.
+     *
+     * @return array{return_policies: array<mixed>, payment_policies: array<mixed>, fulfillment_policies: array<mixed>}
+     */
+    public function getBusinessPolicies(StoreMarketplace $connection): array
+    {
+        $this->ensureValidToken($connection);
+
+        $marketplaceId = $connection->settings['marketplace_id'] ?? 'EBAY_US';
+
+        $returnPolicies = $this->ebayRequest(
+            $connection,
+            'GET',
+            '/sell/account/v1/return_policy',
+            ['marketplace_id' => $marketplaceId]
+        );
+
+        $paymentPolicies = $this->ebayRequest(
+            $connection,
+            'GET',
+            '/sell/account/v1/payment_policy',
+            ['marketplace_id' => $marketplaceId]
+        );
+
+        $fulfillmentPolicies = $this->ebayRequest(
+            $connection,
+            'GET',
+            '/sell/account/v1/fulfillment_policy',
+            ['marketplace_id' => $marketplaceId]
+        );
+
+        return [
+            'return_policies' => $returnPolicies['returnPolicies'] ?? [],
+            'payment_policies' => $paymentPolicies['paymentPolicies'] ?? [],
+            'fulfillment_policies' => $fulfillmentPolicies['fulfillmentPolicies'] ?? [],
+        ];
+    }
+
+    /**
+     * Fetch inventory locations from eBay Inventory API.
+     *
+     * @return array<mixed>
+     */
+    public function getInventoryLocations(StoreMarketplace $connection): array
+    {
+        $this->ensureValidToken($connection);
+
+        $response = $this->ebayRequest(
+            $connection,
+            'GET',
+            '/sell/inventory/v1/location',
+            ['limit' => 100]
+        );
+
+        return $response['locations'] ?? [];
+    }
+
     // Helper methods
 
-    protected function ebayRequest(
+    public function ebayRequest(
         StoreMarketplace $connection,
         string $method,
         string $endpoint,
@@ -497,7 +555,7 @@ class EbayService extends BasePlatformService
         return $response->json() ?? [];
     }
 
-    protected function ensureValidToken(StoreMarketplace $connection): void
+    public function ensureValidToken(StoreMarketplace $connection): void
     {
         if ($connection->token_expires_at && $connection->token_expires_at->isPast()) {
             $this->refreshToken($connection);
@@ -554,11 +612,17 @@ class EbayService extends BasePlatformService
         ];
     }
 
-    protected function mapToEbayInventoryItem(Product $product): array
+    /**
+     * Map a product to an eBay inventory item payload.
+     *
+     * @param  array<string, array<string, string[]>>|null  $aspects  Pre-built aspects from ListingBuilderService
+     */
+    protected function mapToEbayInventoryItem(Product $product, ?array $aspects = null): array
     {
         $variant = $product->variants->first();
+        $settings = [];
 
-        return [
+        $item = [
             'product' => [
                 'title' => $product->title,
                 'description' => $product->description ?? '',
@@ -571,32 +635,91 @@ class EbayService extends BasePlatformService
                 ],
             ],
         ];
+
+        // Include aspects (item specifics) if provided
+        if (! empty($aspects)) {
+            $item['product']['aspects'] = $aspects;
+        }
+
+        return $item;
     }
 
     protected function mapToEbayOffer(Product $product, string $sku, StoreMarketplace $connection): array
     {
         $variant = $product->variants->first();
+        $settings = $connection->settings ?? [];
+        $credentials = $connection->credentials ?? [];
 
-        return [
+        $format = $settings['listing_type'] ?? 'FIXED_PRICE';
+        $price = (float) ($variant?->price ?? 0);
+
+        // Apply markup based on listing type
+        if ($format === 'AUCTION' && ! empty($settings['auction_markup'])) {
+            $price = $price * (1 + $settings['auction_markup'] / 100);
+        } elseif ($format === 'FIXED_PRICE' && ! empty($settings['fixed_price_markup'])) {
+            $price = $price * (1 + $settings['fixed_price_markup'] / 100);
+        }
+
+        $offer = [
             'sku' => $sku,
-            'marketplaceId' => 'EBAY_US',
-            'format' => 'FIXED_PRICE',
+            'marketplaceId' => $settings['marketplace_id'] ?? 'EBAY_US',
+            'format' => $format,
             'listingDescription' => $product->description ?? '',
             'availableQuantity' => $variant?->quantity ?? $product->quantity ?? 0,
             'pricingSummary' => [
                 'price' => [
-                    'value' => (string) ($variant?->price ?? 0),
-                    'currency' => 'USD',
+                    'value' => (string) round($price, 2),
+                    'currency' => $this->getCurrencyForMarketplace($settings['marketplace_id'] ?? 'EBAY_US'),
                 ],
             ],
             'listingPolicies' => [
-                'fulfillmentPolicyId' => $connection->credentials['fulfillment_policy_id'] ?? null,
-                'paymentPolicyId' => $connection->credentials['payment_policy_id'] ?? null,
-                'returnPolicyId' => $connection->credentials['return_policy_id'] ?? null,
+                'fulfillmentPolicyId' => $settings['fulfillment_policy_id'] ?? $credentials['fulfillment_policy_id'] ?? null,
+                'paymentPolicyId' => $settings['payment_policy_id'] ?? $credentials['payment_policy_id'] ?? null,
+                'returnPolicyId' => $settings['return_policy_id'] ?? $credentials['return_policy_id'] ?? null,
             ],
             'categoryId' => $product->category?->external_id ?? '1',
-            'merchantLocationKey' => $connection->credentials['location_key'] ?? 'default',
+            'merchantLocationKey' => $settings['location_key'] ?? $credentials['location_key'] ?? 'default',
         ];
+
+        // Add listing duration
+        $durationKey = $format === 'AUCTION' ? 'listing_duration_auction' : 'listing_duration_fixed';
+        if (! empty($settings[$durationKey])) {
+            $offer['listingDuration'] = $settings[$durationKey];
+        }
+
+        // Add best offer
+        if (! empty($settings['best_offer_enabled'])) {
+            $offer['bestOfferTerms'] = [
+                'bestOfferEnabled' => true,
+            ];
+        }
+
+        // Add condition from settings
+        if (! empty($settings['default_condition'])) {
+            $offer['condition'] = $settings['default_condition'];
+        }
+
+        return $offer;
+    }
+
+    /**
+     * Get the currency code for a given eBay marketplace.
+     */
+    protected function getCurrencyForMarketplace(string $marketplaceId): string
+    {
+        return match ($marketplaceId) {
+            'EBAY_GB' => 'GBP',
+            'EBAY_DE', 'EBAY_FR', 'EBAY_IT', 'EBAY_ES', 'EBAY_AT', 'EBAY_BE_FR', 'EBAY_BE_NL', 'EBAY_NL', 'EBAY_IE', 'EBAY_FI' => 'EUR',
+            'EBAY_AU' => 'AUD',
+            'EBAY_CA' => 'CAD',
+            'EBAY_CH' => 'CHF',
+            'EBAY_IN' => 'INR',
+            'EBAY_SG', 'EBAY_MY' => 'SGD',
+            'EBAY_HK' => 'HKD',
+            'EBAY_PH' => 'PHP',
+            'EBAY_PL' => 'PLN',
+            default => 'USD',
+        };
     }
 
     protected function importOrder(array $ebayOrder, StoreMarketplace $connection): PlatformOrder

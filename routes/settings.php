@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Controllers\Settings\EbayAccountController;
 use App\Http\Controllers\Settings\EmailSettingsController;
 use App\Http\Controllers\Settings\JobLogsController;
 use App\Http\Controllers\Settings\MaintenanceController;
 use App\Http\Controllers\Settings\MarketplaceController;
+use App\Http\Controllers\Settings\MarketplaceSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PaymentTerminalController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -164,6 +166,40 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::delete('/{marketplace}', [MarketplaceController::class, 'destroy'])->name('destroy');
         Route::post('/{marketplace}/test', [MarketplaceController::class, 'test'])->name('test');
         Route::post('/{marketplace}/sync', [MarketplaceController::class, 'sync'])->name('sync');
+        Route::get('/{marketplace}/settings', [MarketplaceSettingsController::class, 'show'])->name('settings');
+        Route::put('/{marketplace}/settings', [MarketplaceSettingsController::class, 'update'])->name('settings.update');
+        Route::post('/{marketplace}/fetch-policies', [MarketplaceSettingsController::class, 'fetchPolicies'])->name('fetch-policies');
+        Route::post('/{marketplace}/fetch-locations', [MarketplaceSettingsController::class, 'fetchLocations'])->name('fetch-locations');
+        Route::post('/{marketplace}/fetch-shipping-profiles', [MarketplaceSettingsController::class, 'fetchShippingProfiles'])->name('fetch-shipping-profiles');
+        Route::post('/{marketplace}/fetch-return-policies', [MarketplaceSettingsController::class, 'fetchReturnPolicies'])->name('fetch-return-policies');
+
+        // eBay Account Management
+        Route::prefix('{marketplace}/ebay')->name('ebay.')->group(function () {
+            Route::get('/return-policies', [EbayAccountController::class, 'returnPolicies'])->name('return-policies.index');
+            Route::post('/return-policies', [EbayAccountController::class, 'storeReturnPolicy'])->name('return-policies.store');
+            Route::put('/return-policies/{policyId}', [EbayAccountController::class, 'updateReturnPolicy'])->name('return-policies.update');
+            Route::delete('/return-policies/{policyId}', [EbayAccountController::class, 'destroyReturnPolicy'])->name('return-policies.destroy');
+
+            Route::get('/fulfillment-policies', [EbayAccountController::class, 'fulfillmentPolicies'])->name('fulfillment-policies.index');
+            Route::post('/fulfillment-policies', [EbayAccountController::class, 'storeFulfillmentPolicy'])->name('fulfillment-policies.store');
+            Route::put('/fulfillment-policies/{policyId}', [EbayAccountController::class, 'updateFulfillmentPolicy'])->name('fulfillment-policies.update');
+            Route::delete('/fulfillment-policies/{policyId}', [EbayAccountController::class, 'destroyFulfillmentPolicy'])->name('fulfillment-policies.destroy');
+
+            Route::get('/payment-policies', [EbayAccountController::class, 'paymentPolicies'])->name('payment-policies.index');
+            Route::post('/payment-policies', [EbayAccountController::class, 'storePaymentPolicy'])->name('payment-policies.store');
+            Route::put('/payment-policies/{policyId}', [EbayAccountController::class, 'updatePaymentPolicy'])->name('payment-policies.update');
+            Route::delete('/payment-policies/{policyId}', [EbayAccountController::class, 'destroyPaymentPolicy'])->name('payment-policies.destroy');
+
+            Route::get('/locations', [EbayAccountController::class, 'locations'])->name('locations.index');
+            Route::post('/locations', [EbayAccountController::class, 'storeLocation'])->name('locations.store');
+            Route::put('/locations/{locationKey}', [EbayAccountController::class, 'updateLocation'])->name('locations.update');
+            Route::delete('/locations/{locationKey}', [EbayAccountController::class, 'destroyLocation'])->name('locations.destroy');
+
+            Route::get('/privileges', [EbayAccountController::class, 'privileges'])->name('privileges');
+            Route::get('/programs', [EbayAccountController::class, 'programs'])->name('programs.index');
+            Route::post('/programs/opt-in', [EbayAccountController::class, 'optInToProgram'])->name('programs.opt-in');
+            Route::post('/programs/opt-out', [EbayAccountController::class, 'optOutOfProgram'])->name('programs.opt-out');
+        });
     });
 
     // Warehouse Settings

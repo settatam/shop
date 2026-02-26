@@ -61,6 +61,7 @@ interface ChannelType {
     value: string;
     label: string;
     is_local: boolean;
+    requires_oauth: boolean;
 }
 
 interface Props {
@@ -306,10 +307,16 @@ function getChannelDescription(channel: SalesChannel): string {
     return channel.type_label;
 }
 
-function reconnectChannel(channel: SalesChannel) {
-    if (channel.store_marketplace) {
-        window.location.href = `/settings/marketplaces/connect/${channel.store_marketplace.platform}?name=${encodeURIComponent(channel.name)}`;
-    }
+function needsConnection(channel: SalesChannel): boolean {
+    if (channel.is_local) return false;
+    if (!channel.store_marketplace) return true;
+    return !channel.store_marketplace.connected_successfully;
+}
+
+function connectChannel(channel: SalesChannel) {
+    // Use the store_marketplace platform if available, otherwise derive from channel type
+    const platform = channel.store_marketplace?.platform ?? channel.type;
+    window.location.href = `/settings/marketplaces/connect/${platform}?name=${encodeURIComponent(channel.name)}`;
 }
 </script>
 
@@ -381,7 +388,7 @@ function reconnectChannel(channel: SalesChannel) {
                                             Connected
                                         </Badge>
                                         <Badge
-                                            v-if="channel.store_marketplace && !channel.store_marketplace.connected_successfully"
+                                            v-if="needsConnection(channel)"
                                             variant="destructive"
                                             class="text-xs"
                                         >
@@ -398,10 +405,10 @@ function reconnectChannel(channel: SalesChannel) {
                             </div>
                             <div class="flex items-center gap-2">
                                 <Button
-                                    v-if="channel.store_marketplace && !channel.store_marketplace.connected_successfully"
+                                    v-if="needsConnection(channel)"
                                     variant="outline"
                                     size="sm"
-                                    @click="reconnectChannel(channel)"
+                                    @click="connectChannel(channel)"
                                     title="Connect to marketplace"
                                 >
                                     <LinkIcon class="mr-1 h-4 w-4" />

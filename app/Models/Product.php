@@ -109,6 +109,7 @@ class Product extends Model
         'brand_id',
         'vendor_id',
         'return_policy_id',
+        'fulfillment_policy_id',
         'sort_attribute',
         'has_variants',
         'country_of_origin',
@@ -466,6 +467,11 @@ class Product extends Model
     public function returnPolicy(): BelongsTo
     {
         return $this->belongsTo(ReturnPolicy::class);
+    }
+
+    public function fulfillmentPolicy(): BelongsTo
+    {
+        return $this->belongsTo(FulfillmentPolicy::class);
     }
 
     public function template(): BelongsTo

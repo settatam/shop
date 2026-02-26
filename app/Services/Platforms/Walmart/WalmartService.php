@@ -184,7 +184,7 @@ class WalmartService extends BasePlatformService
     {
         $this->ensureValidToken($connection);
 
-        $itemData = $this->mapToWalmartItem($product);
+        $itemData = $this->mapToWalmartItem($product, $connection);
 
         // Create feed for item
         $feedResponse = $this->walmartRequest(
@@ -217,7 +217,7 @@ class WalmartService extends BasePlatformService
 
         $this->ensureValidToken($connection);
 
-        $itemData = $this->mapToWalmartItem($product);
+        $itemData = $this->mapToWalmartItem($product, $connection);
 
         $this->walmartRequest(
             $connection,
@@ -276,7 +276,7 @@ class WalmartService extends BasePlatformService
         $product = $listing->product;
 
         // Re-create the item on Walmart using the stored product data
-        $walmartItem = $this->mapToWalmartItem($product);
+        $walmartItem = $this->mapToWalmartItem($product, $connection);
 
         $this->walmartRequest(
             $connection,
@@ -499,14 +499,18 @@ class WalmartService extends BasePlatformService
         ];
     }
 
-    protected function mapToWalmartItem(Product $product): array
+    protected function mapToWalmartItem(Product $product, ?StoreMarketplace $connection = null): array
     {
         $variant = $product->variants->first();
+        $settings = $connection?->settings ?? [];
+        $priceMarkup = ($settings['price_markup'] ?? 0) / 100;
+        $basePrice = $variant?->price ?? 0;
+        $adjustedPrice = $basePrice + ($basePrice * $priceMarkup);
 
         return [
             'sku' => $variant?->sku ?? $product->handle,
             'productIdentifiers' => [
-                'productIdType' => 'UPC',
+                'productIdType' => $settings['product_id_type'] ?? 'UPC',
                 'productId' => $variant?->barcode ?? '000000000000',
             ],
             'productName' => $product->title,
@@ -515,13 +519,14 @@ class WalmartService extends BasePlatformService
             'mainImageUrl' => $product->images->first()?->url ?? '',
             'price' => [
                 'currency' => 'USD',
-                'amount' => $variant?->price ?? 0,
+                'amount' => $adjustedPrice,
             ],
             'category' => $product->category?->name ?? 'Other',
             'shippingWeight' => [
                 'value' => $variant?->weight ?? 1,
-                'unit' => 'LB',
+                'unit' => $settings['weight_unit'] ?? 'LB',
             ],
+            'fulfillmentType' => $settings['fulfillment_type'] ?? 'seller',
         ];
     }
 

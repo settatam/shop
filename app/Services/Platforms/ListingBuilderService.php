@@ -11,7 +11,8 @@ class ListingBuilderService
 {
     public function __construct(
         protected FieldMappingService $fieldMappingService,
-        protected PlatformManager $platformManager
+        protected PlatformManager $platformManager,
+        protected CategoryMappingService $categoryMappingService
     ) {}
 
     /**
@@ -21,7 +22,7 @@ class ListingBuilderService
      */
     public function buildListing(Product $product, StoreMarketplace $marketplace): array
     {
-        $product->load(['attributeValues.field', 'template.fields', 'template.platformMappings', 'images', 'variants']);
+        $product->load(['attributeValues.field', 'template.fields', 'template.platformMappings', 'images', 'variants', 'category']);
         $platform = $marketplace->platform;
 
         // Get the PlatformListing (which now holds override data)
@@ -39,7 +40,30 @@ class ListingBuilderService
         $transformedAttributes = $this->fieldMappingService->transformAttributes($product, $platform);
         $listing['attributes'] = array_merge($listing['attributes'] ?? [], $transformedAttributes);
 
-        // Apply platform category from listing
+        // Resolve platform category via CategoryMappingService
+        $categoryResolution = $this->categoryMappingService->resolveCategory($product, $marketplace);
+        if ($categoryResolution['primary_category_id']) {
+            $listing['platform_category_id'] = $categoryResolution['primary_category_id'];
+            $listing['secondary_category_id'] = $categoryResolution['secondary_category_id'];
+        }
+
+        // Apply category-level field mappings (overrides template mappings)
+        if ($categoryResolution['mapping']) {
+            $effectiveMappings = $this->fieldMappingService->getEffectiveMappings(
+                $product,
+                $marketplace,
+                $categoryResolution['mapping']
+            );
+
+            // Apply category-level default values
+            foreach ($effectiveMappings['default_values'] as $field => $value) {
+                if (! isset($listing['attributes'][$field]) && $value !== null) {
+                    $listing['attributes'][$field] = $value;
+                }
+            }
+        }
+
+        // Apply platform category from listing (listing-level override takes precedence)
         if ($platformListing?->platform_category_id) {
             $listing['platform_category_id'] = $platformListing->platform_category_id;
         }
@@ -333,15 +357,31 @@ class ListingBuilderService
         // Map condition to eBay condition ID
         $listing['condition_id'] = $this->mapEbayCondition($listing['condition'] ?? 'new');
 
-        // Build item specifics from attributes
+        // Use resolved category ID
+        if (! empty($listing['platform_category_id'])) {
+            $listing['categoryId'] = $listing['platform_category_id'];
+        }
+        if (! empty($listing['secondary_category_id'])) {
+            $listing['secondaryCategoryId'] = $listing['secondary_category_id'];
+        }
+
+        // Build item specifics (aspects) from attributes
+        // Attribute keys should already be proper eBay item specific names
+        // when mapped through CategoryPlatformMapping field mappings
         $listing['item_specifics'] = [];
         foreach ($listing['attributes'] ?? [] as $name => $value) {
             if ($value !== null && $value !== '') {
                 $listing['item_specifics'][] = [
-                    'Name' => ucfirst(str_replace('_', ' ', $name)),
+                    'Name' => $name,
                     'Value' => $value,
                 ];
             }
+        }
+
+        // Build aspects array (eBay Inventory API format)
+        $listing['aspects'] = [];
+        foreach ($listing['item_specifics'] as $specific) {
+            $listing['aspects'][$specific['Name']] = [(string) $specific['Value']];
         }
 
         return $listing;
@@ -560,18 +600,18 @@ class ListingBuilderService
      */
     protected function validateEbayListing(Product $product, StoreMarketplace $marketplace, array &$errors, array &$warnings): void
     {
-        // eBay requires policies
+        $settings = $marketplace->settings ?? [];
         $credentials = $marketplace->credentials ?? [];
 
-        if (empty($credentials['fulfillment_policy_id'])) {
+        if (empty($settings['fulfillment_policy_id']) && empty($credentials['fulfillment_policy_id'])) {
             $warnings[] = 'eBay fulfillment policy not configured';
         }
 
-        if (empty($credentials['payment_policy_id'])) {
+        if (empty($settings['payment_policy_id']) && empty($credentials['payment_policy_id'])) {
             $warnings[] = 'eBay payment policy not configured';
         }
 
-        if (empty($credentials['return_policy_id'])) {
+        if (empty($settings['return_policy_id']) && empty($credentials['return_policy_id'])) {
             $warnings[] = 'eBay return policy not configured';
         }
 

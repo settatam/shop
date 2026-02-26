@@ -116,10 +116,16 @@ class MarketplaceController extends Controller
             }
             session()->forget('marketplace_connect_name');
 
-            return redirect()->route('settings.marketplaces.index')
+            // Auto-link to any SalesChannel of this type that doesn't have a marketplace yet
+            \App\Models\SalesChannel::where('store_id', $store->id)
+                ->where('type', $platformEnum->value)
+                ->whereNull('store_marketplace_id')
+                ->update(['store_marketplace_id' => $connection->id]);
+
+            return redirect()->route('settings.channels.index')
                 ->with('success', "{$platformEnum->label()} connected successfully!");
         } catch (\Exception $e) {
-            return redirect()->route('settings.marketplaces.index')
+            return redirect()->route('settings.channels.index')
                 ->with('error', "Failed to connect {$platformEnum->label()}: {$e->getMessage()}");
         }
     }

@@ -86,6 +86,21 @@ class Category extends Model
         return $this->hasOne(SkuSequence::class);
     }
 
+    public function platformMappings(): HasMany
+    {
+        return $this->hasMany(CategoryPlatformMapping::class);
+    }
+
+    /**
+     * Get the platform mapping for a specific marketplace connection.
+     */
+    public function getPlatformMapping(StoreMarketplace $marketplace): ?CategoryPlatformMapping
+    {
+        return $this->platformMappings()
+            ->where('store_marketplace_id', $marketplace->id)
+            ->first();
+    }
+
     /**
      * Get the effective template for this category.
      * If no template is set, it will inherit from the parent category.

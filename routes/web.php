@@ -7,6 +7,7 @@ use App\Http\Controllers\Web\BucketsController;
 use App\Http\Controllers\Web\BuysController;
 use App\Http\Controllers\Web\BuysReportController;
 use App\Http\Controllers\Web\CategoryController;
+use App\Http\Controllers\Web\CategoryMappingController;
 use App\Http\Controllers\Web\CustomProductController;
 use App\Http\Controllers\Web\GiaCardScannerController;
 use App\Http\Controllers\Web\GiaController;
@@ -169,6 +170,16 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('categories/{category}/reset-sequence', [CategoryController::class, 'resetSequence'])->name('categories.reset-sequence');
     });
     Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy')->middleware('permission:categories.delete');
+
+    // Category Platform Mappings
+    Route::middleware('permission:categories.view')->group(function () {
+        Route::get('categories/{category}/platform-mappings', [CategoryMappingController::class, 'index'])->name('categories.platform-mappings.index');
+    });
+    Route::middleware('permission:categories.update')->group(function () {
+        Route::post('categories/{category}/platform-mappings/{marketplace}', [CategoryMappingController::class, 'store'])->name('categories.platform-mappings.store');
+        Route::delete('categories/{category}/platform-mappings/{mapping}', [CategoryMappingController::class, 'destroy'])->name('categories.platform-mappings.destroy');
+        Route::post('categories/{category}/platform-mappings/{mapping}/sync-specifics', [CategoryMappingController::class, 'syncItemSpecifics'])->name('categories.platform-mappings.sync-specifics');
+    });
 
     // Product Types (leaf categories with additional settings)
     Route::middleware('permission:categories.view')->group(function () {

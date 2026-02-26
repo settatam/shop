@@ -187,7 +187,7 @@ class EtsyService extends BasePlatformService
         $this->ensureValidToken($connection);
 
         $shopId = $connection->credentials['shop_id'];
-        $listingData = $this->mapToEtsyListing($product);
+        $listingData = $this->mapToEtsyListing($product, $connection);
 
         $response = $this->etsyRequest(
             $connection,
@@ -222,7 +222,7 @@ class EtsyService extends BasePlatformService
 
         $this->ensureValidToken($connection);
 
-        $listingData = $this->mapToEtsyListing($product);
+        $listingData = $this->mapToEtsyListing($product, $connection);
 
         $response = $this->etsyRequest(
             $connection,
@@ -412,6 +412,50 @@ class EtsyService extends BasePlatformService
         // Etsy uses a ping/callback model rather than traditional webhooks
     }
 
+    /**
+     * Fetch shipping profiles for the connected Etsy shop.
+     *
+     * @return array{shipping_profiles: array<int, array<string, mixed>>}
+     */
+    public function getShippingProfiles(StoreMarketplace $connection): array
+    {
+        $this->ensureValidToken($connection);
+        $shopId = $connection->credentials['shop_id'];
+
+        $response = $this->etsyRequest($connection, 'GET', "/application/shops/{$shopId}/shipping-profiles");
+
+        return [
+            'shipping_profiles' => collect($response['results'] ?? [])->map(fn (array $profile) => [
+                'shipping_profile_id' => $profile['shipping_profile_id'],
+                'title' => $profile['title'] ?? '',
+                'origin_country_iso' => $profile['origin_country_iso'] ?? '',
+                'processing_days_display_label' => $profile['processing_days_display_label'] ?? '',
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Fetch return policies for the connected Etsy shop.
+     *
+     * @return array{return_policies: array<int, array<string, mixed>>}
+     */
+    public function getReturnPolicies(StoreMarketplace $connection): array
+    {
+        $this->ensureValidToken($connection);
+        $shopId = $connection->credentials['shop_id'];
+
+        $response = $this->etsyRequest($connection, 'GET', "/application/shops/{$shopId}/policies/return");
+
+        return [
+            'return_policies' => collect($response['results'] ?? [])->map(fn (array $policy) => [
+                'return_policy_id' => $policy['return_policy_id'] ?? $policy['policy_id'] ?? '',
+                'accepts_returns' => $policy['accepts_returns'] ?? false,
+                'accepts_exchanges' => $policy['accepts_exchanges'] ?? false,
+                'return_deadline' => $policy['return_deadline'] ?? null,
+            ])->values()->all(),
+        ];
+    }
+
     // Helper methods
 
     protected function etsyRequest(
@@ -506,23 +550,40 @@ class EtsyService extends BasePlatformService
         ];
     }
 
-    protected function mapToEtsyListing(Product $product): array
+    protected function mapToEtsyListing(Product $product, ?StoreMarketplace $connection = null): array
     {
         $variant = $product->variants->first();
+        $settings = $connection?->settings ?? [];
+        $priceMarkup = ($settings['price_markup'] ?? 0) / 100;
+        $basePrice = $variant?->price ?? 0;
+        $adjustedPrice = $basePrice + ($basePrice * $priceMarkup);
 
-        return [
+        $listing = [
             'title' => $product->title,
             'description' => $product->description ?? '',
-            'price' => ['amount' => (int) (($variant?->price ?? 0) * 100), 'divisor' => 100, 'currency_code' => 'USD'],
+            'price' => [
+                'amount' => (int) ($adjustedPrice * 100),
+                'divisor' => 100,
+                'currency_code' => $settings['currency'] ?? 'USD',
+            ],
             'quantity' => $variant?->quantity ?? $product->quantity ?? 0,
-            'who_made' => 'i_did',
-            'when_made' => 'made_to_order',
+            'who_made' => $settings['who_made'] ?? 'i_did',
+            'when_made' => $settings['when_made'] ?? 'made_to_order',
             'taxonomy_id' => $product->category?->external_id ?? 1,
-            'is_supply' => false,
-            'shipping_profile_id' => null, // Would need to be set from connection credentials
+            'is_supply' => $settings['is_supply'] ?? false,
             'tags' => $product->tags ?? [],
             'materials' => [],
         ];
+
+        if (! empty($settings['shipping_profile_id'])) {
+            $listing['shipping_profile_id'] = (int) $settings['shipping_profile_id'];
+        }
+
+        if (! empty($settings['return_policy_id'])) {
+            $listing['return_policy_id'] = (int) $settings['return_policy_id'];
+        }
+
+        return $listing;
     }
 
     protected function uploadListingImages(StoreMarketplace $connection, int $listingId, Product $product): void
