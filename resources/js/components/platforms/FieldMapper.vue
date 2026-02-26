@@ -400,8 +400,8 @@ function getConfidenceColor(confidence: number): string {
                 >
                     <Checkbox
                         :id="`metafield-${field.name}`"
-                        :checked="!!localMetafieldMappings[field.name]?.enabled"
-                        @update:checked="(val: boolean) => toggleMetafield(field.name, val)"
+                        :model-value="!!localMetafieldMappings[field.name]?.enabled"
+                        @update:model-value="(val: boolean) => toggleMetafield(field.name, val)"
                     />
                     <Label :for="`metafield-${field.name}`" class="flex-1 cursor-pointer">
                         {{ field.label }}

@@ -490,24 +490,21 @@ function makeDefault(warehouse: Warehouse) {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="is_active"
-                                            :checked="formData.is_active"
-                                            @update:checked="formData.is_active = $event"
+                                            v-model="formData.is_active"
                                         />
                                         <Label for="is_active" class="font-normal">Active</Label>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="accepts_transfers"
-                                            :checked="formData.accepts_transfers"
-                                            @update:checked="formData.accepts_transfers = $event"
+                                            v-model="formData.accepts_transfers"
                                         />
                                         <Label for="accepts_transfers" class="font-normal">Accepts inventory transfers</Label>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="fulfills_orders"
-                                            :checked="formData.fulfills_orders"
-                                            @update:checked="formData.fulfills_orders = $event"
+                                            v-model="formData.fulfills_orders"
                                         />
                                         <Label for="fulfills_orders" class="font-normal">Fulfills orders (retail location)</Label>
                                     </div>

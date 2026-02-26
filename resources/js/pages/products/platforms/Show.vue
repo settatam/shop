@@ -621,8 +621,8 @@ async function unpublish() {
                                 <!-- Include checkbox -->
                                 <div class="absolute top-1 right-1">
                                     <Checkbox
-                                        :checked="image.included"
-                                        @update:checked="toggleImage(image.id)"
+                                        :model-value="image.included"
+                                        @update:model-value="toggleImage(image.id)"
                                     />
                                 </div>
                             </div>
@@ -652,9 +652,9 @@ async function unpublish() {
                             >
                                 <!-- Enable/Disable checkbox -->
                                 <Checkbox
-                                    :checked="field.enabled"
+                                    :model-value="field.enabled"
                                     :disabled="field.is_private"
-                                    @update:checked="toggleField(field.name)"
+                                    @update:model-value="toggleField(field.name)"
                                 />
 
                                 <!-- Field info -->
@@ -726,8 +726,8 @@ async function unpublish() {
                                 <!-- Include checkbox -->
                                 <Checkbox
                                     v-if="metafield.source !== 'custom'"
-                                    :checked="metafield.included"
-                                    @update:checked="toggleMetafield(metafield.namespace, metafield.key)"
+                                    :model-value="metafield.included"
+                                    @update:model-value="toggleMetafield(metafield.namespace, metafield.key)"
                                 />
                                 <div v-else class="w-4" />
 

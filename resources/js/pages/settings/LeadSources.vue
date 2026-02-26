@@ -268,8 +268,7 @@ function deleteSource() {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="create-active"
-                                            :checked="formData.is_active"
-                                            @update:checked="formData.is_active = $event as boolean"
+                                            v-model="formData.is_active"
                                         />
                                         <Label for="create-active" class="!mb-0">Active</Label>
                                     </div>
@@ -336,8 +335,7 @@ function deleteSource() {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="edit-active"
-                                            :checked="formData.is_active"
-                                            @update:checked="formData.is_active = $event as boolean"
+                                            v-model="formData.is_active"
                                         />
                                         <Label for="edit-active" class="!mb-0">Active</Label>
                                     </div>

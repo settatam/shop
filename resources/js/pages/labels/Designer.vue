@@ -444,8 +444,7 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                     <div class="flex items-center gap-2">
                         <Checkbox
                             id="is-default"
-                            :checked="designer.template.value.is_default"
-                            @update:checked="designer.template.value.is_default = $event"
+                            v-model="designer.template.value.is_default"
                         />
                         <Label for="is-default" class="mb-0 cursor-pointer">Set as default</Label>
                     </div>
@@ -571,8 +570,8 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                             <div class="flex items-center gap-2">
                                 <Checkbox
                                     id="show-barcode-text"
-                                    :checked="designer.selectedElement.value.styles?.showText !== false"
-                                    @update:checked="designer.updateElementStyles(designer.selectedElementId.value!, { showText: $event })"
+                                    :model-value="designer.selectedElement.value.styles?.showText !== false"
+                                    @update:model-value="designer.updateElementStyles(designer.selectedElementId.value!, { showText: $event })"
                                 />
                                 <Label for="show-barcode-text" class="mb-0 cursor-pointer">Show text below barcode</Label>
                             </div>

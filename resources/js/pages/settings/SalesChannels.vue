@@ -523,8 +523,7 @@ function reconnectChannel(channel: SalesChannel) {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="create-default"
-                                            :checked="formData.is_default"
-                                            @update:checked="formData.is_default = $event as boolean"
+                                            v-model="formData.is_default"
                                         />
                                         <Label for="create-default" class="!mb-0">Set as default channel</Label>
                                     </div>
@@ -532,8 +531,7 @@ function reconnectChannel(channel: SalesChannel) {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="create-auto-list"
-                                            :checked="formData.auto_list"
-                                            @update:checked="formData.auto_list = $event as boolean"
+                                            v-model="formData.auto_list"
                                         />
                                         <Label for="create-auto-list" class="!mb-0">Automatically list new products on this channel</Label>
                                     </div>
@@ -624,8 +622,7 @@ function reconnectChannel(channel: SalesChannel) {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="edit-active"
-                                            :checked="formData.is_active"
-                                            @update:checked="formData.is_active = $event as boolean"
+                                            v-model="formData.is_active"
                                         />
                                         <Label for="edit-active" class="!mb-0">Active</Label>
                                     </div>
@@ -633,8 +630,7 @@ function reconnectChannel(channel: SalesChannel) {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="edit-default"
-                                            :checked="formData.is_default"
-                                            @update:checked="formData.is_default = $event as boolean"
+                                            v-model="formData.is_default"
                                         />
                                         <Label for="edit-default" class="!mb-0">Set as default channel</Label>
                                     </div>
@@ -642,8 +638,7 @@ function reconnectChannel(channel: SalesChannel) {
                                     <div class="flex items-center gap-2">
                                         <Checkbox
                                             id="edit-auto-list"
-                                            :checked="formData.auto_list"
-                                            @update:checked="formData.auto_list = $event as boolean"
+                                            v-model="formData.auto_list"
                                         />
                                         <Label for="edit-auto-list" class="!mb-0">Automatically list new products on this channel</Label>
                                     </div>

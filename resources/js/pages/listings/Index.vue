@@ -473,9 +473,9 @@ watch(productsData, (products) => {
                         <tr>
                             <th class="w-12 px-4 py-3">
                                 <Checkbox
-                                    :checked="allSelected"
+                                    :model-value="allSelected"
                                     :indeterminate="someSelected"
-                                    @update:checked="toggleSelectAll"
+                                    @update:model-value="toggleSelectAll"
                                 />
                             </th>
                             <th class="w-8 px-2 py-3"></th>
@@ -531,9 +531,9 @@ watch(productsData, (products) => {
                                 <tr class="bg-gray-50/50 dark:bg-gray-800/50">
                                     <td class="px-4 py-3">
                                         <Checkbox
-                                            :checked="isProductSelected(product)"
+                                            :model-value="isProductSelected(product)"
                                             :indeterminate="isProductPartiallySelected(product)"
-                                            @update:checked="(checked: boolean) => toggleSelectProduct(product, checked)"
+                                            @update:model-value="(checked: boolean) => toggleSelectProduct(product, checked)"
                                         />
                                     </td>
                                     <td class="px-2 py-3">
@@ -581,8 +581,8 @@ watch(productsData, (products) => {
                                     >
                                         <td class="px-4 py-3">
                                             <Checkbox
-                                                :checked="selectedListings.includes(listing.id)"
-                                                @update:checked="() => toggleSelectListing(listing.id)"
+                                                :model-value="selectedListings.includes(listing.id)"
+                                                @update:model-value="() => toggleSelectListing(listing.id)"
                                             />
                                         </td>
                                         <td class="px-2 py-3"></td>
