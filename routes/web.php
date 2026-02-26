@@ -671,6 +671,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::middleware('permission:products.update')->group(function () {
         Route::patch('products/{product}/listings/{listing}/price', [\App\Http\Controllers\Web\PlatformListingController::class, 'updatePrice'])->name('products.listings.update-price');
         Route::post('products/{product}/channels/{channel}/price', [\App\Http\Controllers\Web\PlatformListingController::class, 'setChannelPrice'])->name('products.channels.set-price');
+        Route::post('products/{product}/listings/publish-all', [\App\Http\Controllers\Web\PlatformListingController::class, 'publishAll'])->name('products.listings.publish-all');
         Route::post('products/{product}/listings/{marketplace}/publish', [\App\Http\Controllers\Web\PlatformListingController::class, 'publish'])->name('products.listings.publish');
         Route::delete('products/{product}/listings/{marketplace}', [\App\Http\Controllers\Web\PlatformListingController::class, 'unpublish'])->name('products.listings.unpublish');
         Route::post('products/{product}/listings/{marketplace}/relist', [\App\Http\Controllers\Web\PlatformListingController::class, 'relist'])->name('products.listings.relist');

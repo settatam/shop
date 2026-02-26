@@ -21,6 +21,9 @@ import {
     ExclamationCircleIcon,
     ExclamationTriangleIcon,
     ClockIcon,
+    RocketLaunchIcon,
+    ChevronDownIcon,
+    ChevronUpIcon,
 } from '@heroicons/vue/20/solid';
 import PlatformOverrideModal from './PlatformOverrideModal.vue';
 import PublishToPlatformModal from './PublishToPlatformModal.vue';
@@ -98,6 +101,20 @@ const syncing = ref<number | null>(null);
 const syncingAll = ref(false);
 const unpublishing = ref<number | null>(null);
 const relisting = ref<number | null>(null);
+const publishingAll = ref(false);
+const publishAllResults = ref<{
+    published: Array<{ marketplace_name: string; platform: string; listing_url: string | null; warnings: string[] }>;
+    failed: Array<{ marketplace_name: string; platform: string; errors: string[] }>;
+} | null>(null);
+const expandedErrors = ref<Set<number>>(new Set());
+
+function toggleErrorExpanded(listingId: number) {
+    if (expandedErrors.value.has(listingId)) {
+        expandedErrors.value.delete(listingId);
+    } else {
+        expandedErrors.value.add(listingId);
+    }
+}
 
 // Check if a listing needs sync (product updated after last sync)
 // Local/in-house listings never need syncing — they always reflect the product status
@@ -256,6 +273,31 @@ async function relistListing(listing: PlatformListing) {
     }
 }
 
+async function publishToAll() {
+    publishingAll.value = true;
+    publishAllResults.value = null;
+    try {
+        const response = await axios.post(`/products/${props.productId}/listings/publish-all`);
+        publishAllResults.value = {
+            published: response.data.published || [],
+            failed: response.data.failed || [],
+        };
+        emit('refresh');
+    } catch (error: any) {
+        const data = error.response?.data;
+        publishAllResults.value = {
+            published: [],
+            failed: data?.failed || [{ marketplace_name: 'Unknown', platform: '', errors: [data?.message || 'An unexpected error occurred'] }],
+        };
+    } finally {
+        publishingAll.value = false;
+    }
+}
+
+function dismissPublishAllResults() {
+    publishAllResults.value = null;
+}
+
 function viewOnPlatform(listing: PlatformListing) {
     if (listing.listing_url) {
         window.open(listing.listing_url, '_blank');
@@ -316,6 +358,15 @@ function getListingEditUrl(listing: PlatformListing): string {
                         {{ syncingAll ? 'Syncing...' : 'Sync All' }}
                     </Button>
                     <Button
+                        v-if="unconnectedMarketplaces.length > 1"
+                        size="sm"
+                        :disabled="publishingAll"
+                        @click="publishToAll"
+                    >
+                        <RocketLaunchIcon class="h-4 w-4 mr-1" :class="{ 'animate-pulse': publishingAll }" />
+                        {{ publishingAll ? 'Publishing...' : 'Publish All' }}
+                    </Button>
+                    <Button
                         v-if="unconnectedMarketplaces.length > 0"
                         variant="outline"
                         size="sm"
@@ -324,6 +375,79 @@ function getListingEditUrl(listing: PlatformListing): string {
                         <PlusIcon class="h-4 w-4 mr-1" />
                         Publish to Platform
                     </Button>
+                </div>
+            </div>
+
+            <!-- Publish All Results -->
+            <div v-if="publishAllResults" class="mb-4 space-y-3">
+                <!-- Success results -->
+                <div
+                    v-if="publishAllResults.published.length > 0"
+                    class="rounded-md bg-green-50 p-4 dark:bg-green-900/20"
+                >
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-start gap-3">
+                            <CheckCircleIcon class="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h3 class="text-sm font-medium text-green-800 dark:text-green-200">
+                                    Published to {{ publishAllResults.published.length }} platform{{ publishAllResults.published.length !== 1 ? 's' : '' }}
+                                </h3>
+                                <ul class="mt-1 text-sm text-green-700 dark:text-green-300 space-y-0.5">
+                                    <li v-for="item in publishAllResults.published" :key="item.marketplace_name">
+                                        {{ item.marketplace_name }}
+                                        <a
+                                            v-if="item.listing_url"
+                                            :href="item.listing_url"
+                                            target="_blank"
+                                            class="ml-1 text-green-600 underline hover:text-green-800 dark:text-green-400 dark:hover:text-green-200"
+                                        >
+                                            View listing
+                                            <ArrowTopRightOnSquareIcon class="inline h-3 w-3" />
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="text-green-500 hover:text-green-700 dark:hover:text-green-300"
+                            @click="dismissPublishAllResults"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Failure results -->
+                <div
+                    v-if="publishAllResults.failed.length > 0"
+                    class="rounded-md bg-red-50 p-4 dark:bg-red-900/20"
+                >
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-start gap-3">
+                            <ExclamationCircleIcon class="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h3 class="text-sm font-medium text-red-800 dark:text-red-200">
+                                    Failed to publish to {{ publishAllResults.failed.length }} platform{{ publishAllResults.failed.length !== 1 ? 's' : '' }}
+                                </h3>
+                                <div class="mt-2 space-y-2">
+                                    <div v-for="item in publishAllResults.failed" :key="item.marketplace_name">
+                                        <p class="text-sm font-medium text-red-700 dark:text-red-300">{{ item.marketplace_name }}</p>
+                                        <ul class="mt-0.5 text-sm text-red-600 dark:text-red-400 list-disc list-inside">
+                                            <li v-for="error in item.errors" :key="error">{{ error }}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="text-red-500 hover:text-red-700 dark:hover:text-red-300"
+                            @click="dismissPublishAllResults"
+                        >
+                            &times;
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -410,9 +534,36 @@ function getListingEditUrl(listing: PlatformListing): string {
                             <span v-if="listing.quantity !== null">Qty: {{ listing.quantity }}</span>
                             <span>Synced: {{ formatDate(listing.last_synced_at) }}</span>
                         </div>
-                        <p v-if="listing.error_message" class="text-xs text-red-600 dark:text-red-400 mt-1 truncate">
-                            {{ listing.error_message }}
-                        </p>
+                        <a
+                            v-if="listing.listing_url && (listing.status === 'active' || listing.status === 'listed')"
+                            :href="listing.listing_url"
+                            target="_blank"
+                            class="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 mt-1"
+                        >
+                            View listing
+                            <ArrowTopRightOnSquareIcon class="h-3 w-3" />
+                        </a>
+                        <div v-if="listing.error_message" class="mt-1">
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                @click.stop="toggleErrorExpanded(listing.id)"
+                            >
+                                <ExclamationCircleIcon class="h-3.5 w-3.5 flex-shrink-0" />
+                                <span v-if="!expandedErrors.has(listing.id)" class="truncate max-w-xs">{{ listing.error_message }}</span>
+                                <span v-else>Hide error</span>
+                                <component
+                                    :is="expandedErrors.has(listing.id) ? ChevronUpIcon : ChevronDownIcon"
+                                    class="h-3 w-3 flex-shrink-0"
+                                />
+                            </button>
+                            <p
+                                v-if="expandedErrors.has(listing.id)"
+                                class="mt-1 text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap"
+                            >
+                                {{ listing.error_message }}
+                            </p>
+                        </div>
                     </div>
 
                     <!-- Actions -->
@@ -429,15 +580,6 @@ function getListingEditUrl(listing: PlatformListing): string {
                             {{ relisting === listing.id ? 'Relisting...' : 'Relist' }}
                         </Button>
 
-                        <Button
-                            v-if="listing.listing_url && listing.status === 'active' || listing.status === 'listed'"
-                            variant="ghost"
-                            size="sm"
-                            @click="viewOnPlatform(listing)"
-                        >
-                            <ArrowTopRightOnSquareIcon class="h-4 w-4" />
-                        </Button>
-
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
                                 <Button variant="ghost" size="sm">
@@ -445,6 +587,13 @@ function getListingEditUrl(listing: PlatformListing): string {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    v-if="listing.listing_url && (listing.status === 'active' || listing.status === 'listed')"
+                                    @click="viewOnPlatform(listing)"
+                                >
+                                    <ArrowTopRightOnSquareIcon class="h-4 w-4 mr-2" />
+                                    View on Platform
+                                </DropdownMenuItem>
                                 <DropdownMenuItem @click="router.visit(getListingEditUrl(listing))">
                                     <PencilIcon class="h-4 w-4 mr-2" />
                                     Edit Listing Details

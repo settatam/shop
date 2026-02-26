@@ -155,6 +155,96 @@ class PlatformListingController extends Controller
     }
 
     /**
+     * Publish product to all available marketplaces.
+     */
+    public function publishAll(Product $product): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $store = $this->storeContext->getCurrentStore();
+
+        // Get all connected selling marketplaces
+        $marketplaces = StoreMarketplace::where('store_id', $store->id)
+            ->sellingPlatforms()
+            ->connected()
+            ->get();
+
+        // Filter to marketplaces that don't already have an active listing
+        $existingMarketplaceIds = $product->platformListings()
+            ->whereIn('status', [PlatformListing::STATUS_LISTED, 'active', PlatformListing::STATUS_PENDING])
+            ->pluck('store_marketplace_id')
+            ->toArray();
+
+        $targetMarketplaces = $marketplaces->reject(
+            fn ($m) => in_array($m->id, $existingMarketplaceIds)
+        );
+
+        if ($targetMarketplaces->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Product is already listed on all connected marketplaces.',
+                'published' => [],
+                'failed' => [],
+            ]);
+        }
+
+        $published = [];
+        $failed = [];
+
+        foreach ($targetMarketplaces as $marketplace) {
+            // Validate first
+            $validation = $this->listingBuilder->validateListing($product, $marketplace);
+
+            if (! $validation['valid']) {
+                $failed[] = [
+                    'marketplace_id' => $marketplace->id,
+                    'marketplace_name' => $marketplace->name ?: ucfirst($marketplace->platform->value),
+                    'platform' => $marketplace->platform->value,
+                    'errors' => $validation['errors'],
+                ];
+
+                continue;
+            }
+
+            try {
+                $platformService = $this->platformManager->driver($marketplace->platform);
+                $listing = $platformService->pushProduct($product, $marketplace);
+
+                $published[] = [
+                    'marketplace_id' => $marketplace->id,
+                    'marketplace_name' => $marketplace->name ?: ucfirst($marketplace->platform->value),
+                    'platform' => $marketplace->platform->value,
+                    'listing_id' => $listing->id,
+                    'listing_url' => $listing->listing_url,
+                    'warnings' => $validation['warnings'],
+                ];
+            } catch (\Throwable $e) {
+                $failed[] = [
+                    'marketplace_id' => $marketplace->id,
+                    'marketplace_name' => $marketplace->name ?: ucfirst($marketplace->platform->value),
+                    'platform' => $marketplace->platform->value,
+                    'errors' => [$e->getMessage()],
+                ];
+            }
+        }
+
+        $message = count($published) > 0
+            ? 'Published to '.count($published).' platform(s).'
+            : 'No platforms were published to.';
+
+        if (count($failed) > 0) {
+            $message .= ' '.count($failed).' failed.';
+        }
+
+        return response()->json([
+            'success' => count($published) > 0,
+            'message' => $message,
+            'published' => $published,
+            'failed' => $failed,
+        ]);
+    }
+
+    /**
      * Unpublish product from a marketplace (keeps the listing record for relisting later).
      */
     public function unpublish(Product $product, StoreMarketplace $marketplace): JsonResponse
