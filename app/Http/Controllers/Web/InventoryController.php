@@ -35,7 +35,7 @@ class InventoryController extends Controller
 
         $query = Inventory::query()
             ->where('store_id', $store->id)
-            ->with(['variant.product', 'warehouse']);
+            ->with(['variant.product' => fn ($q) => $q->withTrashed(), 'warehouse']);
 
         if ($selectedWarehouseId) {
             $query->where('warehouse_id', $selectedWarehouseId);

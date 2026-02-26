@@ -41,7 +41,7 @@ defineProps<{
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                         </svg>
                         <h3 class="mt-8 text-2xl font-semibold text-white">
-                            Welcome to REB
+                            Welcome to Shopmata
                         </h3>
 <!--                        <p class="mt-4 text-lg text-indigo-100">-->
 <!--                            Streamline your jewelry business with powerful inventory tracking, consignment management, repairs, and point of sale.-->

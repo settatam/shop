@@ -74,9 +74,15 @@ class LayawayItem extends Model
 
     public function reserve(): self
     {
-        if ($this->product) {
-            // Reduce available quantity to reserve item
-            $this->product->decrement('quantity', $this->quantity);
+        if ($this->product_variant_id) {
+            $inventory = Inventory::where('product_variant_id', $this->product_variant_id)->first();
+            if ($inventory) {
+                $inventory->decrement('quantity', $this->quantity);
+                Inventory::syncVariantQuantity($this->product_variant_id);
+                if ($this->product_id) {
+                    Inventory::syncProductQuantity($this->product_id);
+                }
+            }
         }
 
         $this->update(['is_reserved' => true]);
@@ -86,9 +92,15 @@ class LayawayItem extends Model
 
     public function release(): self
     {
-        if ($this->product && $this->is_reserved) {
-            // Return reserved quantity to available stock
-            $this->product->increment('quantity', $this->quantity);
+        if ($this->product_variant_id && $this->is_reserved) {
+            $inventory = Inventory::where('product_variant_id', $this->product_variant_id)->first();
+            if ($inventory) {
+                $inventory->increment('quantity', $this->quantity);
+                Inventory::syncVariantQuantity($this->product_variant_id);
+                if ($this->product_id) {
+                    Inventory::syncProductQuantity($this->product_id);
+                }
+            }
         }
 
         $this->update(['is_reserved' => false]);

@@ -1680,6 +1680,13 @@ class OrderController extends Controller
 
         if ($inventory) {
             $inventory->increment('quantity', $quantity);
+
+            // Sync variant and product quantity caches
+            \App\Models\Inventory::syncVariantQuantity($variantId);
+            $variant = \App\Models\ProductVariant::find($variantId);
+            if ($variant) {
+                \App\Models\Inventory::syncProductQuantity($variant->product_id);
+            }
         }
     }
 

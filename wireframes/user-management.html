@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - Wireframe</title>
+    <link rel="stylesheet" href="lofi.css">
+</head>
+<body>
+    <div class="wf-page">
+        <!-- Sidebar -->
+        <div class="wf-sidebar">
+            <div class="wf-flex wf-gap-8 wf-mb-16">
+                <div class="wf-logo" style="margin:0;">S</div>
+                <span style="font-weight:bold;font-size:14px;">Shopmata</span>
+            </div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Dashboard</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Products</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Inventory</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Integrations</div>
+            <div style="flex:1;"></div>
+            <div class="wf-nav-divider">settings</div>
+            <div class="wf-nav-item active"><div class="wf-nav-icon"></div> Team</div>
+        </div>
+
+        <!-- Main -->
+        <div class="wf-main">
+            <!-- Settings sub-nav -->
+            <div class="wf-flex wf-gap-16" style="align-items:flex-start;">
+                <div style="width:140px;flex-shrink:0;border-right:1px dashed #ddd;padding-right:16px;">
+                    <div style="padding:4px 8px;font-size:12px;color:#999;">General</div>
+                    <div style="padding:4px 8px;font-size:12px;color:#999;">Profile</div>
+                    <div style="padding:4px 8px;font-size:12px;font-weight:bold;border:1.5px dashed #333;border-radius:3px;">Team</div>
+                    <div style="padding:4px 8px;font-size:12px;color:#999;">Channels</div>
+                    <div style="padding:4px 8px;font-size:12px;color:#999;">Billing</div>
+                </div>
+
+                <div style="flex:1;max-width:640px;">
+                    <div class="wf-flex-between wf-mb-20">
+                        <div>
+                            <div class="wf-heading" style="font-size:16px;">Team members</div>
+                            <div class="wf-text-xs wf-text-muted">Manage who has access to this store</div>
+                        </div>
+                        <div class="wf-btn filled sm">+ Invite member</div>
+                    </div>
+
+                    <!-- Member list -->
+                    <!-- Owner -->
+                    <div class="wf-flex-between" style="padding:12px 0;border-bottom:1px dashed #ddd;">
+                        <div class="wf-flex wf-gap-12">
+                            <div class="wf-avatar">JD</div>
+                            <div>
+                                <div><strong>John Doe</strong> <span class="wf-badge" style="margin-left:4px;">Owner</span></div>
+                                <div class="wf-text-xs wf-text-muted">john@example.com</div>
+                            </div>
+                        </div>
+                        <div class="wf-flex wf-gap-16">
+                            <div class="wf-text-right">
+                                <div class="wf-text-sm">Owner</div>
+                                <div class="wf-badge" style="margin-top:2px;">active</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Staff active -->
+                    <div class="wf-flex-between" style="padding:12px 0;border-bottom:1px dashed #ddd;">
+                        <div class="wf-flex wf-gap-12">
+                            <div class="wf-avatar">JS</div>
+                            <div>
+                                <div><strong>Jane Smith</strong></div>
+                                <div class="wf-text-xs wf-text-muted">jane@example.com</div>
+                            </div>
+                        </div>
+                        <div class="wf-flex wf-gap-16">
+                            <div class="wf-text-right">
+                                <div class="wf-text-sm">Staff</div>
+                                <div class="wf-badge" style="margin-top:2px;">active</div>
+                            </div>
+                            <div class="wf-flex wf-gap-8">
+                                <span class="wf-toggle on"></span>
+                                <span class="wf-text-xs wf-text-muted">Assignable</span>
+                            </div>
+                            <div class="wf-dots"><span></span><span></span><span></span></div>
+                        </div>
+                    </div>
+
+                    <!-- Invite sent -->
+                    <div class="wf-flex-between" style="padding:12px 0;border-bottom:1px dashed #ddd;">
+                        <div class="wf-flex wf-gap-12">
+                            <div class="wf-avatar">MJ</div>
+                            <div>
+                                <div><strong>Mike Johnson</strong></div>
+                                <div class="wf-text-xs wf-text-muted">mike@example.com</div>
+                            </div>
+                        </div>
+                        <div class="wf-flex wf-gap-16">
+                            <div class="wf-text-right">
+                                <div class="wf-text-sm">Staff</div>
+                                <div class="wf-badge" style="margin-top:2px;">invite sent</div>
+                            </div>
+                            <div class="wf-flex wf-gap-8">
+                                <span class="wf-toggle"></span>
+                                <span class="wf-text-xs wf-text-muted">Assignable</span>
+                            </div>
+                            <div class="wf-dots"><span></span><span></span><span></span></div>
+                        </div>
+                    </div>
+
+                    <!-- Manager -->
+                    <div class="wf-flex-between" style="padding:12px 0;border-bottom:1px dashed #ddd;">
+                        <div class="wf-flex wf-gap-12">
+                            <div class="wf-avatar">AW</div>
+                            <div>
+                                <div><strong>Alice Williams</strong></div>
+                                <div class="wf-text-xs wf-text-muted">alice@example.com</div>
+                            </div>
+                        </div>
+                        <div class="wf-flex wf-gap-16">
+                            <div class="wf-text-right">
+                                <div class="wf-text-sm">Manager</div>
+                                <div class="wf-badge" style="margin-top:2px;">active</div>
+                            </div>
+                            <div class="wf-flex wf-gap-8">
+                                <span class="wf-toggle on"></span>
+                                <span class="wf-text-xs wf-text-muted">Assignable</span>
+                            </div>
+                            <div class="wf-dots"><span></span><span></span><span></span></div>
+                        </div>
+                    </div>
+
+                    <!-- Modal references -->
+                    <div style="margin-top:32px;">
+                        <div class="wf-annotation wf-mb-12">Modal states referenced below:</div>
+
+                        <div class="wf-grid-2" style="gap:12px;">
+                            <div class="wf-modal-ref">
+                                <div class="wf-modal-ref-title">Invite Member</div>
+                                <div class="wf-label">First name</div>
+                                <div class="wf-input">John</div>
+                                <div class="wf-label">Last name</div>
+                                <div class="wf-input">Doe</div>
+                                <div class="wf-label">Email</div>
+                                <div class="wf-input">john@example.com</div>
+                                <div class="wf-label">Role</div>
+                                <select class="wf-select wf-w-full wf-mb-12">
+                                    <option>Staff</option>
+                                </select>
+                                <div class="wf-flex wf-gap-8">
+                                    <div class="wf-btn sm" style="flex:1;text-align:center;">Cancel</div>
+                                    <div class="wf-btn filled sm" style="flex:1;text-align:center;">Send invite</div>
+                                </div>
+                            </div>
+
+                            <div class="wf-modal-ref">
+                                <div class="wf-modal-ref-title">Change Role</div>
+                                <div class="wf-text-center wf-mb-12">
+                                    <div style="font-weight:bold;">Change role</div>
+                                    <div class="wf-text-xs wf-text-muted">Update role for Jane Smith</div>
+                                </div>
+                                <select class="wf-select wf-w-full wf-mb-12">
+                                    <option>Staff</option>
+                                </select>
+                                <div class="wf-flex wf-gap-8">
+                                    <div class="wf-btn sm" style="flex:1;text-align:center;">Cancel</div>
+                                    <div class="wf-btn filled sm" style="flex:1;text-align:center;">Update</div>
+                                </div>
+                            </div>
+
+                            <div class="wf-modal-ref">
+                                <div class="wf-modal-ref-title">Remove Member</div>
+                                <div class="wf-text-center wf-mb-12">
+                                    <div style="font-weight:bold;">Remove member</div>
+                                    <div class="wf-text-xs wf-text-muted">Remove Jane Smith? They lose access immediately.</div>
+                                </div>
+                                <div class="wf-flex wf-gap-8">
+                                    <div class="wf-btn sm" style="flex:1;text-align:center;">Cancel</div>
+                                    <div class="wf-btn danger sm" style="flex:1;text-align:center;">Remove</div>
+                                </div>
+                            </div>
+
+                            <div class="wf-modal-ref">
+                                <div class="wf-modal-ref-title">Transfer Ownership</div>
+                                <div class="wf-text-center wf-mb-12">
+                                    <div style="font-weight:bold;">Transfer ownership</div>
+                                    <div class="wf-text-xs wf-text-muted">Transfer to Alice Williams? You lose owner privileges.</div>
+                                </div>
+                                <div class="wf-flex wf-gap-8">
+                                    <div class="wf-btn sm" style="flex:1;text-align:center;">Cancel</div>
+                                    <div class="wf-btn filled sm" style="flex:1;text-align:center;">Transfer</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

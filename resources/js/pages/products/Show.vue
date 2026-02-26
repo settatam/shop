@@ -4,9 +4,9 @@ import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { ImageLightbox } from '@/components/images';
 import { PlatformListingsTab } from '@/components/platforms';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
-import { PencilIcon, TrashIcon, ArrowLeftIcon, PrinterIcon, ShoppingCartIcon } from '@heroicons/vue/20/solid';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
+import { PencilIcon, TrashIcon, ArrowLeftIcon, PrinterIcon, ShoppingCartIcon, ArrowsRightLeftIcon, XMarkIcon, CheckCircleIcon } from '@heroicons/vue/20/solid';
 
 interface Variant {
     id: number;
@@ -84,6 +84,21 @@ interface TemplateFieldValue {
     value: string | null;
 }
 
+interface Warehouse {
+    id: number;
+    name: string;
+    code: string;
+    is_default: boolean;
+}
+
+interface DistributionRow {
+    variant_id: number;
+    variant_title: string | null;
+    sku: string;
+    warehouse_quantities: Record<number, number>;
+    total_quantity: number;
+}
+
 interface Product {
     id: number;
     title: string;
@@ -114,9 +129,25 @@ interface Props {
     activityLogs?: ActivityDay[];
     platformListings?: PlatformListing[];
     availableMarketplaces?: AvailableMarketplace[];
+    warehouses?: Warehouse[];
+    inventoryDistribution?: DistributionRow[];
 }
 
 const props = defineProps<Props>();
+
+// Flash message
+const page = usePage();
+const flashSuccess = ref<string | null>(null);
+
+onMounted(() => {
+    const flash = page.props.flash as { success?: string } | undefined;
+    if (flash?.success) {
+        flashSuccess.value = flash.success;
+        setTimeout(() => {
+            flashSuccess.value = null;
+        }, 8000);
+    }
+});
 
 // Lightbox state
 const lightboxOpen = ref(false);
@@ -158,6 +189,135 @@ const deleteProduct = () => {
 const refreshListings = () => {
     router.reload({ only: ['platformListings', 'availableMarketplaces'] });
 };
+
+// Transfer modal state
+const showTransferModal = ref(false);
+const transferForm = ref({
+    from_warehouse_id: null as number | null,
+    to_warehouse_id: null as number | null,
+    notes: '',
+    expected_at: '',
+    items: [] as { product_variant_id: number; quantity_requested: number; sku: string; variant_title: string | null }[],
+});
+const transferErrors = ref<Record<string, string>>({});
+const transferProcessing = ref(false);
+
+const canSubmitTransfer = computed(() => {
+    return (
+        transferForm.value.from_warehouse_id &&
+        transferForm.value.to_warehouse_id &&
+        transferForm.value.from_warehouse_id !== transferForm.value.to_warehouse_id &&
+        transferForm.value.items.length > 0 &&
+        transferForm.value.items.every((i) => i.quantity_requested > 0)
+    );
+});
+
+function getCsrfToken(): string {
+    return decodeURIComponent(
+        document.cookie
+            .split('; ')
+            .find((row) => row.startsWith('XSRF-TOKEN='))
+            ?.split('=')[1] || '',
+    );
+}
+
+function openTransferModal(row?: DistributionRow) {
+    transferForm.value = {
+        from_warehouse_id: null,
+        to_warehouse_id: null,
+        notes: '',
+        expected_at: '',
+        items: [],
+    };
+    transferErrors.value = {};
+
+    if (row) {
+        transferForm.value.items.push({
+            product_variant_id: row.variant_id,
+            quantity_requested: 1,
+            sku: row.sku,
+            variant_title: row.variant_title,
+        });
+    }
+
+    showTransferModal.value = true;
+}
+
+function addVariantToTransfer(row: DistributionRow) {
+    if (transferForm.value.items.some((i) => i.product_variant_id === row.variant_id)) {
+        return;
+    }
+    transferForm.value.items.push({
+        product_variant_id: row.variant_id,
+        quantity_requested: 1,
+        sku: row.sku,
+        variant_title: row.variant_title,
+    });
+}
+
+function removeTransferItem(index: number) {
+    transferForm.value.items.splice(index, 1);
+}
+
+function submitTransfer(asDraft: boolean) {
+    if (transferProcessing.value || !canSubmitTransfer.value) {
+        return;
+    }
+
+    transferProcessing.value = true;
+    transferErrors.value = {};
+
+    const payload = {
+        from_warehouse_id: transferForm.value.from_warehouse_id,
+        to_warehouse_id: transferForm.value.to_warehouse_id,
+        notes: transferForm.value.notes || null,
+        expected_at: transferForm.value.expected_at || null,
+        items: transferForm.value.items.map((i) => ({
+            product_variant_id: i.product_variant_id,
+            quantity_requested: i.quantity_requested,
+        })),
+    };
+
+    fetch('/api/v1/inventory-transfers', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-XSRF-TOKEN': getCsrfToken(),
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+    })
+        .then(async (response) => {
+            if (!response.ok) {
+                const data = await response.json();
+                transferErrors.value = data.errors || { general: data.message || 'An error occurred' };
+                return;
+            }
+
+            const transfer = await response.json();
+
+            if (!asDraft) {
+                await fetch(`/api/v1/inventory-transfers/${transfer.id}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-XSRF-TOKEN': getCsrfToken(),
+                    },
+                    credentials: 'include',
+                });
+            }
+
+            showTransferModal.value = false;
+            router.reload();
+        })
+        .catch(() => {
+            transferErrors.value = { general: 'An unexpected error occurred' };
+        })
+        .finally(() => {
+            transferProcessing.value = false;
+        });
+}
 </script>
 
 <template>
@@ -165,6 +325,30 @@ const refreshListings = () => {
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col p-4">
+            <!-- Flash Message -->
+            <transition
+                enter-active-class="transition duration-300 ease-out"
+                enter-from-class="translate-y-[-8px] opacity-0"
+                enter-to-class="translate-y-0 opacity-100"
+                leave-active-class="transition duration-200 ease-in"
+                leave-from-class="translate-y-0 opacity-100"
+                leave-to-class="translate-y-[-8px] opacity-0"
+            >
+                <div v-if="flashSuccess" class="mb-6 rounded-lg bg-green-50 p-4 shadow-sm ring-1 ring-inset ring-green-200 dark:bg-green-900/20 dark:ring-green-800">
+                    <div class="flex items-center">
+                        <CheckCircleIcon class="size-6 text-green-500 dark:text-green-400" />
+                        <p class="ml-3 text-sm font-semibold text-green-800 dark:text-green-300">{{ flashSuccess }}</p>
+                        <button
+                            type="button"
+                            class="ml-auto rounded-md p-1 text-green-500 hover:bg-green-100 hover:text-green-600 dark:text-green-400 dark:hover:bg-green-800/30"
+                            @click="flashSuccess = null"
+                        >
+                            <XMarkIcon class="size-5" />
+                        </button>
+                    </div>
+                </div>
+            </transition>
+
             <!-- Header -->
             <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center gap-4">
@@ -377,6 +561,90 @@ const refreshListings = () => {
                         :product-updated-at="product.updated_at"
                         @refresh="refreshListings"
                     />
+
+                    <!-- Inventory Allocation -->
+                    <div v-if="warehouses && warehouses.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Inventory Allocation</h3>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
+                                    @click="openTransferModal()"
+                                >
+                                    <ArrowsRightLeftIcon class="size-4" />
+                                    Allocate
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table v-if="inventoryDistribution && inventoryDistribution.length > 0" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead class="bg-gray-50 dark:bg-gray-900/50">
+                                        <tr>
+                                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                                Variant / SKU
+                                            </th>
+                                            <th
+                                                v-for="wh in warehouses"
+                                                :key="wh.id"
+                                                scope="col"
+                                                class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                                            >
+                                                {{ wh.name }}
+                                            </th>
+                                            <th scope="col" class="px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                                Total
+                                            </th>
+                                            <th scope="col" class="relative px-3 py-3">
+                                                <span class="sr-only">Actions</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr v-for="row in inventoryDistribution" :key="row.variant_id">
+                                            <td class="whitespace-nowrap px-3 py-3">
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                                        {{ row.sku }}
+                                                    </p>
+                                                    <p v-if="row.variant_title" class="text-xs text-gray-500 dark:text-gray-400">
+                                                        {{ row.variant_title }}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                            <td
+                                                v-for="wh in warehouses"
+                                                :key="wh.id"
+                                                class="whitespace-nowrap px-3 py-3 text-right text-sm"
+                                                :class="row.warehouse_quantities[wh.id] > 0 ? 'font-medium text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'"
+                                            >
+                                                {{ row.warehouse_quantities[wh.id] || 0 }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                                {{ row.total_quantity }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-3 text-right text-sm">
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                    @click="openTransferModal(row)"
+                                                >
+                                                    <ArrowsRightLeftIcon class="size-4" />
+                                                    Allocate
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                <div v-else class="py-8 text-center">
+                                    <ArrowsRightLeftIcon class="mx-auto h-10 w-10 text-gray-400" />
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        No inventory allocation data for this product.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Sidebar -->
@@ -528,5 +796,145 @@ const refreshListings = () => {
             :images="product.images"
             :initial-index="lightboxIndex"
         />
+
+        <!-- Create Transfer Modal -->
+        <Teleport to="body">
+            <div v-if="showTransferModal" class="relative z-50">
+                <div class="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75" />
+                <div class="fixed inset-0 z-10 overflow-y-auto">
+                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                        <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6 dark:bg-gray-800">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Create Transfer</h3>
+                                <button type="button" class="text-gray-400 hover:text-gray-500" @click="showTransferModal = false">
+                                    <XMarkIcon class="size-6" />
+                                </button>
+                            </div>
+
+                            <div v-if="transferErrors.general" class="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                {{ transferErrors.general }}
+                            </div>
+
+                            <div class="mt-5 space-y-4">
+                                <!-- Warehouses -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">From Warehouse</label>
+                                        <select
+                                            v-model="transferForm.from_warehouse_id"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        >
+                                            <option :value="null">Select warehouse...</option>
+                                            <option v-for="wh in warehouses" :key="wh.id" :value="wh.id">{{ wh.name }}</option>
+                                        </select>
+                                        <p v-if="transferErrors.from_warehouse_id" class="mt-1 text-xs text-red-600">{{ transferErrors.from_warehouse_id }}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">To Warehouse</label>
+                                        <select
+                                            v-model="transferForm.to_warehouse_id"
+                                            class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        >
+                                            <option :value="null">Select warehouse...</option>
+                                            <option v-for="wh in warehouses" :key="wh.id" :value="wh.id">{{ wh.name }}</option>
+                                        </select>
+                                        <p v-if="transferErrors.to_warehouse_id" class="mt-1 text-xs text-red-600">{{ transferErrors.to_warehouse_id }}</p>
+                                    </div>
+                                </div>
+
+                                <!-- Items -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Items</label>
+
+                                    <!-- Add variant buttons from distribution data -->
+                                    <div v-if="inventoryDistribution && inventoryDistribution.length > 0" class="mt-1 flex flex-wrap gap-1.5">
+                                        <button
+                                            v-for="row in inventoryDistribution.filter((r) => !transferForm.items.some((i) => i.product_variant_id === r.variant_id))"
+                                            :key="row.variant_id"
+                                            type="button"
+                                            class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                            @click="addVariantToTransfer(row)"
+                                        >
+                                            + {{ row.sku }}
+                                            <span v-if="row.variant_title" class="ml-1 text-gray-500 dark:text-gray-400">{{ row.variant_title }}</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Items list -->
+                                    <div v-if="transferForm.items.length > 0" class="mt-2 space-y-2">
+                                        <div
+                                            v-for="(item, index) in transferForm.items"
+                                            :key="item.product_variant_id"
+                                            class="flex items-center gap-3 rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-700/50"
+                                        >
+                                            <div class="flex-1">
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ item.sku }}</p>
+                                                <p v-if="item.variant_title" class="text-xs text-gray-500 dark:text-gray-400">{{ item.variant_title }}</p>
+                                            </div>
+                                            <input
+                                                v-model.number="item.quantity_requested"
+                                                type="number"
+                                                min="1"
+                                                class="w-20 rounded-md border-0 bg-white py-1 text-center text-sm text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-600 dark:text-white dark:ring-gray-500"
+                                            />
+                                            <button type="button" class="text-red-500 hover:text-red-700" @click="removeTransferItem(index)">
+                                                <XMarkIcon class="size-5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">Click a variant above to add it to this transfer.</p>
+                                </div>
+
+                                <!-- Notes -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes (optional)</label>
+                                    <textarea
+                                        v-model="transferForm.notes"
+                                        rows="2"
+                                        class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+
+                                <!-- Expected date -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Expected Date (optional)</label>
+                                    <input
+                                        v-model="transferForm.expected_at"
+                                        type="date"
+                                        class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="mt-5 flex justify-end gap-3 sm:mt-6">
+                                <button
+                                    type="button"
+                                    class="inline-flex justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                                    @click="showTransferModal = false"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="transferProcessing || !canSubmitTransfer"
+                                    class="inline-flex justify-center rounded-md bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 disabled:opacity-50"
+                                    @click="submitTransfer(true)"
+                                >
+                                    {{ transferProcessing ? 'Saving...' : 'Save as Draft' }}
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="transferProcessing || !canSubmitTransfer"
+                                    class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                                    @click="submitTransfer(false)"
+                                >
+                                    {{ transferProcessing ? 'Saving...' : 'Submit Transfer' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

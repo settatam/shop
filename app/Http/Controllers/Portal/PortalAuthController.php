@@ -12,13 +12,28 @@ use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * Handles authentication for the customer-facing portal.
+ *
+ * Customers authenticate via either email/password or phone-based OTP.
+ * All lookups are scoped to the current store (resolved from the subdomain)
+ * to ensure customers can only access their own store's portal.
+ *
+ * Auth guard: 'customer' (separate from the staff 'web' guard).
+ */
 class PortalAuthController extends Controller
 {
+    /**
+     * Show the portal login page.
+     */
     public function showLogin(): Response
     {
         return Inertia::render('portal/auth/Login');
     }
 
+    /**
+     * Authenticate a customer using email and password.
+     */
     public function login(Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
@@ -48,6 +63,10 @@ class PortalAuthController extends Controller
         );
     }
 
+    /**
+     * Send a 6-digit OTP to the customer's phone number.
+     * The code is cached for 10 minutes and dispatched via SendCustomerOtpJob.
+     */
     public function sendOtp(Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
@@ -76,6 +95,10 @@ class PortalAuthController extends Controller
         return back()->with('otpSent', true);
     }
 
+    /**
+     * Verify the OTP code and log the customer in.
+     * Also marks the phone as verified if it hasn't been already.
+     */
     public function verifyOtp(Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
@@ -118,6 +141,9 @@ class PortalAuthController extends Controller
         );
     }
 
+    /**
+     * Log the customer out and invalidate the session.
+     */
     public function logout(Request $request): \Illuminate\Http\RedirectResponse
     {
         $storeSlug = app(StoreContext::class)->getCurrentStore()->slug;

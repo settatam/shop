@@ -320,14 +320,12 @@ class ProductPreviewTest extends TestCase
     {
         Passport::actingAs($this->user);
 
-        // Create product with has_variants=false so total_quantity comes from product.quantity
         $product = Product::factory()->create([
             'store_id' => $this->store->id,
             'has_variants' => false,
-            'quantity' => 100,
         ]);
 
-        ProductVariant::factory()->create(['product_id' => $product->id]);
+        ProductVariant::factory()->create(['product_id' => $product->id, 'quantity' => 100]);
 
         $response = $this->getJson("/api/v1/products/{$product->id}/preview");
 

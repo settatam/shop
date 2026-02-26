@@ -13,6 +13,51 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Scout\Searchable;
 
+/**
+ * Product model representing a store's inventory item.
+ *
+ * A product contains one or more variants, each with its own SKU, price, and quantity.
+ * Products are listed on sales channels (In Store, Shopify, eBay, Amazon, etc.) via
+ * PlatformListing records. Inventory is tracked per-variant per-warehouse via the
+ * Inventory model, and quantity changes automatically dispatch SyncProductInventoryJob
+ * to push updated quantities to all listed platforms.
+ *
+ * Lifecycle:
+ * - On create: listings are created for all active sales channels (local = listed, external = not_listed).
+ * - On status change to active: local listings are listed, external listings are ensured.
+ * - On status change away from active: all listings are ended.
+ * - Inventory changes (via Inventory model): variant/product quantities are synced, then
+ *   SyncProductInventoryJob is dispatched to update all listed platforms.
+ *
+ * @property int $id
+ * @property int $store_id
+ * @property string $title
+ * @property string|null $description
+ * @property string|null $handle
+ * @property string $status
+ * @property bool $is_published
+ * @property bool $is_draft
+ * @property bool $has_variants
+ * @property bool $track_quantity
+ * @property bool $sell_out_of_stock
+ * @property bool $charge_taxes
+ * @property int $quantity
+ * @property int|null $category_id
+ * @property int|null $template_id
+ * @property int|null $brand_id
+ * @property int|null $vendor_id
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property-read int $total_quantity
+ * @property-read string $status_label
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, ProductVariant> $variants
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, PlatformListing> $platformListings
+ * @property-read Category|null $category
+ * @property-read Brand|null $brand
+ * @property-read Vendor|null $vendor
+ * @property-read ProductTemplate|null $template
+ */
 class Product extends Model
 {
     use BelongsToStore, HasFactory, HasImages, HasTags, LogsActivity, Searchable, SoftDeletes;
@@ -126,6 +171,10 @@ class Product extends Model
             }
         });
     }
+
+    // ──────────────────────────────────────────────────────────────
+    //  Sales Channel / Platform Listing Management
+    // ──────────────────────────────────────────────────────────────
 
     /**
      * Create listings for ALL active channels.
@@ -302,6 +351,8 @@ class Product extends Model
     /**
      * List product on all active external platforms.
      * Called when user clicks "List on All Platforms".
+     *
+     * @return array<PlatformListing>
      */
     public function listOnAllPlatforms(): array
     {
@@ -355,9 +406,17 @@ class Product extends Model
     }
 
     /**
-     * Dispatch a job to sync inventory to all platform listings.
-     * If quantity is zero, listings will be ended on all platforms.
-     * Otherwise, inventory will be updated on all platforms.
+     * Dispatch SyncProductInventoryJob to push current quantity to all listed platforms.
+     *
+     * This is the single entry point for platform inventory sync. It is called
+     * automatically by the Inventory model's saved/deleted hooks whenever stock
+     * changes (sales, manual adjustments, transfers, corrections, etc.).
+     *
+     * The dispatched job will:
+     * - Update quantity on each platform where the product has a "listed" listing.
+     * - End the listing on platforms if the product's quantity reaches zero.
+     *
+     * @param  string|null  $reason  Human-readable trigger reason for logging (e.g. 'inventory_changed', 'order_placed')
      */
     public function syncInventoryToAllPlatforms(?string $reason = null): void
     {
@@ -384,6 +443,10 @@ class Product extends Model
             ->whereIn('status', [PlatformListing::STATUS_LISTED, 'active'])
             ->exists();
     }
+
+    // ──────────────────────────────────────────────────────────────
+    //  Relationships
+    // ──────────────────────────────────────────────────────────────
 
     public function category(): BelongsTo
     {
@@ -489,18 +552,20 @@ class Product extends Model
         return $this->hasMany(TransactionItem::class);
     }
 
+    // ──────────────────────────────────────────────────────────────
+    //  Template / Attributes
+    // ──────────────────────────────────────────────────────────────
+
     /**
      * Get the effective template for this product.
      * Uses stored template_id first, falls back to category's effective template.
      */
     public function getTemplate(): ?ProductTemplate
     {
-        // Use stored template if available
         if ($this->template_id) {
             return $this->template;
         }
 
-        // Fall back to category's effective template
         if ($this->category) {
             return $this->category->getEffectiveTemplate();
         }
@@ -529,14 +594,29 @@ class Product extends Model
         );
     }
 
+    // ──────────────────────────────────────────────────────────────
+    //  Computed Attributes
+    // ──────────────────────────────────────────────────────────────
+
+    /**
+     * Total quantity across all variants (sum of variant quantities).
+     */
     public function getTotalQuantityAttribute(): int
     {
-        if ($this->has_variants) {
-            return $this->variants->sum('quantity');
-        }
-
-        return $this->quantity ?? 0;
+        return (int) $this->variants->sum('quantity');
     }
+
+    /**
+     * Human-readable status label.
+     */
+    public function getStatusLabelAttribute(): string
+    {
+        return self::getStatuses()[$this->status] ?? ucfirst($this->status ?? 'Unknown');
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    //  Scopes
+    // ──────────────────────────────────────────────────────────────
 
     public function scopePublished($query)
     {
@@ -587,6 +667,10 @@ class Product extends Model
     {
         return $query->where('status', $status);
     }
+
+    // ──────────────────────────────────────────────────────────────
+    //  Status Helpers
+    // ──────────────────────────────────────────────────────────────
 
     /**
      * Get all available statuses.
@@ -645,15 +729,7 @@ class Product extends Model
     }
 
     /**
-     * Get human-readable status label.
-     */
-    public function getStatusLabelAttribute(): string
-    {
-        return self::getStatuses()[$this->status] ?? ucfirst($this->status ?? 'Unknown');
-    }
-
-    /**
-     * Check if product can be edited.
+     * Check if product can be edited (only draft and active products).
      */
     public function canBeEdited(): bool
     {
@@ -661,27 +737,46 @@ class Product extends Model
     }
 
     /**
-     * Check if product is available for sale.
+     * Check if product is available for sale (active with stock).
      */
     public function isAvailableForSale(): bool
     {
         return $this->status === self::STATUS_ACTIVE && $this->total_quantity > 0;
     }
 
+    // ──────────────────────────────────────────────────────────────
+    //  Activity Logging
+    // ──────────────────────────────────────────────────────────────
+
     protected function getActivityPrefix(): string
     {
         return 'products';
     }
 
+    protected function getActivityMap(): array
+    {
+        return [
+            'create' => Activity::PRODUCTS_CREATE,
+            'update' => Activity::PRODUCTS_UPDATE,
+            'delete' => Activity::PRODUCTS_DELETE,
+            'view' => 'products.view',
+            'quantity_change' => Activity::PRODUCTS_QUANTITY_CHANGE,
+        ];
+    }
+
     protected function getLoggableAttributes(): array
     {
-        return ['id', 'title', 'handle', 'is_published', 'is_draft', 'category_id', 'brand_id'];
+        return ['id', 'title', 'handle', 'is_published', 'is_draft', 'category_id', 'brand_id', 'quantity'];
     }
 
     protected function getActivityIdentifier(): string
     {
         return $this->title ?? "#{$this->id}";
     }
+
+    // ──────────────────────────────────────────────────────────────
+    //  Search (Laravel Scout)
+    // ──────────────────────────────────────────────────────────────
 
     /**
      * Get the indexable data array for the model.
@@ -716,8 +811,12 @@ class Product extends Model
         return ! $this->trashed();
     }
 
+    // ──────────────────────────────────────────────────────────────
+    //  SKU Generation
+    // ──────────────────────────────────────────────────────────────
+
     /**
-     * Generate SKU in the format: CATEGORY_PREFIX-product_id
+     * Generate SKU in the format: CATEGORY_PREFIX-product_id.
      */
     public function generateSku(): string
     {
@@ -728,6 +827,7 @@ class Product extends Model
 
     /**
      * Generate SKU and barcode for all variants of this product.
+     * Single variant gets base SKU; multiple variants get base SKU suffixed with index.
      */
     public function generateSkusForVariants(): void
     {

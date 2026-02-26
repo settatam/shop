@@ -863,6 +863,17 @@ function processReturn() {
                     </div>
                 </div>
 
+                <!-- Cancelled Banner -->
+                <div v-if="order.is_cancelled" class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                    <div class="flex items-center gap-3">
+                        <XCircleIcon class="size-6 shrink-0 text-red-600 dark:text-red-400" />
+                        <div>
+                            <h3 class="text-sm font-semibold text-red-800 dark:text-red-300">This sale has been cancelled</h3>
+                            <p class="mt-0.5 text-sm text-red-700 dark:text-red-400">This order was cancelled and any associated stock has been restored.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <!-- Main content -->
                     <div class="space-y-6 lg:col-span-2">

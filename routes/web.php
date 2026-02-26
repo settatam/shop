@@ -11,6 +11,7 @@ use App\Http\Controllers\Web\CustomProductController;
 use App\Http\Controllers\Web\GiaCardScannerController;
 use App\Http\Controllers\Web\GiaController;
 use App\Http\Controllers\Web\IntegrationsController;
+use App\Http\Controllers\Web\InventoryAllocationController;
 use App\Http\Controllers\Web\InventoryController;
 use App\Http\Controllers\Web\InventoryReportController;
 use App\Http\Controllers\Web\InvoiceController;
@@ -437,6 +438,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('customers/{customer}/addresses', [\App\Http\Controllers\Web\CustomerController::class, 'storeAddress'])->name('web.customers.store-address');
         Route::put('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'updateAddress'])->name('web.customers.update-address');
         Route::delete('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'deleteAddress'])->name('web.customers.delete-address');
+        Route::get('customers/{customer}/store-credits', [\App\Http\Controllers\Web\StoreCreditController::class, 'index'])->name('web.customers.store-credits.index');
+        Route::post('customers/{customer}/store-credits/cash-out', [\App\Http\Controllers\Web\StoreCreditController::class, 'cashOut'])->name('web.customers.store-credits.cash-out');
     });
 
     // Lead Sources
@@ -633,6 +636,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
 
     // Inventory
     Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index')->middleware('permission:inventory.view');
+    Route::get('inventory/allocations', [InventoryAllocationController::class, 'index'])->name('inventory.allocations')->middleware('permission:inventory.view');
     Route::post('inventory/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust')->middleware('permission:inventory.adjust');
 
     // Integrations

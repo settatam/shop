@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\ProductReturn;
+use App\Models\ProductVariant;
 use App\Models\ReturnItem;
 use App\Models\ReturnPolicy;
 use App\Models\Store;
@@ -191,6 +192,13 @@ class ReturnService
 
         if ($inventory) {
             $inventory->increment('quantity', $quantity);
+
+            // Sync variant and product quantity caches
+            Inventory::syncVariantQuantity($variantId);
+            $variant = ProductVariant::find($variantId);
+            if ($variant) {
+                Inventory::syncProductQuantity($variant->product_id);
+            }
         }
     }
 

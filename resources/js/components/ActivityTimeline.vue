@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+    ArrowsRightLeftIcon,
     BanknotesIcon,
     ChatBubbleLeftEllipsisIcon,
     CheckCircleIcon,
@@ -68,6 +69,7 @@ const iconComponents: Record<string, typeof PlusIcon> = {
     inbox: InboxIcon,
     document: DocumentIcon,
     'chat-bubble': ChatBubbleLeftEllipsisIcon,
+    'arrows-right-left': ArrowsRightLeftIcon,
 };
 
 const colorClasses: Record<string, { bg: string; icon: string }> = {
@@ -86,6 +88,22 @@ const colorClasses: Record<string, { bg: string; icon: string }> = {
     yellow: {
         bg: 'bg-yellow-100 dark:bg-yellow-900/50',
         icon: 'text-yellow-600 dark:text-yellow-400',
+    },
+    orange: {
+        bg: 'bg-orange-100 dark:bg-orange-900/50',
+        icon: 'text-orange-600 dark:text-orange-400',
+    },
+    amber: {
+        bg: 'bg-amber-100 dark:bg-amber-900/50',
+        icon: 'text-amber-600 dark:text-amber-400',
+    },
+    indigo: {
+        bg: 'bg-indigo-100 dark:bg-indigo-900/50',
+        icon: 'text-indigo-600 dark:text-indigo-400',
+    },
+    purple: {
+        bg: 'bg-purple-100 dark:bg-purple-900/50',
+        icon: 'text-purple-600 dark:text-purple-400',
     },
     gray: {
         bg: 'bg-gray-100 dark:bg-gray-700',

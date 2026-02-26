@@ -13,10 +13,12 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\SalesChannel;
 use App\Models\Store;
+use App\Models\StoreCredit;
 use App\Models\StoreUser;
 use App\Models\Warehouse;
 use App\Notifications\InventoryOversoldNotification;
 use App\Services\BucketService;
+use App\Services\Credits\StoreCreditService;
 use App\Services\Invoices\InvoiceService;
 use App\Services\TaxService;
 use App\Services\TradeIn\TradeInService;
@@ -40,6 +42,7 @@ class OrderCreationService
         protected TradeInService $tradeInService,
         protected InvoiceService $invoiceService,
         protected BucketService $bucketService,
+        protected StoreCreditService $storeCreditService,
     ) {}
 
     /**
@@ -505,6 +508,12 @@ class OrderCreationService
             }
         }
 
+        // Sync variant and product quantity caches
+        Inventory::syncVariantQuantity($variant->id);
+        if ($variant->product_id) {
+            Inventory::syncProductQuantity($variant->product_id);
+        }
+
         // Sync inventory to all platform listings
         if ($variant->product) {
             SyncProductInventoryJob::dispatch($variant->product, 'order_placed');
@@ -561,6 +570,22 @@ class OrderCreationService
 
     public function addPayment(array $paymentData): Payment
     {
+        $paymentMethod = $paymentData['payment_method'] ?? Payment::METHOD_CASH;
+
+        // Redeem store credit if paying with store credit
+        if ($paymentMethod === Payment::METHOD_STORE_CREDIT && $this->order->customer_id) {
+            $customer = Customer::find($this->order->customer_id);
+            if ($customer && (float) $customer->store_credit_balance > 0) {
+                $this->storeCreditService->redeem(
+                    customer: $customer,
+                    amount: (float) $paymentData['amount'],
+                    source: StoreCredit::SOURCE_ORDER_PAYMENT,
+                    reference: $this->order,
+                    description: "Payment for order {$this->order->invoice_number}",
+                );
+            }
+        }
+
         $payment = Payment::create([
             'store_id' => $this->store->id,
             'payable_type' => Order::class,
@@ -568,7 +593,7 @@ class OrderCreationService
             'order_id' => $this->order->id, // Keep for backwards compatibility
             'customer_id' => $this->order->customer_id,
             'user_id' => $paymentData['user_id'] ?? auth()->id(),
-            'payment_method' => $paymentData['payment_method'] ?? Payment::METHOD_CASH,
+            'payment_method' => $paymentMethod,
             'status' => $paymentData['status'] ?? Payment::STATUS_COMPLETED,
             'amount' => $paymentData['amount'],
             'currency' => $paymentData['currency'] ?? 'USD',
@@ -650,10 +675,16 @@ class OrderCreationService
         if ($inventory) {
             $inventory->increment('quantity', $quantity);
 
-            // Sync inventory to all platform listings
+            // Sync variant and product quantity caches
+            Inventory::syncVariantQuantity($variantId);
             $variant = ProductVariant::find($variantId);
-            if ($variant?->product) {
-                SyncProductInventoryJob::dispatch($variant->product, 'order_cancelled');
+            if ($variant) {
+                Inventory::syncProductQuantity($variant->product_id);
+
+                // Sync inventory to all platform listings
+                if ($variant->product) {
+                    SyncProductInventoryJob::dispatch($variant->product, 'order_cancelled');
+                }
             }
         }
     }

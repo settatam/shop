@@ -44,6 +44,7 @@ class Customer extends Authenticatable
         'additional_fields',
         'number_of_sales',
         'number_of_buys',
+        'store_credit_balance',
         'last_sales_date',
         'phone_verified_at',
         'portal_invite_token',
@@ -69,6 +70,7 @@ class Customer extends Authenticatable
             'is_active' => 'boolean',
             'notify' => 'boolean',
             'additional_fields' => 'array',
+            'store_credit_balance' => 'decimal:2',
             'last_sales_date' => 'date',
             'phone_verified_at' => 'datetime',
             'portal_invite_sent_at' => 'datetime',
@@ -83,6 +85,11 @@ class Customer extends Authenticatable
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function storeCredits(): HasMany
+    {
+        return $this->hasMany(StoreCredit::class);
     }
 
     public function repairs(): HasMany

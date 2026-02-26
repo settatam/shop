@@ -887,21 +887,10 @@ class OrderImportService
             }
         }
 
-        // If there's still remaining quantity, reduce from variant directly
-        // This handles cases where inventory tracking isn't set up
-        if ($remaining > 0 && $variant->quantity > 0) {
-            $reduceBy = min($variant->quantity, $remaining);
-
-            // Atomic conditional update
-            $updated = ProductVariant::where('id', $variant->id)
-                ->where('quantity', '>=', $reduceBy)
-                ->update([
-                    'quantity' => DB::raw("quantity - {$reduceBy}"),
-                ]);
-
-            if ($updated) {
-                $remaining -= $reduceBy;
-            }
+        // Sync variant and product quantity caches
+        Inventory::syncVariantQuantity($variant->id);
+        if ($variant->product_id) {
+            Inventory::syncProductQuantity($variant->product_id);
         }
 
         // Notify store owners if we couldn't fulfill the entire quantity

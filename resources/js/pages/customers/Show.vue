@@ -133,6 +133,7 @@ interface Stats {
     total_sales: number;
     total_buy_value: number;
     total_sales_value: number;
+    store_credit_balance: number;
     last_activity: string | null;
 }
 
@@ -870,6 +871,25 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                     <dd class="text-sm text-gray-900 dark:text-white">{{ formatDate(stats.last_activity) }}</dd>
                                 </div>
                             </dl>
+                        </div>
+                    </div>
+
+                    <!-- Store Credit -->
+                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Credit</h3>
+                                <Link
+                                    :href="`/customers/${customer.id}/store-credits`"
+                                    class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                >
+                                    View History
+                                </Link>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                {{ formatCurrency(stats.store_credit_balance) }}
+                            </p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Available balance</p>
                         </div>
                     </div>
 

@@ -134,8 +134,18 @@ class SyncOrderAction implements AgentActionInterface
                 ->first();
 
             if ($product && ($item['quantity'] ?? 0) > 0) {
-                // Deduct sold quantity
-                $product->decrement('quantity', (int) $item['quantity']);
+                $qty = (int) $item['quantity'];
+
+                // Deduct from inventory (first variant, first warehouse)
+                $variant = $product->variants()->first();
+                if ($variant) {
+                    $inventory = \App\Models\Inventory::where('product_variant_id', $variant->id)->first();
+                    if ($inventory) {
+                        $inventory->decrement('quantity', $qty);
+                        \App\Models\Inventory::syncVariantQuantity($variant->id);
+                    }
+                }
+                \App\Models\Inventory::syncProductQuantity($product->id);
 
                 // Sync inventory to all platform listings
                 $product->syncInventoryToAllPlatforms('external_order_synced');
@@ -177,7 +187,16 @@ class SyncOrderAction implements AgentActionInterface
                         ->first();
 
                     if ($product && ($item['quantity'] ?? 0) > 0) {
-                        $product->increment('quantity', (int) $item['quantity']);
+                        $qty = (int) $item['quantity'];
+                        $variant = $product->variants()->first();
+                        if ($variant) {
+                            $inventory = \App\Models\Inventory::where('product_variant_id', $variant->id)->first();
+                            if ($inventory) {
+                                $inventory->increment('quantity', $qty);
+                                \App\Models\Inventory::syncVariantQuantity($variant->id);
+                            }
+                        }
+                        \App\Models\Inventory::syncProductQuantity($product->id);
                     }
                 }
 

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Allocation - Wireframe</title>
+    <link rel="stylesheet" href="lofi.css">
+</head>
+<body>
+    <div class="wf-page">
+        <!-- Sidebar -->
+        <div class="wf-sidebar">
+            <div class="wf-flex wf-gap-8 wf-mb-16">
+                <div class="wf-logo" style="margin:0;">S</div>
+                <span style="font-weight:bold;font-size:14px;">Shopmata</span>
+            </div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Dashboard</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Products</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Sales</div>
+            <div class="wf-nav-item active"><div class="wf-nav-icon"></div> Inventory</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Integrations</div>
+            <div style="flex:1;"></div>
+            <div class="wf-nav-divider">settings</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Settings</div>
+        </div>
+
+        <!-- Main -->
+        <div class="wf-main">
+            <div class="wf-flex-between wf-mb-20">
+                <div>
+                    <div class="wf-heading">Inventory Allocation</div>
+                    <div class="wf-subheading" style="margin-bottom:0;">View stock distribution and manage transfers</div>
+                </div>
+                <div class="wf-flex wf-gap-8">
+                    <div class="wf-btn filled sm">+ Create Transfer</div>
+                </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="wf-grid-4 wf-mb-20">
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total Warehouses</div>
+                    <div class="wf-stat-value">3</div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Items in Transit</div>
+                    <div class="wf-stat-value">2</div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Pending Transfers</div>
+                    <div class="wf-stat-value">4</div>
+                    <div class="wf-stat-trend">! needs attention</div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total Allocated Value</div>
+                    <div class="wf-stat-value">$284K</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,22 15,18 30,14 45,16 60,10 75,12 100,6" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div style="display:flex;gap:24px;border-bottom:2px solid #e5e5e5;margin-bottom:16px;">
+                <div style="padding:8px 4px;border-bottom:2px solid #333;font-weight:600;font-size:14px;margin-bottom:-2px;">Stock Distribution</div>
+                <div style="padding:8px 4px;font-size:14px;color:#999;">Transfers <span style="background:#eee;padding:1px 6px;border-radius:8px;font-size:11px;">6</span></div>
+            </div>
+
+            <!-- Stock Distribution Tab -->
+
+            <!-- Filters -->
+            <div class="wf-filters" style="margin-bottom:16px;">
+                <div class="wf-filter-group">
+                    <label>Search</label>
+                    <div class="wf-input" style="margin-bottom:0;width:220px;">Search SKU or product...</div>
+                </div>
+            </div>
+
+            <!-- Distribution Table -->
+            <table class="wf-table">
+                <thead>
+                    <tr>
+                        <th>Product / SKU</th>
+                        <th class="right">Main Store</th>
+                        <th class="right">Vault</th>
+                        <th class="right">Warehouse</th>
+                        <th class="right">Total</th>
+                        <th class="right">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div style="font-weight:500;">Platinum Marquise Band</div>
+                            <div style="font-size:11px;color:#999;">SKU-12682</div>
+                        </td>
+                        <td class="right" style="font-weight:600;">3</td>
+                        <td class="right" style="font-weight:600;">1</td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="font-weight:700;">4</td>
+                        <td class="right"><span class="wf-link">Allocate</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight:500;">14K Round Diamond Band</div>
+                            <div style="font-size:11px;color:#999;">SKU-12683</div>
+                        </td>
+                        <td class="right" style="font-weight:600;">5</td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="font-weight:600;">2</td>
+                        <td class="right" style="font-weight:700;">7</td>
+                        <td class="right"><span class="wf-link">Allocate</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight:500;">Rolex Submariner 41mm</div>
+                            <div style="font-size:11px;color:#999;">SKU-12700</div>
+                        </td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="font-weight:600;">1</td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="font-weight:700;">1</td>
+                        <td class="right"><span class="wf-link">Allocate</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight:500;">18K Rose Gold Solitaire</div>
+                            <div style="font-size:11px;color:#999;">SKU-12710</div>
+                        </td>
+                        <td class="right" style="font-weight:600;">2</td>
+                        <td class="right" style="font-weight:600;">3</td>
+                        <td class="right" style="font-weight:600;">1</td>
+                        <td class="right" style="font-weight:700;">6</td>
+                        <td class="right"><span class="wf-link">Allocate</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="height:40px;"></div>
+
+            <!-- Transfers Tab (shown below for wireframe completeness) -->
+            <div style="border-top:2px solid #e5e5e5;padding-top:20px;">
+                <div style="font-weight:600;margin-bottom:12px;font-size:14px;color:#666;">[Transfers Tab]</div>
+
+                <div class="wf-filters" style="margin-bottom:16px;">
+                    <div class="wf-filter-group">
+                        <label>Status</label>
+                        <select class="wf-select"><option>All Statuses</option></select>
+                    </div>
+                    <div class="wf-filter-group">
+                        <label>Search</label>
+                        <div class="wf-input" style="margin-bottom:0;width:180px;">Search reference...</div>
+                    </div>
+                </div>
+
+                <table class="wf-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>From / To</th>
+                            <th class="right">Items</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th class="right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="font-weight:500;">TRF-000001</td>
+                            <td>Main Store &rarr; Vault</td>
+                            <td class="right">3</td>
+                            <td><span style="background:#FEF3C7;padding:2px 8px;border-radius:8px;font-size:11px;color:#92400E;">Pending</span></td>
+                            <td>2026-02-20</td>
+                            <td class="right"><span class="wf-link">Ship</span> &middot; <span class="wf-link" style="color:#DC2626;">Cancel</span></td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight:500;">TRF-000002</td>
+                            <td>Vault &rarr; Warehouse</td>
+                            <td class="right">5</td>
+                            <td><span style="background:#DBEAFE;padding:2px 8px;border-radius:8px;font-size:11px;color:#1E40AF;">In Transit</span></td>
+                            <td>2026-02-18</td>
+                            <td class="right"><span class="wf-link" style="color:#16A34A;">Receive</span></td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight:500;">TRF-000003</td>
+                            <td>Main Store &rarr; Warehouse</td>
+                            <td class="right">2</td>
+                            <td><span style="background:#F3F4F6;padding:2px 8px;border-radius:8px;font-size:11px;color:#374151;">Draft</span></td>
+                            <td>2026-02-22</td>
+                            <td class="right"><span class="wf-link">Submit</span> &middot; <span class="wf-link" style="color:#DC2626;">Cancel</span></td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight:500;color:#bbb;">TRF-000004</td>
+                            <td style="color:#bbb;">Warehouse &rarr; Main Store</td>
+                            <td class="right" style="color:#bbb;">1</td>
+                            <td><span style="background:#DCFCE7;padding:2px 8px;border-radius:8px;font-size:11px;color:#166534;">Received</span></td>
+                            <td style="color:#bbb;">2026-02-15</td>
+                            <td class="right" style="color:#bbb;">-</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="wf-flex-between" style="margin-top:16px;">
+                    <div class="wf-text-xs wf-text-muted">Showing 1-4 of 4</div>
+                    <div class="wf-pagination">
+                        <div class="wf-page-num">&laquo;</div>
+                        <div class="wf-page-num active">1</div>
+                        <div class="wf-page-num">&raquo;</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

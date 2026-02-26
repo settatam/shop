@@ -7,10 +7,12 @@ use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\StoreCredit;
 use App\Models\StoreUser;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\TransactionOffer;
+use App\Services\Credits\StoreCreditService;
 use App\Services\Notifications\NotificationManager;
 use App\Services\Payments\PayoutResult;
 use App\Services\Payments\PayPalPayoutsService;
@@ -23,6 +25,7 @@ class TransactionService
     public function __construct(
         protected StoreContext $storeContext,
         protected PayPalPayoutsService $payPalPayoutsService,
+        protected StoreCreditService $storeCreditService,
     ) {}
 
     public function create(array $data): Transaction
@@ -167,6 +170,26 @@ class TransactionService
                             $transaction->update([
                                 'payment_details' => ['payments' => $updatedPayments],
                             ]);
+                        }
+                    }
+                }
+            }
+
+            // Issue store credit for any store_credit payments
+            if ($customerId) {
+                $customer = Customer::find($customerId);
+                if ($customer) {
+                    foreach ($payments as $payment) {
+                        if ($payment['method'] === Transaction::PAYMENT_STORE_CREDIT) {
+                            $this->storeCreditService->issue(
+                                customer: $customer,
+                                amount: (float) $payment['amount'],
+                                source: StoreCredit::SOURCE_BUY_TRANSACTION,
+                                reference: $transaction,
+                                description: "Store credit from buy {$transaction->transaction_number}",
+                                userId: $userId,
+                                payoutMethod: $payment['details']['payout_method'] ?? null,
+                            );
                         }
                     }
                 }

@@ -61,6 +61,17 @@ class ActivityLogFormatter
                     });
                 }
 
+                // For products, include variant-level activities
+                if ($subject instanceof \App\Models\Product) {
+                    $variantIds = $subject->variants()->pluck('id');
+                    if ($variantIds->isNotEmpty()) {
+                        $query->orWhere(function ($q) use ($variantIds) {
+                            $q->where('subject_type', \App\Models\ProductVariant::class)
+                                ->whereIn('subject_id', $variantIds);
+                        });
+                    }
+                }
+
                 // For orders, include related activities
                 if ($subject instanceof \App\Models\Order) {
                     $paymentIds = $subject->payments()->pluck('id');
@@ -257,6 +268,12 @@ class ActivityLogFormatter
         if (str_contains($activitySlug, 'offer') || str_contains($activitySlug, 'quote')) {
             return 'currency-dollar';
         }
+        if (str_contains($activitySlug, 'quantity_change') || str_contains($activitySlug, 'quantity_manual_adjust')) {
+            return 'arrows-right-left';
+        }
+        if (str_contains($activitySlug, 'price_change')) {
+            return 'banknotes';
+        }
         if (str_contains($activitySlug, '.create') || str_contains($activitySlug, 'added')) {
             return 'plus';
         }
@@ -303,6 +320,12 @@ class ActivityLogFormatter
             return 'indigo';
         }
         if (str_contains($activitySlug, 'offer') || str_contains($activitySlug, 'quote')) {
+            return 'amber';
+        }
+        if (str_contains($activitySlug, 'quantity_change') || str_contains($activitySlug, 'quantity_manual_adjust')) {
+            return 'orange';
+        }
+        if (str_contains($activitySlug, 'price_change')) {
             return 'amber';
         }
         if (str_contains($activitySlug, '.create') || str_contains($activitySlug, 'added')) {

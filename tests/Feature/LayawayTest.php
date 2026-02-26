@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\Layaway;
 use App\Models\LayawayItem;
 use App\Models\LayawaySchedule;
@@ -12,6 +13,7 @@ use App\Models\Role;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\Layaways\LayawayService;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -477,11 +479,27 @@ class LayawayTest extends TestCase
             'quantity' => 100,
         ]);
 
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'quantity' => 100,
+        ]);
+
+        $warehouse = Warehouse::where('store_id', $this->store->id)->first()
+            ?? Warehouse::factory()->create(['store_id' => $this->store->id, 'is_default' => true]);
+
+        Inventory::create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 100,
+        ]);
+
         $layaway = Layaway::factory()->active()->create(['store_id' => $this->store->id]);
 
         LayawayItem::factory()->create([
             'layaway_id' => $layaway->id,
             'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
             'quantity' => 5,
             'is_reserved' => true,
         ]);

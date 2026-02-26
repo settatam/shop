@@ -358,6 +358,13 @@ class ReturnController extends Controller
             $inventory = \App\Models\Inventory::where('product_variant_id', $item->product_variant_id)->first();
             if ($inventory) {
                 $inventory->increment('quantity', $item->quantity);
+
+                // Sync variant and product quantity caches
+                \App\Models\Inventory::syncVariantQuantity($item->product_variant_id);
+                $variant = \App\Models\ProductVariant::find($item->product_variant_id);
+                if ($variant) {
+                    \App\Models\Inventory::syncProductQuantity($variant->product_id);
+                }
             }
         }
 

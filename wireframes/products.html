@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products - Wireframe</title>
+    <link rel="stylesheet" href="lofi.css">
+</head>
+<body>
+    <div class="wf-page">
+        <!-- Sidebar -->
+        <div class="wf-sidebar">
+            <div class="wf-flex wf-gap-8 wf-mb-16">
+                <div class="wf-logo" style="margin:0;">S</div>
+                <span style="font-weight:bold;font-size:14px;">Shopmata</span>
+            </div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Dashboard</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Customers</div>
+            <div class="wf-nav-item active"><div class="wf-nav-icon"></div> Products</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Sales</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Inventory</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Integrations</div>
+            <div style="flex:1;"></div>
+            <div class="wf-nav-divider">settings</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Settings</div>
+        </div>
+
+        <!-- Main -->
+        <div class="wf-main">
+            <div class="wf-flex-between wf-mb-20">
+                <div>
+                    <div class="wf-heading">Products</div>
+                    <div class="wf-subheading" style="margin-bottom:0;">Manage your product catalog</div>
+                </div>
+                <div class="wf-flex wf-gap-8">
+                    <div class="wf-btn sm">Advanced Search</div>
+                    <div class="wf-btn sm">Scan GIA</div>
+                    <div class="wf-btn filled sm">+ Add Product</div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="wf-filters">
+                <div class="wf-filter-group">
+                    <label>From</label>
+                    <select class="wf-select"><option>mm/dd/yyyy</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>To</label>
+                    <select class="wf-select"><option>mm/dd/yyyy</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Brand</label>
+                    <select class="wf-select"><option>All Brands</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Category</label>
+                    <select class="wf-select"><option>All Categories</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Status</label>
+                    <select class="wf-select"><option>All Status</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Stock</label>
+                    <select class="wf-select"><option>All</option></select>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <table class="wf-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px;"><span class="wf-checkbox"></span></th>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th>Brand</th>
+                        <th class="right">Price</th>
+                        <th class="right">Cost</th>
+                        <th class="right">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="wf-checkbox"></span></td>
+                        <td>
+                            <div class="wf-flex wf-gap-8">
+                                <div class="wf-img" style="width:36px;height:36px;border-radius:4px;"></div>
+                                <div>
+                                    <div>Platinum 2.68 CTW Marquise Band</div>
+                                    <div class="wf-text-xs wf-text-muted">SKU-12682</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>Bands</td>
+                        <td>Tacori</td>
+                        <td class="right">$4,250</td>
+                        <td class="right">$2,100</td>
+                        <td class="right"><span class="wf-badge">Active</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="wf-checkbox"></span></td>
+                        <td>
+                            <div class="wf-flex wf-gap-8">
+                                <div class="wf-img" style="width:36px;height:36px;border-radius:4px;"></div>
+                                <div>
+                                    <div>14K Round Natural Diamond Band</div>
+                                    <div class="wf-text-xs wf-text-muted">SKU-12683</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>Bands</td>
+                        <td>-</td>
+                        <td class="right">$1,850</td>
+                        <td class="right">$920</td>
+                        <td class="right"><span class="wf-badge">Active</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="wf-checkbox"></span></td>
+                        <td>
+                            <div class="wf-flex wf-gap-8">
+                                <div class="wf-img" style="width:36px;height:36px;border-radius:4px;"></div>
+                                <div>
+                                    <div>Rolex Submariner Date 41mm</div>
+                                    <div class="wf-text-xs wf-text-muted">SKU-12700</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>Watches</td>
+                        <td>Rolex</td>
+                        <td class="right">$12,500</td>
+                        <td class="right">$9,800</td>
+                        <td class="right"><span class="wf-badge">Draft</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="wf-checkbox"></span></td>
+                        <td>
+                            <div class="wf-flex wf-gap-8">
+                                <div class="wf-img" style="width:36px;height:36px;border-radius:4px;"></div>
+                                <div>
+                                    <div>18K Rose Gold 1.5ct Solitaire Ring</div>
+                                    <div class="wf-text-xs wf-text-muted">SKU-12710</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>Engagement Rings</td>
+                        <td>-</td>
+                        <td class="right">$6,200</td>
+                        <td class="right">$3,400</td>
+                        <td class="right"><span class="wf-badge">Sold</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="wf-flex-between" style="margin-top:16px;">
+                <div class="wf-text-xs wf-text-muted">Showing 1-25 of 1,788</div>
+                <div class="wf-pagination">
+                    <div class="wf-page-num">&laquo;</div>
+                    <div class="wf-page-num active">1</div>
+                    <div class="wf-page-num">2</div>
+                    <div class="wf-page-num">3</div>
+                    <div class="wf-page-num">&hellip;</div>
+                    <div class="wf-page-num">72</div>
+                    <div class="wf-page-num">&raquo;</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

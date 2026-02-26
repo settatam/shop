@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory - Wireframe</title>
+    <link rel="stylesheet" href="lofi.css">
+</head>
+<body>
+    <div class="wf-page">
+        <!-- Sidebar -->
+        <div class="wf-sidebar">
+            <div class="wf-flex wf-gap-8 wf-mb-16">
+                <div class="wf-logo" style="margin:0;">S</div>
+                <span style="font-weight:bold;font-size:14px;">Shopmata</span>
+            </div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Dashboard</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Products</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Sales</div>
+            <div class="wf-nav-item active"><div class="wf-nav-icon"></div> Inventory</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Integrations</div>
+            <div style="flex:1;"></div>
+            <div class="wf-nav-divider">settings</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Settings</div>
+        </div>
+
+        <!-- Main -->
+        <div class="wf-main">
+            <div class="wf-flex-between wf-mb-20">
+                <div>
+                    <div class="wf-heading">Inventory</div>
+                    <div class="wf-subheading" style="margin-bottom:0;">Track stock levels across locations</div>
+                </div>
+                <div class="wf-flex wf-gap-8">
+                    <div class="wf-btn sm">Export</div>
+                    <div class="wf-btn filled sm">+ Adjust Stock</div>
+                </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="wf-grid-4 wf-mb-20">
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total SKUs</div>
+                    <div class="wf-stat-value">1,247</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,20 15,16 30,18 45,12 60,14 75,8 100,10" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total Units</div>
+                    <div class="wf-stat-value">3,842</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,18 15,14 30,16 45,10 60,12 75,6 100,8" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Low Stock Items</div>
+                    <div class="wf-stat-value">23</div>
+                    <div class="wf-stat-trend">! needs attention</div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total Value</div>
+                    <div class="wf-stat-value">$284K</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,22 15,18 30,14 45,16 60,10 75,12 100,6" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="wf-filters" style="margin-bottom:16px;">
+                <div class="wf-filter-group">
+                    <label>Warehouse</label>
+                    <select class="wf-select"><option>All Locations</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Category</label>
+                    <select class="wf-select"><option>All Categories</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Stock Level</label>
+                    <select class="wf-select"><option>All</option></select>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Search</label>
+                    <div class="wf-input" style="margin-bottom:0;width:180px;">Search SKU or name...</div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <table class="wf-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Location</th>
+                        <th class="right">On Hand</th>
+                        <th class="right">Available</th>
+                        <th class="right">Reserved</th>
+                        <th class="right">Value</th>
+                        <th class="right">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>SKU-12682</td>
+                        <td>Platinum Marquise Band</td>
+                        <td>Main Store</td>
+                        <td class="right">3</td>
+                        <td class="right">2</td>
+                        <td class="right">1</td>
+                        <td class="right">$12,750</td>
+                        <td class="right"><span class="wf-link">Adjust</span></td>
+                    </tr>
+                    <tr>
+                        <td>SKU-12683</td>
+                        <td>14K Round Diamond Band</td>
+                        <td>Main Store</td>
+                        <td class="right">5</td>
+                        <td class="right">5</td>
+                        <td class="right">0</td>
+                        <td class="right">$9,250</td>
+                        <td class="right"><span class="wf-link">Adjust</span></td>
+                    </tr>
+                    <tr>
+                        <td>SKU-12700</td>
+                        <td>Rolex Submariner 41mm</td>
+                        <td>Vault</td>
+                        <td class="right">1</td>
+                        <td class="right">0</td>
+                        <td class="right">1</td>
+                        <td class="right">$12,500</td>
+                        <td class="right"><span class="wf-link">Adjust</span></td>
+                    </tr>
+                    <tr>
+                        <td style="color:#bbb;">SKU-12710</td>
+                        <td style="color:#bbb;">18K Rose Gold Solitaire</td>
+                        <td style="color:#bbb;">Main Store</td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="color:#bbb;">0</td>
+                        <td class="right" style="color:#bbb;">$0</td>
+                        <td class="right"><span class="wf-link">Adjust</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="wf-flex-between" style="margin-top:16px;">
+                <div class="wf-text-xs wf-text-muted">Showing 1-25 of 1,247</div>
+                <div class="wf-pagination">
+                    <div class="wf-page-num">&laquo;</div>
+                    <div class="wf-page-num active">1</div>
+                    <div class="wf-page-num">2</div>
+                    <div class="wf-page-num">3</div>
+                    <div class="wf-page-num">&raquo;</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

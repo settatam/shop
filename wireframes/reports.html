@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - Month over Month - Wireframe</title>
+    <link rel="stylesheet" href="lofi.css">
+</head>
+<body>
+    <div class="wf-page">
+        <!-- Sidebar -->
+        <div class="wf-sidebar">
+            <div class="wf-flex wf-gap-8 wf-mb-16">
+                <div class="wf-logo" style="margin:0;">S</div>
+                <span style="font-weight:bold;font-size:14px;">Shopmata</span>
+            </div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Dashboard</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Products</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Sales</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Inventory</div>
+            <div class="wf-nav-item active"><div class="wf-nav-icon"></div> Reports</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Integrations</div>
+            <div style="flex:1;"></div>
+            <div class="wf-nav-divider">settings</div>
+            <div class="wf-nav-item"><div class="wf-nav-icon"></div> Settings</div>
+        </div>
+
+        <!-- Main -->
+        <div class="wf-main">
+            <!-- Breadcrumb -->
+            <div class="wf-text-xs wf-text-muted wf-mb-12">
+                Reports &rsaquo; Sales &rsaquo; Month over Month
+            </div>
+
+            <div class="wf-flex-between wf-mb-16">
+                <div>
+                    <div class="wf-heading">Month over Month Sales</div>
+                    <div class="wf-text-xs wf-text-muted">Feb 2025 - Feb 2026</div>
+                </div>
+                <div class="wf-flex wf-gap-8">
+                    <div class="wf-btn sm">View Year over Year</div>
+                    <div class="wf-btn sm">View Daily</div>
+                </div>
+            </div>
+
+            <!-- Date Range Filters -->
+            <div class="wf-filters">
+                <div class="wf-filter-group">
+                    <label>Start Month</label>
+                    <div class="wf-flex wf-gap-8">
+                        <select class="wf-select"><option>February</option></select>
+                        <select class="wf-select"><option>2025</option></select>
+                    </div>
+                </div>
+                <div class="wf-filter-group">
+                    <label>End Month</label>
+                    <div class="wf-flex wf-gap-8">
+                        <select class="wf-select"><option>February</option></select>
+                        <select class="wf-select"><option>2026</option></select>
+                    </div>
+                </div>
+                <div class="wf-filter-group">
+                    <label>Category</label>
+                    <select class="wf-select"><option>All Categories</option></select>
+                </div>
+                <div class="wf-btn sm" style="align-self:flex-end;">Last 12 Months</div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="wf-grid-4 wf-mb-20">
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total Revenue</div>
+                    <div class="wf-stat-value">$482K</div>
+                    <div class="wf-stat-trend">+12.3% vs last month</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,20 10,18 20,16 30,19 40,14 50,12 60,15 70,10 80,8 90,11 100,6" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Gross Profit</div>
+                    <div class="wf-stat-value">$186K</div>
+                    <div class="wf-stat-trend">+8.7% vs last month</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,18 10,16 20,14 30,17 40,12 50,10 60,13 70,8 80,9 90,7 100,5" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Total Sales</div>
+                    <div class="wf-stat-value">342</div>
+                    <div class="wf-stat-trend">+5.2% vs last month</div>
+                    <div class="wf-stat-sparkline">
+                        <svg viewBox="0 0 100 24"><polyline points="0,22 10,18 20,20 30,16 40,14 50,18 60,12 70,10 80,14 90,8 100,6" fill="none" stroke="#bbb" stroke-width="1.5"/></svg>
+                    </div>
+                </div>
+                <div class="wf-stat">
+                    <div class="wf-stat-label">Avg Profit Margin</div>
+                    <div class="wf-stat-value">38.6%</div>
+                    <div class="wf-stat-trend wf-text-muted">period average</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="wf-grid-2 wf-mb-20">
+                <div class="wf-chart">
+                    <svg viewBox="0 0 200 80" style="height:80%;width:90%;position:absolute;bottom:10px;">
+                        <!-- Area chart sketch: revenue -->
+                        <polyline points="10,60 30,50 50,45 70,52 90,38 110,42 130,30 150,35 170,22 190,18" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="4,2"/>
+                        <!-- Area fill -->
+                        <polygon points="10,60 30,50 50,45 70,52 90,38 110,42 130,30 150,35 170,22 190,18 190,70 10,70" fill="#eee" opacity="0.5"/>
+                        <!-- Profit line -->
+                        <polyline points="10,65 30,58 50,55 70,60 90,50 110,52 130,44 150,46 170,38 190,34" fill="none" stroke="#bbb" stroke-width="1.5" stroke-dasharray="2,3"/>
+                    </svg>
+                    <div class="wf-chart-label">Revenue vs Profit<br><span class="wf-text-xs">(area chart)</span></div>
+                </div>
+                <div class="wf-chart">
+                    <svg viewBox="0 0 200 80" style="height:80%;width:90%;position:absolute;bottom:10px;">
+                        <!-- Bar chart sketch -->
+                        <rect x="10" y="40" width="14" height="30" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="30" y="32" width="14" height="38" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="50" y="36" width="14" height="34" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="70" y="28" width="14" height="42" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="90" y="22" width="14" height="48" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="110" y="30" width="14" height="40" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="130" y="18" width="14" height="52" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="150" y="24" width="14" height="46" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                        <rect x="170" y="12" width="14" height="58" fill="#ddd" stroke="#bbb" stroke-width="0.5"/>
+                    </svg>
+                    <div class="wf-chart-label">Sales Volume by Month<br><span class="wf-text-xs">(bar chart)</span></div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="wf-flex-between wf-mb-8">
+                <div style="font-weight:bold;font-size:14px;">Monthly Sales Data</div>
+                <div class="wf-flex wf-gap-8">
+                    <div class="wf-btn sm">Export CSV</div>
+                    <div class="wf-btn sm">Email Report</div>
+                </div>
+            </div>
+
+            <table class="wf-table">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th class="right">Sales #</th>
+                        <th class="right">Items</th>
+                        <th class="right">Cost</th>
+                        <th class="right">Sales Price</th>
+                        <th class="right">Shopify</th>
+                        <th class="right">In-Store</th>
+                        <th class="right">Total Paid</th>
+                        <th class="right">Profit</th>
+                        <th class="right">Profit %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Feb 2026</td>
+                        <td class="right">32</td>
+                        <td class="right">45</td>
+                        <td class="right">$28,400</td>
+                        <td class="right">$52,800</td>
+                        <td class="right">$31,200</td>
+                        <td class="right">$21,600</td>
+                        <td class="right">$52,800</td>
+                        <td class="right">$24,400</td>
+                        <td class="right">46.2%</td>
+                    </tr>
+                    <tr>
+                        <td>Jan 2026</td>
+                        <td class="right">28</td>
+                        <td class="right">38</td>
+                        <td class="right">$24,100</td>
+                        <td class="right">$44,200</td>
+                        <td class="right">$26,500</td>
+                        <td class="right">$17,700</td>
+                        <td class="right">$44,200</td>
+                        <td class="right">$20,100</td>
+                        <td class="right">45.5%</td>
+                    </tr>
+                    <tr>
+                        <td>Dec 2025</td>
+                        <td class="right">41</td>
+                        <td class="right">56</td>
+                        <td class="right">$35,200</td>
+                        <td class="right">$68,500</td>
+                        <td class="right">$42,100</td>
+                        <td class="right">$26,400</td>
+                        <td class="right">$68,500</td>
+                        <td class="right">$33,300</td>
+                        <td class="right">48.6%</td>
+                    </tr>
+                    <tr>
+                        <td>Nov 2025</td>
+                        <td class="right">35</td>
+                        <td class="right">48</td>
+                        <td class="right">$30,800</td>
+                        <td class="right">$56,100</td>
+                        <td class="right">$33,600</td>
+                        <td class="right">$22,500</td>
+                        <td class="right">$56,100</td>
+                        <td class="right">$25,300</td>
+                        <td class="right">45.1%</td>
+                    </tr>
+                    <tr>
+                        <td style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                        <td class="right" style="color:#ccc;">...</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr class="totals">
+                        <td><strong>TOTALS</strong></td>
+                        <td class="right">342</td>
+                        <td class="right">468</td>
+                        <td class="right">$296K</td>
+                        <td class="right">$482K</td>
+                        <td class="right">$289K</td>
+                        <td class="right">$193K</td>
+                        <td class="right">$482K</td>
+                        <td class="right">$186K</td>
+                        <td class="right">38.6%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

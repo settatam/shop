@@ -3,6 +3,7 @@
 namespace App\Services\Layaways;
 
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\Layaway;
 use App\Models\LayawayItem;
 use App\Models\LayawaySchedule;
@@ -318,19 +319,39 @@ class LayawayService
     }
 
     /**
-     * Reserve a product (reduce available quantity).
+     * Reserve a product (reduce available quantity via inventory).
      */
     protected function reserveProduct(Product $product, int $quantity): void
     {
-        $product->decrement('quantity', $quantity);
+        $variant = $product->variants()->first();
+        if (! $variant) {
+            return;
+        }
+
+        $inventory = Inventory::where('product_variant_id', $variant->id)->first();
+        if ($inventory) {
+            $inventory->decrement('quantity', $quantity);
+            Inventory::syncVariantQuantity($variant->id);
+            Inventory::syncProductQuantity($product->id);
+        }
     }
 
     /**
-     * Release a reserved product (restore available quantity).
+     * Release a reserved product (restore available quantity via inventory).
      */
     protected function releaseProduct(Product $product, int $quantity): void
     {
-        $product->increment('quantity', $quantity);
+        $variant = $product->variants()->first();
+        if (! $variant) {
+            return;
+        }
+
+        $inventory = Inventory::where('product_variant_id', $variant->id)->first();
+        if ($inventory) {
+            $inventory->increment('quantity', $quantity);
+            Inventory::syncVariantQuantity($variant->id);
+            Inventory::syncProductQuantity($product->id);
+        }
     }
 
     /**

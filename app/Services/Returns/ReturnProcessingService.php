@@ -3,6 +3,7 @@
 namespace App\Services\Returns;
 
 use App\Enums\Platform;
+use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductReturn;
@@ -284,12 +285,13 @@ class ReturnProcessingService
             }
 
             // Add quantity back to inventory
-            $variant->increment('quantity', $item->quantity);
-
-            // If there's a specific inventory location, update that
             $inventory = $variant->inventories->first();
             if ($inventory) {
                 $inventory->increment('quantity', $item->quantity);
+
+                // Sync variant and product quantity caches
+                Inventory::syncVariantQuantity($variant->id);
+                Inventory::syncProductQuantity($variant->product_id);
             }
 
             $item->markAsRestocked();

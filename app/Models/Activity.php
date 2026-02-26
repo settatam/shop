@@ -61,6 +61,8 @@ class Activity extends Model
 
     public const PRODUCTS_PRICE_CHANGE = 'products.price_change';
 
+    public const PRODUCTS_QUANTITY_CHANGE = 'products.quantity_change';
+
     // Category Activities
     public const CATEGORIES_VIEW = 'categories.view';
 
@@ -356,6 +358,7 @@ class Activity extends Model
             self::PRODUCTS_MANAGE_IMAGES => ['name' => 'Manage Images', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Upload and manage product images'],
             self::PRODUCTS_MANAGE_PRICING => ['name' => 'Manage Pricing', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Set and update product prices'],
             self::PRODUCTS_PRICE_CHANGE => ['name' => 'Price Changed', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Product price, wholesale price, or cost was changed'],
+            self::PRODUCTS_QUANTITY_CHANGE => ['name' => 'Quantity Changed', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'Product stock quantity was updated'],
 
             // Categories
             self::CATEGORIES_VIEW => ['name' => 'View Categories', 'category' => self::CATEGORY_PRODUCTS, 'description' => 'View product categories'],

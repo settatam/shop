@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Activity;
+use App\Models\Inventory;
 use App\Models\Memo;
 use App\Models\MemoItem;
 use App\Models\Order;
@@ -15,6 +17,7 @@ use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Models\Warehouse;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -128,6 +131,73 @@ class ProductActivityTest extends TestCase
             ->has('activity.memos')
             ->has('activity.repairs')
         );
+    }
+
+    public function test_inventory_quantity_change_logs_activity_on_product(): void
+    {
+        $this->actingAs($this->user);
+
+        $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'quantity' => 0,
+        ]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'quantity' => 0,
+        ]);
+        $warehouse = Warehouse::factory()->create(['store_id' => $this->store->id]);
+        $inventory = Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 0,
+        ]);
+
+        // Adjust inventory — triggers cascade sync
+        $inventory->adjustQuantity(10, 'manual', $this->user->id, 'Received shipment');
+
+        $this->assertDatabaseHas('activity_logs', [
+            'subject_type' => Product::class,
+            'subject_id' => $product->id,
+            'activity_slug' => Activity::PRODUCTS_QUANTITY_CHANGE,
+        ]);
+
+        $product->refresh();
+        $this->assertEquals(10, $product->quantity);
+    }
+
+    public function test_inventory_quantity_change_does_not_log_when_quantity_unchanged(): void
+    {
+        $this->actingAs($this->user);
+
+        $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'quantity' => 5,
+        ]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'quantity' => 5,
+        ]);
+        $warehouse = Warehouse::factory()->create(['store_id' => $this->store->id]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 5,
+        ]);
+
+        // Sync product quantity when it's already correct — should NOT create a log
+        Inventory::syncProductQuantity($product->id);
+
+        $this->assertDatabaseMissing('activity_logs', [
+            'subject_type' => Product::class,
+            'subject_id' => $product->id,
+            'activity_slug' => Activity::PRODUCTS_QUANTITY_CHANGE,
+        ]);
     }
 
     public function test_product_activity_shows_correct_order_count(): void

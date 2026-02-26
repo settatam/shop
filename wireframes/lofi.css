@@ -1,0 +1,552 @@
+/* Lo-fi wireframe base styles */
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Architects Daughter', cursive;
+    background: #fff;
+    color: #333;
+    font-size: 14px;
+}
+
+/* Layout shell */
+.wf-page {
+    display: flex;
+    min-height: 100vh;
+    border: 2px solid #333;
+}
+
+.wf-sidebar {
+    width: 180px;
+    border-right: 2px dashed #999;
+    padding: 16px 12px;
+    flex-shrink: 0;
+}
+
+.wf-main {
+    flex: 1;
+    padding: 24px;
+}
+
+/* Auth pages (centered) */
+.wf-auth {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #333;
+}
+
+.wf-auth-card {
+    width: 320px;
+    border: 2px dashed #999;
+    border-radius: 4px;
+    padding: 24px;
+}
+
+/* Logo placeholder */
+.wf-logo {
+    width: 40px;
+    height: 40px;
+    border: 2px solid #333;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 18px;
+    margin: 0 auto 12px;
+}
+
+.wf-sidebar .wf-logo {
+    margin: 0 0 16px 0;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+}
+
+/* Nav items */
+.wf-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin-bottom: 2px;
+    font-size: 13px;
+    color: #666;
+}
+
+.wf-nav-item.active {
+    border: 1.5px dashed #333;
+    border-radius: 3px;
+    color: #333;
+    font-weight: bold;
+}
+
+.wf-nav-icon {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid #999;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.wf-nav-divider {
+    border-top: 1px dashed #ccc;
+    margin: 10px 0;
+    font-size: 10px;
+    color: #999;
+    padding-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Heading */
+.wf-heading {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.wf-subheading {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 20px;
+}
+
+/* Text placeholder bars */
+.wf-text-bar {
+    height: 10px;
+    background: #ddd;
+    border-radius: 2px;
+    margin-bottom: 6px;
+}
+
+.wf-text-bar.short { width: 60%; }
+.wf-text-bar.medium { width: 80%; }
+.wf-text-bar.long { width: 95%; }
+.wf-text-bar.xs { width: 40%; }
+
+/* Input fields */
+.wf-input {
+    width: 100%;
+    border: 1.5px dashed #999;
+    border-radius: 3px;
+    padding: 8px 10px;
+    font-family: 'Architects Daughter', cursive;
+    font-size: 12px;
+    color: #aaa;
+    background: transparent;
+    margin-bottom: 12px;
+}
+
+.wf-label {
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    display: block;
+}
+
+/* Buttons */
+.wf-btn {
+    display: inline-block;
+    border: 2px solid #333;
+    border-radius: 3px;
+    padding: 8px 16px;
+    font-family: 'Architects Daughter', cursive;
+    font-size: 13px;
+    font-weight: bold;
+    background: transparent;
+    cursor: default;
+}
+
+.wf-btn.filled {
+    background: #333;
+    color: #fff;
+}
+
+.wf-btn.sm {
+    padding: 5px 12px;
+    font-size: 12px;
+}
+
+.wf-btn.danger {
+    border-color: #999;
+    background: #eee;
+}
+
+/* Image placeholder (X box) */
+.wf-img {
+    border: 1.5px dashed #bbb;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ccc;
+    font-size: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.wf-img::before,
+.wf-img::after {
+    content: '';
+    position: absolute;
+    background: #ddd;
+}
+
+.wf-img::before {
+    width: 141%;
+    height: 1.5px;
+    transform: rotate(45deg);
+}
+
+.wf-img::after {
+    width: 141%;
+    height: 1.5px;
+    transform: rotate(-45deg);
+}
+
+/* Cards */
+.wf-card {
+    border: 1.5px dashed #bbb;
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+/* Stat cards */
+.wf-stat {
+    border: 1.5px dashed #bbb;
+    border-radius: 4px;
+    padding: 12px 16px;
+}
+
+.wf-stat-label {
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 4px;
+}
+
+.wf-stat-value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.wf-stat-trend {
+    font-size: 11px;
+    color: #999;
+    margin-top: 2px;
+}
+
+.wf-stat-sparkline {
+    height: 24px;
+    margin-top: 6px;
+    border-bottom: 1px dashed #ddd;
+    position: relative;
+}
+
+.wf-stat-sparkline svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Chart placeholder */
+.wf-chart {
+    border: 1.5px dashed #bbb;
+    border-radius: 4px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fafafa;
+    position: relative;
+    overflow: hidden;
+}
+
+.wf-chart-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #aaa;
+    text-align: center;
+    z-index: 1;
+}
+
+.wf-chart svg {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70%;
+}
+
+/* Table */
+.wf-table {
+    width: 100%;
+    border: 1.5px dashed #bbb;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.wf-table th {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 2px dashed #bbb;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #999;
+    font-weight: bold;
+}
+
+.wf-table th.right { text-align: right; }
+
+.wf-table td {
+    padding: 8px 10px;
+    border-bottom: 1px dashed #ddd;
+    color: #666;
+}
+
+.wf-table td.right { text-align: right; }
+
+.wf-table tr.totals td {
+    font-weight: bold;
+    color: #333;
+    border-top: 2px dashed #bbb;
+    background: #f9f9f9;
+}
+
+/* Badge */
+.wf-badge {
+    display: inline-block;
+    border: 1px dashed #999;
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 10px;
+    color: #666;
+}
+
+/* Avatar circle */
+.wf-avatar {
+    width: 36px;
+    height: 36px;
+    border: 1.5px solid #999;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+    flex-shrink: 0;
+}
+
+/* Toggle switch */
+.wf-toggle {
+    width: 32px;
+    height: 18px;
+    border: 1.5px solid #999;
+    border-radius: 9px;
+    position: relative;
+    display: inline-block;
+}
+
+.wf-toggle::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border: 1px solid #999;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+}
+
+.wf-toggle.on::after {
+    left: auto;
+    right: 2px;
+    background: #999;
+}
+
+/* Select dropdown */
+.wf-select {
+    border: 1.5px dashed #999;
+    border-radius: 3px;
+    padding: 6px 24px 6px 8px;
+    font-family: 'Architects Daughter', cursive;
+    font-size: 12px;
+    color: #666;
+    background: transparent;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+/* Checkbox */
+.wf-checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #999;
+    border-radius: 2px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+/* Filter bar */
+.wf-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    padding: 12px;
+    border: 1.5px dashed #ddd;
+    border-radius: 4px;
+}
+
+.wf-filter-group label {
+    display: block;
+    font-size: 10px;
+    color: #999;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Grid helpers */
+.wf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.wf-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.wf-grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
+
+.wf-flex { display: flex; align-items: center; }
+.wf-flex-between { display: flex; align-items: center; justify-content: space-between; }
+.wf-gap-8 { gap: 8px; }
+.wf-gap-12 { gap: 12px; }
+.wf-gap-16 { gap: 16px; }
+.wf-mb-8 { margin-bottom: 8px; }
+.wf-mb-12 { margin-bottom: 12px; }
+.wf-mb-16 { margin-bottom: 16px; }
+.wf-mb-20 { margin-bottom: 20px; }
+.wf-mb-24 { margin-bottom: 24px; }
+.wf-mt-8 { margin-top: 8px; }
+.wf-ml-auto { margin-left: auto; }
+.wf-text-center { text-align: center; }
+.wf-text-right { text-align: right; }
+.wf-text-sm { font-size: 12px; }
+.wf-text-xs { font-size: 10px; }
+.wf-text-muted { color: #999; }
+.wf-w-full { width: 100%; }
+
+/* Annotation callout */
+.wf-annotation {
+    font-size: 10px;
+    color: #999;
+    font-style: italic;
+    padding: 4px 0;
+}
+
+/* Dots menu */
+.wf-dots {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: default;
+}
+
+.wf-dots span {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: #999;
+}
+
+/* Divider */
+.wf-divider {
+    border-top: 1px dashed #ccc;
+    margin: 12px 0;
+}
+
+/* Modal reference */
+.wf-modal-ref {
+    border: 2px dashed #bbb;
+    border-radius: 4px;
+    padding: 20px;
+    margin-top: 24px;
+    max-width: 360px;
+}
+
+.wf-modal-ref-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #999;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed #ddd;
+}
+
+/* Pagination */
+.wf-pagination {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+}
+
+.wf-page-num {
+    width: 28px;
+    height: 28px;
+    border: 1px dashed #bbb;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.wf-page-num.active {
+    border: 2px solid #333;
+    font-weight: bold;
+    color: #333;
+}
+
+/* Link style */
+.wf-link {
+    color: #666;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    font-size: 12px;
+}
+
+/* Platform/integration card */
+.wf-platform-card {
+    border: 1.5px dashed #bbb;
+    border-radius: 4px;
+    padding: 16px;
+    text-align: center;
+}
+
+.wf-platform-icon {
+    width: 48px;
+    height: 48px;
+    border: 1.5px dashed #ccc;
+    border-radius: 8px;
+    margin: 0 auto 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #aaa;
+}

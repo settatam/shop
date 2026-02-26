@@ -12,21 +12,40 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Push the current inventory quantity for a product to all listed marketplace platforms.
+ *
+ * This job is the single point of outbound inventory synchronization. It is dispatched
+ * automatically by Inventory::booted() whenever an inventory record is saved or deleted,
+ * ensuring that every stock change — sales, manual adjustments, transfers, corrections —
+ * is propagated to all external platforms.
+ *
+ * Behavior:
+ * - Loads all PlatformListing records with status "listed" for the product.
+ * - If the product's total quantity is zero → ends each listing via the platform adapter.
+ * - If the product has stock → calls updateInventory() on each platform adapter.
+ * - Results (updated/ended/failed counts) are logged to the job execution log.
+ *
+ * Dispatched from:
+ * - Inventory::booted() saved/deleted hooks (automatic, covers all inventory changes)
+ * - Product::syncInventoryToAllPlatforms() (explicit call from services)
+ * - OrderCreationService::reduceStock() / restoreStock()
+ * - OrderImportService::createOrderItems()
+ *
+ * Queue: inventory-sync | Retries: 3 | Backoff: 30s | Timeout: 5min
+ */
 class SyncProductInventoryJob implements ShouldQueue
 {
     use LogsJobExecution, Queueable;
 
     public int $tries = 3;
 
-    public int $timeout = 300; // 5 minutes
+    public int $timeout = 300;
 
-    public int $backoff = 30; // 30 seconds between retries
+    public int $backoff = 30;
 
     protected int $storeId;
 
-    /**
-     * Create a new job instance.
-     */
     public function __construct(
         public Product $product,
         public ?string $triggerReason = null,
@@ -35,25 +54,22 @@ class SyncProductInventoryJob implements ShouldQueue
         $this->onQueue('inventory-sync');
     }
 
-    /**
-     * Get the store ID for logging.
-     */
     protected function getStoreIdForLogging(): ?int
     {
         return $this->storeId;
     }
 
     /**
-     * Get the payload for logging.
+     * Build the payload written to the job execution log at start.
+     *
+     * @return array{queue: string, product_id: int, product_sku: string|null, trigger_reason: string|null, quantity: int}
      */
     protected function getPayloadForLogging(): array
     {
-        // Ensure variants are loaded for accurate quantity
         if (! $this->product->relationLoaded('variants')) {
             $this->product->load('variants');
         }
 
-        // Get quantity from variants if available, otherwise use product quantity
         $quantity = $this->product->variants->isNotEmpty()
             ? $this->product->variants->sum('quantity')
             : ($this->product->quantity ?? 0);
@@ -68,20 +84,23 @@ class SyncProductInventoryJob implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Sync inventory to all listed platforms for this product.
+     *
+     * For each listing:
+     * - quantity > 0 → Channel::listing($listing)->updateInventory($quantity)
+     * - quantity = 0 → Channel::listing($listing)->end() and log status change
      */
     public function handle(): void
     {
         $this->startJobLog();
 
         try {
-            // Refresh product with variants to get accurate total_quantity
             $this->product->load('variants');
 
-            // Get quantity from variants if available, otherwise use product quantity
             $quantity = $this->product->variants->isNotEmpty()
                 ? $this->product->variants->sum('quantity')
                 : ($this->product->quantity ?? 0);
+
             $results = [
                 'product_id' => $this->product->id,
                 'quantity' => $quantity,
@@ -96,7 +115,6 @@ class SyncProductInventoryJob implements ShouldQueue
 
             Log::info("SyncProductInventoryJob: Starting sync for product {$this->product->id}, quantity: {$quantity}");
 
-            // Get all listed listings for this product
             $listings = PlatformListing::where('product_id', $this->product->id)
                 ->where('status', PlatformListing::STATUS_LISTED)
                 ->with('salesChannel')
@@ -116,7 +134,6 @@ class SyncProductInventoryJob implements ShouldQueue
                     $channelName = $listing->salesChannel?->name ?? 'Unknown';
 
                     if ($quantity <= 0) {
-                        // End the listing on this platform
                         Log::info("SyncProductInventoryJob: Ending listing {$listing->id} on {$channelName} (quantity: 0)");
 
                         $result = Channel::listing($listing)->end();
@@ -147,7 +164,6 @@ class SyncProductInventoryJob implements ShouldQueue
                             Log::warning("SyncProductInventoryJob: Failed to end listing {$listing->id}: {$result->message}");
                         }
                     } else {
-                        // Update inventory on this platform
                         Log::info("SyncProductInventoryJob: Updating inventory for listing {$listing->id} on {$channelName} to {$quantity}");
 
                         $result = Channel::listing($listing)->updateInventory($quantity);
@@ -188,7 +204,7 @@ class SyncProductInventoryJob implements ShouldQueue
     }
 
     /**
-     * Handle a job failure.
+     * Handle permanent failure after all retries exhausted.
      */
     public function failed(?\Throwable $exception): void
     {

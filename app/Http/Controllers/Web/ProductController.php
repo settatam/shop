@@ -459,7 +459,7 @@ class ProductController extends Controller
                 'price' => $variantData['price'],
                 'cost' => $variantData['cost'] ?? null,
                 'wholesale_price' => $variantData['wholesale_price'] ?? null,
-                'quantity' => $variantData['quantity'],
+                'quantity' => 0, // Inventory sync will set the correct value
                 'option1_name' => $optionName,
                 'option1_value' => $optionValue,
             ]);
@@ -607,6 +607,11 @@ class ProductController extends Controller
             })->values();
         }
 
+        $warehouses = Warehouse::where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderBy('priority')
+            ->get(['id', 'name', 'code', 'is_default']);
+
         return Inertia::render('products/Show', [
             'product' => [
                 'id' => $product->id,
@@ -715,6 +720,31 @@ class ProductController extends Controller
                     'platform' => $marketplace->platform->value,
                     'platform_label' => $marketplace->platform->label(),
                 ]),
+            'warehouses' => $warehouses,
+            'inventoryDistribution' => Inventory::query()
+                ->where('store_id', $store->id)
+                ->whereIn('product_variant_id', $product->variants->pluck('id'))
+                ->with(['variant', 'warehouse'])
+                ->get()
+                ->groupBy('product_variant_id')
+                ->map(function ($items) use ($warehouses) {
+                    $first = $items->first();
+
+                    $warehouseQuantities = [];
+                    foreach ($warehouses as $warehouse) {
+                        $inv = $items->firstWhere('warehouse_id', $warehouse->id);
+                        $warehouseQuantities[$warehouse->id] = $inv ? $inv->quantity : 0;
+                    }
+
+                    return [
+                        'variant_id' => $first->variant->id,
+                        'variant_title' => $first->variant->options_title,
+                        'sku' => $first->variant->sku,
+                        'warehouse_quantities' => $warehouseQuantities,
+                        'total_quantity' => $items->sum('quantity'),
+                    ];
+                })
+                ->values(),
         ]);
     }
 
@@ -1062,7 +1092,6 @@ class ProductController extends Controller
                     'price' => $variantData['price'],
                     'cost' => $variantData['cost'] ?? null,
                     'wholesale_price' => $variantData['wholesale_price'] ?? null,
-                    'quantity' => $variantData['quantity'],
                     'option1_name' => $option1Name,
                     'option1_value' => $option1Value,
                     'option2_name' => $option2Name,
@@ -1124,7 +1153,7 @@ class ProductController extends Controller
                     'price' => $variantData['price'],
                     'cost' => $variantData['cost'] ?? null,
                     'wholesale_price' => $variantData['wholesale_price'] ?? null,
-                    'quantity' => $variantData['quantity'],
+                    'quantity' => 0, // Inventory sync will set the correct value
                     'option1_name' => $option1Name,
                     'option1_value' => $option1Value,
                     'option2_name' => $option2Name,

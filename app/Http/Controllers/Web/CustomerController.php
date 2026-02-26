@@ -131,6 +131,7 @@ class CustomerController extends Controller
             'total_sales' => $customer->orders()->count(),
             'total_buy_value' => $customer->transactions()->sum('final_offer') ?? 0,
             'total_sales_value' => $customer->orders()->sum('total') ?? 0,
+            'store_credit_balance' => (float) $customer->store_credit_balance,
             'last_activity' => $customer->transactions()->latest()->first()?->created_at
                 ?? $customer->orders()->latest()->first()?->created_at,
         ];

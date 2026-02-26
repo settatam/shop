@@ -15,6 +15,7 @@ import {
     PuzzlePieceIcon,
     CurrencyDollarIcon,
     CreditCardIcon,
+    ArchiveBoxIcon,
     BeakerIcon,
     TagIcon,
     PrinterIcon,
@@ -81,6 +82,15 @@ const allNavigation: NavGroup[] = [
     { name: 'Memos', href: '/memos', icon: DocumentTextIcon, feature: 'memos' },
     { name: 'Invoices', href: '/invoices', icon: CurrencyDollarIcon, feature: 'invoices' },
     { name: 'Payments', href: '/payments', icon: CreditCardIcon, feature: 'payments' },
+    {
+        name: 'Inventory',
+        icon: ArchiveBoxIcon,
+        feature: 'inventory',
+        children: [
+            { name: 'Stock Levels', href: '/inventory' },
+            { name: 'Allocations', href: '/inventory/allocations' },
+        ],
+    },
     { name: 'Labels', href: '/labels', icon: PrinterIcon, feature: 'labels' },
     { name: 'Buckets', href: '/buckets', icon: BeakerIcon, feature: 'buckets' },
     {
