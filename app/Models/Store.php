@@ -26,6 +26,7 @@ class Store extends Model
                 'is_local' => true,
                 'is_active' => true,
                 'is_default' => true,
+                'auto_list' => true,
                 'sort_order' => 0,
             ]);
         });

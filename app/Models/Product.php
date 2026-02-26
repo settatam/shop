@@ -211,8 +211,8 @@ class Product extends Model
             // Ensure variants are in sync (new variants added to product get listing variants)
             $this->syncListingVariants($existingListing);
 
-            // If product just became active and this is a local channel, list it
-            if ($this->status === self::STATUS_ACTIVE && $channel->is_local && $existingListing->isNotListed()) {
+            // If product just became active and channel has auto_list, list it
+            if ($this->status === self::STATUS_ACTIVE && $channel->auto_list && $existingListing->isNotListed()) {
                 $existingListing->markAsListed();
             }
 
@@ -220,10 +220,10 @@ class Product extends Model
         }
 
         // Determine initial status:
-        // - Local channels: 'listed' if product is active, 'not_listed' otherwise
-        // - External channels: always 'not_listed' initially (user must explicitly list)
+        // - Channels with auto_list: 'listed' if product is active, 'not_listed' otherwise
+        // - Other channels: always 'not_listed' initially (user must explicitly list)
         $status = PlatformListing::STATUS_NOT_LISTED;
-        if ($channel->is_local && $this->status === self::STATUS_ACTIVE) {
+        if ($channel->auto_list && $this->status === self::STATUS_ACTIVE) {
             $status = PlatformListing::STATUS_LISTED;
         }
 

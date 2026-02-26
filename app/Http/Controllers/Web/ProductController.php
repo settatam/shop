@@ -702,7 +702,7 @@ class ProductController extends Controller
                         'price' => $listing->platform_price,
                         'quantity' => $listing->platform_quantity,
                         'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
-                        'error_message' => $listing->last_error,
+                        'error_message' => null,
                         'is_local' => true,
                         'marketplace' => [
                             'id' => $listing->sales_channel_id,

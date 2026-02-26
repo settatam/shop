@@ -37,6 +37,7 @@ class SalesChannelController extends Controller
                 'is_local' => $channel->is_local,
                 'is_active' => $channel->is_active,
                 'is_default' => $channel->is_default,
+                'auto_list' => $channel->auto_list,
                 'color' => $channel->color,
                 'sort_order' => $channel->sort_order,
                 'active_listing_count' => $channel->getActiveListingCount(),
@@ -91,6 +92,7 @@ class SalesChannelController extends Controller
             'store_marketplace_id' => ['nullable', 'exists:store_marketplaces,id'],
             'color' => ['nullable', 'string', 'max:20'],
             'is_default' => ['nullable', 'boolean'],
+            'auto_list' => ['nullable', 'boolean'],
         ]);
 
         // Verify warehouse belongs to store
@@ -117,6 +119,7 @@ class SalesChannelController extends Controller
             'color' => $validated['color'] ?? null,
             'is_active' => true,
             'is_default' => $validated['is_default'] ?? false,
+            'auto_list' => $validated['auto_list'] ?? ($validated['type'] === SalesChannel::TYPE_LOCAL),
         ]);
 
         return back()->with('success', 'Sales channel created successfully.');
@@ -137,6 +140,7 @@ class SalesChannelController extends Controller
             'color' => ['nullable', 'string', 'max:20'],
             'is_active' => ['nullable', 'boolean'],
             'is_default' => ['nullable', 'boolean'],
+            'auto_list' => ['nullable', 'boolean'],
         ]);
 
         // Verify warehouse belongs to store
@@ -160,6 +164,7 @@ class SalesChannelController extends Controller
             'color' => $validated['color'] ?? $salesChannel->color,
             'is_active' => $validated['is_active'] ?? $salesChannel->is_active,
             'is_default' => $validated['is_default'] ?? $salesChannel->is_default,
+            'auto_list' => $validated['auto_list'] ?? $salesChannel->auto_list,
         ]);
 
         return back()->with('success', 'Sales channel updated successfully.');

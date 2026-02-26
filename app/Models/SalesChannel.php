@@ -61,6 +61,7 @@ class SalesChannel extends Model
         'sort_order',
         'is_active',
         'is_default',
+        'auto_list',
         'settings',
     ];
 
@@ -70,6 +71,7 @@ class SalesChannel extends Model
             'is_local' => 'boolean',
             'is_active' => 'boolean',
             'is_default' => 'boolean',
+            'auto_list' => 'boolean',
             'sort_order' => 'integer',
             'settings' => 'array',
         ];
@@ -85,6 +87,11 @@ class SalesChannel extends Model
 
             // Set is_local based on type
             $channel->is_local = $channel->type === self::TYPE_LOCAL;
+
+            // Local channels auto-list by default
+            if ($channel->auto_list === null) {
+                $channel->auto_list = $channel->is_local;
+            }
 
             // Set sort order if not provided (null check, not empty, since 0 is valid)
             if ($channel->sort_order === null) {
@@ -115,15 +122,15 @@ class SalesChannel extends Model
         });
 
         static::created(function (SalesChannel $channel) {
-            // Only auto-list active products for "In Store" (local) channels
-            if ($channel->is_active && $channel->is_local) {
+            // Auto-list active products for channels with auto_list enabled
+            if ($channel->is_active && $channel->auto_list) {
                 $channel->listActiveProducts();
             }
         });
 
         static::updated(function (SalesChannel $channel) {
-            // When "In Store" channel is activated, list all active products
-            if ($channel->wasChanged('is_active') && $channel->is_active && $channel->is_local) {
+            // When an auto_list channel is activated, list all active products
+            if ($channel->wasChanged('is_active') && $channel->is_active && $channel->auto_list) {
                 $channel->listActiveProducts();
             }
         });
@@ -294,6 +301,7 @@ class SalesChannel extends Model
             'is_local' => true,
             'is_active' => true,
             'is_default' => true,
+            'auto_list' => true,
             'sort_order' => 0,
         ]);
     }
@@ -333,6 +341,7 @@ class SalesChannel extends Model
             [
                 'name' => self::getTypeLabel($type),
                 'is_local' => $type === self::TYPE_LOCAL,
+                'auto_list' => $type === self::TYPE_LOCAL,
                 'is_active' => true,
             ]
         );

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\PlatformListing;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\SalesChannel;
 use App\Models\Store;
@@ -167,6 +169,147 @@ class SalesChannelControllerTest extends TestCase
                 ->has('marketplaces.0.connected_successfully')
                 ->has('marketplaces.1.connected_successfully')
             );
+    }
+
+    public function test_index_returns_auto_list_for_channels(): void
+    {
+        $this->actingAs($this->user);
+
+        // The default in-store channel should have auto_list = true
+        $response = $this->withStore()->get('/settings/channels');
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('settings/SalesChannels')
+                ->where('channels.0.auto_list', true)
+            );
+    }
+
+    public function test_store_creates_channel_with_auto_list(): void
+    {
+        $this->actingAs($this->user);
+
+        $this->withStore()->post('/settings/channels', [
+            'name' => 'My eBay',
+            'type' => 'ebay',
+            'auto_list' => true,
+        ]);
+
+        $channel = SalesChannel::where('store_id', $this->store->id)
+            ->where('name', 'My eBay')
+            ->first();
+
+        $this->assertNotNull($channel);
+        $this->assertTrue($channel->auto_list);
+    }
+
+    public function test_store_creates_channel_without_auto_list(): void
+    {
+        $this->actingAs($this->user);
+
+        $this->withStore()->post('/settings/channels', [
+            'name' => 'My Shopify',
+            'type' => 'shopify',
+            'auto_list' => false,
+        ]);
+
+        $channel = SalesChannel::where('store_id', $this->store->id)
+            ->where('name', 'My Shopify')
+            ->first();
+
+        $this->assertNotNull($channel);
+        $this->assertFalse($channel->auto_list);
+    }
+
+    public function test_update_toggles_auto_list(): void
+    {
+        $this->actingAs($this->user);
+
+        $channel = SalesChannel::create([
+            'store_id' => $this->store->id,
+            'name' => 'Local Store',
+            'type' => 'local',
+            'is_local' => true,
+            'auto_list' => true,
+            'is_active' => true,
+        ]);
+
+        $this->withStore()->put("/settings/channels/{$channel->id}", [
+            'name' => 'Local Store',
+            'auto_list' => false,
+        ]);
+
+        $channel->refresh();
+        $this->assertFalse($channel->auto_list);
+    }
+
+    public function test_auto_list_channel_lists_products_on_creation(): void
+    {
+        $this->actingAs($this->user);
+
+        // Create an active product
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_ACTIVE,
+        ]);
+
+        // Create a channel with auto_list enabled
+        $channel = SalesChannel::create([
+            'store_id' => $this->store->id,
+            'name' => 'Auto List Channel',
+            'type' => 'ebay',
+            'is_local' => false,
+            'auto_list' => true,
+            'is_active' => true,
+        ]);
+
+        // Product should have a listed listing on this channel
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+
+        $this->assertNotNull($listing);
+        $this->assertEquals(PlatformListing::STATUS_LISTED, $listing->status);
+    }
+
+    public function test_non_auto_list_channel_does_not_list_products_on_creation(): void
+    {
+        $this->actingAs($this->user);
+
+        // Create an active product
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_ACTIVE,
+        ]);
+
+        // Create a channel without auto_list
+        $channel = SalesChannel::create([
+            'store_id' => $this->store->id,
+            'name' => 'Manual Channel',
+            'type' => 'ebay',
+            'is_local' => false,
+            'auto_list' => false,
+            'is_active' => true,
+        ]);
+
+        // Product should NOT be auto-listed
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+
+        $this->assertNull($listing);
+    }
+
+    public function test_local_channel_defaults_auto_list_to_true(): void
+    {
+        $channel = SalesChannel::create([
+            'store_id' => $this->store->id,
+            'name' => 'New Local Store',
+            'type' => 'local',
+        ]);
+
+        $this->assertTrue($channel->auto_list);
+        $this->assertTrue($channel->is_local);
     }
 
     public function test_index_shows_local_channel_with_warehouse(): void

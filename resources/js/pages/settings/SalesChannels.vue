@@ -44,6 +44,7 @@ interface SalesChannel {
     is_local: boolean;
     is_active: boolean;
     is_default: boolean;
+    auto_list: boolean;
     color: string | null;
     sort_order: number;
     active_listing_count: number;
@@ -101,6 +102,7 @@ const formData = ref({
     store_marketplace_id: null as number | null,
     color: '',
     is_default: false,
+    auto_list: true,
     is_active: true,
 });
 const formErrors = ref<Record<string, string>>({});
@@ -128,6 +130,7 @@ function openCreateModal() {
         store_marketplace_id: null,
         color: '',
         is_default: false,
+        auto_list: true,
         is_active: true,
     };
     showCreateModal.value = true;
@@ -142,6 +145,7 @@ function openEditModal(channel: SalesChannel) {
         store_marketplace_id: channel.store_marketplace?.id ?? null,
         color: channel.color || '',
         is_default: channel.is_default,
+        auto_list: channel.auto_list,
         is_active: channel.is_active,
     };
     formErrors.value = {};
@@ -356,6 +360,13 @@ function reconnectChannel(channel: SalesChannel) {
                                             Default
                                         </Badge>
                                         <Badge
+                                            v-if="channel.auto_list"
+                                            variant="outline"
+                                            class="text-xs"
+                                        >
+                                            Auto-list
+                                        </Badge>
+                                        <Badge
                                             v-if="!channel.is_active"
                                             variant="secondary"
                                             class="text-xs"
@@ -517,6 +528,15 @@ function reconnectChannel(channel: SalesChannel) {
                                         />
                                         <Label for="create-default" class="!mb-0">Set as default channel</Label>
                                     </div>
+
+                                    <div class="flex items-center gap-2">
+                                        <Checkbox
+                                            id="create-auto-list"
+                                            :checked="formData.auto_list"
+                                            @update:checked="formData.auto_list = $event as boolean"
+                                        />
+                                        <Label for="create-auto-list" class="!mb-0">Automatically list new products on this channel</Label>
+                                    </div>
                                 </div>
                             </div>
                             <div class="bg-gray-50 px-4 py-3 dark:bg-white/5 sm:flex sm:flex-row-reverse sm:px-6">
@@ -617,6 +637,15 @@ function reconnectChannel(channel: SalesChannel) {
                                             @update:checked="formData.is_default = $event as boolean"
                                         />
                                         <Label for="edit-default" class="!mb-0">Set as default channel</Label>
+                                    </div>
+
+                                    <div class="flex items-center gap-2">
+                                        <Checkbox
+                                            id="edit-auto-list"
+                                            :checked="formData.auto_list"
+                                            @update:checked="formData.auto_list = $event as boolean"
+                                        />
+                                        <Label for="edit-auto-list" class="!mb-0">Automatically list new products on this channel</Label>
                                     </div>
                                 </div>
                             </div>

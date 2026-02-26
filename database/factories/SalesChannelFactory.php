@@ -25,6 +25,7 @@ class SalesChannelFactory extends Factory
             'is_local' => false,
             'is_active' => true,
             'is_default' => false,
+            'auto_list' => false,
             'sort_order' => $this->faker->numberBetween(1, 10),
         ];
     }
@@ -34,6 +35,7 @@ class SalesChannelFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'type' => 'local',
             'is_local' => true,
+            'auto_list' => true,
             'code' => 'in_store',
             'name' => 'In Store',
         ]);

@@ -100,14 +100,16 @@ const unpublishing = ref<number | null>(null);
 const relisting = ref<number | null>(null);
 
 // Check if a listing needs sync (product updated after last sync)
+// Local/in-house listings never need syncing — they always reflect the product status
 function needsSync(listing: PlatformListing): boolean {
+    if (listing.is_local) return false;
     if (!props.productUpdatedAt || !listing.last_synced_at) return false;
     return new Date(props.productUpdatedAt) > new Date(listing.last_synced_at);
 }
 
 // Count listings that need sync
 const listingsNeedingSync = computed(() => {
-    return props.listings.filter(l => (l.status === 'active' || l.status === 'listed') && needsSync(l)).length;
+    return props.listings.filter(l => !l.is_local && (l.status === 'active' || l.status === 'listed') && needsSync(l)).length;
 });
 
 // Platform icon mapping
