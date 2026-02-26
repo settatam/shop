@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\SyncTransactionToLegacyJob;
 use App\Traits\BelongsToStore;
 use App\Traits\HasAddresses;
 use App\Traits\HasCustomStatuses;
@@ -180,6 +181,12 @@ class Transaction extends Model
                 $transaction->transaction_number = "{$prefix}-{$transaction->id}{$suffix}";
                 $transaction->saveQuietly();
                 $transaction->searchable(); // Manually sync to Scout after saveQuietly
+            }
+        });
+
+        static::updated(function (Transaction $transaction) {
+            if ($transaction->wasChanged('status')) {
+                SyncTransactionToLegacyJob::dispatch($transaction);
             }
         });
     }

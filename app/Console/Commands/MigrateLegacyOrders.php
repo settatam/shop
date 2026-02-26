@@ -556,10 +556,15 @@ class MigrateLegacyOrders extends Command
             }
 
             // Migrate trade-ins linked to this order
-            $tradeInCredit = $this->migrateOrderTradeIns($legacyOrder, $newOrderId, $customerId, $userId);
-            if ($tradeInCredit > 0) {
-                $totalPaid += $tradeInCredit;
+            // Returns the payment amount only if a new store credit payment was created
+            // (0 if the payment was already imported by migrateOrderPayments)
+            $tradeInPaymentAmount = $this->migrateOrderTradeIns($legacyOrder, $newOrderId, $customerId, $userId);
+            if ($tradeInPaymentAmount > 0) {
+                $totalPaid += $tradeInPaymentAmount;
             }
+
+            // Read the actual trade-in credit from the order for invoice notes
+            $tradeInCredit = (float) DB::table('orders')->where('id', $newOrderId)->value('trade_in_credit');
 
             // Create invoice for this order (includes trade-in credit)
             $this->createOrderInvoice($legacyOrder, $newOrderId, $customerId, $userId, $totalPaid, $tradeInCredit);
@@ -854,11 +859,14 @@ class MigrateLegacyOrders extends Command
         }
 
         // Create a store credit payment for the trade-in amount
+        // Check for any existing store credit payment on this order (may have been
+        // imported by migrateOrderPayments with a different reference value)
         $existingTradeInPayment = DB::table('payments')
             ->where('order_id', $newOrderId)
             ->where('payment_method', Payment::METHOD_STORE_CREDIT)
-            ->where('reference', 'trade_in_'.$transaction->id)
             ->exists();
+
+        $createdPayment = false;
 
         if (! $existingTradeInPayment) {
             DB::table('payments')->insert([
@@ -880,11 +888,15 @@ class MigrateLegacyOrders extends Command
             ]);
 
             $this->paymentCount++;
+            $createdPayment = true;
         }
 
         $this->tradeInCount++;
 
-        return $tradeInCredit;
+        // Only return the credit amount if we created a new payment.
+        // If the store credit payment was already imported by migrateOrderPayments,
+        // its amount is already counted in totalPaid — returning it again would double-count.
+        return $createdPayment ? $tradeInCredit : 0;
     }
 
     protected function createOrderInvoice(object $legacyOrder, int $newOrderId, ?int $customerId, ?int $userId, float $totalPaid, float $tradeInCredit = 0): void
