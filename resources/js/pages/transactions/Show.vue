@@ -491,7 +491,6 @@ const savingItem = ref(false);
 // Inline price editing state
 const inlineEditingPrices = ref<Record<number, { price: number | null; buy_price: number | null }>>({});
 const inlineUpdating = ref<Record<number, boolean>>({});
-let debounceTimers: Record<number, ReturnType<typeof setTimeout>> = {};
 
 function initializeInlinePrices() {
     props.transaction.items.forEach(item => {
@@ -505,58 +504,72 @@ function initializeInlinePrices() {
 // Initialize on mount
 initializeInlinePrices();
 
-// Watch for transaction changes (e.g., after item added/removed)
-watch(() => props.transaction.items, () => {
-    initializeInlinePrices();
-}, { deep: true });
+// Watch for items being added/removed only (not deep value changes that reset editing state)
+watch(() => props.transaction.items.length, () => {
+    const existingIds = new Set(Object.keys(inlineEditingPrices.value).map(Number));
+    // Add new items
+    props.transaction.items.forEach(item => {
+        if (!existingIds.has(item.id)) {
+            inlineEditingPrices.value[item.id] = {
+                price: item.price,
+                buy_price: item.buy_price,
+            };
+        }
+    });
+    // Clean up removed items
+    const currentIds = new Set(props.transaction.items.map(i => i.id));
+    for (const id of existingIds) {
+        if (!currentIds.has(id)) {
+            delete inlineEditingPrices.value[id];
+        }
+    }
+});
 
 async function saveInlinePrice(itemId: number, field: 'price' | 'buy_price') {
-    // Clear any existing timer for this item
-    if (debounceTimers[itemId]) {
-        clearTimeout(debounceTimers[itemId]);
-    }
+    const values = inlineEditingPrices.value[itemId];
+    if (!values) return;
 
-    // Debounce the save
-    debounceTimers[itemId] = setTimeout(async () => {
-        const values = inlineEditingPrices.value[itemId];
-        if (!values) return;
+    const item = props.transaction.items.find(i => i.id === itemId);
+    // Skip save if value hasn't actually changed
+    if (item && values[field] === item[field]) return;
 
-        inlineUpdating.value[itemId] = true;
+    inlineUpdating.value[itemId] = true;
 
-        try {
-            const response = await axios.patch(
-                `/transactions/${props.transaction.id}/items/${itemId}/quick-update`,
-                {
-                    [field]: values[field],
-                }
-            );
-
-            // Update local state with returned values
-            if (response.data.success) {
-                const item = props.transaction.items.find(i => i.id === itemId);
-                if (item) {
-                    item.price = response.data.item.price;
-                    item.buy_price = response.data.item.buy_price;
-                }
-                // Update transaction totals
-                if (response.data.transaction) {
-                    props.transaction.total_buy_price = response.data.transaction.total_buy_price;
-                }
+    try {
+        const response = await axios.patch(
+            `/transactions/${props.transaction.id}/items/${itemId}/quick-update`,
+            {
+                [field]: values[field],
             }
-        } catch (error) {
-            console.error('Failed to update price:', error);
-            // Revert to original value on error
-            const item = props.transaction.items.find(i => i.id === itemId);
+        );
+
+        if (response.data.success) {
             if (item) {
-                inlineEditingPrices.value[itemId] = {
-                    price: item.price,
-                    buy_price: item.buy_price,
-                };
+                item.price = response.data.item.price;
+                item.buy_price = response.data.item.buy_price;
             }
-        } finally {
-            inlineUpdating.value[itemId] = false;
+            // Sync inline editing state with server-normalized values
+            inlineEditingPrices.value[itemId] = {
+                price: response.data.item.price,
+                buy_price: response.data.item.buy_price,
+            };
+            // Update transaction totals
+            if (response.data.transaction) {
+                props.transaction.total_buy_price = response.data.transaction.total_buy_price;
+            }
         }
-    }, 500);
+    } catch (error) {
+        console.error('Failed to update price:', error);
+        // Revert to original value on error
+        if (item) {
+            inlineEditingPrices.value[itemId] = {
+                price: item.price,
+                buy_price: item.buy_price,
+            };
+        }
+    } finally {
+        inlineUpdating.value[itemId] = false;
+    }
 }
 
 // Image lightbox modal state
@@ -1565,8 +1578,8 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         type="number"
                                                         step="0.01"
                                                         min="0"
-                                                        :value="inlineEditingPrices[item.id]?.price ?? ''"
-                                                        @input="(e) => { inlineEditingPrices[item.id].price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'price'); }"
+                                                        v-model.number="inlineEditingPrices[item.id].price"
+                                                        @blur="saveInlinePrice(item.id, 'price')"
                                                         class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                                         :class="{ 'opacity-50': inlineUpdating[item.id] }"
                                                     />
@@ -1582,9 +1595,9 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         type="number"
                                                         step="0.01"
                                                         min="0"
-                                                        :value="inlineEditingPrices[item.id]?.buy_price ?? ''"
+                                                        v-model.number="inlineEditingPrices[item.id].buy_price"
                                                         :disabled="transaction.status === 'payment_processed'"
-                                                        @input="(e) => { inlineEditingPrices[item.id].buy_price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'buy_price'); }"
+                                                        @blur="saveInlinePrice(item.id, 'buy_price')"
                                                         class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                                         :class="{ 'opacity-50': inlineUpdating[item.id], 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
                                                     />
@@ -1786,8 +1799,8 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         type="number"
                                                         step="0.01"
                                                         min="0"
-                                                        :value="inlineEditingPrices[item.id]?.price ?? ''"
-                                                        @input="(e) => { inlineEditingPrices[item.id].price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'price'); }"
+                                                        v-model.number="inlineEditingPrices[item.id].price"
+                                                        @blur="saveInlinePrice(item.id, 'price')"
                                                         class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                                         :class="{ 'opacity-50': inlineUpdating[item.id] }"
                                                     />
@@ -1803,9 +1816,9 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                         type="number"
                                                         step="0.01"
                                                         min="0"
-                                                        :value="inlineEditingPrices[item.id]?.buy_price ?? ''"
+                                                        v-model.number="inlineEditingPrices[item.id].buy_price"
                                                         :disabled="transaction.status === 'payment_processed'"
-                                                        @input="(e) => { inlineEditingPrices[item.id].buy_price = parseFloat((e.target as HTMLInputElement).value) || null; saveInlinePrice(item.id, 'buy_price'); }"
+                                                        @blur="saveInlinePrice(item.id, 'buy_price')"
                                                         class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                                         :class="{ 'opacity-50': inlineUpdating[item.id], 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
                                                     />
