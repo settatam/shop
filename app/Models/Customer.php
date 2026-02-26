@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\SyncCustomerToLegacyJob;
 use App\Traits\BelongsToStore;
 use App\Traits\HasAddresses;
 use App\Traits\HasNotes;
@@ -18,6 +19,13 @@ use Laravel\Scout\Searchable;
 class Customer extends Authenticatable
 {
     use BelongsToStore, HasAddresses, HasFactory, HasNotes, LogsActivity, Notifiable, Searchable, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saved(function (Customer $customer) {
+            SyncCustomerToLegacyJob::dispatch($customer);
+        });
+    }
 
     protected $fillable = [
         'first_name',

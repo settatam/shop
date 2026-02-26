@@ -555,6 +555,7 @@ async function saveInlinePrice(itemId: number, field: 'price' | 'buy_price') {
             };
             // Update transaction totals
             if (response.data.transaction) {
+                props.transaction.total_value = response.data.transaction.total_value;
                 props.transaction.total_buy_price = response.data.transaction.total_buy_price;
             }
         }

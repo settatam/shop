@@ -218,6 +218,7 @@ class TransactionItemController extends Controller
                 'buy_price' => $item->buy_price,
             ],
             'transaction' => [
+                'total_value' => $transaction->total_value,
                 'total_buy_price' => $transaction->total_buy_price,
             ],
         ]);

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\SyncCustomerToLegacyJob;
 use App\Traits\BelongsToStore;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +13,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Address extends Model
 {
     use BelongsToStore, HasFactory, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::saved(function (Address $address) {
+            if ($address->addressable_type === Customer::class && $address->addressable) {
+                SyncCustomerToLegacyJob::dispatch($address->addressable);
+            }
+        });
+    }
 
     public const TYPE_HOME = 'home';
 

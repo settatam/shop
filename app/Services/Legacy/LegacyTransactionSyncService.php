@@ -2,6 +2,7 @@
 
 namespace App\Services\Legacy;
 
+use App\Models\Customer;
 use App\Models\Legacy\LegacyStatusUpdate;
 use App\Models\Legacy\LegacyStore;
 use App\Models\Legacy\LegacyTransaction;
@@ -69,6 +70,57 @@ class LegacyTransactionSyncService
 
         $this->syncTransactionStatus($transaction, $legacyStoreId);
         $this->syncTransactionItems($transaction);
+    }
+
+    /**
+     * Sync a customer's details and primary address to the legacy database.
+     */
+    public function syncCustomer(Customer $customer): void
+    {
+        if (! config('legacy-sync.enabled')) {
+            return;
+        }
+
+        $legacyCustomer = DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $customer->id)
+            ->first();
+
+        if (! $legacyCustomer) {
+            return;
+        }
+
+        $customer->loadMissing('addresses');
+
+        $primaryAddress = $customer->addresses->firstWhere('is_default', true)
+            ?? $customer->addresses->first();
+
+        $data = [
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'email' => $customer->email,
+            'phone_number' => $customer->phone_number,
+            'company_name' => $customer->company_name,
+            'updated_at' => now(),
+        ];
+
+        if ($primaryAddress) {
+            $data['street_address'] = $primaryAddress->address;
+            $data['street_address2'] = $primaryAddress->address2;
+            $data['city'] = $primaryAddress->city;
+            $data['state_id'] = $primaryAddress->state_id;
+            $data['zip'] = $primaryAddress->zip;
+        } else {
+            $data['street_address'] = $customer->address;
+            $data['street_address2'] = $customer->address2;
+            $data['city'] = $customer->city;
+            $data['zip'] = $customer->zip;
+        }
+
+        DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $customer->id)
+            ->update($data);
     }
 
     /**

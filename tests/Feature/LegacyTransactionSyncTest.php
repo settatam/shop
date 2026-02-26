@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncCustomerToLegacyJob;
 use App\Jobs\SyncTransactionToLegacyJob;
+use App\Models\Address;
+use App\Models\Customer;
 use App\Models\Store;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
@@ -137,6 +140,23 @@ class LegacyTransactionSyncTest extends TestCase
             $table->string('first_name')->nullable();
             $table->string('last_name')->nullable();
             $table->timestamps();
+        });
+
+        Schema::connection('legacy')->create('customers', function ($table) {
+            $table->id();
+            $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+            $table->string('email')->nullable();
+            $table->string('phone_number')->nullable();
+            $table->string('company_name')->nullable();
+            $table->string('street_address')->nullable();
+            $table->string('street_address2')->nullable();
+            $table->string('city')->nullable();
+            $table->integer('state_id')->nullable();
+            $table->string('zip')->nullable();
+            $table->integer('store_id');
+            $table->timestamps();
+            $table->softDeletes();
         });
 
         $this->seedLegacyData();
@@ -827,5 +847,174 @@ class LegacyTransactionSyncTest extends TestCase
             ->count();
 
         $this->assertEquals(0, $statusUpdates);
+    }
+
+    // --- Customer Sync Tests ---
+
+    protected function createLegacyCustomer(int $id, array $overrides = []): void
+    {
+        DB::connection('legacy')->table('customers')->insert(array_merge([
+            'id' => $id,
+            'first_name' => 'Legacy',
+            'last_name' => 'Customer',
+            'store_id' => $this->legacyStoreId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $overrides));
+    }
+
+    public function test_syncs_customer_details_to_legacy(): void
+    {
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'john@example.com',
+            'phone_number' => '555-1234',
+            'company_name' => 'Acme Inc',
+        ]);
+
+        $this->createLegacyCustomer($customer->id);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->syncCustomer($customer);
+
+        $legacyCustomer = DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $customer->id)
+            ->first();
+
+        $this->assertEquals('John', $legacyCustomer->first_name);
+        $this->assertEquals('Doe', $legacyCustomer->last_name);
+        $this->assertEquals('john@example.com', $legacyCustomer->email);
+        $this->assertEquals('555-1234', $legacyCustomer->phone_number);
+        $this->assertEquals('Acme Inc', $legacyCustomer->company_name);
+    }
+
+    public function test_syncs_customer_primary_address_to_legacy(): void
+    {
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        Address::factory()->default()->forCustomer($customer)->create([
+            'address' => '123 Main St',
+            'address2' => 'Suite 100',
+            'city' => 'Springfield',
+            'state_id' => 14,
+            'zip' => '62704',
+        ]);
+
+        $this->createLegacyCustomer($customer->id);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->syncCustomer($customer);
+
+        $legacyCustomer = DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $customer->id)
+            ->first();
+
+        $this->assertEquals('123 Main St', $legacyCustomer->street_address);
+        $this->assertEquals('Suite 100', $legacyCustomer->street_address2);
+        $this->assertEquals('Springfield', $legacyCustomer->city);
+        $this->assertEquals(14, $legacyCustomer->state_id);
+        $this->assertEquals('62704', $legacyCustomer->zip);
+    }
+
+    public function test_syncs_first_address_when_no_default(): void
+    {
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        Address::factory()->forCustomer($customer)->create([
+            'is_default' => false,
+            'address' => '456 Oak Ave',
+            'city' => 'Portland',
+            'zip' => '97201',
+        ]);
+
+        $this->createLegacyCustomer($customer->id);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->syncCustomer($customer);
+
+        $legacyCustomer = DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $customer->id)
+            ->first();
+
+        $this->assertEquals('456 Oak Ave', $legacyCustomer->street_address);
+        $this->assertEquals('Portland', $legacyCustomer->city);
+        $this->assertEquals('97201', $legacyCustomer->zip);
+    }
+
+    public function test_skips_customer_sync_when_not_in_legacy(): void
+    {
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'Ghost',
+        ]);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->syncCustomer($customer);
+
+        $count = DB::connection('legacy')
+            ->table('customers')
+            ->where('first_name', 'Ghost')
+            ->count();
+
+        $this->assertEquals(0, $count);
+    }
+
+    public function test_dispatches_customer_sync_job_on_customer_saved(): void
+    {
+        Bus::fake([SyncCustomerToLegacyJob::class]);
+
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        Bus::assertDispatched(SyncCustomerToLegacyJob::class, function ($job) use ($customer) {
+            return $job->customer->id === $customer->id;
+        });
+    }
+
+    public function test_dispatches_customer_sync_job_on_address_saved(): void
+    {
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        Bus::fake([SyncCustomerToLegacyJob::class]);
+
+        Address::factory()->forCustomer($customer)->create();
+
+        Bus::assertDispatched(SyncCustomerToLegacyJob::class, function ($job) use ($customer) {
+            return $job->customer->id === $customer->id;
+        });
+    }
+
+    public function test_does_not_sync_customer_when_disabled(): void
+    {
+        config(['legacy-sync.enabled' => false]);
+
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'Ignored',
+        ]);
+
+        $this->createLegacyCustomer($customer->id, ['first_name' => 'Original']);
+
+        $service = app(LegacyTransactionSyncService::class);
+        $service->syncCustomer($customer);
+
+        $legacyCustomer = DB::connection('legacy')
+            ->table('customers')
+            ->where('id', $customer->id)
+            ->first();
+
+        $this->assertEquals('Original', $legacyCustomer->first_name);
     }
 }
