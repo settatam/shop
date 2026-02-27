@@ -10,6 +10,7 @@ use App\Models\ShopifyMetafieldDefinition;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
 use App\Services\Platforms\BasePlatformService;
+use App\Services\Platforms\ListingBuilderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -697,6 +698,22 @@ class ShopifyService extends BasePlatformService
 
         $priceMarkup = ($settings['price_markup'] ?? 0) / 100;
         $inventoryManagement = ($settings['inventory_tracking'] ?? 'shopify') === 'not_managed' ? null : 'shopify';
+
+        // Build metafields from ListingBuilderService (filters empty values)
+        if ($connection) {
+            $listingBuilder = app(ListingBuilderService::class);
+            $builtListing = $listingBuilder->buildListing($product, $connection);
+            $metafields = $builtListing['metafields'] ?? [];
+
+            // Only include metafields that have non-empty values
+            $metafields = array_values(array_filter($metafields, function (array $mf) {
+                return isset($mf['value']) && $mf['value'] !== null && $mf['value'] !== '';
+            }));
+
+            if (! empty($metafields)) {
+                $shopifyProduct['metafields'] = $metafields;
+            }
+        }
 
         // Build variants from listing variants if available
         if ($listing) {

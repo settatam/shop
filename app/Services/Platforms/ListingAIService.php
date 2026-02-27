@@ -33,6 +33,7 @@ class ListingAIService
         - "listing_type": "FIXED_PRICE" or "AUCTION"
         - "item_specifics": object of key-value pairs for eBay item specifics (e.g. {"Brand": "...", "Material": "...", "Color": "..."})
 
+        IMPORTANT: All values must be human-readable, properly capitalized, and production-ready. Never return slugged, kebab-case, or snake_case values (e.g. return "White Gold" not "white-gold", "Yellow Gold" not "yellow_gold").
         Return ONLY valid JSON, no explanation.
         PROMPT;
 
@@ -181,6 +182,7 @@ class ListingAIService
         - {$fieldsList}
 
         For SELECTION_ONLY specifics, you MUST pick a value from their allowed values list.
+        IMPORTANT: All values must be human-readable, properly capitalized, and production-ready. Never return slugged, kebab-case, or snake_case values (e.g. return "White Gold" not "white-gold", "Yellow Gold" not "yellow_gold").
         Return ONLY valid JSON, no explanation.
         PROMPT;
 
@@ -246,6 +248,7 @@ class ListingAIService
         Return a JSON object where keys are "{namespace}.{key}" and values are the suggested metafield values.
         Match the expected type for each metafield (e.g. integers for number_integer, "true"/"false" for boolean).
         Only include metafields you can confidently determine a value for.
+        IMPORTANT: All values must be human-readable, properly capitalized, and production-ready. Never return slugged, kebab-case, or snake_case values (e.g. return "White Gold" not "white-gold", "Yellow Gold" not "yellow_gold").
         Return ONLY valid JSON, no explanation.
         PROMPT;
 
@@ -359,11 +362,13 @@ class ListingAIService
             $parts[] = "Price: \${$variant->price}";
         }
 
-        // Include template attribute values
+        // Include template attribute values (resolved to display labels)
+        $product->loadMissing('attributeValues.field.options');
         $attributes = $product->attributeValues ?? collect();
         foreach ($attributes as $av) {
             if ($av->value && $av->field) {
-                $parts[] = "{$av->field->label}: {$av->value}";
+                $displayValue = $av->resolveDisplayValue() ?? $av->value;
+                $parts[] = "{$av->field->label}: {$displayValue}";
             }
         }
 

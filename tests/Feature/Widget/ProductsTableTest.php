@@ -3,9 +3,11 @@
 namespace Tests\Feature\Widget;
 
 use App\Models\Category;
+use App\Models\PlatformListing;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
+use App\Models\SalesChannel;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
@@ -130,6 +132,59 @@ class ProductsTableTest extends TestCase
         // Filter by parent should include parent and child products
         $result = $widget->render(['store_id' => $this->store->id, 'category_id' => $parentCategory->id]);
         $this->assertEquals(2, $result['pagination']['total']);
+    }
+
+    public function test_marketplace_column_shows_listed_for_listed_status(): void
+    {
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        ProductVariant::factory()->create(['product_id' => $product->id, 'quantity' => 1]);
+
+        // Creating an active channel auto-creates a listing for existing products
+        $channel = SalesChannel::factory()->active()->create([
+            'store_id' => $this->store->id,
+            'type' => 'ebay',
+            'is_local' => false,
+        ]);
+
+        // Update the auto-created listing to 'listed' status
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+        $listing->update(['status' => PlatformListing::STATUS_LISTED, 'published_at' => now()]);
+
+        $widget = new ProductsTable;
+        $result = $widget->render(['store_id' => $this->store->id]);
+
+        $item = $result['data']['items'][0];
+        $marketplaces = $item['marketplaces']['data'];
+        $channelData = collect($marketplaces)->firstWhere('channel_id', $channel->id);
+
+        $this->assertNotNull($channelData);
+        $this->assertTrue($channelData['is_listed'], 'Listed items should have is_listed = true');
+        $this->assertEquals('listed', $channelData['status']);
+    }
+
+    public function test_marketplace_column_shows_draft_for_not_listed_status(): void
+    {
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        ProductVariant::factory()->create(['product_id' => $product->id, 'quantity' => 1]);
+
+        $channel = SalesChannel::factory()->active()->create([
+            'store_id' => $this->store->id,
+            'type' => 'shopify',
+            'is_local' => false,
+        ]);
+
+        // The auto-created listing defaults to 'not_listed'
+        $widget = new ProductsTable;
+        $result = $widget->render(['store_id' => $this->store->id]);
+
+        $item = $result['data']['items'][0];
+        $marketplaces = $item['marketplaces']['data'];
+        $channelData = collect($marketplaces)->firstWhere('channel_id', $channel->id);
+
+        $this->assertNotNull($channelData);
+        $this->assertFalse($channelData['is_listed'], 'Not listed items should have is_listed = false');
     }
 
     public function test_products_table_returns_products_for_store(): void

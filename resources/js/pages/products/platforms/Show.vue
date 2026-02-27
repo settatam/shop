@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     ArrowLeftIcon,
+    ArrowTopRightOnSquareIcon,
     CheckCircleIcon,
     ExclamationTriangleIcon,
     XCircleIcon,
@@ -789,6 +790,18 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                     <Badge v-else variant="secondary">
                         Draft
                     </Badge>
+
+                    <!-- Listing URL -->
+                    <a
+                        v-if="listing?.listing_url"
+                        :href="listing.listing_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                        <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+                        View Listing
+                    </a>
 
                     <!-- Actions -->
                     <Button variant="outline" @click="save" :disabled="saving">

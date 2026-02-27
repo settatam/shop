@@ -431,4 +431,77 @@ class ListingBuilderServiceTest extends TestCase
         $this->assertEquals(['75'], $listing['aspects']['Ring Size']);
         $this->assertEquals(['White Gold'], $listing['aspects']['Material']);
     }
+
+    public function test_shopify_metafields_excludes_fields_without_values(): void
+    {
+        $template = ProductTemplate::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $materialField = ProductTemplateField::factory()->create([
+            'product_template_id' => $template->id,
+            'name' => 'material',
+            'label' => 'Material',
+            'type' => 'text',
+        ]);
+
+        // A field with no value set on the product
+        ProductTemplateField::factory()->create([
+            'product_template_id' => $template->id,
+            'name' => 'color',
+            'label' => 'Color',
+            'type' => 'text',
+        ]);
+
+        // A field with an empty string value
+        $emptyField = ProductTemplateField::factory()->create([
+            'product_template_id' => $template->id,
+            'name' => 'size',
+            'label' => 'Size',
+            'type' => 'text',
+        ]);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'template_id' => $template->id,
+            'title' => 'Test Product',
+        ]);
+
+        $product->attributeValues()->create([
+            'product_template_field_id' => $materialField->id,
+            'value' => 'Gold',
+        ]);
+
+        $product->attributeValues()->create([
+            'product_template_field_id' => $emptyField->id,
+            'value' => '',
+        ]);
+
+        ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 100,
+        ]);
+
+        $marketplace = StoreMarketplace::factory()->create([
+            'store_id' => $this->store->id,
+            'platform' => Platform::Shopify,
+        ]);
+
+        $service = app(ListingBuilderService::class);
+        $listing = $service->buildListing($product, $marketplace);
+
+        $this->assertArrayHasKey('metafields', $listing);
+
+        // Only the field with a value should be included
+        $keys = collect($listing['metafields'])->pluck('key')->all();
+        $this->assertContains('material', $keys);
+        $this->assertNotContains('color', $keys);
+        $this->assertNotContains('size', $keys);
+
+        // Every metafield should have a non-empty value
+        foreach ($listing['metafields'] as $mf) {
+            $this->assertNotNull($mf['value']);
+            $this->assertNotEquals('', $mf['value']);
+        }
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Widget\Products;
 
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\PlatformListing;
 use App\Models\Product;
 use App\Models\ProductTemplateField;
 use App\Models\SalesChannel;
@@ -667,7 +668,7 @@ class ProductsTable extends Table
                 'price' => $price,
                 'status' => $status,
                 'is_local' => $channel->is_local,
-                'is_listed' => $listing !== null && in_array($listing->status, ['active', 'pending']),
+                'is_listed' => $listing !== null && ($listing->isListed() || $listing->status === PlatformListing::STATUS_PENDING),
             ];
         })->values()->toArray();
     }
