@@ -22,7 +22,7 @@ class ListingBuilderService
      */
     public function buildListing(Product $product, StoreMarketplace $marketplace): array
     {
-        $product->load(['attributeValues.field', 'template.fields', 'template.platformMappings', 'images', 'variants', 'category']);
+        $product->load(['attributeValues.field.options', 'template.fields', 'template.platformMappings', 'images', 'variants', 'category']);
         $platform = $marketplace->platform;
 
         // Get the PlatformListing (which now holds override data)
@@ -55,10 +55,39 @@ class ListingBuilderService
                 $categoryResolution['mapping']
             );
 
+            // Transform attributes using category-level field_mappings
+            // Category format: {platformFieldName: templateFieldName}
+            $categoryFieldMappings = $categoryResolution['mapping']->getEffectiveFieldMappings();
+            if (! empty($categoryFieldMappings)) {
+                $template = $product->getTemplate();
+                if ($template) {
+                    $attributeValues = $product->attributeValues->keyBy('product_template_field_id');
+                    foreach ($categoryFieldMappings as $platformFieldName => $templateFieldName) {
+                        $templateField = $template->fields->firstWhere('name', $templateFieldName);
+                        if ($templateField) {
+                            $attributeValue = $attributeValues->get($templateField->id);
+                            $value = $attributeValue?->resolveDisplayValue();
+                            if ($value !== null && $value !== '') {
+                                $listing['attributes'][$platformFieldName] = $value;
+                            }
+                        }
+                    }
+                }
+            }
+
             // Apply category-level default values
             foreach ($effectiveMappings['default_values'] as $field => $value) {
                 if (! isset($listing['attributes'][$field]) && $value !== null) {
                     $listing['attributes'][$field] = $value;
+                }
+            }
+        }
+
+        // Listing-level attribute overrides always take final precedence
+        if ($platformListing?->attributes) {
+            foreach ($platformListing->attributes as $key => $value) {
+                if ($value !== null && $value !== '') {
+                    $listing['attributes'][$key] = $value;
                 }
             }
         }
@@ -74,7 +103,7 @@ class ListingBuilderService
         }
 
         // Apply platform-specific transformations
-        $listing = $this->applyPlatformTransformations($listing, $platform, $product);
+        $listing = $this->applyPlatformTransformations($listing, $platform, $product, $marketplace);
 
         return $listing;
     }
@@ -130,17 +159,6 @@ class ListingBuilderService
             if (! $variant || ! $variant->price) {
                 $errors[] = 'Product price is required';
             }
-        }
-
-        // Check platform-specific required fields
-        $template = $product->getTemplate();
-        if ($template) {
-            $unmappedRequired = $this->fieldMappingService->getUnmappedRequiredFields($template, $platform);
-            foreach ($unmappedRequired as $field) {
-                $warnings[] = "Required platform field '{$field}' is not mapped";
-            }
-        } else {
-            $warnings[] = 'Product has no template - platform attributes cannot be mapped';
         }
 
         // Platform-specific validation
@@ -329,11 +347,11 @@ class ListingBuilderService
      * @param  array<string, mixed>  $listing
      * @return array<string, mixed>
      */
-    protected function applyPlatformTransformations(array $listing, Platform $platform, Product $product): array
+    protected function applyPlatformTransformations(array $listing, Platform $platform, Product $product, StoreMarketplace $marketplace): array
     {
         return match ($platform) {
             Platform::Ebay => $this->transformForEbay($listing),
-            Platform::Shopify => $this->transformForShopify($listing, $product),
+            Platform::Shopify => $this->transformForShopify($listing, $product, $marketplace),
             Platform::Amazon => $this->transformForAmazon($listing),
             Platform::Etsy => $this->transformForEtsy($listing),
             Platform::Walmart => $this->transformForWalmart($listing),
@@ -393,13 +411,13 @@ class ListingBuilderService
      * @param  array<string, mixed>  $listing
      * @return array<string, mixed>
      */
-    protected function transformForShopify(array $listing, Product $product): array
+    protected function transformForShopify(array $listing, Product $product, StoreMarketplace $marketplace): array
     {
         // Convert description to body_html
         $listing['body_html'] = $listing['description'];
 
         // Build metafields using template metafield configuration
-        $listing['metafields'] = $this->buildMetafields($product, Platform::Shopify, $listing['attributes'] ?? []);
+        $listing['metafields'] = $this->buildMetafields($product, Platform::Shopify, $listing['attributes'] ?? [], $marketplace);
 
         return $listing;
     }
@@ -412,7 +430,7 @@ class ListingBuilderService
      * @param  array<string, mixed>  $attributes
      * @return array<array{namespace: string, key: string, value: mixed, type: string}>
      */
-    protected function buildMetafields(Product $product, Platform $platform, array $attributes): array
+    protected function buildMetafields(Product $product, Platform $platform, array $attributes, ?StoreMarketplace $marketplace = null): array
     {
         $metafields = [];
         $template = $product->getTemplate();
@@ -463,11 +481,14 @@ class ListingBuilderService
             // Check if there's a custom config for this field
             $config = $customMetafieldConfigs[$field->name] ?? null;
 
+            $namespace = $config['namespace'] ?? 'custom';
+            $key = $config['key'] ?? $field->name;
+
             $metafields[] = [
-                'namespace' => $config['namespace'] ?? 'custom',
-                'key' => $config['key'] ?? $field->name,
+                'namespace' => $namespace,
+                'key' => $key,
                 'value' => $value,
-                'type' => $this->getShopifyMetafieldType($value),
+                'type' => $this->resolveMetafieldType($marketplace, $namespace, $key, $value),
             ];
         }
 
@@ -483,7 +504,7 @@ class ListingBuilderService
         $attributeValue = $product->attributeValues
             ->first(fn ($av) => $av->field?->name === $fieldName);
 
-        return $attributeValue?->value;
+        return $attributeValue?->resolveDisplayValue();
     }
 
     /**
@@ -513,6 +534,26 @@ class ListingBuilderService
         }
 
         return 'single_line_text_field';
+    }
+
+    /**
+     * Resolve the Shopify metafield type using actual definitions when available.
+     * Falls back to guessing from the value when no definition exists.
+     */
+    protected function resolveMetafieldType(?StoreMarketplace $marketplace, string $namespace, string $key, mixed $value): string
+    {
+        if ($marketplace) {
+            $definition = $marketplace->metafieldDefinitions()
+                ->where('namespace', $namespace)
+                ->where('key', $key)
+                ->first();
+
+            if ($definition) {
+                return $definition->type;
+            }
+        }
+
+        return $this->getShopifyMetafieldType($value);
     }
 
     /**
@@ -600,23 +641,29 @@ class ListingBuilderService
      */
     protected function validateEbayListing(Product $product, StoreMarketplace $marketplace, array &$errors, array &$warnings): void
     {
-        $settings = $marketplace->settings ?? [];
+        $listing = $this->getExistingListing($product, $marketplace);
         $credentials = $marketplace->credentials ?? [];
 
-        if (empty($settings['fulfillment_policy_id']) && empty($credentials['fulfillment_policy_id'])) {
+        // Resolve through listing → marketplace → credentials
+        $effectiveFulfillment = $listing?->getEffectiveSetting('fulfillment_policy_id') ?? $credentials['fulfillment_policy_id'] ?? null;
+        $effectivePayment = $listing?->getEffectiveSetting('payment_policy_id') ?? $credentials['payment_policy_id'] ?? null;
+        $effectiveReturn = $listing?->getEffectiveSetting('return_policy_id') ?? $credentials['return_policy_id'] ?? null;
+
+        if (empty($effectiveFulfillment)) {
             $warnings[] = 'eBay fulfillment policy not configured';
         }
 
-        if (empty($settings['payment_policy_id']) && empty($credentials['payment_policy_id'])) {
+        if (empty($effectivePayment)) {
             $warnings[] = 'eBay payment policy not configured';
         }
 
-        if (empty($settings['return_policy_id']) && empty($credentials['return_policy_id'])) {
+        if (empty($effectiveReturn)) {
             $warnings[] = 'eBay return policy not configured';
         }
 
-        // Title length
-        if (strlen($product->title) > 80) {
+        // Title length — check effective title
+        $effectiveTitle = $listing?->getEffectiveTitle() ?? $product->title;
+        if (strlen($effectiveTitle) > 80) {
             $warnings[] = 'eBay title will be truncated to 80 characters';
         }
     }

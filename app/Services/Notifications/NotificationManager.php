@@ -3,6 +3,7 @@
 namespace App\Services\Notifications;
 
 use App\Models\NotificationChannel;
+use App\Models\NotificationLayout;
 use App\Models\NotificationLog;
 use App\Models\NotificationSubscription;
 use App\Models\NotificationTemplate;
@@ -102,6 +103,22 @@ class NotificationManager
         // Render the template
         $content = $template->render($data);
         $subject_line = $template->renderSubject($data);
+
+        // Wrap content in layout
+        $layout = NotificationLayout::resolveForTemplate($template);
+        if ($layout) {
+            $storeData = $data['store'] ?? [];
+            if ($storeData instanceof Store) {
+                $storeData = app(NotificationDataPreparer::class)->prepareStore($storeData);
+            }
+            $content = $layout->render($content, is_array($storeData) ? $storeData : []);
+        } elseif ($template->channel === NotificationChannel::TYPE_EMAIL) {
+            $storeData = $data['store'] ?? [];
+            if ($storeData instanceof Store) {
+                $storeData = app(NotificationDataPreparer::class)->prepareStore($storeData);
+            }
+            $content = NotificationTemplate::renderWithLayout($content, is_array($storeData) ? $storeData : []);
+        }
 
         // Get recipients
         $recipients = $subscription->getRecipientEmails($data);
@@ -221,6 +238,22 @@ class NotificationManager
     ): NotificationLog {
         $content = $template->render($data);
         $subject_line = $template->renderSubject($data);
+
+        // Wrap content in layout
+        $layout = NotificationLayout::resolveForTemplate($template);
+        if ($layout) {
+            $storeData = $data['store'] ?? [];
+            if ($storeData instanceof Store) {
+                $storeData = app(NotificationDataPreparer::class)->prepareStore($storeData);
+            }
+            $content = $layout->render($content, is_array($storeData) ? $storeData : []);
+        } elseif ($template->channel === NotificationChannel::TYPE_EMAIL) {
+            $storeData = $data['store'] ?? [];
+            if ($storeData instanceof Store) {
+                $storeData = app(NotificationDataPreparer::class)->prepareStore($storeData);
+            }
+            $content = NotificationTemplate::renderWithLayout($content, is_array($storeData) ? $storeData : []);
+        }
 
         $options = [
             'subject' => $subject_line,

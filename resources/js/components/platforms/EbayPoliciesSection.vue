@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -16,9 +16,13 @@ import axios from 'axios';
 interface Props {
     marketplaceId: number;
     ebayMarketplaceId: string;
+    savedPrograms?: string[];
 }
 
 const props = defineProps<Props>();
+const emit = defineEmits<{
+    (e: 'policies-synced'): void;
+}>();
 
 type Tab = 'return' | 'fulfillment' | 'payment' | 'locations' | 'programs';
 
@@ -39,7 +43,26 @@ const returnPolicies = ref<Record<string, unknown>[]>([]);
 const fulfillmentPolicies = ref<Record<string, unknown>[]>([]);
 const paymentPolicies = ref<Record<string, unknown>[]>([]);
 const locations = ref<Record<string, unknown>[]>([]);
-const programs = ref<Record<string, unknown>[]>([]);
+
+// Track which tabs have been loaded
+const loadedTabs = ref(new Set<Tab>());
+
+watch(activeTab, (tab) => {
+    if (!loadedTabs.value.has(tab)) {
+        loadedTabs.value.add(tab);
+        const fetchMap: Record<Tab, () => Promise<void>> = {
+            return: fetchReturnPolicies,
+            fulfillment: fetchFulfillmentPolicies,
+            payment: fetchPaymentPolicies,
+            locations: fetchLocations,
+            programs: fetchPrograms,
+        };
+        fetchMap[tab]();
+    }
+}, { immediate: true });
+const programs = ref<Record<string, unknown>[]>(
+    (props.savedPrograms ?? []).map((type) => ({ programType: type })),
+);
 const privileges = ref<Record<string, unknown> | null>(null);
 
 // Modal state
@@ -137,6 +160,15 @@ function refreshCurrentTab() {
     fetchMap[activeTab.value]();
 }
 
+async function syncPoliciesToLocal() {
+    try {
+        await axios.post(`/settings/marketplaces/${props.marketplaceId}/fetch-policies`);
+        emit('policies-synced');
+    } catch {
+        // Sync failure is non-critical; policies were already saved on eBay
+    }
+}
+
 // CRUD operations
 async function deletePolicy(type: 'return' | 'fulfillment' | 'payment', policyId: string) {
     if (!confirm('Are you sure you want to delete this policy? This cannot be undone.')) return;
@@ -150,6 +182,7 @@ async function deletePolicy(type: 'return' | 'fulfillment' | 'payment', policyId
     try {
         await axios.delete(`${baseUrl.value}/${urlMap[type]}/${policyId}`);
         refreshCurrentTab();
+        syncPoliciesToLocal();
     } catch (e: unknown) {
         const axiosError = e as { response?: { data?: { error?: string } } };
         error.value = axiosError.response?.data?.error ?? 'Failed to delete policy';
@@ -202,6 +235,7 @@ async function savePolicyFromModal(data: Record<string, unknown>) {
         }
         policyModalOpen.value = false;
         refreshCurrentTab();
+        syncPoliciesToLocal();
     } catch (e: unknown) {
         const axiosError = e as { response?: { data?: { error?: string } } };
         error.value = axiosError.response?.data?.error ?? 'Failed to save policy';
@@ -233,6 +267,19 @@ async function saveLocationFromModal(data: Record<string, unknown>) {
         error.value = axiosError.response?.data?.error ?? 'Failed to save location';
     }
 }
+
+const allPrograms = [
+    { type: 'SELLING_POLICY_MANAGEMENT', label: 'Selling Policy Management', description: 'Enable business policies for managing return, payment, and fulfillment policies.' },
+    { type: 'OUT_OF_STOCK_CONTROL', label: 'Out of Stock Control', description: 'Automatically hide listings when inventory reaches zero instead of ending them.' },
+];
+
+const optedInProgramTypes = computed(() =>
+    new Set(programs.value.map((p) => p.programType as string)),
+);
+
+const availablePrograms = computed(() =>
+    allPrograms.filter((p) => !optedInProgramTypes.value.has(p.type)),
+);
 
 async function optInToProgram(programType: string) {
     try {
@@ -345,7 +392,7 @@ function getLocationDisplay(loc: Record<string, unknown>): string {
                     </div>
                 </div>
                 <p v-else class="text-sm text-muted-foreground">
-                    No return policies loaded. Click "Refresh" to fetch from eBay.
+                    No return policies found.
                 </p>
             </div>
 
@@ -390,7 +437,7 @@ function getLocationDisplay(loc: Record<string, unknown>): string {
                     </div>
                 </div>
                 <p v-else class="text-sm text-muted-foreground">
-                    No fulfillment policies loaded. Click "Refresh" to fetch from eBay.
+                    No fulfillment policies found.
                 </p>
             </div>
 
@@ -433,7 +480,7 @@ function getLocationDisplay(loc: Record<string, unknown>): string {
                     </div>
                 </div>
                 <p v-else class="text-sm text-muted-foreground">
-                    No payment policies loaded. Click "Refresh" to fetch from eBay.
+                    No payment policies found.
                 </p>
             </div>
 
@@ -480,7 +527,7 @@ function getLocationDisplay(loc: Record<string, unknown>): string {
                     </div>
                 </div>
                 <p v-else class="text-sm text-muted-foreground">
-                    No locations loaded. Click "Refresh" to fetch from eBay.
+                    No locations found.
                 </p>
             </div>
 
@@ -504,41 +551,57 @@ function getLocationDisplay(loc: Record<string, unknown>): string {
                     </div>
                 </div>
 
-                <div v-if="programs.length > 0" class="space-y-2">
-                    <div
-                        v-for="program in programs"
-                        :key="(program.programType as string)"
-                        class="flex items-center justify-between p-3 rounded-lg border border-border"
-                    >
-                        <div>
-                            <p class="text-sm font-medium text-foreground">{{ (program.programType as string) }}</p>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            class="text-red-500"
-                            @click="optOutOfProgram((program.programType as string))"
+                <div v-if="programs.length > 0">
+                    <h4 class="text-sm font-medium text-foreground mb-2">Enrolled Programs</h4>
+                    <div class="space-y-2">
+                        <div
+                            v-for="program in programs"
+                            :key="(program.programType as string)"
+                            class="flex items-center justify-between p-3 rounded-lg border border-border"
                         >
-                            Opt Out
-                        </Button>
+                            <div>
+                                <p class="text-sm font-medium text-foreground">
+                                    {{ allPrograms.find(p => p.type === program.programType)?.label ?? (program.programType as string) }}
+                                </p>
+                                <p class="text-xs text-muted-foreground">
+                                    {{ allPrograms.find(p => p.type === program.programType)?.description ?? '' }}
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="text-red-500"
+                                @click="optOutOfProgram((program.programType as string))"
+                            >
+                                Opt Out
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="mt-4">
+                <div v-if="availablePrograms.length > 0" class="mt-4">
                     <h4 class="text-sm font-medium text-foreground mb-2">Available Programs</h4>
                     <div class="space-y-2">
-                        <div class="flex items-center justify-between p-3 rounded-lg border border-border">
+                        <div
+                            v-for="prog in availablePrograms"
+                            :key="prog.type"
+                            class="flex items-center justify-between p-3 rounded-lg border border-border"
+                        >
                             <div>
-                                <p class="text-sm font-medium text-foreground">SELLING_POLICY_MANAGEMENT</p>
-                                <p class="text-xs text-muted-foreground">Enable business policies for managing return, payment, and fulfillment policies.</p>
+                                <p class="text-sm font-medium text-foreground">{{ prog.label }}</p>
+                                <p class="text-xs text-muted-foreground">{{ prog.description }}</p>
                             </div>
-                            <Button type="button" size="sm" @click="optInToProgram('SELLING_POLICY_MANAGEMENT')">
+                            <Button type="button" size="sm" @click="optInToProgram(prog.type)">
                                 Opt In
                             </Button>
                         </div>
                     </div>
                 </div>
+
+                <p v-if="programs.length === 0 && availablePrograms.length === 0" class="text-sm text-muted-foreground">
+                    No programs found.
+                </p>
             </div>
         </div>
 

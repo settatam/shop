@@ -86,6 +86,36 @@ class PlatformListingController extends Controller
     }
 
     /**
+     * Toggle whether a product should be listed on this marketplace.
+     */
+    public function toggleShouldList(Product $product, StoreMarketplace $marketplace): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $listing = PlatformListing::firstOrCreate(
+            [
+                'product_id' => $product->id,
+                'store_marketplace_id' => $marketplace->id,
+            ],
+            [
+                'status' => PlatformListing::STATUS_NOT_LISTED,
+                'platform_price' => $product->variants()->first()?->price ?? 0,
+                'platform_quantity' => $product->total_quantity,
+            ]
+        );
+
+        $listing->update(['should_list' => ! $listing->should_list]);
+
+        return response()->json([
+            'success' => true,
+            'should_list' => $listing->should_list,
+            'message' => $listing->should_list
+                ? "Product included for listing on {$marketplace->name}"
+                : "Product excluded from listing on {$marketplace->name}",
+        ]);
+    }
+
+    /**
      * Preview listing data for a marketplace.
      */
     public function preview(Product $product, StoreMarketplace $marketplace): JsonResponse
@@ -103,6 +133,18 @@ class PlatformListingController extends Controller
     public function publish(Request $request, Product $product, StoreMarketplace $marketplace): JsonResponse
     {
         $this->authorize('update', $product);
+
+        // Check if the product is excluded from this marketplace
+        $existingListing = PlatformListing::where('product_id', $product->id)
+            ->where('store_marketplace_id', $marketplace->id)
+            ->first();
+
+        if ($existingListing && ! $existingListing->should_list) {
+            return response()->json([
+                'success' => false,
+                'message' => "This product is excluded from {$marketplace->name}. Toggle 'Should List' to enable publishing.",
+            ], 422);
+        }
 
         // Validate override data if provided
         $validated = $request->validate([
@@ -175,8 +217,14 @@ class PlatformListingController extends Controller
             ->pluck('store_marketplace_id')
             ->toArray();
 
+        // Get marketplace IDs where should_list is false
+        $excludedMarketplaceIds = $product->platformListings()
+            ->where('should_list', false)
+            ->pluck('store_marketplace_id')
+            ->toArray();
+
         $targetMarketplaces = $marketplaces->reject(
-            fn ($m) => in_array($m->id, $existingMarketplaceIds)
+            fn ($m) => in_array($m->id, $existingMarketplaceIds) || in_array($m->id, $excludedMarketplaceIds)
         );
 
         if ($targetMarketplaces->isEmpty()) {

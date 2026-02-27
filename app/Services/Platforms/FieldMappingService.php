@@ -85,6 +85,20 @@ class FieldMappingService
     ];
 
     /**
+     * Fields that are automatically provided from base product data
+     * and do not require explicit template-to-platform mapping.
+     *
+     * @var array<string, array<string>>
+     */
+    protected array $autoProvidedFields = [
+        'ebay' => ['title', 'description', 'condition'],
+        'shopify' => ['title'],
+        'amazon' => ['item_name', 'product_description'],
+        'etsy' => ['title', 'description', 'who_made', 'when_made'],
+        'walmart' => ['productName', 'shortDescription', 'mainImageUrl'],
+    ];
+
+    /**
      * Platforms that support custom metafields/attributes.
      * For these platforms, any unmapped template field can be sent as a metafield.
      *
@@ -395,6 +409,9 @@ class FieldMappingService
             return [];
         }
 
+        // Ensure field options are loaded for display value resolution
+        $product->loadMissing('attributeValues.field.options');
+
         $transformed = [];
         $fieldMappings = $mapping->field_mappings ?? [];
         $defaultValues = $mapping->default_values ?? [];
@@ -403,14 +420,14 @@ class FieldMappingService
         $attributeValues = $product->attributeValues->keyBy('product_template_field_id');
         $templateFields = $template->fields->keyBy('id');
 
-        // Apply mappings
+        // Apply mappings — template-level format: {templateFieldName: platformFieldName}
         foreach ($fieldMappings as $templateFieldName => $platformFieldName) {
             // Find the template field
             $templateField = $template->fields->firstWhere('name', $templateFieldName);
 
             if ($templateField) {
                 $attributeValue = $attributeValues->get($templateField->id);
-                $value = $attributeValue?->value;
+                $value = $attributeValue?->resolveDisplayValue();
 
                 if ($value !== null && $value !== '') {
                     $transformed[$platformFieldName] = $value;
@@ -439,8 +456,10 @@ class FieldMappingService
         $mapping = $this->getMappings($template, $platformValue);
         $requiredFields = $this->getRequiredPlatformFields($platformValue);
 
+        $autoProvided = $this->autoProvidedFields[$platformValue] ?? [];
+
         if (! $mapping) {
-            return array_keys($requiredFields);
+            return array_values(array_diff(array_keys($requiredFields), $autoProvided));
         }
 
         $mappedPlatformFields = array_values($mapping->field_mappings ?? []);
@@ -449,7 +468,8 @@ class FieldMappingService
         return array_values(array_diff(
             array_keys($requiredFields),
             $mappedPlatformFields,
-            $defaultValueFields
+            $defaultValueFields,
+            $autoProvided
         ));
     }
 

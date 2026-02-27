@@ -250,8 +250,8 @@ function saveTemplate() {
     formErrors.value = {};
 
     const url = isEditing.value
-        ? `/api/v1/notification-templates/${props.template!.id}`
-        : '/api/v1/notification-templates';
+        ? `/settings/notifications/templates/${props.template!.id}`
+        : '/settings/notifications/templates';
 
     const method = isEditing.value ? 'put' : 'post';
 

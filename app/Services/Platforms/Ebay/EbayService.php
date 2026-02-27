@@ -3,6 +3,7 @@
 namespace App\Services\Platforms\Ebay;
 
 use App\Enums\Platform;
+use App\Models\MarketplacePolicy;
 use App\Models\PlatformListing;
 use App\Models\PlatformOrder;
 use App\Models\Product;
@@ -204,8 +205,19 @@ class EbayService extends BasePlatformService
     {
         $this->ensureValidToken($connection);
 
+        // Load existing listing for per-listing setting overrides
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('store_marketplace_id', $connection->id)
+            ->first();
+
         $sku = $product->variants->first()?->sku ?? $product->handle;
-        $inventoryItem = $this->mapToEbayInventoryItem($product);
+
+        // Build the full listing data to get aspects/item specifics
+        $listingBuilder = app(\App\Services\Platforms\ListingBuilderService::class);
+        $builtListing = $listingBuilder->buildListing($product, $connection);
+        $aspects = $builtListing['aspects'] ?? null;
+
+        $inventoryItem = $this->mapToEbayInventoryItem($product, $aspects, $listing);
 
         // Create or update inventory item
         $this->ebayRequest(
@@ -215,11 +227,46 @@ class EbayService extends BasePlatformService
             $inventoryItem
         );
 
-        // Create offer
-        $offer = $this->mapToEbayOffer($product, $sku, $connection);
-        $offerResponse = $this->ebayRequest($connection, 'POST', '/sell/inventory/v1/offer', $offer);
+        // Create or update offer
+        $offer = $this->mapToEbayOffer($product, $sku, $connection, $listing);
+        $existingOfferId = $listing?->platform_data['offer_id'] ?? null;
 
-        $offerId = $offerResponse['offerId'];
+        if ($existingOfferId) {
+            // Update existing offer
+            $this->ebayRequest($connection, 'PUT', "/sell/inventory/v1/offer/{$existingOfferId}", $offer);
+            $offerId = $existingOfferId;
+        } else {
+            // Create new offer, or recover if one already exists on eBay
+            try {
+                $offerResponse = $this->ebayRequest($connection, 'POST', '/sell/inventory/v1/offer', $offer);
+                $offerId = $offerResponse['offerId'];
+            } catch (\Exception $e) {
+                $offerId = $this->extractExistingOfferId($e->getMessage());
+                if ($offerId) {
+                    // Offer already exists — update it instead
+                    $this->ebayRequest($connection, 'PUT', "/sell/inventory/v1/offer/{$offerId}", $offer);
+                } else {
+                    throw $e;
+                }
+            }
+        }
+
+        // Save offer_id immediately so it survives if publish fails
+        if (! $listing) {
+            $listing = PlatformListing::create([
+                'store_marketplace_id' => $connection->id,
+                'product_id' => $product->id,
+                'status' => PlatformListing::STATUS_PENDING,
+                'platform_data' => ['sku' => $sku, 'offer_id' => $offerId],
+            ]);
+        } else {
+            $listing->update([
+                'platform_data' => array_merge($listing->platform_data ?? [], [
+                    'sku' => $sku,
+                    'offer_id' => $offerId,
+                ]),
+            ]);
+        }
 
         // Publish offer
         $publishResponse = $this->ebayRequest(
@@ -228,20 +275,18 @@ class EbayService extends BasePlatformService
             "/sell/inventory/v1/offer/{$offerId}/publish"
         );
 
-        return PlatformListing::create([
-            'store_marketplace_id' => $connection->id,
-            'product_id' => $product->id,
+        $listing->update([
             'external_listing_id' => $publishResponse['listingId'] ?? $offerId,
             'status' => 'active',
             'listing_url' => "https://www.ebay.com/itm/{$publishResponse['listingId']}",
-            'platform_data' => [
-                'sku' => $sku,
-                'offer_id' => $offerId,
+            'platform_data' => array_merge($listing->platform_data ?? [], [
                 'listing_id' => $publishResponse['listingId'] ?? null,
-            ],
+            ]),
             'last_synced_at' => now(),
             'published_at' => now(),
         ]);
+
+        return $listing;
     }
 
     public function updateListing(PlatformListing $listing): PlatformListing
@@ -506,6 +551,20 @@ class EbayService extends BasePlatformService
     }
 
     /**
+     * Fetch business policies from eBay and sync them to local database.
+     *
+     * @return array{return_policies: array<mixed>, payment_policies: array<mixed>, fulfillment_policies: array<mixed>}
+     */
+    public function syncBusinessPolicies(StoreMarketplace $connection): array
+    {
+        $policies = $this->getBusinessPolicies($connection);
+
+        MarketplacePolicy::syncFromEbay($connection, $policies);
+
+        return $policies;
+    }
+
+    /**
      * Fetch inventory locations from eBay Inventory API.
      *
      * @return array<mixed>
@@ -534,10 +593,14 @@ class EbayService extends BasePlatformService
     ): array {
         $url = $this->apiBaseUrl.$endpoint;
 
+        $marketplaceId = $connection->settings['marketplace_id'] ?? 'EBAY_US';
+
         $request = Http::withHeaders([
             'Authorization' => 'Bearer '.$connection->access_token,
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
+            'Content-Language' => $this->getLocaleForMarketplace($marketplaceId),
+            'X-EBAY-C-MARKETPLACE-ID' => $marketplaceId,
         ]);
 
         $response = match (strtoupper($method)) {
@@ -617,18 +680,17 @@ class EbayService extends BasePlatformService
      *
      * @param  array<string, array<string, string[]>>|null  $aspects  Pre-built aspects from ListingBuilderService
      */
-    protected function mapToEbayInventoryItem(Product $product, ?array $aspects = null): array
+    protected function mapToEbayInventoryItem(Product $product, ?array $aspects = null, ?PlatformListing $listing = null): array
     {
         $variant = $product->variants->first();
-        $settings = [];
 
         $item = [
             'product' => [
-                'title' => $product->title,
-                'description' => $product->description ?? '',
-                'imageUrls' => $product->images->pluck('url')->all(),
+                'title' => $listing?->getEffectiveTitle() ?? $product->title,
+                'description' => $listing?->getEffectiveDescription() ?? $product->description ?? '',
+                'imageUrls' => $listing?->getEffectiveImages() ?: $product->images->pluck('url')->all(),
             ],
-            'condition' => $product->condition ?? 'NEW',
+            'condition' => $this->resolveConditionEnum($listing?->getEffectiveSetting('default_condition') ?? $product->condition ?? 'NEW'),
             'availability' => [
                 'shipToLocationAvailability' => [
                     'quantity' => $variant?->quantity ?? $product->quantity ?? 0,
@@ -644,59 +706,67 @@ class EbayService extends BasePlatformService
         return $item;
     }
 
-    protected function mapToEbayOffer(Product $product, string $sku, StoreMarketplace $connection): array
+    protected function mapToEbayOffer(Product $product, string $sku, StoreMarketplace $connection, ?PlatformListing $listing = null): array
     {
         $variant = $product->variants->first();
-        $settings = $connection->settings ?? [];
         $credentials = $connection->credentials ?? [];
 
-        $format = $settings['listing_type'] ?? 'FIXED_PRICE';
+        // Resolve settings through listing → marketplace → default
+        $setting = function (string $key, mixed $default = null) use ($listing, $connection) {
+            if ($listing) {
+                return $listing->getEffectiveSetting($key, $default);
+            }
+
+            return $connection->settings[$key] ?? $default;
+        };
+
+        $format = $setting('listing_type', 'FIXED_PRICE');
         $price = (float) ($variant?->price ?? 0);
 
         // Apply markup based on listing type
-        if ($format === 'AUCTION' && ! empty($settings['auction_markup'])) {
-            $price = $price * (1 + $settings['auction_markup'] / 100);
-        } elseif ($format === 'FIXED_PRICE' && ! empty($settings['fixed_price_markup'])) {
-            $price = $price * (1 + $settings['fixed_price_markup'] / 100);
+        $auctionMarkup = $setting('auction_markup');
+        $fixedMarkup = $setting('fixed_price_markup');
+        if ($format === 'AUCTION' && ! empty($auctionMarkup)) {
+            $price = $price * (1 + $auctionMarkup / 100);
+        } elseif ($format === 'FIXED_PRICE' && ! empty($fixedMarkup)) {
+            $price = $price * (1 + $fixedMarkup / 100);
         }
+
+        $marketplaceId = $setting('marketplace_id', 'EBAY_US');
 
         $offer = [
             'sku' => $sku,
-            'marketplaceId' => $settings['marketplace_id'] ?? 'EBAY_US',
+            'marketplaceId' => $marketplaceId,
             'format' => $format,
-            'listingDescription' => $product->description ?? '',
+            'listingDescription' => $listing?->getEffectiveDescription() ?? $product->description ?? '',
             'availableQuantity' => $variant?->quantity ?? $product->quantity ?? 0,
             'pricingSummary' => [
                 'price' => [
                     'value' => (string) round($price, 2),
-                    'currency' => $this->getCurrencyForMarketplace($settings['marketplace_id'] ?? 'EBAY_US'),
+                    'currency' => $this->getCurrencyForMarketplace($marketplaceId),
                 ],
             ],
             'listingPolicies' => [
-                'fulfillmentPolicyId' => $settings['fulfillment_policy_id'] ?? $credentials['fulfillment_policy_id'] ?? null,
-                'paymentPolicyId' => $settings['payment_policy_id'] ?? $credentials['payment_policy_id'] ?? null,
-                'returnPolicyId' => $settings['return_policy_id'] ?? $credentials['return_policy_id'] ?? null,
+                'fulfillmentPolicyId' => $setting('fulfillment_policy_id', $credentials['fulfillment_policy_id'] ?? null),
+                'paymentPolicyId' => $setting('payment_policy_id', $credentials['payment_policy_id'] ?? null),
+                'returnPolicyId' => $setting('return_policy_id', $credentials['return_policy_id'] ?? null),
             ],
-            'categoryId' => $product->category?->external_id ?? '1',
-            'merchantLocationKey' => $settings['location_key'] ?? $credentials['location_key'] ?? 'default',
+            'categoryId' => $setting('primary_category_id', $listing?->platform_category_id ?? $product->category?->platform_category_id ?? '1'),
+            'merchantLocationKey' => $setting('location_key', $credentials['location_key'] ?? 'default'),
         ];
 
         // Add listing duration
         $durationKey = $format === 'AUCTION' ? 'listing_duration_auction' : 'listing_duration_fixed';
-        if (! empty($settings[$durationKey])) {
-            $offer['listingDuration'] = $settings[$durationKey];
+        $duration = $setting($durationKey);
+        if (! empty($duration)) {
+            $offer['listingDuration'] = $duration;
         }
 
         // Add best offer
-        if (! empty($settings['best_offer_enabled'])) {
+        if (! empty($setting('best_offer_enabled'))) {
             $offer['bestOfferTerms'] = [
                 'bestOfferEnabled' => true,
             ];
-        }
-
-        // Add condition from settings
-        if (! empty($settings['default_condition'])) {
-            $offer['condition'] = $settings['default_condition'];
         }
 
         return $offer;
@@ -719,6 +789,82 @@ class EbayService extends BasePlatformService
             'EBAY_PH' => 'PHP',
             'EBAY_PL' => 'PLN',
             default => 'USD',
+        };
+    }
+
+    /**
+     * Get the Content-Language locale for a given eBay marketplace.
+     */
+    protected function getLocaleForMarketplace(string $marketplaceId): string
+    {
+        return match ($marketplaceId) {
+            'EBAY_GB' => 'en-GB',
+            'EBAY_DE' => 'de-DE',
+            'EBAY_FR', 'EBAY_BE_FR' => 'fr-FR',
+            'EBAY_IT' => 'it-IT',
+            'EBAY_ES' => 'es-ES',
+            'EBAY_AT' => 'de-AT',
+            'EBAY_BE_NL', 'EBAY_NL' => 'nl-NL',
+            'EBAY_AU' => 'en-AU',
+            'EBAY_CA' => 'en-CA',
+            'EBAY_CH' => 'de-CH',
+            'EBAY_IE' => 'en-IE',
+            'EBAY_PL' => 'pl-PL',
+            'EBAY_SG' => 'en-SG',
+            'EBAY_HK' => 'zh-HK',
+            'EBAY_PH' => 'en-PH',
+            'EBAY_IN' => 'en-IN',
+            'EBAY_MY' => 'en-MY',
+            default => 'en-US',
+        };
+    }
+
+    /**
+     * Extract an existing offerId from an eBay "Offer entity already exists" error.
+     */
+    protected function extractExistingOfferId(string $errorMessage): ?string
+    {
+        $json = str_replace('eBay API error: ', '', $errorMessage);
+        $data = json_decode($json, true);
+
+        if (! $data || empty($data['errors'])) {
+            return null;
+        }
+
+        foreach ($data['errors'] as $error) {
+            if (($error['errorId'] ?? null) === 25002) {
+                foreach ($error['parameters'] ?? [] as $param) {
+                    if ($param['name'] === 'offerId') {
+                        return $param['value'];
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve a condition value to the eBay ConditionEnum string.
+     * Accepts either a numeric condition ID (e.g. "3000") or an existing enum value (e.g. "NEW").
+     */
+    protected function resolveConditionEnum(string $condition): string
+    {
+        return match ($condition) {
+            '1000' => 'NEW',
+            '1500' => 'NEW_OTHER',
+            '1750' => 'NEW_WITH_DEFECTS',
+            '2000' => 'CERTIFIED_REFURBISHED',
+            '2010' => 'EXCELLENT_REFURBISHED',
+            '2020' => 'VERY_GOOD_REFURBISHED',
+            '2030' => 'GOOD_REFURBISHED',
+            '2500' => 'SELLER_REFURBISHED',
+            '2750' => 'LIKE_NEW',
+            '3000' => 'USED_EXCELLENT',
+            '4000' => 'USED_GOOD',
+            '5000' => 'USED_ACCEPTABLE',
+            '7000' => 'FOR_PARTS_OR_NOT_WORKING',
+            default => $condition,
         };
     }
 

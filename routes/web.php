@@ -689,12 +689,14 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('products/{product}/listings/{marketplace}/relist', [\App\Http\Controllers\Web\PlatformListingController::class, 'relist'])->name('products.listings.relist');
         Route::put('products/{product}/listings/{marketplace}/override', [\App\Http\Controllers\Web\PlatformListingController::class, 'updateOverride'])->name('products.listings.override');
         Route::post('products/{product}/listings/{marketplace}/sync', [\App\Http\Controllers\Web\PlatformListingController::class, 'sync'])->name('products.listings.sync');
+        Route::post('products/{product}/listings/{marketplace}/toggle-should-list', [\App\Http\Controllers\Web\PlatformListingController::class, 'toggleShouldList'])->name('products.listings.toggle-should-list');
         // Full platform listing page updates
         Route::put('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'update'])->name('products.platforms.update');
         Route::post('products/{product}/platforms/{marketplace}/publish', [\App\Http\Controllers\Web\ProductPlatformController::class, 'publish'])->name('products.platforms.publish');
         Route::delete('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'unpublish'])->name('products.platforms.unpublish');
         Route::post('products/{product}/platforms/{marketplace}/relist', [\App\Http\Controllers\Web\ProductPlatformController::class, 'relist'])->name('products.platforms.relist');
         Route::post('products/{product}/platforms/{marketplace}/sync', [\App\Http\Controllers\Web\ProductPlatformController::class, 'sync'])->name('products.platforms.sync');
+        Route::post('products/{product}/platforms/{marketplace}/ai-suggest', [\App\Http\Controllers\Web\ProductPlatformController::class, 'aiSuggest'])->name('products.platforms.ai-suggest');
     });
 
     // Standalone Listing Routes (by listing ID)
@@ -717,6 +719,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('products/{product}/channels/{channel}/publish', [\App\Http\Controllers\Web\ProductChannelController::class, 'publish'])->name('products.channels.publish');
         Route::delete('products/{product}/channels/{channel}', [\App\Http\Controllers\Web\ProductChannelController::class, 'unpublish'])->name('products.channels.unpublish');
         Route::post('products/{product}/channels/{channel}/toggle-not-for-sale', [\App\Http\Controllers\Web\ProductChannelController::class, 'toggleNotForSale'])->name('products.channels.toggle-not-for-sale');
+        Route::post('products/{product}/channels/{channel}/toggle-should-list', [\App\Http\Controllers\Web\ProductChannelController::class, 'toggleShouldList'])->name('products.channels.toggle-should-list');
         Route::post('products/{product}/channels/{channel}/sync', [\App\Http\Controllers\Web\ProductChannelController::class, 'sync'])->name('products.channels.sync');
         // Bulk actions
         Route::post('products/{product}/list-all-platforms', [\App\Http\Controllers\Web\ProductChannelController::class, 'listOnAllPlatforms'])->name('products.list-all-platforms');

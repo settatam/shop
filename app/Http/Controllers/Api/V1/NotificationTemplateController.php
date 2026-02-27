@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\NotificationChannel;
+use App\Models\NotificationLayout;
 use App\Models\NotificationLog;
+use App\Models\NotificationSubscription;
 use App\Models\NotificationTemplate;
 use App\Services\AI\AIManager;
 use App\Services\Notifications\NotificationDataPreparer;
@@ -67,6 +69,7 @@ class NotificationTemplateController extends Controller
             'available_variables' => ['nullable', 'array'],
             'category' => ['nullable', 'string', 'max:50'],
             'is_enabled' => ['nullable', 'boolean'],
+            'notification_layout_id' => ['nullable', 'integer', 'exists:notification_layouts,id'],
         ]);
 
         $storeId = $request->user()->currentStore()?->id;
@@ -120,6 +123,7 @@ class NotificationTemplateController extends Controller
             'available_variables' => ['nullable', 'array'],
             'category' => ['nullable', 'string', 'max:50'],
             'is_enabled' => ['nullable', 'boolean'],
+            'notification_layout_id' => ['nullable', 'integer', 'exists:notification_layouts,id'],
         ]);
 
         $notificationTemplate->update($validated);
@@ -160,6 +164,17 @@ class NotificationTemplateController extends Controller
         try {
             $content = $notificationTemplate->render($sampleData);
             $subject = $notificationTemplate->renderSubject($sampleData);
+
+            // Wrap content in layout
+            $layout = NotificationLayout::resolveForTemplate($notificationTemplate);
+            if ($layout || $notificationTemplate->channel === NotificationChannel::TYPE_EMAIL) {
+                $storeData = $sampleData['store'] ?? [];
+                if (! is_array($storeData)) {
+                    $store = $this->storeContext->getCurrentStore();
+                    $storeData = $store ? $this->dataPreparer->prepareStore($store) : [];
+                }
+                $content = NotificationTemplate::renderWithLayout($content, $storeData, $layout, $notificationTemplate);
+            }
 
             return response()->json([
                 'subject' => $subject,
@@ -212,9 +227,10 @@ class NotificationTemplateController extends Controller
         }
 
         NotificationTemplate::createDefaultTemplates($storeId);
+        NotificationSubscription::createDefaultSubscriptions($storeId);
 
         return response()->json([
-            'message' => 'Default templates created successfully',
+            'message' => 'Default templates and subscriptions created successfully',
         ]);
     }
 
@@ -233,15 +249,17 @@ class NotificationTemplateController extends Controller
             $ai = app(AIManager::class);
 
             $systemPrompt = <<<'PROMPT'
-You are an email template editor. Modify the given HTML/Twig email template based on the user's request.
+You are an email template editor. Modify the given HTML/Twig email template body based on the user's request.
 
 Rules:
 1. Keep the existing Twig variables ({{ variable }}) intact unless asked to remove them
 2. Maintain proper HTML structure
 3. Apply the requested design changes
-4. Keep inline CSS styles
-5. Return ONLY the modified HTML content, no explanations
-6. If asked to modify the subject, include a line at the start: SUBJECT: new subject here
+4. Keep inline CSS styles for content elements
+5. Return ONLY the modified HTML body content, no explanations
+6. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags — the content is wrapped in a shared email layout that provides the document structure, header with store logo, and footer with store info
+7. Only output the inner body HTML (headings, paragraphs, tables, etc.)
+8. If asked to modify the subject, include a line at the start: SUBJECT: new subject here
 
 Current template:
 PROMPT;
@@ -303,13 +321,17 @@ PROMPT;
             // Render the template with sample data
             $sampleData = $validated['sample_data'] ?? $this->dataPreparer->getSampleData();
 
-            $twig = new \Twig\Environment(new \Twig\Loader\ArrayLoader([
-                'content' => $validated['content'],
-                'subject' => $validated['subject'] ?? 'Template Test',
-            ]), ['autoescape' => false]);
+            $renderedContent = NotificationTemplate::renderTwig($validated['content'], $sampleData);
+            $renderedSubject = NotificationTemplate::renderTwig($validated['subject'] ?? 'Template Test', $sampleData);
 
-            $renderedContent = $twig->render('content', $sampleData);
-            $renderedSubject = $twig->render('subject', $sampleData);
+            // Wrap in email layout (use store's default or hardcoded fallback)
+            $storeData = $this->dataPreparer->prepareStore($store);
+            $defaultLayout = NotificationLayout::where('store_id', $store->id)
+                ->where('channel', NotificationChannel::TYPE_EMAIL)
+                ->where('is_default', true)
+                ->where('is_enabled', true)
+                ->first();
+            $renderedContent = NotificationTemplate::renderWithLayout($renderedContent, $storeData, $defaultLayout);
 
             // Create mailable
             $mailable = new \Illuminate\Mail\Mailable;

@@ -98,7 +98,7 @@ function getChannelBadgeClass(channel: string): string {
 }
 
 function toggleEnabled(template: NotificationTemplate) {
-    router.put(`/api/v1/notification-templates/${template.id}`, {
+    router.put(`/settings/notifications/templates/${template.id}`, {
         is_enabled: !template.is_enabled,
     }, {
         preserveScroll: true,
@@ -109,7 +109,7 @@ function toggleEnabled(template: NotificationTemplate) {
 }
 
 function duplicateTemplate(template: NotificationTemplate) {
-    router.post(`/api/v1/notification-templates/${template.id}/duplicate`, {}, {
+    router.post(`/settings/notifications/templates/${template.id}/duplicate`, {}, {
         preserveScroll: true,
         onSuccess: () => {
             router.reload();
@@ -132,7 +132,7 @@ function deleteTemplate() {
 
     isDeleting.value = true;
 
-    router.delete(`/api/v1/notification-templates/${selectedTemplate.value.id}`, {
+    router.delete(`/settings/notifications/templates/${selectedTemplate.value.id}`, {
         preserveScroll: true,
         onSuccess: () => {
             closeDeleteModal();
@@ -144,7 +144,7 @@ function deleteTemplate() {
 }
 
 function createDefaults() {
-    router.post('/api/v1/notification-templates/create-defaults', {}, {
+    router.post('/settings/notifications/templates/create-defaults', {}, {
         preserveScroll: true,
         onSuccess: () => {
             router.reload();

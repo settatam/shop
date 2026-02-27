@@ -16,10 +16,12 @@ import {
 interface Props {
     open: boolean;
     editData?: Record<string, unknown> | null;
+    prefillData?: Record<string, unknown> | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     editData: null,
+    prefillData: null,
 });
 
 const emit = defineEmits<{
@@ -61,6 +63,21 @@ watch(() => props.open, (isOpen) => {
             form.value.postalCode = (address.postalCode as string) ?? '';
             form.value.country = (address.country as string) ?? 'US';
             form.value.status = (data.merchantLocationStatus as string) ?? 'ENABLED';
+        } else if (props.prefillData) {
+            isEdit.value = false;
+            const data = props.prefillData;
+            const address = (data.location as Record<string, unknown>)?.address as Record<string, unknown> ?? {};
+            form.value = {
+                location_key: (data.location_key as string) ?? '',
+                name: (data.name as string) ?? '',
+                addressLine1: (address.addressLine1 as string) ?? '',
+                city: (address.city as string) ?? '',
+                stateOrProvince: (address.stateOrProvince as string) ?? '',
+                postalCode: (address.postalCode as string) ?? '',
+                country: (address.country as string) ?? 'US',
+                locationType: 'WAREHOUSE',
+                status: 'ENABLED',
+            };
         } else {
             isEdit.value = false;
             form.value = {

@@ -122,9 +122,11 @@ class SalesChannel extends Model
         });
 
         static::created(function (SalesChannel $channel) {
-            // Auto-list active products for channels with auto_list enabled
-            if ($channel->is_active && $channel->auto_list) {
-                $channel->listActiveProducts();
+            // Create listings for all products when a new active channel is created.
+            // auto_list channels will have active products set to 'listed',
+            // others will have all listings set to 'not_listed'.
+            if ($channel->is_active) {
+                $channel->createListingsForAllProducts();
             }
         });
 

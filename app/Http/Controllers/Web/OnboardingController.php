@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\EbayCategory;
 use App\Models\LeadSource;
+use App\Models\NotificationLayout;
+use App\Models\NotificationSubscription;
 use App\Models\NotificationTemplate;
 use App\Models\ProductTemplate;
 use App\Models\Warehouse;
@@ -144,10 +146,16 @@ class OnboardingController extends Controller
             // 4. Create default lead sources
             LeadSource::createDefaultsForStore($store->id);
 
-            // 5. Create default notification templates
+            // 5. Create default notification layouts
+            NotificationLayout::createDefaultLayouts($store->id);
+
+            // 6. Create default notification templates
             NotificationTemplate::createDefaultTemplates($store->id);
 
-            // 6. Mark onboarding complete
+            // 7. Create default notification subscriptions (wire templates to activities)
+            NotificationSubscription::createDefaultSubscriptions($store->id);
+
+            // 8. Mark onboarding complete
             $store->update(['step' => 2]);
         });
 

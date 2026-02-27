@@ -34,10 +34,8 @@ class ProductChannelController extends Controller
             'brand',
         ]);
 
-        // Get existing listing if any
-        $listing = PlatformListing::where('product_id', $product->id)
-            ->where('sales_channel_id', $channel->id)
-            ->first();
+        // Get or create listing (also auto-lists active products on auto_list channels)
+        $listing = $product->ensureListingExists($channel);
 
         // Get default variant for pricing
         $defaultVariant = $product->variants()->first();
@@ -54,7 +52,7 @@ class ProductChannelController extends Controller
                 'is_local' => $ch->is_local,
                 'is_listed' => $product->platformListings()
                     ->where('sales_channel_id', $ch->id)
-                    ->where('status', 'active')
+                    ->where('status', PlatformListing::STATUS_LISTED)
                     ->exists(),
             ]);
 
@@ -93,6 +91,7 @@ class ProductChannelController extends Controller
             'listing' => $listing ? [
                 'id' => $listing->id,
                 'status' => $listing->status,
+                'should_list' => $listing->should_list,
                 'platform_price' => $listing->platform_price,
                 'platform_quantity' => $listing->platform_quantity,
                 'platform_data' => $listing->platform_data,
@@ -155,7 +154,19 @@ class ProductChannelController extends Controller
         $this->authorize('update', $product);
         $this->authorizeChannel($channel);
 
-        $listing = $product->listOnChannel($channel, 'active');
+        // Check if the product is excluded from this channel
+        $existingListing = $product->platformListings()
+            ->where('sales_channel_id', $channel->id)
+            ->first();
+
+        if ($existingListing && ! $existingListing->should_list) {
+            return response()->json([
+                'success' => false,
+                'message' => "This product is excluded from {$channel->name}. Toggle 'Should List' to enable publishing.",
+            ], 422);
+        }
+
+        $listing = $product->listOnChannel($channel, PlatformListing::STATUS_LISTED);
 
         return response()->json([
             'success' => true,
@@ -198,7 +209,7 @@ class ProductChannelController extends Controller
     {
         $this->authorize('update', $product);
 
-        $listings = $product->listOnAllPlatforms();
+        $listings = $product->listOnAllPlatforms(respectShouldList: true);
 
         // Also list on In Store if not already
         $product->listOnInStore();
@@ -210,6 +221,26 @@ class ProductChannelController extends Controller
             'message' => 'Product listed on all platforms',
             'channels' => $channelNames,
             'count' => count($listings),
+        ]);
+    }
+
+    /**
+     * Toggle whether a product should be listed on this channel.
+     */
+    public function toggleShouldList(Product $product, SalesChannel $channel): JsonResponse
+    {
+        $this->authorize('update', $product);
+        $this->authorizeChannel($channel);
+
+        $listing = $product->ensureListingExists($channel);
+        $listing->update(['should_list' => ! $listing->should_list]);
+
+        return response()->json([
+            'success' => true,
+            'should_list' => $listing->should_list,
+            'message' => $listing->should_list
+                ? "Product included for listing on {$channel->name}"
+                : "Product excluded from listing on {$channel->name}",
         ]);
     }
 
@@ -369,7 +400,7 @@ class ProductChannelController extends Controller
 
         $listings = PlatformListing::where('product_id', $product->id)
             ->whereIn('status', [
-                PlatformListing::STATUS_ACTIVE,
+                PlatformListing::STATUS_LISTED,
                 PlatformListing::STATUS_PENDING,
             ])
             ->get();

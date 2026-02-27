@@ -24,6 +24,7 @@ import {
     RocketLaunchIcon,
     ChevronDownIcon,
     ChevronUpIcon,
+    NoSymbolIcon,
 } from '@heroicons/vue/20/solid';
 import PlatformOverrideModal from './PlatformOverrideModal.vue';
 import PublishToPlatformModal from './PublishToPlatformModal.vue';
@@ -35,6 +36,7 @@ interface PlatformListing {
     platform_label: string;
     platform_product_id: string | null;
     status: 'listed' | 'not_listed' | 'ended' | 'pending' | 'error' | 'archived' | 'active' | 'draft' | 'unlisted';
+    should_list: boolean;
     listing_url: string | null;
     price: number | null;
     quantity: number | null;
@@ -107,6 +109,29 @@ const publishAllResults = ref<{
     failed: Array<{ marketplace_name: string; platform: string; errors: string[] }>;
 } | null>(null);
 const expandedErrors = ref<Set<number>>(new Set());
+const togglingShouldList = ref<number | null>(null);
+
+async function toggleShouldList(listing: PlatformListing) {
+    togglingShouldList.value = listing.id;
+    try {
+        const endpoint = listing.is_local
+            ? `/products/${props.productId}/channels/${listing.marketplace.id}/toggle-should-list`
+            : `/products/${props.productId}/listings/${listing.marketplace.id}/toggle-should-list`;
+        await axios.post(endpoint);
+        emit('refresh');
+    } catch (error) {
+        console.error('Toggle should_list failed:', error);
+    } finally {
+        togglingShouldList.value = null;
+    }
+}
+
+// Count listings eligible for publish all (excluding should_list=false)
+const publishableCount = computed(() => {
+    const connectedIds = props.listings.map(l => l.marketplace.id);
+    const excludedCount = props.listings.filter(l => !l.should_list).length;
+    return props.availableMarketplaces.filter(m => !connectedIds.includes(m.id)).length - excludedCount;
+});
 
 function toggleErrorExpanded(listingId: number) {
     if (expandedErrors.value.has(listingId)) {
@@ -493,7 +518,10 @@ function getListingEditUrl(listing: PlatformListing): string {
                 <div
                     v-for="listing in listings"
                     :key="listing.id"
-                    class="flex items-center gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    class="flex items-center gap-4 p-4 rounded-lg border transition-colors"
+                    :class="listing.should_list
+                        ? 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60'"
                 >
                     <!-- Platform Icon -->
                     <div class="h-10 w-10 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
@@ -519,6 +547,13 @@ function getListingEditUrl(listing: PlatformListing): string {
                             >
                                 <component :is="getStatusIcon(listing.status)" class="h-3 w-3 mr-1" />
                                 {{ listing.status }}
+                            </Badge>
+                            <Badge
+                                v-if="!listing.should_list"
+                                class="text-xs bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20"
+                            >
+                                <NoSymbolIcon class="h-3 w-3 mr-1" />
+                                Excluded
                             </Badge>
                             <Badge
                                 v-if="needsSync(listing)"
@@ -570,7 +605,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                     <div class="flex items-center gap-2">
                         <!-- Relist button for unlisted items -->
                         <Button
-                            v-if="listing.status === 'unlisted' || listing.status === 'ended'"
+                            v-if="listing.should_list && (listing.status === 'unlisted' || listing.status === 'ended')"
                             variant="default"
                             size="sm"
                             :disabled="relisting === listing.id"
@@ -588,6 +623,15 @@ function getListingEditUrl(listing: PlatformListing): string {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem
+                                    @click="toggleShouldList(listing)"
+                                    :disabled="togglingShouldList === listing.id"
+                                    :class="listing.should_list ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'"
+                                >
+                                    <NoSymbolIcon v-if="listing.should_list" class="h-4 w-4 mr-2" />
+                                    <CheckCircleIcon v-else class="h-4 w-4 mr-2" />
+                                    {{ listing.should_list ? 'Exclude from Platform' : 'Include on Platform' }}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                     v-if="listing.listing_url && (listing.status === 'active' || listing.status === 'listed')"
                                     @click="viewOnPlatform(listing)"
                                 >
@@ -599,7 +643,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     Edit Listing Details
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="listing.status === 'active' || listing.status === 'listed'"
+                                    v-if="listing.should_list && (listing.status === 'active' || listing.status === 'listed')"
                                     @click="syncListing(listing)"
                                     :disabled="syncing === listing.id"
                                 >
@@ -607,7 +651,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     {{ syncing === listing.id ? 'Syncing...' : 'Sync Now' }}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="listing.status === 'unlisted' || listing.status === 'ended'"
+                                    v-if="listing.should_list && (listing.status === 'unlisted' || listing.status === 'ended')"
                                     class="text-green-600 dark:text-green-400"
                                     @click="relistListing(listing)"
                                     :disabled="relisting === listing.id"
@@ -616,7 +660,7 @@ function getListingEditUrl(listing: PlatformListing): string {
                                     {{ relisting === listing.id ? 'Relisting...' : 'Relist' }}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="listing.status === 'active' || listing.status === 'listed'"
+                                    v-if="listing.should_list && (listing.status === 'active' || listing.status === 'listed')"
                                     class="text-orange-600 dark:text-orange-400"
                                     @click="unpublishListing(listing)"
                                     :disabled="unpublishing === listing.id"

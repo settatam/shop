@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateOrderFromWizardRequest;
+use App\Models\Activity;
 use App\Models\Address;
 use App\Models\Bucket;
 use App\Models\Category;
@@ -20,6 +21,7 @@ use App\Models\StoreMarketplace;
 use App\Models\TransactionItem;
 use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
+use App\Services\Notifications\NotificationManager;
 use App\Services\Orders\OrderCreationService;
 use App\Services\StoreContext;
 use App\Services\TaxService;
@@ -1254,6 +1256,18 @@ class OrderController extends Controller
         }
 
         $order->markAsCompleted();
+
+        try {
+            $store = $this->storeContext->getCurrentStore();
+            $order->load(['customer', 'store', 'items.product.variants', 'items.productVariant', 'warehouse', 'user', 'payments']);
+            $notificationManager = new NotificationManager($order->store ?? $store);
+            $notificationManager->trigger(Activity::ORDERS_COMPLETE, [
+                'order' => $order,
+                'customer' => $order->customer,
+            ], $order);
+        } catch (\Exception $e) {
+            report($e);
+        }
 
         return back()->with('success', 'Order completed.');
     }

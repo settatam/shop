@@ -113,7 +113,20 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::get('/', [NotificationSettingsController::class, 'index'])->name('index');
         Route::get('/templates', [NotificationSettingsController::class, 'templates'])->name('templates');
         Route::get('/templates/create', [NotificationSettingsController::class, 'createTemplate'])->name('templates.create');
+        Route::post('/templates', [NotificationSettingsController::class, 'storeTemplate'])->name('templates.store');
         Route::get('/templates/{template}/edit', [NotificationSettingsController::class, 'editTemplate'])->name('templates.edit');
+        Route::put('/templates/{template}', [NotificationSettingsController::class, 'updateTemplate'])->name('templates.update');
+        Route::delete('/templates/{template}', [NotificationSettingsController::class, 'destroyTemplate'])->name('templates.destroy');
+        Route::post('/templates/{template}/duplicate', [NotificationSettingsController::class, 'duplicateTemplate'])->name('templates.duplicate');
+        Route::post('/templates/create-defaults', [NotificationSettingsController::class, 'createDefaultTemplates'])->name('templates.create-defaults');
+        Route::get('/layouts', [NotificationSettingsController::class, 'layouts'])->name('layouts');
+        Route::get('/layouts/create', [NotificationSettingsController::class, 'createLayout'])->name('layouts.create');
+        Route::post('/layouts', [NotificationSettingsController::class, 'storeLayout'])->name('layouts.store');
+        Route::get('/layouts/{layout}/edit', [NotificationSettingsController::class, 'editLayout'])->name('layouts.edit');
+        Route::put('/layouts/{layout}', [NotificationSettingsController::class, 'updateLayout'])->name('layouts.update');
+        Route::delete('/layouts/{layout}', [NotificationSettingsController::class, 'destroyLayout'])->name('layouts.destroy');
+        Route::post('/layouts/{layout}/set-default', [NotificationSettingsController::class, 'setDefaultLayout'])->name('layouts.set-default');
+        Route::post('/layouts/create-defaults', [NotificationSettingsController::class, 'createDefaultLayouts'])->name('layouts.create-defaults');
         Route::get('/subscriptions', [NotificationSettingsController::class, 'subscriptions'])->name('subscriptions');
         Route::get('/channels', [NotificationSettingsController::class, 'channels'])->name('channels');
         Route::post('/channels/save', [NotificationSettingsController::class, 'saveChannel'])->name('channels.save');
@@ -172,6 +185,8 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::post('/{marketplace}/fetch-locations', [MarketplaceSettingsController::class, 'fetchLocations'])->name('fetch-locations');
         Route::post('/{marketplace}/fetch-shipping-profiles', [MarketplaceSettingsController::class, 'fetchShippingProfiles'])->name('fetch-shipping-profiles');
         Route::post('/{marketplace}/fetch-return-policies', [MarketplaceSettingsController::class, 'fetchReturnPolicies'])->name('fetch-return-policies');
+        Route::post('/{marketplace}/sync-metafield-definitions', [MarketplaceSettingsController::class, 'syncMetafieldDefinitions'])->name('sync-metafield-definitions');
+        Route::post('/{marketplace}/create-listings', [MarketplaceSettingsController::class, 'createListings'])->name('create-listings');
 
         // eBay Account Management
         Route::prefix('{marketplace}/ebay')->name('ebay.')->group(function () {

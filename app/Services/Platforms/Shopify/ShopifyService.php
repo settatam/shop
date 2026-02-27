@@ -6,6 +6,7 @@ use App\Enums\Platform;
 use App\Models\PlatformListing;
 use App\Models\PlatformOrder;
 use App\Models\Product;
+use App\Models\ShopifyMetafieldDefinition;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
 use App\Services\Platforms\BasePlatformService;
@@ -13,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ShopifyService extends BasePlatformService
 {
@@ -508,6 +510,108 @@ class ShopifyService extends BasePlatformService
             'inventory_levels/update' => $this->handleInventoryWebhook($data, $connection),
             default => null,
         };
+    }
+
+    /**
+     * Sync metafield definitions from Shopify for a store marketplace.
+     *
+     * Fetches all product metafield definitions via GraphQL and upserts them locally.
+     * Removes local definitions that no longer exist in Shopify.
+     */
+    public function syncMetafieldDefinitions(StoreMarketplace $marketplace): int
+    {
+        $query = <<<'GRAPHQL'
+        {
+            metafieldDefinitions(first: 250, ownerType: PRODUCT) {
+                edges {
+                    node {
+                        id
+                        key
+                        namespace
+                        name
+                        type { name }
+                        description
+                    }
+                }
+            }
+        }
+        GRAPHQL;
+
+        try {
+            $response = $this->shopifyGraphqlRequest($marketplace, $query);
+        } catch (\Throwable $e) {
+            Log::error('Failed to sync Shopify metafield definitions', [
+                'store_marketplace_id' => $marketplace->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+
+        $edges = $response['data']['metafieldDefinitions']['edges'] ?? [];
+        $remoteGids = [];
+        $synced = 0;
+
+        foreach ($edges as $edge) {
+            $node = $edge['node'];
+            $remoteGids[] = $node['id'];
+
+            ShopifyMetafieldDefinition::updateOrCreate(
+                [
+                    'store_marketplace_id' => $marketplace->id,
+                    'namespace' => $node['namespace'],
+                    'key' => $node['key'],
+                ],
+                [
+                    'name' => $node['name'],
+                    'type' => $node['type']['name'],
+                    'description' => $node['description'],
+                    'shopify_gid' => $node['id'],
+                ]
+            );
+
+            $synced++;
+        }
+
+        // Remove local definitions that no longer exist in Shopify
+        if (! empty($remoteGids)) {
+            $marketplace->metafieldDefinitions()
+                ->whereNotIn('shopify_gid', $remoteGids)
+                ->delete();
+        }
+
+        return $synced;
+    }
+
+    /**
+     * Make a GraphQL request to Shopify.
+     *
+     * @return array<string, mixed>
+     */
+    protected function shopifyGraphqlRequest(StoreMarketplace $connection, string $query, array $variables = []): array
+    {
+        $url = "https://{$connection->shop_domain}/admin/api/{$this->apiVersion}/graphql.json";
+
+        $body = ['query' => $query];
+        if (! empty($variables)) {
+            $body['variables'] = $variables;
+        }
+
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $connection->access_token,
+            'Content-Type' => 'application/json',
+        ])->post($url, $body);
+
+        if ($response->failed()) {
+            throw new \Exception("Shopify GraphQL error: {$response->body()}");
+        }
+
+        $data = $response->json();
+
+        if (! empty($data['errors'])) {
+            throw new \Exception('Shopify GraphQL errors: '.json_encode($data['errors']));
+        }
+
+        return $data;
     }
 
     // Helper methods

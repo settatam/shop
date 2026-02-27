@@ -115,6 +115,7 @@ class NotificationDataPreparer
                 $store->state,
                 $store->zip,
             ])),
+            'logo' => $store->logo,
             'url' => $store->url,
             'domain' => $store->store_domain,
             'owner' => $store->owner ? [
@@ -612,6 +613,7 @@ class NotificationDataPreparer
                 'state' => 'NY',
                 'zip' => '10001',
                 'full_address' => '123 Main Street, Suite 100, New York, NY, 10001',
+                'logo' => 'https://myjewelrystore.com/logo.png',
                 'url' => 'https://myjewelrystore.com',
                 'domain' => 'myjewelrystore.com',
                 'owner' => [

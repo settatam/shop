@@ -272,7 +272,7 @@ class SalesChannelControllerTest extends TestCase
         $this->assertEquals(PlatformListing::STATUS_LISTED, $listing->status);
     }
 
-    public function test_non_auto_list_channel_does_not_list_products_on_creation(): void
+    public function test_non_auto_list_channel_creates_unlisted_listings_on_creation(): void
     {
         $this->actingAs($this->user);
 
@@ -292,12 +292,13 @@ class SalesChannelControllerTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Product should NOT be auto-listed
+        // Listing should exist but with not_listed status
         $listing = PlatformListing::where('product_id', $product->id)
             ->where('sales_channel_id', $channel->id)
             ->first();
 
-        $this->assertNull($listing);
+        $this->assertNotNull($listing);
+        $this->assertEquals(PlatformListing::STATUS_NOT_LISTED, $listing->status);
     }
 
     public function test_local_channel_defaults_auto_list_to_true(): void

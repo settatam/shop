@@ -84,6 +84,21 @@ class StoreMarketplace extends Model
             ->where('status', 'active');
     }
 
+    public function policies(): HasMany
+    {
+        return $this->hasMany(MarketplacePolicy::class);
+    }
+
+    public function metafieldDefinitions(): HasMany
+    {
+        return $this->hasMany(ShopifyMetafieldDefinition::class);
+    }
+
+    public function salesChannels(): HasMany
+    {
+        return $this->hasMany(SalesChannel::class);
+    }
+
     public function listings(): HasMany
     {
         return $this->hasMany(PlatformListing::class, 'store_marketplace_id');

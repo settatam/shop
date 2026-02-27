@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\InventoryTransferController;
 use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\MemoController;
 use App\Http\Controllers\Api\V1\MetalPriceController;
+use App\Http\Controllers\Api\V1\NotificationLayoutController;
 use App\Http\Controllers\Api\V1\NotificationSubscriptionController;
 use App\Http\Controllers\Api\V1\NotificationTemplateController;
 use App\Http\Controllers\Api\V1\OrderController;
@@ -170,6 +171,11 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     Route::post('notification-templates/{notificationTemplate}/preview', [NotificationTemplateController::class, 'preview']);
     Route::post('notification-templates/{notificationTemplate}/duplicate', [NotificationTemplateController::class, 'duplicate']);
     Route::apiResource('notification-templates', NotificationTemplateController::class);
+
+    // Notification Layouts
+    Route::post('notification-layouts/{notificationLayout}/preview', [NotificationLayoutController::class, 'preview']);
+    Route::post('notification-layouts/{notificationLayout}/duplicate', [NotificationLayoutController::class, 'duplicate']);
+    Route::apiResource('notification-layouts', NotificationLayoutController::class);
 
     // Notification Subscriptions
     Route::get('notifications/activities', [NotificationSubscriptionController::class, 'activities']);

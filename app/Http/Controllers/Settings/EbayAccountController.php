@@ -206,9 +206,19 @@ class EbayAccountController extends Controller
     {
         $this->authorizeEbayMarketplace($marketplace);
 
-        return $this->tryOrFail(
-            fn () => $this->ebayAccountService->getOptedInPrograms($marketplace)
-        );
+        return $this->tryOrFail(function () use ($marketplace) {
+            $result = $this->ebayAccountService->getOptedInPrograms($marketplace);
+
+            // Sync opted-in programs to local settings
+            $programTypes = collect($result['programs'] ?? [])
+                ->pluck('programType')
+                ->values()
+                ->all();
+
+            $this->syncProgramsToSettings($marketplace, $programTypes);
+
+            return $result;
+        });
     }
 
     public function optInToProgram(Request $request, StoreMarketplace $marketplace): JsonResponse
@@ -217,9 +227,20 @@ class EbayAccountController extends Controller
 
         $request->validate(['program_type' => ['required', 'string']]);
 
-        return $this->tryOrFail(
-            fn () => $this->ebayAccountService->optInToProgram($marketplace, $request->input('program_type'))
-        );
+        return $this->tryOrFail(function () use ($request, $marketplace) {
+            $result = $this->ebayAccountService->optInToProgram($marketplace, $request->input('program_type'));
+
+            // Add program to local settings
+            $settings = $marketplace->settings ?? [];
+            $programs = $settings['programs'] ?? [];
+            if (! in_array($request->input('program_type'), $programs)) {
+                $programs[] = $request->input('program_type');
+            }
+            $settings['programs'] = $programs;
+            $marketplace->update(['settings' => $settings]);
+
+            return $result;
+        });
     }
 
     public function optOutOfProgram(Request $request, StoreMarketplace $marketplace): JsonResponse
@@ -228,9 +249,25 @@ class EbayAccountController extends Controller
 
         $request->validate(['program_type' => ['required', 'string']]);
 
-        return $this->tryOrFail(
-            fn () => $this->ebayAccountService->optOutOfProgram($marketplace, $request->input('program_type'))
-        );
+        return $this->tryOrFail(function () use ($request, $marketplace) {
+            $result = $this->ebayAccountService->optOutOfProgram($marketplace, $request->input('program_type'));
+
+            // Remove program from local settings
+            $settings = $marketplace->settings ?? [];
+            $programs = $settings['programs'] ?? [];
+            $programs = array_values(array_filter($programs, fn ($p) => $p !== $request->input('program_type')));
+            $settings['programs'] = $programs;
+            $marketplace->update(['settings' => $settings]);
+
+            return $result;
+        });
+    }
+
+    protected function syncProgramsToSettings(StoreMarketplace $marketplace, array $programTypes): void
+    {
+        $settings = $marketplace->settings ?? [];
+        $settings['programs'] = $programTypes;
+        $marketplace->update(['settings' => $settings]);
     }
 
     // ──────────────────────────────────────────────────────────────

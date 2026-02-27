@@ -67,6 +67,7 @@ class PlatformListing extends Model
         'product_id',
         'external_listing_id',
         'status',
+        'should_list',
         'title',
         'description',
         'images',
@@ -88,6 +89,7 @@ class PlatformListing extends Model
     protected function casts(): array
     {
         return [
+            'should_list' => 'boolean',
             'platform_price' => 'decimal:2',
             'platform_data' => 'array',
             'images' => 'array',
@@ -188,6 +190,30 @@ class PlatformListing extends Model
     public function getNormalizedStatusAttribute(): string
     {
         return $this->normalizeStatus($this->status);
+    }
+
+    /**
+     * Whether this product should be listed on this platform.
+     */
+    public function shouldList(): bool
+    {
+        return $this->should_list;
+    }
+
+    /**
+     * Exclude this product from being listed on this platform.
+     */
+    public function excludeFromListing(): void
+    {
+        $this->update(['should_list' => false]);
+    }
+
+    /**
+     * Include this product for listing on this platform.
+     */
+    public function includeInListing(): void
+    {
+        $this->update(['should_list' => true]);
     }
 
     public function marketplace(): BelongsTo
@@ -469,6 +495,43 @@ class PlatformListing extends Model
             self::STATUS_ERROR => 'Error',
             self::STATUS_PENDING => 'Pending',
         ];
+    }
+
+    /**
+     * Get a single effective setting, resolving through: listing override → marketplace default → fallback.
+     */
+    public function getEffectiveSetting(string $key, mixed $default = null): mixed
+    {
+        $listingValue = $this->platform_settings[$key] ?? null;
+        if ($listingValue !== null) {
+            return $listingValue;
+        }
+
+        $marketplaceSettings = $this->marketplace?->settings ?? [];
+
+        return $marketplaceSettings[$key] ?? $default;
+    }
+
+    /**
+     * Get all effective settings — marketplace defaults merged with listing overrides.
+     *
+     * @return array<string, mixed>
+     */
+    public function getEffectiveSettings(): array
+    {
+        $marketplaceSettings = $this->marketplace?->settings ?? [];
+        $listingSettings = $this->platform_settings ?? [];
+
+        return array_merge($marketplaceSettings, array_filter($listingSettings, fn ($v) => $v !== null));
+    }
+
+    /**
+     * Check if a setting key is overridden at the listing level.
+     */
+    public function isSettingOverridden(string $key): bool
+    {
+        return array_key_exists($key, $this->platform_settings ?? [])
+            && $this->platform_settings[$key] !== null;
     }
 
     /**

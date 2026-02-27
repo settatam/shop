@@ -93,6 +93,7 @@ interface Settings {
     best_offer_enabled?: boolean;
     location_key?: string;
     location_mappings?: LocationMapping[];
+    programs?: string[];
 
     // Amazon
     fulfillment_channel?: string;
@@ -129,6 +130,9 @@ interface Marketplace {
 interface Props {
     marketplace: Marketplace;
     warehouses: Warehouse[];
+    listingCount: number;
+    hasSalesChannel: boolean;
+    metafieldDefinitionsCount: number;
 }
 
 const props = defineProps<Props>();
@@ -189,6 +193,11 @@ const errors = ref<Record<string, string>>({});
 const saving = ref(false);
 const recentlySaved = ref(false);
 
+// Listing creation state
+const currentListingCount = ref(props.listingCount);
+const creatingListings = ref(false);
+const listingsCreatedMessage = ref('');
+
 // Platform checks
 const isEbay = computed(() => props.marketplace.platform === 'ebay');
 const isAmazon = computed(() => props.marketplace.platform === 'amazon');
@@ -221,6 +230,12 @@ const loadingEtsyReturnPolicies = ref(false);
 const etsyReturnPolicies = ref<EtsyReturnPolicy[]>([]);
 const etsyReturnPoliciesLoaded = ref(false);
 const etsyReturnPoliciesError = ref('');
+
+// Shopify Metafield Definitions state
+const syncingMetafields = ref(false);
+const metafieldCount = ref(props.metafieldDefinitionsCount);
+const metafieldSyncError = ref('');
+const metafieldSyncSuccess = ref('');
 
 // eBay Options
 const ebayMarketplaces = [
@@ -433,6 +448,24 @@ async function fetchEtsyReturnPolicies() {
     }
 }
 
+// Shopify fetch functions
+async function syncMetafieldDefinitions() {
+    syncingMetafields.value = true;
+    metafieldSyncError.value = '';
+    metafieldSyncSuccess.value = '';
+
+    try {
+        const response = await axios.post(`/settings/marketplaces/${props.marketplace.id}/sync-metafield-definitions`);
+        metafieldCount.value = response.data.count ?? 0;
+        metafieldSyncSuccess.value = response.data.message;
+    } catch (error: unknown) {
+        const axiosError = error as { response?: { data?: { error?: string } } };
+        metafieldSyncError.value = axiosError.response?.data?.error ?? 'Failed to sync metafield definitions';
+    } finally {
+        syncingMetafields.value = false;
+    }
+}
+
 function submitForm() {
     saving.value = true;
     errors.value = {};
@@ -452,6 +485,21 @@ function submitForm() {
             saving.value = false;
         },
     });
+}
+
+async function createListings() {
+    creatingListings.value = true;
+    listingsCreatedMessage.value = '';
+
+    try {
+        const response = await axios.post(`/settings/marketplaces/${props.marketplace.id}/create-listings`);
+        listingsCreatedMessage.value = response.data.message;
+    } catch (err: unknown) {
+        const axiosError = err as { response?: { data?: { error?: string } } };
+        listingsCreatedMessage.value = axiosError.response?.data?.error ?? 'Failed to create listings';
+    } finally {
+        creatingListings.value = false;
+    }
 }
 
 function addLocationMapping() {
@@ -488,6 +536,32 @@ onMounted(() => {
                         :title="`${marketplace.name} Settings`"
                         description="Configure default listing settings for this marketplace connection."
                     />
+                </div>
+
+                <!-- Create Listings Banner -->
+                <div
+                    v-if="hasSalesChannel && currentListingCount === 0"
+                    class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
+                >
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-amber-800 dark:text-amber-200">No listings found</p>
+                            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                This marketplace has no product listings yet. Create listings for all your products to get started.
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            size="sm"
+                            :disabled="creatingListings"
+                            @click="createListings"
+                        >
+                            {{ creatingListings ? 'Creating...' : 'Create Listings' }}
+                        </Button>
+                    </div>
+                    <p v-if="listingsCreatedMessage" class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                        {{ listingsCreatedMessage }}
+                    </p>
                 </div>
 
                 <form @submit.prevent="submitForm" class="space-y-8">
@@ -757,6 +831,40 @@ onMounted(() => {
                                 </select>
                                 <InputError :message="errors.inventory_tracking" />
                             </div>
+                        </div>
+
+                        <Separator class="my-8" />
+
+                        <!-- Metafield Definitions -->
+                        <div class="flex items-center justify-between">
+                            <HeadingSmall
+                                title="Metafield Definitions"
+                                description="Sync metafield definitions from your Shopify store to ensure correct types when pushing product data."
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                :disabled="syncingMetafields"
+                                @click="syncMetafieldDefinitions"
+                            >
+                                <ArrowPathIcon class="h-4 w-4 mr-1" :class="{ 'animate-spin': syncingMetafields }" />
+                                {{ syncingMetafields ? 'Syncing...' : 'Sync from Shopify' }}
+                            </Button>
+                        </div>
+
+                        <div class="mt-3 max-w-2xl">
+                            <p class="text-sm text-muted-foreground">
+                                <span v-if="metafieldCount > 0">{{ metafieldCount }} metafield definitions cached.</span>
+                                <span v-else>No metafield definitions cached yet. Click "Sync from Shopify" to download them.</span>
+                            </p>
+                            <p v-if="metafieldSyncSuccess" class="mt-2 flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+                                <CheckCircleIcon class="h-4 w-4" />
+                                {{ metafieldSyncSuccess }}
+                            </p>
+                            <p v-if="metafieldSyncError" class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                {{ metafieldSyncError }}
+                            </p>
                         </div>
                     </div>
 
@@ -1094,6 +1202,8 @@ onMounted(() => {
                         v-if="isEbay"
                         :marketplace-id="marketplace.id"
                         :ebay-marketplace-id="form.marketplace_id ?? 'EBAY_US'"
+                        :saved-programs="(marketplace.settings?.programs as string[]) ?? []"
+                        @policies-synced="fetchPolicies"
                     />
 
                     <!-- Save -->

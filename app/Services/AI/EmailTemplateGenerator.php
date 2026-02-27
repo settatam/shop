@@ -101,17 +101,19 @@ class EmailTemplateGenerator
         $tone = $options['tone'] ?? 'friendly but professional';
 
         return <<<PROMPT
-You are an expert email template designer. Generate HTML email templates using Twig templating syntax.
+You are an expert email template designer. Generate HTML email body content using Twig templating syntax.
 
 IMPORTANT RULES:
 1. Output ONLY valid JSON with these exact keys: "subject", "content", "variables"
 2. The "subject" should use Twig syntax for variables: {{ variable.field }}
-3. The "content" must be valid HTML with Twig templating
-4. Use proper Twig syntax: {{ variable }}, {% for item in items %}, {% if condition %}
-5. Available Twig filters: |money (formats currency), |date_format('m-d-Y') (formats dates)
-6. Keep emails clean, readable, and mobile-friendly
-7. Use inline CSS styles
-8. Style: {$style}, Tone: {$tone}
+3. The "content" must be valid HTML body content with Twig templating
+4. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags — the content will be wrapped in a shared email layout that provides the document structure, header with store logo, and footer with store info
+5. Only generate the inner body HTML (headings, paragraphs, tables, etc.)
+6. Use proper Twig syntax: {{ variable }}, {% for item in items %}, {% if condition %}
+7. Available Twig filters: |money (formats currency), |date_format('m-d-Y') (formats dates)
+8. Keep content clean, readable, and mobile-friendly
+9. Use inline CSS styles for content elements (tables, text, etc.)
+10. Style: {$style}, Tone: {$tone}
 
 AVAILABLE CONTEXT:
 {$contextInfo}
@@ -136,19 +138,21 @@ PROMPT;
         };
 
         return <<<PROMPT
-You are an expert email template designer specializing in business reports. Generate HTML email templates using Twig templating syntax.
+You are an expert email template designer specializing in business reports. Generate HTML email body content using Twig templating syntax.
 
 REPORT TYPE: {$reportType}
 
 IMPORTANT RULES:
 1. Output ONLY valid JSON with these exact keys: "subject", "content", "variables"
 2. The "subject" should include the report date using: {{ date }}
-3. The "content" must be valid HTML with Twig templating
-4. Use proper Twig syntax: {{ variable }}, {% for item in items %}, {% if condition %}
-5. Available Twig filters: |money (formats currency), |date_format('m-d-Y') (formats dates)
-6. Create professional, easy-to-read reports with proper tables
-7. Use inline CSS styles (border-collapse, padding, etc.)
-8. Include summaries and totals where appropriate
+3. The "content" must be valid HTML body content with Twig templating
+4. Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags — the content will be wrapped in a shared email layout that provides the document structure, header with store logo, and footer with store info
+5. Only generate the inner body HTML (headings, paragraphs, tables, etc.)
+6. Use proper Twig syntax: {{ variable }}, {% for item in items %}, {% if condition %}
+7. Available Twig filters: |money (formats currency), |date_format('m-d-Y') (formats dates)
+8. Create professional, easy-to-read reports with proper tables
+9. Use inline CSS styles for content elements (border-collapse, padding, etc.)
+10. Include summaries and totals where appropriate
 
 {$reportContext}
 
@@ -292,38 +296,107 @@ PROMPT;
         return match ($variable) {
             'store' => [
                 'name' => 'string',
+                'business_name' => 'string',
                 'email' => 'string',
+                'customer_email' => 'string',
                 'phone' => 'string',
-                'address.street' => 'string',
-                'address.city' => 'string',
-                'address.state' => 'string',
-                'address.zip' => 'string',
+                'address' => 'string',
+                'address2' => 'string',
+                'city' => 'string',
+                'state' => 'string',
+                'zip' => 'string',
+                'full_address' => 'string',
+                'logo' => 'url (store logo image)',
+                'url' => 'string',
+                'domain' => 'string',
+                'owner.name' => 'string',
+                'owner.email' => 'string',
+                'warehouse.name' => 'string',
+                'warehouse.full_address' => 'string',
+                'warehouse.phone' => 'string',
             ],
             'customer' => [
                 'name' => 'string',
+                'full_name' => 'string',
+                'first_name' => 'string',
+                'last_name' => 'string',
                 'email' => 'string',
                 'phone' => 'string',
+                'phone_number' => 'string',
+                'company_name' => 'string',
+                'full_address' => 'string',
             ],
             'order' => [
                 'number' => 'string',
-                'total' => 'decimal',
-                'subtotal' => 'decimal',
-                'tax' => 'decimal',
+                'invoice_number' => 'string',
                 'status' => 'string',
+                'sub_total' => 'decimal',
+                'total' => 'decimal',
+                'sales_tax' => 'decimal',
+                'shipping_cost' => 'decimal',
+                'discount_cost' => 'decimal',
+                'trade_in_credit' => 'decimal',
+                'total_paid' => 'decimal',
+                'balance_due' => 'decimal',
+                'item_count' => 'integer',
+                'tracking_number' => 'string',
+                'notes' => 'string',
+                'date_of_purchase' => 'date',
                 'created_at' => 'datetime',
+                'billing_address.name' => 'string',
+                'billing_address.full_address' => 'string',
+                'shipping_address.name' => 'string',
+                'shipping_address.full_address' => 'string',
+                'items' => 'array of {name, sku, quantity, price, total}',
+                'payments' => 'array of {amount, method, status}',
+                'customer.name' => 'string',
+                'customer.email' => 'string',
             ],
             'product' => [
                 'title' => 'string',
+                'description' => 'string',
                 'sku' => 'string',
                 'price' => 'decimal',
-                'description' => 'string',
+                'compare_at_price' => 'decimal',
+                'cost' => 'decimal',
+                'quantity' => 'integer',
+                'category' => 'string',
+                'brand' => 'string',
+                'vendor' => 'string',
             ],
             'transaction' => [
-                'id' => 'integer',
-                'bought' => 'decimal',
-                'profit' => 'decimal',
-                'payment_type' => 'string',
-                'customer_name' => 'string',
+                'number' => 'string',
+                'status' => 'string',
+                'total_value' => 'decimal',
+                'total_paid' => 'decimal',
+                'balance_due' => 'decimal',
+                'item_count' => 'integer',
+                'notes' => 'string',
+                'items' => 'array of {description, quantity, offered_price, accepted_price}',
+                'customer.name' => 'string',
+                'customer.email' => 'string',
+            ],
+            'memo' => [
+                'number' => 'string',
+                'status' => 'string',
+                'total_value' => 'decimal',
+                'total_paid' => 'decimal',
+                'balance_due' => 'decimal',
+                'item_count' => 'integer',
+                'vendor.name' => 'string',
+                'vendor.email' => 'string',
+                'items' => 'array of {description, quantity, price, total}',
+            ],
+            'repair' => [
+                'number' => 'string',
+                'status' => 'string',
+                'total_cost' => 'decimal',
+                'total_paid' => 'decimal',
+                'balance_due' => 'decimal',
+                'estimated_completion' => 'date',
+                'notes' => 'string',
+                'customer.name' => 'string',
+                'items' => 'array of {description, service_type, cost}',
             ],
             default => [],
         };

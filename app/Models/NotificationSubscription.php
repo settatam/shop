@@ -208,6 +208,118 @@ class NotificationSubscription extends Model
     }
 
     /**
+     * Get the default subscription mappings (template slug → activity + metadata).
+     *
+     * @return array<string, array{activity: string, name: string, recipients: array}>
+     */
+    public static function getDefaultSubscriptions(): array
+    {
+        return [
+            'order-created' => [
+                'activity' => Activity::ORDERS_CREATE,
+                'name' => 'Notify on New Orders',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'order-fulfilled' => [
+                'activity' => Activity::ORDERS_FULFILL,
+                'name' => 'Notify on Order Fulfillment',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'order-completed' => [
+                'activity' => Activity::ORDERS_COMPLETE,
+                'name' => 'Notify on Order Completion',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'order-cancelled' => [
+                'activity' => Activity::ORDERS_CANCEL,
+                'name' => 'Notify on Order Cancellation',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'product-created' => [
+                'activity' => Activity::PRODUCTS_CREATE,
+                'name' => 'Notify on New Products',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'product-updated' => [
+                'activity' => Activity::PRODUCTS_UPDATE,
+                'name' => 'Notify on Product Updates',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'listing-published' => [
+                'activity' => Activity::LISTINGS_PUBLISH,
+                'name' => 'Notify on Platform Publishing',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'transaction-created' => [
+                'activity' => Activity::TRANSACTIONS_CREATE,
+                'name' => 'Notify on New Buy Transactions',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'customer-welcome' => [
+                'activity' => Activity::CUSTOMERS_CREATE,
+                'name' => 'Welcome New Customers',
+                'recipients' => [['type' => self::RECIPIENT_CUSTOMER]],
+            ],
+            'team-invite' => [
+                'activity' => Activity::TEAM_INVITE,
+                'name' => 'Team Member Invitation',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'alert-price-changed' => [
+                'activity' => Activity::PRODUCTS_PRICE_CHANGE,
+                'name' => 'Alert on Product Price Changes',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'alert-inventory-adjusted' => [
+                'activity' => Activity::INVENTORY_QUANTITY_MANUAL_ADJUST,
+                'name' => 'Alert on Manual Inventory Changes',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'alert-closed-order-deleted' => [
+                'activity' => Activity::ORDERS_DELETE_CLOSED,
+                'name' => 'Alert on Closed Sale Deletion',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'alert-closed-transaction-deleted' => [
+                'activity' => Activity::TRANSACTIONS_DELETE_CLOSED,
+                'name' => 'Alert on Closed Transaction Deletion',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+        ];
+    }
+
+    /**
+     * Create default subscriptions for a store, wiring templates to activities.
+     */
+    public static function createDefaultSubscriptions(int $storeId): void
+    {
+        foreach (self::getDefaultSubscriptions() as $templateSlug => $config) {
+            $template = NotificationTemplate::withoutGlobalScopes()
+                ->where('store_id', $storeId)
+                ->where('slug', $templateSlug)
+                ->first();
+
+            if (! $template) {
+                continue;
+            }
+
+            self::firstOrCreate(
+                [
+                    'store_id' => $storeId,
+                    'activity' => $config['activity'],
+                    'notification_template_id' => $template->id,
+                ],
+                [
+                    'name' => $config['name'],
+                    'recipients' => $config['recipients'],
+                    'schedule_type' => self::SCHEDULE_IMMEDIATE,
+                    'is_enabled' => true,
+                ]
+            );
+        }
+    }
+
+    /**
      * Scope to get enabled subscriptions.
      */
     public function scopeEnabled($query)

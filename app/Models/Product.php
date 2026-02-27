@@ -212,8 +212,8 @@ class Product extends Model
             // Ensure variants are in sync (new variants added to product get listing variants)
             $this->syncListingVariants($existingListing);
 
-            // If product just became active and channel has auto_list, list it
-            if ($this->status === self::STATUS_ACTIVE && $channel->auto_list && $existingListing->isNotListed()) {
+            // If product just became active and channel has auto_list, list it (unless excluded)
+            if ($this->status === self::STATUS_ACTIVE && $channel->auto_list && $existingListing->isNotListed() && $existingListing->should_list) {
                 $existingListing->markAsListed();
             }
 
@@ -355,12 +355,24 @@ class Product extends Model
      *
      * @return array<PlatformListing>
      */
-    public function listOnAllPlatforms(): array
+    /**
+     * @return array<PlatformListing>
+     */
+    public function listOnAllPlatforms(bool $respectShouldList = false): array
     {
         $channels = SalesChannel::where('store_id', $this->store_id)
             ->where('is_active', true)
             ->where('is_local', false) // External platforms only
             ->get();
+
+        if ($respectShouldList) {
+            $excludedChannelIds = $this->platformListings()
+                ->where('should_list', false)
+                ->pluck('sales_channel_id')
+                ->toArray();
+
+            $channels = $channels->reject(fn ($ch) => in_array($ch->id, $excludedChannelIds));
+        }
 
         $listings = [];
         foreach ($channels as $channel) {
@@ -594,6 +606,22 @@ class Product extends Model
      */
     public function setTemplateAttributeValue(int $fieldId, ?string $value): void
     {
+        // Treat "0" as empty for select/radio/checkbox fields (legacy "not selected" value)
+        if ($value === '0') {
+            $field = ProductTemplateField::find($fieldId);
+            if ($field && $field->hasOptions()) {
+                $value = null;
+            }
+        }
+
+        if ($value === null || $value === '') {
+            $this->attributeValues()
+                ->where('product_template_field_id', $fieldId)
+                ->delete();
+
+            return;
+        }
+
         $this->attributeValues()->updateOrCreate(
             ['product_template_field_id' => $fieldId],
             ['value' => $value]

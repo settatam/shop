@@ -3,9 +3,13 @@
 namespace Tests\Feature;
 
 use App\Enums\Platform;
+use App\Models\Category;
+use App\Models\CategoryPlatformMapping;
 use App\Models\Product;
+use App\Models\ProductAttributeValue;
 use App\Models\ProductTemplate;
 use App\Models\ProductTemplateField;
+use App\Models\ProductTemplateFieldOption;
 use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\Store;
@@ -338,5 +342,93 @@ class ListingBuilderServiceTest extends TestCase
         $this->assertArrayHasKey('listing', $preview);
         $this->assertArrayHasKey('validation', $preview);
         $this->assertEquals('Preview Product', $preview['listing']['title']);
+    }
+
+    public function test_ebay_listing_includes_aspects_from_category_field_mappings(): void
+    {
+        $category = Category::factory()->create(['store_id' => $this->store->id]);
+
+        $template = ProductTemplate::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $ringSizeField = ProductTemplateField::factory()->create([
+            'product_template_id' => $template->id,
+            'name' => 'ring_size',
+            'label' => 'Ring Size',
+            'type' => 'text',
+        ]);
+
+        // Material is a select field with options — should resolve to label
+        $materialField = ProductTemplateField::factory()->select()->create([
+            'product_template_id' => $template->id,
+            'name' => 'material',
+            'label' => 'Material',
+        ]);
+
+        ProductTemplateFieldOption::factory()->create([
+            'product_template_field_id' => $materialField->id,
+            'label' => 'White Gold',
+            'value' => 'white-gold',
+        ]);
+
+        $marketplace = StoreMarketplace::factory()->create([
+            'store_id' => $this->store->id,
+            'platform' => Platform::Ebay,
+        ]);
+
+        // Category-level field_mappings: {platformFieldName: templateFieldName}
+        CategoryPlatformMapping::create([
+            'store_id' => $this->store->id,
+            'category_id' => $category->id,
+            'store_marketplace_id' => $marketplace->id,
+            'platform' => 'ebay',
+            'primary_category_id' => '261994',
+            'primary_category_name' => 'Rings',
+            'field_mappings' => [
+                'Ring Size' => 'ring_size',
+                'Material' => 'material',
+            ],
+        ]);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'template_id' => $template->id,
+            'category_id' => $category->id,
+            'title' => 'Gold Ring',
+        ]);
+
+        ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 200,
+        ]);
+
+        ProductAttributeValue::create([
+            'product_id' => $product->id,
+            'product_template_field_id' => $ringSizeField->id,
+            'value' => '75',
+        ]);
+
+        ProductAttributeValue::create([
+            'product_id' => $product->id,
+            'product_template_field_id' => $materialField->id,
+            'value' => 'white-gold',
+        ]);
+
+        $service = app(ListingBuilderService::class);
+        $listing = $service->buildListing($product, $marketplace);
+
+        // Text field: raw value preserved
+        $this->assertArrayHasKey('Ring Size', $listing['attributes']);
+        $this->assertEquals('75', $listing['attributes']['Ring Size']);
+
+        // Select field: resolved to display label
+        $this->assertArrayHasKey('Material', $listing['attributes']);
+        $this->assertEquals('White Gold', $listing['attributes']['Material']);
+
+        // Aspects (eBay Inventory API format) should wrap values in arrays
+        $this->assertArrayHasKey('aspects', $listing);
+        $this->assertEquals(['75'], $listing['aspects']['Ring Size']);
+        $this->assertEquals(['White Gold'], $listing['aspects']['Material']);
     }
 }

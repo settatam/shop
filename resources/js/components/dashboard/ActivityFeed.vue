@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useDate } from '@/composables/useDate';
 import {
+    CheckCircleIcon,
     CubeIcon,
     ShoppingCartIcon,
     UserIcon,
@@ -51,6 +52,7 @@ const activityIcons: Record<string, Component> = {
     'products.delete': TrashIcon,
     'orders.create': ShoppingCartIcon,
     'orders.update': ShoppingCartIcon,
+    'orders.complete': CheckCircleIcon,
     'customers.create': UserIcon,
     'categories.create': CubeIcon,
     'categories.update': CubeIcon,

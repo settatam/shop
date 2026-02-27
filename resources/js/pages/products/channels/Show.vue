@@ -49,6 +49,7 @@ interface Channel {
 interface Listing {
     id: number;
     status: string;
+    should_list: boolean;
     platform_price: number | null;
     platform_quantity: number | null;
     platform_data: {
@@ -88,10 +89,12 @@ const saving = ref(false);
 const publishing = ref(false);
 const syncing = ref(false);
 const togglingNotForSale = ref(false);
+const togglingShouldList = ref(false);
 
 // Computed
 const isListed = computed(() => props.listing?.status === 'active');
 const isNotForSale = computed(() => props.listing?.status === 'not_for_sale');
+const isExcluded = computed(() => props.listing?.should_list === false);
 const isDraft = computed(() => !props.listing || props.listing.status === 'draft');
 
 const effectiveTitle = computed(() => form.value.title || props.product.title);
@@ -189,6 +192,18 @@ async function unpublish() {
     }
 }
 
+async function toggleShouldList() {
+    togglingShouldList.value = true;
+    try {
+        await axios.post(`/products/${props.product.id}/channels/${props.channel.id}/toggle-should-list`);
+        router.reload();
+    } catch (error) {
+        console.error('Toggle should_list failed:', error);
+    } finally {
+        togglingShouldList.value = false;
+    }
+}
+
 async function toggleNotForSale() {
     togglingNotForSale.value = true;
     try {
@@ -250,7 +265,10 @@ async function sync() {
 
                 <div class="flex items-center gap-3">
                     <!-- Status Badge -->
-                    <Badge :variant="statusVariant" class="flex items-center gap-1">
+                    <Badge v-if="isExcluded" variant="destructive" class="flex items-center gap-1">
+                        Excluded
+                    </Badge>
+                    <Badge v-else :variant="statusVariant" class="flex items-center gap-1">
                         <CheckCircleIcon v-if="isListed" class="h-3.5 w-3.5" />
                         <XCircleIcon v-else-if="isNotForSale" class="h-3.5 w-3.5" />
                         {{ statusLabel }}
@@ -261,7 +279,15 @@ async function sync() {
                         {{ saving ? 'Saving...' : 'Save' }}
                     </Button>
 
-                    <template v-if="isListed">
+                    <Button
+                        variant="outline"
+                        @click="toggleShouldList"
+                        :disabled="togglingShouldList"
+                    >
+                        {{ isExcluded ? 'Include on Channel' : 'Exclude from Channel' }}
+                    </Button>
+
+                    <template v-if="!isExcluded && isListed">
                         <Button variant="outline" @click="sync" :disabled="syncing">
                             <ArrowPathIcon class="h-4 w-4 mr-1" :class="{ 'animate-spin': syncing }" />
                             Sync
@@ -270,11 +296,24 @@ async function sync() {
                             Unlist
                         </Button>
                     </template>
-                    <template v-else>
+                    <template v-else-if="!isExcluded">
                         <Button @click="publish" :disabled="publishing">
                             {{ publishing ? 'Listing...' : `List on ${channel.name}` }}
                         </Button>
                     </template>
+                </div>
+            </div>
+
+            <!-- Excluded Warning -->
+            <div v-if="isExcluded" class="mb-6 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
+                <div class="flex items-start gap-3">
+                    <XCircleIcon class="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
+                    <div class="min-w-0 flex-1">
+                        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-300">Product Excluded</h3>
+                        <p class="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
+                            This product is excluded from {{ channel.name }}. Click "Include on Channel" to enable listing.
+                        </p>
+                    </div>
                 </div>
             </div>
 

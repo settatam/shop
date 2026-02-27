@@ -96,6 +96,8 @@ class Activity extends Model
 
     public const ORDERS_FULFILL = 'orders.fulfill';
 
+    public const ORDERS_COMPLETE = 'orders.complete';
+
     public const ORDERS_EXPORT = 'orders.export';
 
     public const ORDERS_MANAGE_SHIPPING = 'orders.manage_shipping';
@@ -380,6 +382,7 @@ class Activity extends Model
             self::ORDERS_CANCEL => ['name' => 'Cancel Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Cancel pending orders'],
             self::ORDERS_REFUND => ['name' => 'Process Refunds', 'category' => self::CATEGORY_ORDERS, 'description' => 'Issue order refunds'],
             self::ORDERS_FULFILL => ['name' => 'Fulfill Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Mark orders as shipped/fulfilled'],
+            self::ORDERS_COMPLETE => ['name' => 'Complete Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Mark orders as completed'],
             self::ORDERS_EXPORT => ['name' => 'Export Orders', 'category' => self::CATEGORY_ORDERS, 'description' => 'Export order data'],
             self::ORDERS_MANAGE_SHIPPING => ['name' => 'Manage Shipping', 'category' => self::CATEGORY_ORDERS, 'description' => 'Create shipping labels and tracking'],
             self::ORDERS_VIEW_FINANCIALS => ['name' => 'View Order Financials', 'category' => self::CATEGORY_ORDERS, 'description' => 'View order costs and profits'],
