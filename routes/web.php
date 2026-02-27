@@ -177,6 +177,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:categories.update')->group(function () {
         Route::post('categories/{category}/platform-mappings/{marketplace}', [CategoryMappingController::class, 'store'])->name('categories.platform-mappings.store');
+        Route::put('categories/{category}/platform-mappings/{mapping}', [CategoryMappingController::class, 'update'])->name('categories.platform-mappings.update');
         Route::delete('categories/{category}/platform-mappings/{mapping}', [CategoryMappingController::class, 'destroy'])->name('categories.platform-mappings.destroy');
         Route::post('categories/{category}/platform-mappings/{mapping}/sync-specifics', [CategoryMappingController::class, 'syncItemSpecifics'])->name('categories.platform-mappings.sync-specifics');
     });
@@ -796,6 +797,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('ebay/categories', [TaxonomyController::class, 'searchEbayCategories'])->name('ebay.categories');
         Route::get('ebay/categories/{id}', [TaxonomyController::class, 'getEbayCategoryDetails'])->name('ebay.category');
         Route::get('ebay/categories/{id}/fields', [TaxonomyController::class, 'generateTemplateFields'])->name('ebay.fields');
+        Route::post('ebay/suggest', [TaxonomyController::class, 'suggestEbayCategory'])->name('ebay.suggest');
         Route::get('google/categories', [TaxonomyController::class, 'searchGoogleCategories'])->name('google.categories');
         Route::get('etsy/categories', [TaxonomyController::class, 'searchEtsyCategories'])->name('etsy.categories');
     });

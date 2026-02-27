@@ -612,6 +612,36 @@ class ProductController extends Controller
             ->orderBy('priority')
             ->get(['id', 'name', 'code', 'is_default']);
 
+        // Resolve barcode attributes from category
+        $barcodeAttributes = $product->category?->getEffectiveBarcodeAttributes() ?? ['price_code', 'category', 'price'];
+
+        // Build template field values for barcode label resolution
+        $templateFieldValues = [];
+        if ($template) {
+            foreach ($product->attributeValues as $attrValue) {
+                $field = $attrValue->field;
+                if ($field) {
+                    $storedValue = $attrValue->value;
+                    $displayValue = $storedValue;
+
+                    if ($storedValue && in_array($field->type, [ProductTemplateField::TYPE_SELECT, ProductTemplateField::TYPE_RADIO, ProductTemplateField::TYPE_CHECKBOX])) {
+                        $option = $field->options->firstWhere('value', $storedValue);
+                        $displayValue = $option?->label ?? $storedValue;
+                    }
+
+                    if ($field->type === ProductTemplateField::TYPE_BRAND && $storedValue) {
+                        $brand = Brand::find($storedValue);
+                        $displayValue = $brand?->name ?? $storedValue;
+                    }
+
+                    $templateFieldValues[$field->name] = $displayValue;
+                    if ($field->canonical_name) {
+                        $templateFieldValues[$field->canonical_name] = $displayValue;
+                    }
+                }
+            }
+        }
+
         return Inertia::render('products/Show', [
             'product' => [
                 'id' => $product->id,
@@ -626,6 +656,7 @@ class ProductController extends Controller
                 'sell_out_of_stock' => $product->sell_out_of_stock,
                 'charge_taxes' => $product->charge_taxes,
                 'total_quantity' => $product->total_quantity,
+                'price_code' => $product->price_code,
                 'created_at' => $product->created_at,
                 'updated_at' => $product->updated_at,
                 'category' => $product->category ? [
@@ -648,6 +679,7 @@ class ProductController extends Controller
                 'variants' => $product->variants->map(fn (ProductVariant $variant) => [
                     'id' => $variant->id,
                     'sku' => $variant->sku,
+                    'barcode' => $variant->barcode,
                     'title' => $variant->options_title ?: null,
                     'price' => $variant->price,
                     'cost' => $variant->cost,
@@ -745,6 +777,8 @@ class ProductController extends Controller
                     ];
                 })
                 ->values(),
+            'barcodeAttributes' => $barcodeAttributes,
+            'templateFieldValues' => $templateFieldValues,
         ]);
     }
 

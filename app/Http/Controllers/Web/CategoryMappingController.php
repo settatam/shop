@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\CategoryPlatformMapping;
+use App\Models\EbayCategory;
 use App\Models\StoreMarketplace;
 use App\Services\Platforms\CategoryMappingService;
 use App\Services\StoreContext;
@@ -69,13 +70,44 @@ class CategoryMappingController extends Controller
 
         $mapping = $this->categoryMappingService->saveMapping($category, $marketplace, $validated);
 
+        // Resolve internal ebay_categories ID for the frontend
+        $ebayInternalId = EbayCategory::where('ebay_category_id', $mapping->primary_category_id)->value('id');
+
         return response()->json([
             'id' => $mapping->id,
             'primary_category_id' => $mapping->primary_category_id,
             'primary_category_name' => $mapping->primary_category_name,
             'secondary_category_id' => $mapping->secondary_category_id,
             'secondary_category_name' => $mapping->secondary_category_name,
+            'ebay_category_internal_id' => $ebayInternalId,
         ], 201);
+    }
+
+    /**
+     * Update field mappings and default values for an existing mapping.
+     */
+    public function update(Request $request, Category $category, CategoryPlatformMapping $mapping): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        abort_unless($category->store_id === $store->id, 403);
+        abort_unless($mapping->category_id === $category->id, 403);
+
+        $validated = $request->validate([
+            'field_mappings' => ['nullable', 'array'],
+            'default_values' => ['nullable', 'array'],
+        ]);
+
+        $mapping->update([
+            'field_mappings' => $validated['field_mappings'] ?? [],
+            'default_values' => $validated['default_values'] ?? [],
+        ]);
+
+        return response()->json([
+            'id' => $mapping->id,
+            'field_mappings' => $mapping->field_mappings,
+            'default_values' => $mapping->default_values,
+        ]);
     }
 
     /**

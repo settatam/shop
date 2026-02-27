@@ -11,6 +11,7 @@ import { PencilIcon, TrashIcon, ArrowLeftIcon, PrinterIcon, ShoppingCartIcon, Ar
 interface Variant {
     id: number;
     sku: string;
+    barcode: string | null;
     title: string | null;
     price: number;
     cost: number | null;
@@ -112,6 +113,7 @@ interface Product {
     sell_out_of_stock: boolean;
     charge_taxes: boolean;
     total_quantity: number;
+    price_code: string | null;
     created_at: string;
     updated_at: string;
     category: { id: number; name: string } | null;
@@ -131,6 +133,8 @@ interface Props {
     availableMarketplaces?: AvailableMarketplace[];
     warehouses?: Warehouse[];
     inventoryDistribution?: DistributionRow[];
+    barcodeAttributes?: string[];
+    templateFieldValues?: Record<string, string | null>;
 }
 
 const props = defineProps<Props>();
@@ -178,6 +182,32 @@ const formatDate = (date: string) => {
         hour: '2-digit',
         minute: '2-digit',
     });
+};
+
+const getAttributeValue = (attr: string, variant: Variant): string => {
+    switch (attr.toLowerCase()) {
+        case 'price_code':
+            return props.product.price_code || '';
+        case 'category':
+            return props.product.category?.name || '';
+        case 'price':
+            return formatPrice(variant.price);
+        case 'sku':
+            return variant.sku || '';
+        case 'barcode':
+            return variant.barcode || variant.sku || '';
+        default: {
+            const snakeAttr = attr.toLowerCase().replace(/\s+/g, '_');
+            return props.templateFieldValues?.[attr] || props.templateFieldValues?.[snakeAttr] || '';
+        }
+    }
+};
+
+const formatAttributeName = (attr: string): string => {
+    return attr
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, c => c.toUpperCase());
 };
 
 const deleteProduct = () => {
@@ -719,6 +749,21 @@ function submitTransfer(asDraft: boolean) {
                                         >
                                             {{ tag.name }}
                                         </span>
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <!-- Barcode Label -->
+                    <div v-if="barcodeAttributes && barcodeAttributes.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Barcode Label</h3>
+                            <dl class="space-y-3">
+                                <div v-for="attr in barcodeAttributes" :key="attr" class="flex items-center justify-between">
+                                    <dt class="text-sm text-gray-500 dark:text-gray-400">{{ formatAttributeName(attr) }}</dt>
+                                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ getAttributeValue(attr, product.variants[0]) || '-' }}
                                     </dd>
                                 </div>
                             </dl>

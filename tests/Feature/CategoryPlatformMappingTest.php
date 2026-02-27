@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\CategoryPlatformMapping;
+use App\Models\ProductTemplate;
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\StoreMarketplace;
@@ -11,6 +12,7 @@ use App\Models\StoreUser;
 use App\Models\User;
 use App\Services\Platforms\CategoryMappingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CategoryPlatformMappingTest extends TestCase
@@ -323,5 +325,65 @@ class CategoryPlatformMappingTest extends TestCase
         $mapping = $this->category->getPlatformMapping($this->marketplace);
         $this->assertNotNull($mapping);
         $this->assertEquals('31387', $mapping->primary_category_id);
+    }
+
+    public function test_can_update_field_mappings(): void
+    {
+        $mapping = CategoryPlatformMapping::create([
+            'store_id' => $this->store->id,
+            'category_id' => $this->category->id,
+            'store_marketplace_id' => $this->marketplace->id,
+            'platform' => 'ebay',
+            'primary_category_id' => '31387',
+            'primary_category_name' => 'Wristwatches',
+        ]);
+
+        $this->actingAs($this->user);
+
+        $response = $this->withStore()
+            ->putJson("/categories/{$this->category->id}/platform-mappings/{$mapping->id}", [
+                'field_mappings' => ['Brand' => 'brand', 'Model' => 'model_name'],
+                'default_values' => ['Dial Color' => 'Black'],
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'id' => $mapping->id,
+        ]);
+
+        $mapping->refresh();
+        $this->assertEquals(['Brand' => 'brand', 'Model' => 'model_name'], $mapping->field_mappings);
+        $this->assertEquals(['Dial Color' => 'Black'], $mapping->default_values);
+    }
+
+    public function test_settings_page_returns_marketplace_and_mapping_data(): void
+    {
+        $template = ProductTemplate::factory()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $this->category->update(['template_id' => $template->id]);
+
+        CategoryPlatformMapping::create([
+            'store_id' => $this->store->id,
+            'category_id' => $this->category->id,
+            'store_marketplace_id' => $this->marketplace->id,
+            'platform' => 'ebay',
+            'primary_category_id' => '31387',
+            'primary_category_name' => 'Wristwatches',
+        ]);
+
+        $this->actingAs($this->user);
+
+        $response = $this->withStore()
+            ->get("/categories/{$this->category->id}/settings");
+
+        $response->assertOk();
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('categories/Settings')
+            ->has('connectedMarketplaces')
+            ->has('platformMappings')
+            ->where('platformMappings.0.primary_category_id', '31387')
+        );
     }
 }

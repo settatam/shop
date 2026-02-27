@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\Category;
+use App\Models\EbayCategory;
 use App\Models\LabelTemplate;
 use App\Models\ProductTemplate;
 use App\Models\ProductTemplateField;
 use App\Models\SkuSequence;
+use App\Models\StoreMarketplace;
 use App\Rules\ValidSkuFormat;
 use App\Services\Sku\SkuGeneratorService;
 use App\Services\StoreContext;
@@ -374,7 +376,45 @@ class CategoryController extends Controller
                 ->with('error', 'Only leaf categories (categories without children) can have settings configured.');
         }
 
-        $category->load(['template:id,name', 'labelTemplate:id,name', 'skuSequence', 'parent']);
+        $category->load(['template:id,name', 'labelTemplate:id,name', 'skuSequence', 'parent', 'platformMappings.storeMarketplace']);
+
+        // Get connected marketplaces
+        $connectedMarketplaces = StoreMarketplace::where('store_id', $store->id)
+            ->where('connected_successfully', true)
+            ->where('is_app', false)
+            ->get()
+            ->map(fn (StoreMarketplace $mp) => [
+                'id' => $mp->id,
+                'name' => $mp->name,
+                'platform' => $mp->platform->value,
+                'platform_label' => $mp->platform->label(),
+            ]);
+
+        // Get existing platform mappings, resolving internal ebay_categories IDs
+        $ebayExternalIds = $category->platformMappings
+            ->where('platform', \App\Enums\Platform::Ebay)
+            ->pluck('primary_category_id')
+            ->filter();
+
+        $ebayInternalIdMap = $ebayExternalIds->isNotEmpty()
+            ? EbayCategory::whereIn('ebay_category_id', $ebayExternalIds)->pluck('id', 'ebay_category_id')
+            : collect();
+
+        $platformMappings = $category->platformMappings->map(fn ($mapping) => [
+            'id' => $mapping->id,
+            'store_marketplace_id' => $mapping->store_marketplace_id,
+            'platform' => $mapping->platform->value,
+            'platform_label' => $mapping->platform->label(),
+            'marketplace_name' => $mapping->storeMarketplace->name,
+            'primary_category_id' => $mapping->primary_category_id,
+            'primary_category_name' => $mapping->primary_category_name,
+            'secondary_category_id' => $mapping->secondary_category_id,
+            'secondary_category_name' => $mapping->secondary_category_name,
+            'ebay_category_internal_id' => $ebayInternalIdMap->get($mapping->primary_category_id),
+            'item_specifics_synced_at' => $mapping->item_specifics_synced_at?->toIso8601String(),
+            'field_mappings' => $mapping->field_mappings ?? [],
+            'default_values' => $mapping->default_values ?? [],
+        ]);
 
         // Get templates for dropdown
         $templates = ProductTemplate::where('store_id', $store->id)
@@ -422,6 +462,8 @@ class CategoryController extends Controller
             'skuPreview' => $skuPreview,
             'availableVariables' => $availableVariables,
             'templateFields' => $this->getTemplateFieldsForCategory($category),
+            'connectedMarketplaces' => $connectedMarketplaces,
+            'platformMappings' => $platformMappings,
         ]);
     }
 

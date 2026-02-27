@@ -3,8 +3,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
-import { ChevronUpIcon, ChevronDownIcon, XMarkIcon } from '@heroicons/vue/20/solid';
-import { ArrowLeftIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/vue/20/solid';
+import { ChevronUpIcon, ChevronDownIcon, XMarkIcon, ChevronRightIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, ArrowPathIcon, InformationCircleIcon, TrashIcon } from '@heroicons/vue/20/solid';
 import {
     Dialog,
     DialogPanel,
@@ -12,6 +12,9 @@ import {
     TransitionChild,
     TransitionRoot,
 } from '@headlessui/vue';
+import CategoryPlatformMappingModal from '@/components/platforms/CategoryPlatformMappingModal.vue';
+import CategoryFieldMappingPanel from '@/components/platforms/CategoryFieldMappingPanel.vue';
+import axios from 'axios';
 
 interface Category {
     id: number;
@@ -50,6 +53,29 @@ interface TemplateField {
     label: string;
 }
 
+interface Marketplace {
+    id: number;
+    name: string;
+    platform: string;
+    platform_label: string;
+}
+
+interface PlatformMapping {
+    id: number;
+    store_marketplace_id: number;
+    platform: string;
+    platform_label: string;
+    marketplace_name: string;
+    primary_category_id: string;
+    primary_category_name: string;
+    secondary_category_id: string | null;
+    secondary_category_name: string | null;
+    ebay_category_internal_id: number | null;
+    item_specifics_synced_at: string | null;
+    field_mappings: Record<string, string>;
+    default_values: Record<string, string>;
+}
+
 interface Props {
     category: Category;
     templates: Template[];
@@ -57,6 +83,8 @@ interface Props {
     skuPreview: string | null;
     availableVariables: Record<string, string>;
     templateFields: TemplateField[];
+    connectedMarketplaces: Marketplace[];
+    platformMappings: PlatformMapping[];
 }
 
 const props = defineProps<Props>();
@@ -246,6 +274,120 @@ const isTitleFormatInherited = computed(() => {
 
 function insertTitleVariable(variable: string) {
     form.title_format = (form.title_format || '') + variable;
+}
+
+// Platform Mapping State
+const mappings = ref<PlatformMapping[]>([...props.platformMappings]);
+const expandedMarketplaces = ref<Set<number>>(new Set());
+const mappingModalOpen = ref(false);
+const mappingModalMarketplace = ref<Marketplace | null>(null);
+const savingFieldMappings = ref<Record<number, boolean>>({});
+const deletingMapping = ref<Record<number, boolean>>({});
+const syncingSpecifics = ref<Record<number, boolean>>({});
+
+function getMappingForMarketplace(marketplaceId: number): PlatformMapping | undefined {
+    return mappings.value.find((m) => m.store_marketplace_id === marketplaceId);
+}
+
+function toggleMarketplace(marketplaceId: number) {
+    if (expandedMarketplaces.value.has(marketplaceId)) {
+        expandedMarketplaces.value.delete(marketplaceId);
+    } else {
+        expandedMarketplaces.value.add(marketplaceId);
+    }
+}
+
+function openMappingModal(marketplace: Marketplace) {
+    mappingModalMarketplace.value = marketplace;
+    mappingModalOpen.value = true;
+}
+
+function onMappingSaved(data: Record<string, unknown>) {
+    const marketplace = mappingModalMarketplace.value;
+    if (!marketplace) return;
+
+    // Replace or add the mapping in our local list
+    const existingIndex = mappings.value.findIndex((m) => m.store_marketplace_id === marketplace.id);
+    const newMapping: PlatformMapping = {
+        id: data.id as number,
+        store_marketplace_id: marketplace.id,
+        platform: marketplace.platform,
+        platform_label: marketplace.platform_label,
+        marketplace_name: marketplace.name,
+        primary_category_id: data.primary_category_id as string,
+        primary_category_name: data.primary_category_name as string,
+        secondary_category_id: (data.secondary_category_id as string | null) ?? null,
+        secondary_category_name: (data.secondary_category_name as string | null) ?? null,
+        ebay_category_internal_id: (data.ebay_category_internal_id as number | null) ?? null,
+        item_specifics_synced_at: null,
+        field_mappings: {},
+        default_values: {},
+    };
+
+    if (existingIndex >= 0) {
+        mappings.value[existingIndex] = newMapping;
+    } else {
+        mappings.value.push(newMapping);
+    }
+
+    // Auto-expand
+    expandedMarketplaces.value.add(marketplace.id);
+}
+
+async function deleteMapping(mapping: PlatformMapping) {
+    if (!confirm(`Remove the ${mapping.platform_label} category mapping?`)) return;
+
+    deletingMapping.value[mapping.id] = true;
+    try {
+        await axios.delete(`/categories/${props.category.id}/platform-mappings/${mapping.id}`);
+        mappings.value = mappings.value.filter((m) => m.id !== mapping.id);
+        expandedMarketplaces.value.delete(mapping.store_marketplace_id);
+    } catch {
+        alert('Failed to delete mapping.');
+    } finally {
+        deletingMapping.value[mapping.id] = false;
+    }
+}
+
+async function saveFieldMappings(mapping: PlatformMapping, fieldMappings: Record<string, string>, defaultValues: Record<string, string>) {
+    savingFieldMappings.value[mapping.id] = true;
+    try {
+        const response = await axios.put(`/categories/${props.category.id}/platform-mappings/${mapping.id}`, {
+            field_mappings: fieldMappings,
+            default_values: defaultValues,
+        });
+        // Update local state
+        const idx = mappings.value.findIndex((m) => m.id === mapping.id);
+        if (idx >= 0) {
+            mappings.value[idx].field_mappings = response.data.field_mappings ?? {};
+            mappings.value[idx].default_values = response.data.default_values ?? {};
+        }
+    } catch {
+        alert('Failed to save field mappings.');
+    } finally {
+        savingFieldMappings.value[mapping.id] = false;
+    }
+}
+
+async function syncItemSpecifics(mapping: PlatformMapping) {
+    syncingSpecifics.value[mapping.id] = true;
+    try {
+        await axios.post(`/categories/${props.category.id}/platform-mappings/${mapping.id}/sync-specifics`);
+        const idx = mappings.value.findIndex((m) => m.id === mapping.id);
+        if (idx >= 0) {
+            mappings.value[idx].item_specifics_synced_at = new Date().toISOString();
+        }
+    } catch {
+        alert('Failed to start sync.');
+    } finally {
+        syncingSpecifics.value[mapping.id] = false;
+    }
+}
+
+function formatSyncDate(isoDate: string | null): string {
+    if (!isoDate) return 'Never';
+    const d = new Date(isoDate);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 </script>
 
@@ -471,6 +613,141 @@ function insertTitleVariable(variable: string) {
                                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                             Used when printing labels for products in this category
                                         </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Platform Category Mappings -->
+                        <div
+                            v-if="category.effective_template_name && connectedMarketplaces.length > 0"
+                            class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+                        >
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Platform Category Mappings</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    Map this category to marketplace categories. Item specifics will be available for field mapping.
+                                </p>
+
+                                <div class="space-y-3">
+                                    <div
+                                        v-for="marketplace in connectedMarketplaces"
+                                        :key="marketplace.id"
+                                        class="rounded-lg border border-gray-200 dark:border-gray-700"
+                                    >
+                                        <!-- Marketplace header -->
+                                        <button
+                                            type="button"
+                                            class="flex w-full items-center justify-between px-4 py-3 text-left"
+                                            @click="toggleMarketplace(marketplace.id)"
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <ChevronRightIcon
+                                                    class="size-4 text-gray-400 transition-transform"
+                                                    :class="{ 'rotate-90': expandedMarketplaces.has(marketplace.id) }"
+                                                />
+                                                <span class="text-sm font-medium text-gray-900 dark:text-white">{{ marketplace.name }}</span>
+                                                <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                                    {{ marketplace.platform_label }}
+                                                </span>
+                                            </div>
+                                            <span
+                                                class="text-xs"
+                                                :class="getMappingForMarketplace(marketplace.id) ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
+                                            >
+                                                {{ getMappingForMarketplace(marketplace.id) ? 'Mapped' : 'Not mapped' }}
+                                            </span>
+                                        </button>
+
+                                        <!-- Expanded content -->
+                                        <div v-if="expandedMarketplaces.has(marketplace.id)" class="border-t border-gray-200 px-4 py-4 dark:border-gray-700">
+                                            <template v-if="getMappingForMarketplace(marketplace.id)">
+                                                <div class="space-y-4">
+                                                    <!-- Mapping info -->
+                                                    <div class="flex items-start justify-between">
+                                                        <div class="space-y-1">
+                                                            <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                                                {{ getMappingForMarketplace(marketplace.id)!.primary_category_name }}
+                                                            </p>
+                                                            <p
+                                                                v-if="getMappingForMarketplace(marketplace.id)!.secondary_category_name"
+                                                                class="text-xs text-gray-500 dark:text-gray-400"
+                                                            >
+                                                                Secondary: {{ getMappingForMarketplace(marketplace.id)!.secondary_category_name }}
+                                                            </p>
+                                                            <p class="text-xs text-gray-400 dark:text-gray-500">
+                                                                Item specifics synced: {{ formatSyncDate(getMappingForMarketplace(marketplace.id)!.item_specifics_synced_at) }}
+                                                            </p>
+                                                        </div>
+                                                        <div class="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                class="rounded-md p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                                                title="Sync item specifics"
+                                                                :disabled="syncingSpecifics[getMappingForMarketplace(marketplace.id)!.id]"
+                                                                @click.stop="syncItemSpecifics(getMappingForMarketplace(marketplace.id)!)"
+                                                            >
+                                                                <ArrowPathIcon class="size-4" :class="{ 'animate-spin': syncingSpecifics[getMappingForMarketplace(marketplace.id)!.id] }" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                                title="Change mapping"
+                                                                @click.stop="openMappingModal(marketplace)"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                class="rounded-md p-1.5 text-gray-400 hover:text-red-600"
+                                                                title="Remove mapping"
+                                                                :disabled="deletingMapping[getMappingForMarketplace(marketplace.id)!.id]"
+                                                                @click.stop="deleteMapping(getMappingForMarketplace(marketplace.id)!)"
+                                                            >
+                                                                <TrashIcon class="size-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Field mappings panel -->
+                                                    <div
+                                                        v-if="getMappingForMarketplace(marketplace.id)!.ebay_category_internal_id"
+                                                        class="border-t border-gray-100 pt-4 dark:border-gray-700"
+                                                    >
+                                                        <CategoryFieldMappingPanel
+                                                            :category-id="getMappingForMarketplace(marketplace.id)!.ebay_category_internal_id!"
+                                                            :ebay-category-id="getMappingForMarketplace(marketplace.id)!.primary_category_id"
+                                                            :template-fields="templateFields"
+                                                            :existing-mappings="getMappingForMarketplace(marketplace.id)!.field_mappings"
+                                                            :existing-defaults="getMappingForMarketplace(marketplace.id)!.default_values"
+                                                            @mappings-changed="(fm, dv) => saveFieldMappings(getMappingForMarketplace(marketplace.id)!, fm, dv)"
+                                                        />
+                                                        <div class="mt-2 flex justify-end">
+                                                            <span
+                                                                v-if="savingFieldMappings[getMappingForMarketplace(marketplace.id)!.id]"
+                                                                class="text-xs text-gray-400"
+                                                            >
+                                                                Saving...
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template v-else>
+                                                <div class="text-center py-4">
+                                                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                                                        No {{ marketplace.platform_label }} category mapped yet.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                                                        @click="openMappingModal(marketplace)"
+                                                    >
+                                                        Map Category
+                                                    </button>
+                                                </div>
+                                            </template>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -772,5 +1049,21 @@ function insertTitleVariable(variable: string) {
                 </div>
             </Dialog>
         </TransitionRoot>
+        <!-- Platform Mapping Modal -->
+        <CategoryPlatformMappingModal
+            v-if="mappingModalMarketplace"
+            :open="mappingModalOpen"
+            :category-id="category.id"
+            :category-name="category.name"
+            :marketplace-id="mappingModalMarketplace.id"
+            :platform="mappingModalMarketplace.platform"
+            :platform-label="mappingModalMarketplace.platform_label"
+            :existing-primary-category-id="getMappingForMarketplace(mappingModalMarketplace.id)?.primary_category_id ?? null"
+            :existing-secondary-category-id="getMappingForMarketplace(mappingModalMarketplace.id)?.secondary_category_id ?? null"
+            :template-name="category.effective_template_name"
+            :category-path="category.full_path"
+            @update:open="mappingModalOpen = $event"
+            @saved="onMappingSaved"
+        />
     </AppLayout>
 </template>

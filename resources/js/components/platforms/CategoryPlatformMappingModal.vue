@@ -50,11 +50,15 @@ interface Props {
     platformLabel: string;
     existingPrimaryCategoryId?: string | null;
     existingSecondaryCategoryId?: string | null;
+    templateName?: string | null;
+    categoryPath?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     existingPrimaryCategoryId: null,
     existingSecondaryCategoryId: null,
+    templateName: null,
+    categoryPath: null,
 });
 
 const emit = defineEmits<{
@@ -96,7 +100,7 @@ async function fetchCategoryDetails(category: PlatformCategory) {
 
     loadingDetails.value = true;
     try {
-        const response = await axios.get(`/taxonomy/ebay/categories/${category.id}`);
+        const response = await axios.get(`/api/taxonomy/ebay/categories/${category.id}`);
         categoryDetails.value = response.data;
     } catch (e) {
         console.error('Failed to fetch category details:', e);
@@ -232,6 +236,9 @@ watch(() => props.open, (isOpen) => {
                     <PlatformCategoryBrowser
                         :platform="platform"
                         :selected-category-id="selectedPrimaryCategoryId"
+                        :category-name="categoryName"
+                        :template-name="templateName"
+                        :category-path="categoryPath"
                         @select="selectPrimaryCategory"
                     />
 

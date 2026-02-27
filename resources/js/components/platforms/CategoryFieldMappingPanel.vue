@@ -79,7 +79,7 @@ const unmappedRequiredCount = computed(() => {
 async function fetchItemSpecifics() {
     loading.value = true;
     try {
-        const response = await axios.get(`/taxonomy/ebay/categories/${props.categoryId}`);
+        const response = await axios.get(`/api/taxonomy/ebay/categories/${props.categoryId}`);
         itemSpecifics.value = response.data.item_specifics ?? [];
     } catch (error) {
         console.error('Failed to fetch item specifics:', error);

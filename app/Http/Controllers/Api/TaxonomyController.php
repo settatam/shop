@@ -7,6 +7,7 @@ use App\Models\EbayCategory;
 use App\Models\EbayItemSpecific;
 use App\Models\EtsyCategory;
 use App\Models\GoogleCategory;
+use App\Services\AI\CategorySuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -26,19 +27,19 @@ class TaxonomyController extends Controller
         $query = EbayCategory::query();
 
         if ($request->filled('query')) {
-            $query->where('name', 'like', '%'.$request->query.'%');
-        }
-
-        if ($request->filled('parent_id')) {
+            $query->where('name', 'like', '%'.$request->input('query').'%')
+                ->whereDoesntHave('children');
+        } elseif ($request->filled('parent_id')) {
             $query->where('parent_id', $request->parent_id);
-        } elseif (! $request->filled('query')) {
-            // Only show root categories if no search query
+        } else {
             $query->whereNull('parent_id');
         }
 
         if ($request->filled('level')) {
             $query->where('level', $request->level);
         }
+
+        $isSearch = $request->filled('query');
 
         $categories = $query
             ->withCount('children')
@@ -53,6 +54,7 @@ class TaxonomyController extends Controller
                 'parent_id' => $cat->parent_id,
                 'children_count' => $cat->children_count,
                 'has_children' => $cat->children_count > 0,
+                'path' => $isSearch ? $cat->path : null,
             ]);
 
         return response()->json($categories);
@@ -161,7 +163,7 @@ class TaxonomyController extends Controller
         $query = GoogleCategory::query();
 
         if ($request->filled('query')) {
-            $query->where('name', 'like', '%'.$request->query.'%');
+            $query->where('name', 'like', '%'.$request->input('query').'%');
         }
 
         $categories = $query
@@ -192,7 +194,7 @@ class TaxonomyController extends Controller
         $query = EtsyCategory::query();
 
         if ($request->filled('query')) {
-            $query->where('name', 'like', '%'.$request->query.'%');
+            $query->where('name', 'like', '%'.$request->input('query').'%');
         }
 
         if ($request->filled('parent_id')) {
@@ -217,6 +219,26 @@ class TaxonomyController extends Controller
             ]);
 
         return response()->json($categories);
+    }
+
+    /**
+     * Suggest eBay categories using AI.
+     */
+    public function suggestEbayCategory(Request $request, CategorySuggestionService $service): JsonResponse
+    {
+        $request->validate([
+            'category_name' => 'required|string|max:255',
+            'template_name' => 'nullable|string|max:255',
+            'category_path' => 'nullable|string|max:500',
+        ]);
+
+        $suggestions = $service->suggestEbayCategories(
+            $request->input('category_name'),
+            $request->input('template_name'),
+            $request->input('category_path'),
+        );
+
+        return response()->json($suggestions);
     }
 
     /**
