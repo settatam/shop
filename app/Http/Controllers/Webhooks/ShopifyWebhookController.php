@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Webhooks;
 
 use App\Enums\Platform;
 use App\Jobs\ProcessWebhookJob;
+use App\Models\StorefrontApiToken;
 use App\Models\StoreMarketplace;
 use App\Models\WebhookLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ShopifyWebhookController extends BaseWebhookController
 {
@@ -97,6 +99,41 @@ class ShopifyWebhookController extends BaseWebhookController
     public function refundCreated(Request $request, string $connectionId): JsonResponse
     {
         return $this->handleWithEventType($request, $connectionId, 'refunds/create');
+    }
+
+    /**
+     * Handle app/uninstalled webhook.
+     *
+     * Deactivates the connection and disables all storefront API tokens.
+     */
+    public function appUninstalled(Request $request, string $connectionId): JsonResponse
+    {
+        $connection = StoreMarketplace::find($connectionId);
+
+        if (! $connection) {
+            return response()->json(['error' => 'Connection not found'], 404);
+        }
+
+        if (! $this->verifySignature($request, $connection)) {
+            Log::warning('Shopify app uninstall webhook failed signature verification', [
+                'connection_id' => $connectionId,
+            ]);
+
+            return response()->json(['error' => 'Invalid signature'], 401);
+        }
+
+        $connection->update(['status' => 'inactive']);
+
+        StorefrontApiToken::where('store_marketplace_id', $connection->id)
+            ->update(['is_active' => false]);
+
+        Log::info('Shopify app uninstalled', [
+            'connection_id' => $connection->id,
+            'store_id' => $connection->store_id,
+            'shop_domain' => $connection->shop_domain,
+        ]);
+
+        return response()->json(['status' => 'ok']);
     }
 
     /**

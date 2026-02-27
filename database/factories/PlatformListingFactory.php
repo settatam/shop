@@ -25,6 +25,7 @@ class PlatformListingFactory extends Factory
             'status' => PlatformListing::STATUS_NOT_LISTED,
             'platform_price' => $this->faker->randomFloat(2, 10, 1000),
             'platform_quantity' => $this->faker->numberBetween(0, 100),
+            'quantity_override' => null,
         ];
     }
 
@@ -97,6 +98,13 @@ class PlatformListingFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'platform_category_id' => $categoryId,
+        ]);
+    }
+
+    public function withQuantityOverride(int $quantity): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'quantity_override' => $quantity,
         ]);
     }
 

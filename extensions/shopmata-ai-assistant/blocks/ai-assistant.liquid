@@ -1,0 +1,57 @@
+{% comment %}
+  Shopmata AI Assistant - Storefront Chat Widget
+  This app embed block adds a floating chat widget powered by AI.
+{% endcomment %}
+
+{{ 'shopmata-chat.css' | asset_url | stylesheet_tag }}
+
+<div
+  id="shopmata-chat-root"
+  data-proxy-url="/apps/shopmata-assistant"
+  data-accent-color="{{ block.settings.accent_color }}"
+  data-position="{{ block.settings.position }}"
+  data-welcome-message="{{ block.settings.welcome_message | escape }}"
+  data-assistant-name="{{ block.settings.assistant_name | escape }}"
+  data-shop="{{ shop.permanent_domain }}"
+></div>
+
+<script src="{{ 'shopmata-chat.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Shopmata AI Assistant",
+  "target": "body",
+  "javascript": "shopmata-chat.js",
+  "stylesheet": "shopmata-chat.css",
+  "settings": [
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "t:settings.accent_color.label",
+      "default": "#1a1a2e"
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "t:settings.position.label",
+      "options": [
+        { "value": "right", "label": "t:settings.position.options__1" },
+        { "value": "left", "label": "t:settings.position.options__2" }
+      ],
+      "default": "right"
+    },
+    {
+      "type": "text",
+      "id": "welcome_message",
+      "label": "t:settings.welcome_message.label",
+      "default": "Hi! How can I help you find the perfect piece today?"
+    },
+    {
+      "type": "text",
+      "id": "assistant_name",
+      "label": "t:settings.assistant_name.label",
+      "default": "Jewelry Assistant"
+    }
+  ]
+}
+{% endschema %}

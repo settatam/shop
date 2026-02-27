@@ -7,8 +7,11 @@ use App\Models\Activity;
 use App\Models\User;
 use App\Services\Platforms\ChannelService;
 use App\Services\StoreContext;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\AliasLoader;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -41,6 +44,23 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registerGates();
+        $this->configureRateLimiting();
+    }
+
+    /**
+     * Configure rate limiters for the application.
+     */
+    protected function configureRateLimiting(): void
+    {
+        RateLimiter::for('storefront-chat', function (Request $request) {
+            $shop = $request->query('shop', 'unknown');
+            $visitorId = $request->input('visitor_id', $request->ip());
+
+            return [
+                Limit::perMinute(20)->by($shop.'|'.$visitorId),
+                Limit::perHour(500)->by($shop),
+            ];
+        });
     }
 
     /**

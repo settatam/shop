@@ -1,0 +1,19 @@
+{
+  "name": "Shopmata AI Assistant",
+  "settings": {
+    "accent_color": {
+      "label": "Accent Color"
+    },
+    "position": {
+      "label": "Widget Position",
+      "options__1": "Bottom Right",
+      "options__2": "Bottom Left"
+    },
+    "welcome_message": {
+      "label": "Welcome Message"
+    },
+    "assistant_name": {
+      "label": "Assistant Name"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Storefront\StorefrontChatController;
 use App\Http\Controllers\Api\TaxonomyController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\Web\AppraisalController;
@@ -42,6 +43,22 @@ use App\Http\Controllers\WidgetsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+
+/*
+|--------------------------------------------------------------------------
+| Shopify App Proxy Routes
+|--------------------------------------------------------------------------
+|
+| These routes handle requests proxied through Shopify's App Proxy.
+| Shopify adds HMAC signature verification params to every request.
+|
+*/
+Route::prefix('shopify/proxy')
+    ->middleware(['verify.shopify.proxy', 'throttle:storefront-chat'])
+    ->group(function () {
+        Route::post('chat', [StorefrontChatController::class, 'chat'])->name('storefront.chat');
+        Route::post('chat/session', [StorefrontChatController::class, 'session'])->name('storefront.chat.session');
+    });
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -679,6 +696,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         // Full platform listing page
         Route::get('products/{product}/platforms/{marketplace}', [\App\Http\Controllers\Web\ProductPlatformController::class, 'show'])->name('products.platforms.show');
         Route::post('products/{product}/platforms/{marketplace}/preview', [\App\Http\Controllers\Web\ProductPlatformController::class, 'preview'])->name('products.platforms.preview');
+        Route::post('products/{product}/platforms/{marketplace}/item-specifics', [\App\Http\Controllers\Web\ProductPlatformController::class, 'getItemSpecifics'])->name('products.platforms.item-specifics');
     });
     Route::middleware('permission:products.update')->group(function () {
         Route::patch('products/{product}/listings/{listing}/price', [\App\Http\Controllers\Web\PlatformListingController::class, 'updatePrice'])->name('products.listings.update-price');

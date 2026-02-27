@@ -36,6 +36,8 @@ interface Product {
     handle: string | null;
     category: string | null;
     brand: string | null;
+    weight: number | null;
+    weight_unit: string;
 }
 
 interface Marketplace {
@@ -53,6 +55,9 @@ interface Listing {
     listing_url: string | null;
     platform_price: number | null;
     platform_quantity: number | null;
+    quantity_override: number | null;
+    inventory_quantity: number;
+    effective_quantity: number;
     published_at: string | null;
     last_synced_at: string | null;
     last_error: string | null;
@@ -267,6 +272,7 @@ const localPreview = ref(props.preview);
 const aiLoading = ref<string | null>(null);
 const publishError = ref<string | null>(null);
 const publishErrors = ref<string[]>([]);
+const successMessage = ref<string | null>(null);
 const showPrimaryCategoryBrowser = ref(false);
 const showSecondaryCategoryBrowser = ref(false);
 const primaryCategoryName = ref<string | null>(props.categoryMapping?.primary_category_name ?? null);
@@ -281,15 +287,29 @@ const aiIncludeTitle = ref(true);
 const aiIncludeDescription = ref(true);
 const ebayAiSuggestions = ref<Record<string, string> | null>(null);
 const shopifyAiSuggestions = ref<Record<string, string> | null>(null);
+const dynamicItemSpecifics = ref<EbayItemSpecificsData | null>(null);
+const loadingItemSpecifics = ref(false);
 
 // Computed
-const isPublished = computed(() => props.listing?.status === 'listed');
+const isPublished = computed(() => ['listed', 'active'].includes(props.listing?.status ?? ''));
+const isEnded = computed(() => ['ended', 'unlisted'].includes(props.listing?.status ?? ''));
 const isExcluded = computed(() => props.listing?.should_list === false);
+const effectiveItemSpecifics = computed(() => dynamicItemSpecifics.value ?? props.ebayItemSpecifics);
+const hasItemSpecifics = computed(() => {
+    const data = effectiveItemSpecifics.value;
+    return data && (data.category_mapping_id || (data.specifics && data.specifics.length > 0));
+});
 
 const effectiveTitle = computed(() => form.value.title || props.preview.listing.title);
 const effectiveDescription = computed(() => form.value.description || props.preview.listing.description);
 const effectivePrice = computed(() => form.value.price ?? props.preview.listing.price);
-const effectiveQuantity = computed(() => form.value.quantity ?? props.preview.listing.quantity);
+const effectiveQuantity = computed(() => {
+    const inventory = props.listing?.inventory_quantity ?? props.preview.listing.quantity ?? 0;
+    if (form.value.quantity !== null) {
+        return Math.min(form.value.quantity, inventory);
+    }
+    return inventory;
+});
 
 // eBay setting helpers
 function getSettingValue(key: string): unknown {
@@ -485,6 +505,7 @@ async function save() {
             form.value,
         );
         localPreview.value = response.data.preview;
+        successMessage.value = 'Changes saved successfully.';
     } catch (error) {
         console.error('Failed to save:', error);
     } finally {
@@ -508,10 +529,12 @@ async function publish() {
     publishing.value = true;
     publishError.value = null;
     publishErrors.value = [];
+    successMessage.value = null;
     try {
         await save();
         const response = await axios.post(`/products/${props.product.id}/platforms/${props.marketplace.id}/publish`);
         if (response.data.success) {
+            successMessage.value = `Product listed on ${props.marketplace.platform_label} successfully.`;
             router.reload();
         } else {
             publishError.value = response.data.message || 'Failed to publish';
@@ -532,8 +555,10 @@ async function publish() {
 
 async function sync() {
     syncing.value = true;
+    successMessage.value = null;
     try {
         await axios.post(`/products/${props.product.id}/platforms/${props.marketplace.id}/sync`);
+        successMessage.value = 'Listing synced successfully.';
         router.reload();
     } catch (error) {
         console.error('Failed to sync:', error);
@@ -543,14 +568,32 @@ async function sync() {
 }
 
 async function unpublish() {
-    if (!confirm('Are you sure you want to unpublish this product from the platform?')) {
+    if (!confirm('Are you sure you want to unlist this product from the platform?')) {
         return;
     }
+    successMessage.value = null;
     try {
         await axios.delete(`/products/${props.product.id}/platforms/${props.marketplace.id}`);
+        successMessage.value = 'Product unlisted successfully.';
         router.reload();
     } catch (error) {
-        console.error('Failed to unpublish:', error);
+        console.error('Failed to unlist:', error);
+    }
+}
+
+const relisting = ref(false);
+
+async function relist() {
+    relisting.value = true;
+    successMessage.value = null;
+    try {
+        await axios.post(`/products/${props.product.id}/platforms/${props.marketplace.id}/relist`);
+        successMessage.value = `Product relisted on ${props.marketplace.platform_label} successfully.`;
+        router.reload();
+    } catch (error: any) {
+        publishError.value = error.response?.data?.message || 'Failed to relist';
+    } finally {
+        relisting.value = false;
     }
 }
 
@@ -561,11 +604,40 @@ interface PlatformCategory {
     path?: string | null;
 }
 
-function selectPrimaryCategory(category: PlatformCategory) {
+async function selectPrimaryCategory(category: PlatformCategory) {
     const catId = category.ebay_category_id || String(category.id);
     setSetting('primary_category_id', catId);
     primaryCategoryName.value = category.path || category.name;
     showPrimaryCategoryBrowser.value = false;
+
+    // Fetch item specifics for the newly selected category
+    await fetchItemSpecificsForCategory(catId);
+}
+
+async function fetchItemSpecificsForCategory(categoryId: string) {
+    loadingItemSpecifics.value = true;
+    dynamicItemSpecifics.value = null;
+
+    try {
+        const response = await axios.post(
+            `/products/${props.product.id}/platforms/${props.marketplace.id}/item-specifics`,
+            { category_id: categoryId },
+        );
+
+        if (response.data.success) {
+            dynamicItemSpecifics.value = {
+                specifics: response.data.specifics,
+                category_mapping_id: response.data.category_mapping_id,
+                category_id: response.data.category_id,
+                synced_at: response.data.synced_at,
+                needs_sync: response.data.needs_sync,
+            };
+        }
+    } catch (error) {
+        console.error('Failed to fetch item specifics:', error);
+    } finally {
+        loadingItemSpecifics.value = false;
+    }
 }
 
 function selectSecondaryCategory(category: PlatformCategory) {
@@ -587,10 +659,11 @@ function clearSecondaryCategory() {
 
 // eBay Item Specifics handlers
 async function handleFieldMappingChanged(mappings: Record<string, string>) {
-    if (!props.ebayItemSpecifics?.category_mapping_id || !props.ebayItemSpecifics?.category_id) return;
+    const data = effectiveItemSpecifics.value;
+    if (!data?.category_mapping_id || !data?.category_id) return;
     try {
         await axios.put(
-            `/categories/${props.ebayItemSpecifics.category_id}/platform-mappings/${props.ebayItemSpecifics.category_mapping_id}`,
+            `/categories/${data.category_id}/platform-mappings/${data.category_mapping_id}`,
             { field_mappings: mappings },
         );
     } catch (error) {
@@ -610,10 +683,21 @@ function handleValueOverridesChanged(overrides: Record<string, string>) {
 }
 
 async function handleSyncItemSpecifics() {
-    if (!props.ebayItemSpecifics?.category_mapping_id || !props.ebayItemSpecifics?.category_id) return;
+    const data = effectiveItemSpecifics.value;
+
+    // For listing-level override (no category mapping), re-fetch via the new endpoint
+    if (!data?.category_mapping_id) {
+        const categoryId = form.value.platform_settings?.primary_category_id as string | undefined;
+        if (categoryId) {
+            await fetchItemSpecificsForCategory(categoryId);
+        }
+        return;
+    }
+
+    if (!data?.category_id) return;
     try {
         await axios.post(
-            `/categories/${props.ebayItemSpecifics.category_id}/platform-mappings/${props.ebayItemSpecifics.category_mapping_id}/sync-specifics`,
+            `/categories/${data.category_id}/platform-mappings/${data.category_mapping_id}/sync-specifics`,
         );
         router.reload();
     } catch (error) {
@@ -785,7 +869,10 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                     </Badge>
                     <Badge v-else-if="isPublished" variant="success" class="flex items-center gap-1">
                         <CheckCircleIcon class="h-3.5 w-3.5" />
-                        Published
+                        Listed
+                    </Badge>
+                    <Badge v-else-if="isEnded" variant="secondary" class="flex items-center gap-1">
+                        Ended
                     </Badge>
                     <Badge v-else variant="secondary">
                         Draft
@@ -805,7 +892,7 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
 
                     <!-- Actions -->
                     <Button variant="outline" @click="save" :disabled="saving">
-                        {{ saving ? 'Saving...' : 'Save Draft' }}
+                        {{ saving ? 'Saving...' : 'Save' }}
                     </Button>
 
                     <Button
@@ -822,7 +909,15 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                             Sync
                         </Button>
                         <Button variant="destructive" @click="unpublish">
-                            Unpublish
+                            Unlist
+                        </Button>
+                    </template>
+                    <template v-else-if="!isExcluded && isEnded">
+                        <Button @click="relist" :disabled="relisting">
+                            {{ relisting ? 'Relisting...' : `Relist on ${marketplace.platform_label}` }}
+                        </Button>
+                        <Button variant="outline" @click="publish" :disabled="publishing || !preview.validation.valid">
+                            {{ publishing ? 'Publishing...' : 'Publish as New' }}
                         </Button>
                     </template>
                     <Button v-else-if="!isExcluded" @click="publish" :disabled="publishing || !preview.validation.valid">
@@ -841,6 +936,20 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                             This product is excluded from {{ marketplace.platform_label }}. Click "Include on Platform" to enable publishing.
                             You can still save draft overrides while excluded.
                         </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success Notification -->
+            <div v-if="successMessage" class="mb-6 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+                <div class="flex items-start gap-3">
+                    <CheckCircleIcon class="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-green-800 dark:text-green-300">{{ successMessage }}</p>
+                        <button
+                            @click="successMessage = null"
+                            class="mt-1 text-xs font-medium text-green-600 underline hover:text-green-500 dark:text-green-400"
+                        >Dismiss</button>
                     </div>
                 </div>
             </div>
@@ -1012,21 +1121,73 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                                 </div>
                                 <div class="space-y-2">
                                     <div class="flex items-center justify-between">
-                                        <Label for="ebay-quantity">Quantity</Label>
-                                        <Badge v-if="form.quantity !== null && form.quantity !== preview.listing.quantity" variant="outline" class="text-xs">
-                                            Overridden
+                                        <Label for="ebay-quantity">Quantity Cap</Label>
+                                        <Badge v-if="form.quantity !== null" variant="outline" class="text-xs">
+                                            Capped
                                         </Badge>
                                         <span v-else class="text-xs text-gray-500 dark:text-gray-400">
-                                            Inherited
+                                            Using inventory ({{ listing?.inventory_quantity ?? preview.listing.quantity ?? 0 }})
                                         </span>
                                     </div>
                                     <Input
                                         id="ebay-quantity"
                                         type="number"
                                         min="0"
-                                        :model-value="form.quantity ?? preview.listing.quantity ?? 0"
-                                        @update:model-value="form.quantity = Number($event) !== preview.listing.quantity ? Number($event) : null"
+                                        v-model.number="form.quantity"
+                                        :placeholder="`Inventory: ${listing?.inventory_quantity ?? preview.listing.quantity ?? 0}`"
                                     />
+                                    <p v-if="form.quantity !== null" class="text-xs text-gray-500 dark:text-gray-400">
+                                        Effective: {{ Math.min(form.quantity, listing?.inventory_quantity ?? preview.listing.quantity ?? 0) }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Weight -->
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <Label for="ebay-weight">Package Weight</Label>
+                                        <Badge v-if="isSettingOverridden('weight')" variant="outline" class="text-xs">
+                                            Overridden
+                                        </Badge>
+                                        <span v-else-if="product.weight" class="text-xs text-gray-500 dark:text-gray-400">
+                                            Inherited ({{ product.weight }} {{ product.weight_unit }})
+                                        </span>
+                                        <span v-else class="text-xs text-gray-500 dark:text-gray-400">
+                                            Not set
+                                        </span>
+                                    </div>
+                                    <Input
+                                        id="ebay-weight"
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        :model-value="(getSettingValue('weight') as number) ?? product.weight ?? ''"
+                                        @update:model-value="$event !== '' && Number($event) !== product.weight ? setSetting('weight', Number($event)) : clearSetting('weight')"
+                                        placeholder="e.g. 1.5"
+                                    />
+                                </div>
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <Label for="ebay-weight-unit">Weight Unit</Label>
+                                        <Badge v-if="isSettingOverridden('weight_unit')" variant="outline" class="text-xs">
+                                            Overridden
+                                        </Badge>
+                                        <span v-else class="text-xs text-gray-500 dark:text-gray-400">
+                                            Inherited
+                                        </span>
+                                    </div>
+                                    <select
+                                        id="ebay-weight-unit"
+                                        :value="(getSettingValue('weight_unit') as string) || product.weight_unit || 'lb'"
+                                        @change="setSetting('weight_unit', ($event.target as HTMLSelectElement).value)"
+                                        :class="selectClass"
+                                    >
+                                        <option value="lb">Pounds (lb)</option>
+                                        <option value="oz">Ounces (oz)</option>
+                                        <option value="kg">Kilograms (kg)</option>
+                                        <option value="g">Grams (g)</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -1035,9 +1196,17 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                     <!-- Item Specifics section -->
                     <div class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
                         <h2 class="mb-4 text-base font-semibold text-gray-900 dark:text-white">Item Specifics</h2>
-                        <template v-if="ebayItemSpecifics && ebayItemSpecifics.category_mapping_id">
+                        <template v-if="loadingItemSpecifics">
+                            <div class="space-y-3 py-4">
+                                <div v-for="i in 5" :key="i" class="flex items-center gap-4">
+                                    <div class="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+                                    <div class="h-9 flex-1 animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <template v-else-if="hasItemSpecifics">
                             <EbayItemSpecificsEditor
-                                :data="ebayItemSpecifics"
+                                :data="effectiveItemSpecifics!"
                                 :template-fields="templateFields"
                                 :ai-suggestions="ebayAiSuggestions"
                                 :ai-loading="aiLoading === 'ebay_listing'"
@@ -1139,21 +1308,24 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                                 </div>
                                 <div class="space-y-2">
                                     <div class="flex items-center justify-between">
-                                        <Label for="quantity">Quantity</Label>
-                                        <Badge v-if="form.quantity !== null && form.quantity !== preview.listing.quantity" variant="outline" class="text-xs">
-                                            Overridden
+                                        <Label for="quantity">Quantity Cap</Label>
+                                        <Badge v-if="form.quantity !== null" variant="outline" class="text-xs">
+                                            Capped
                                         </Badge>
                                         <span v-else class="text-xs text-gray-500 dark:text-gray-400">
-                                            Inherited
+                                            Using inventory ({{ listing?.inventory_quantity ?? preview.listing.quantity ?? 0 }})
                                         </span>
                                     </div>
                                     <Input
                                         id="quantity"
                                         type="number"
                                         min="0"
-                                        :model-value="form.quantity ?? preview.listing.quantity ?? 0"
-                                        @update:model-value="form.quantity = Number($event) !== preview.listing.quantity ? Number($event) : null"
+                                        v-model.number="form.quantity"
+                                        :placeholder="`Inventory: ${listing?.inventory_quantity ?? preview.listing.quantity ?? 0}`"
                                     />
+                                    <p v-if="form.quantity !== null" class="text-xs text-gray-500 dark:text-gray-400">
+                                        Effective: {{ Math.min(form.quantity, listing?.inventory_quantity ?? preview.listing.quantity ?? 0) }}
+                                    </p>
                                 </div>
                             </div>
                         </div>

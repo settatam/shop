@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\SalesChannel;
+use App\Models\StorefrontApiToken;
 use App\Models\StoreMarketplace;
 use App\Services\StoreContext;
 use Illuminate\Http\RedirectResponse;
@@ -403,6 +404,9 @@ class PlatformConnectionController extends Controller
                 ]
             );
 
+            // Auto-create storefront API token for the AI assistant
+            $this->ensureStorefrontApiToken($connection);
+
             // Auto-create sales channel
             $this->createSalesChannelForConnection($connection, $storeId);
 
@@ -461,6 +465,28 @@ class PlatformConnectionController extends Controller
             'is_active' => true,
             'is_default' => false,
         ]);
+    }
+
+    /**
+     * Ensure a StorefrontApiToken exists for a Shopify connection.
+     */
+    protected function ensureStorefrontApiToken(StoreMarketplace $connection): void
+    {
+        StorefrontApiToken::firstOrCreate(
+            [
+                'store_id' => $connection->store_id,
+                'store_marketplace_id' => $connection->id,
+            ],
+            [
+                'token' => StorefrontApiToken::generateToken(),
+                'name' => 'Default',
+                'is_active' => true,
+                'settings' => [
+                    'welcome_message' => "Hi! I'm your jewelry assistant. How can I help you today?",
+                    'accent_color' => '#1a1a2e',
+                ],
+            ]
+        );
     }
 
     protected function getPlatformDescription(Platform $platform): string

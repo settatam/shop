@@ -50,6 +50,8 @@ class PlatformListingController extends Controller
             'external_listing_id' => $listing->external_listing_id,
             'platform_price' => $listing->platform_price,
             'platform_quantity' => $listing->platform_quantity,
+            'quantity_override' => $listing->quantity_override,
+            'effective_quantity' => $listing->getEffectiveQuantity(),
             'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
             'published_at' => $listing->published_at?->toIso8601String(),
             'last_error' => $listing->last_error,
@@ -65,7 +67,7 @@ class PlatformListingController extends Controller
                 'title' => $listing->title,
                 'description' => $listing->description,
                 'price' => $listing->platform_price,
-                'quantity' => $listing->platform_quantity,
+                'quantity' => $listing->quantity_override,
                 'attributes' => $listing->attributes,
                 'platform_category_id' => $listing->platform_category_id,
             ]);
@@ -100,7 +102,7 @@ class PlatformListingController extends Controller
             [
                 'status' => PlatformListing::STATUS_NOT_LISTED,
                 'platform_price' => $product->variants()->first()?->price ?? 0,
-                'platform_quantity' => $product->total_quantity,
+                'platform_quantity' => null,
             ]
         );
 
@@ -426,7 +428,7 @@ class PlatformListingController extends Controller
                 'title' => $listing->title,
                 'description' => $listing->description,
                 'price' => $listing->platform_price,
-                'quantity' => $listing->platform_quantity,
+                'quantity' => $listing->quantity_override,
                 'attributes' => $listing->attributes,
                 'platform_category_id' => $listing->platform_category_id,
             ],
@@ -569,7 +571,8 @@ class PlatformListingController extends Controller
                         'listing_url' => $listing->listing_url,
                         'external_listing_id' => $listing->external_listing_id,
                         'platform_price' => $listing->platform_price,
-                        'platform_quantity' => $listing->platform_quantity,
+                        'platform_quantity' => $listing->getEffectiveQuantity(),
+                        'quantity_override' => $listing->quantity_override,
                         'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
                         'last_error' => $listing->last_error,
                     ];
@@ -647,7 +650,7 @@ class PlatformListingController extends Controller
                 'store_marketplace_id' => $channel->store_marketplace_id,
                 'status' => 'draft',
                 'platform_price' => $validated['price'],
-                'platform_quantity' => $product->total_quantity,
+                'platform_quantity' => null,
                 'platform_data' => [
                     'title' => $product->title,
                     'description' => $product->description,

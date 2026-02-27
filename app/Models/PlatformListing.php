@@ -79,6 +79,7 @@ class PlatformListing extends Model
         'listing_url',
         'platform_price',
         'platform_quantity',
+        'quantity_override',
         'platform_data',
         'category_mapping',
         'last_error',
@@ -91,6 +92,7 @@ class PlatformListing extends Model
         return [
             'should_list' => 'boolean',
             'platform_price' => 'decimal:2',
+            'quantity_override' => 'integer',
             'platform_data' => 'array',
             'images' => 'array',
             'attributes' => 'array',
@@ -214,6 +216,37 @@ class PlatformListing extends Model
     public function includeInListing(): void
     {
         $this->update(['should_list' => true]);
+    }
+
+    /**
+     * Get the effective quantity for this listing.
+     * Uses quantity_override (capped at inventory) if set, otherwise inventory quantity.
+     */
+    public function getEffectiveQuantity(): int
+    {
+        $inventoryQuantity = $this->product?->total_quantity ?? 0;
+
+        if ($this->quantity_override !== null) {
+            return min($this->quantity_override, $inventoryQuantity);
+        }
+
+        return $inventoryQuantity;
+    }
+
+    /**
+     * Whether a manual quantity override is set for this listing.
+     */
+    public function hasQuantityOverride(): bool
+    {
+        return $this->quantity_override !== null;
+    }
+
+    /**
+     * Clear the manual quantity override, reverting to inventory quantity.
+     */
+    public function clearQuantityOverride(): void
+    {
+        $this->update(['quantity_override' => null]);
     }
 
     public function marketplace(): BelongsTo

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Settings\EbayAccountController;
 use App\Http\Controllers\Settings\EmailSettingsController;
 use App\Http\Controllers\Settings\JobLogsController;
+use App\Http\Controllers\Settings\KnowledgeBaseController;
 use App\Http\Controllers\Settings\MaintenanceController;
 use App\Http\Controllers\Settings\MarketplaceController;
 use App\Http\Controllers\Settings\MarketplaceSettingsController;
@@ -215,6 +216,15 @@ Route::middleware(['auth', 'store'])->group(function () {
             Route::post('/programs/opt-in', [EbayAccountController::class, 'optInToProgram'])->name('programs.opt-in');
             Route::post('/programs/opt-out', [EbayAccountController::class, 'optOutOfProgram'])->name('programs.opt-out');
         });
+    });
+
+    // Knowledge Base (AI Assistant)
+    Route::middleware(['store', 'onboarding'])->prefix('settings/knowledge-base')->name('settings.knowledge-base.')->group(function () {
+        Route::get('/', [KnowledgeBaseController::class, 'index'])->name('index');
+        Route::post('/', [KnowledgeBaseController::class, 'store'])->name('store');
+        Route::put('/{entry}', [KnowledgeBaseController::class, 'update'])->name('update');
+        Route::delete('/{entry}', [KnowledgeBaseController::class, 'destroy'])->name('destroy');
+        Route::post('/reorder', [KnowledgeBaseController::class, 'reorder'])->name('reorder');
     });
 
     // Warehouse Settings

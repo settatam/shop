@@ -236,7 +236,7 @@ class Product extends Model
             'product_id' => $this->id,
             'status' => $status,
             'platform_price' => $defaultVariant?->price ?? 0,
-            'platform_quantity' => $this->total_quantity,
+            'platform_quantity' => null,
             'published_at' => $status === PlatformListing::STATUS_LISTED ? now() : null,
         ]);
 
@@ -333,7 +333,7 @@ class Product extends Model
             'product_id' => $this->id,
             'status' => $normalizedStatus,
             'platform_price' => $defaultVariant?->price ?? 0,
-            'platform_quantity' => $this->total_quantity,
+            'platform_quantity' => null,
             'published_at' => $normalizedStatus === PlatformListing::STATUS_LISTED ? now() : null,
         ]);
 

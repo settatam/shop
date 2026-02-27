@@ -928,6 +928,17 @@ function deleteProduct() {
                                                     class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 />
 
+                                                <!-- Textarea -->
+                                                <textarea
+                                                    v-else-if="field.type === 'textarea'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    rows="3"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
                                                 <!-- Select -->
                                                 <select
                                                     v-else-if="field.type === 'select'"

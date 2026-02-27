@@ -43,6 +43,7 @@ interface Listing {
     external_listing_id: string | null;
     platform_price: number | null;
     platform_quantity: number | null;
+    quantity_override: number | null;
     last_synced_at: string | null;
     last_error: string | null;
 }
@@ -627,6 +628,9 @@ watch(productsData, (products) => {
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
                                             {{ listing.platform_quantity ?? '-' }}
+                                            <span v-if="listing.quantity_override !== null" class="ml-1 text-xs text-amber-600 dark:text-amber-400" :title="`Capped at ${listing.quantity_override}`">
+                                                (cap: {{ listing.quantity_override }})
+                                            </span>
                                         </td>
                                         <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                                             {{ formatDate(listing.last_synced_at) }}

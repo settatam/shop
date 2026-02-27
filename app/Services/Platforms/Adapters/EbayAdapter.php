@@ -4,6 +4,7 @@ namespace App\Services\Platforms\Adapters;
 
 use App\Contracts\Platforms\PlatformAdapterResult;
 use App\Models\PlatformListing;
+use App\Services\Platforms\Ebay\EbayService;
 
 class EbayAdapter extends BaseAdapter
 {
@@ -57,9 +58,42 @@ class EbayAdapter extends BaseAdapter
 
     public function updateInventory(PlatformListing $listing, int $quantity): PlatformAdapterResult
     {
-        // TODO: Implement eBay inventory update
+        if (! $this->isConnected()) {
+            return PlatformAdapterResult::failure('eBay is not connected');
+        }
 
-        return PlatformAdapterResult::failure('eBay inventory update not yet implemented');
+        $sku = $listing->platform_data['sku'] ?? null;
+        if (! $sku) {
+            return PlatformAdapterResult::failure('No SKU found for this listing');
+        }
+
+        try {
+            $ebayService = app(EbayService::class);
+            $ebayService->ensureValidToken($this->marketplace);
+            $ebayService->ebayRequest($this->marketplace, 'PUT', "/sell/inventory/v1/inventory_item/{$sku}", [
+                'availability' => [
+                    'shipToLocationAvailability' => [
+                        'quantity' => $quantity,
+                    ],
+                ],
+            ]);
+
+            $this->log('inventory_updated', [
+                'listing_id' => $listing->id,
+                'sku' => $sku,
+                'quantity' => $quantity,
+            ]);
+
+            return PlatformAdapterResult::success('Inventory updated', ['quantity' => $quantity]);
+        } catch (\Throwable $e) {
+            $this->log('inventory_update_failed', [
+                'listing_id' => $listing->id,
+                'sku' => $sku,
+                'error' => $e->getMessage(),
+            ]);
+
+            return PlatformAdapterResult::failure("Failed to update eBay inventory: {$e->getMessage()}", $e);
+        }
     }
 
     public function sync(PlatformListing $listing): PlatformAdapterResult

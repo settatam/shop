@@ -37,6 +37,9 @@ Route::prefix('webhooks')->withoutMiddleware(['web', 'csrf'])->group(function ()
     Route::post('shopify/{connectionId}/refund-created', [ShopifyWebhookController::class, 'refundCreated'])
         ->name('webhooks.shopify.refund-created');
 
+    Route::post('shopify/{connectionId}/app-uninstalled', [ShopifyWebhookController::class, 'appUninstalled'])
+        ->name('webhooks.shopify.app-uninstalled');
+
     // Shopify webhooks - generic handler (legacy/fallback)
     Route::post('shopify/{connectionId}', [ShopifyWebhookController::class, 'handle'])
         ->name('webhooks.shopify');

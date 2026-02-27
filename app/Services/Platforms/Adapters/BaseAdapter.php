@@ -75,7 +75,7 @@ abstract class BaseAdapter implements PlatformAdapterContract
             'title' => $listing->getEffectiveTitle(),
             'description' => $listing->getEffectiveDescription(),
             'price' => $listing->getEffectivePrice(),
-            'quantity' => $listing->platform_quantity ?? $product?->total_quantity ?? 0,
+            'quantity' => $listing->getEffectiveQuantity(),
             'images' => $listing->getEffectiveImages(),
             'category' => $listing->platform_category_id ?? $product?->category?->name,
             'attributes' => $listing->attributes ?? [],

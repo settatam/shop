@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class EbayService extends BasePlatformService
 {
@@ -232,10 +233,17 @@ class EbayService extends BasePlatformService
         $existingOfferId = $listing?->platform_data['offer_id'] ?? null;
 
         if ($existingOfferId) {
-            // Update existing offer
-            $this->ebayRequest($connection, 'PUT', "/sell/inventory/v1/offer/{$existingOfferId}", $offer);
-            $offerId = $existingOfferId;
-        } else {
+            // Try to update existing offer; if stale, fall through to create new
+            try {
+                $this->ebayRequest($connection, 'PUT', "/sell/inventory/v1/offer/{$existingOfferId}", $offer);
+                $offerId = $existingOfferId;
+            } catch (\Exception $e) {
+                Log::warning("EbayService: Stale offer {$existingOfferId}, creating new offer: {$e->getMessage()}");
+                $existingOfferId = null;
+            }
+        }
+
+        if (! $existingOfferId) {
             // Create new offer, or recover if one already exists on eBay
             try {
                 $offerResponse = $this->ebayRequest($connection, 'POST', '/sell/inventory/v1/offer', $offer);
@@ -277,7 +285,7 @@ class EbayService extends BasePlatformService
 
         $listing->update([
             'external_listing_id' => $publishResponse['listingId'] ?? $offerId,
-            'status' => 'active',
+            'status' => PlatformListing::STATUS_LISTED,
             'listing_url' => "https://www.ebay.com/itm/{$publishResponse['listingId']}",
             'platform_data' => array_merge($listing->platform_data ?? [], [
                 'listing_id' => $publishResponse['listingId'] ?? null,
@@ -373,7 +381,7 @@ class EbayService extends BasePlatformService
             }
 
             $listing->update([
-                'status' => PlatformListing::STATUS_ACTIVE,
+                'status' => PlatformListing::STATUS_LISTED,
                 'platform_data' => $platformData,
                 'published_at' => now(),
                 'last_synced_at' => now(),
@@ -702,6 +710,24 @@ class EbayService extends BasePlatformService
         if (! empty($aspects)) {
             $item['product']['aspects'] = $aspects;
         }
+
+        // Include package weight — eBay requires this for shipping
+        $weight = $listing?->platform_settings['weight'] ?? $variant?->weight ?? $product->weight;
+        $weightUnit = strtoupper($listing?->platform_settings['weight_unit'] ?? $product->weight_unit ?? 'lb');
+        $ebayWeightUnit = match ($weightUnit) {
+            'LB', 'POUND' => 'POUND',
+            'OZ', 'OUNCE' => 'OUNCE',
+            'KG', 'KILOGRAM' => 'KILOGRAM',
+            'G', 'GRAM' => 'GRAM',
+            default => 'POUND',
+        };
+
+        $item['packageWeightAndSize'] = [
+            'weight' => [
+                'value' => (float) ($weight ?: 1),
+                'unit' => $ebayWeightUnit,
+            ],
+        ];
 
         return $item;
     }

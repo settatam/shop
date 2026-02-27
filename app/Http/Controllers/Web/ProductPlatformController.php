@@ -13,6 +13,7 @@ use App\Models\ShopifyMetafieldDefinition;
 use App\Models\StoreMarketplace;
 use App\Models\Warehouse;
 use App\Services\Platforms\CategoryMappingService;
+use App\Services\Platforms\Ebay\EbayItemSpecificsService;
 use App\Services\Platforms\ListingAIService;
 use App\Services\Platforms\ListingBuilderService;
 use App\Services\Platforms\PlatformManager;
@@ -81,6 +82,8 @@ class ProductPlatformController extends Controller
                 'handle' => $product->handle,
                 'category' => $product->category?->name,
                 'brand' => $product->brand?->name,
+                'weight' => $product->weight,
+                'weight_unit' => $product->weight_unit ?? 'lb',
             ],
             'marketplace' => [
                 'id' => $marketplace->id,
@@ -96,6 +99,9 @@ class ProductPlatformController extends Controller
                 'listing_url' => $listing->listing_url,
                 'platform_price' => $listing->platform_price,
                 'platform_quantity' => $listing->platform_quantity,
+                'quantity_override' => $listing->quantity_override,
+                'inventory_quantity' => $product->total_quantity,
+                'effective_quantity' => $listing->getEffectiveQuantity(),
                 'published_at' => $listing->published_at?->toIso8601String(),
                 'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
                 'last_error' => $listing->last_error,
@@ -114,7 +120,7 @@ class ProductPlatformController extends Controller
                 'title' => $listing->title,
                 'description' => $listing->description,
                 'price' => $listing->platform_price,
-                'quantity' => $listing->platform_quantity,
+                'quantity' => $listing->quantity_override,
                 'platform_category_id' => $listing->platform_category_id,
                 'attributes' => $listing->attributes,
                 'images' => $listing->images,
@@ -177,7 +183,7 @@ class ProductPlatformController extends Controller
                 'title' => $listing->title,
                 'description' => $listing->description,
                 'price' => $listing->platform_price,
-                'quantity' => $listing->platform_quantity,
+                'quantity' => $listing->quantity_override,
                 'attributes' => $listing->attributes,
                 'platform_category_id' => $listing->platform_category_id,
                 'platform_settings' => $listing->platform_settings,
@@ -312,7 +318,7 @@ class ProductPlatformController extends Controller
             ], 404);
         }
 
-        if ($listing->status !== PlatformListing::STATUS_ENDED) {
+        if (! in_array($listing->status, [PlatformListing::STATUS_ENDED, PlatformListing::STATUS_UNLISTED])) {
             return response()->json([
                 'success' => false,
                 'message' => 'This listing is not in unlisted status',
@@ -479,11 +485,140 @@ class ProductPlatformController extends Controller
     }
 
     /**
+     * Get item specifics for a given eBay category ID.
+     */
+    public function getItemSpecifics(Request $request, Product $product, StoreMarketplace $marketplace): JsonResponse
+    {
+        $this->authorize('view', $product);
+        $this->authorizeMarketplace($marketplace);
+
+        $validated = $request->validate([
+            'category_id' => ['required', 'string', 'max:255'],
+        ]);
+
+        $categoryId = $validated['category_id'];
+        $itemSpecificsService = app(EbayItemSpecificsService::class);
+
+        try {
+            $itemSpecificsService->ensureItemSpecificsExist($categoryId, $marketplace);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch item specifics: '.$e->getMessage(),
+            ], 500);
+        }
+
+        $specifics = $itemSpecificsService->getItemSpecifics($categoryId);
+        $listingAttributes = $this->getListingAttributes($product, $marketplace);
+
+        $specificsData = $specifics->map(function (EbayItemSpecific $specific) use ($listingAttributes) {
+            $isListingOverride = isset($listingAttributes[$specific->name]);
+            $resolvedValue = $listingAttributes[$specific->name] ?? null;
+
+            return [
+                'id' => $specific->id,
+                'name' => $specific->name,
+                'is_required' => $specific->is_required,
+                'is_recommended' => $specific->is_recommended,
+                'aspect_mode' => $specific->aspect_mode,
+                'allowed_values' => $specific->values->pluck('value')->toArray(),
+                'mapped_template_field' => null,
+                'resolved_value' => $resolvedValue,
+                'is_listing_override' => $isListingOverride,
+            ];
+        })->toArray();
+
+        return response()->json([
+            'success' => true,
+            'specifics' => $specificsData,
+            'category_mapping_id' => null,
+            'category_id' => null,
+            'synced_at' => now()->toIso8601String(),
+            'needs_sync' => false,
+        ]);
+    }
+
+    /**
      * Get eBay item specifics data with resolved values for the frontend.
      *
      * @return array{specifics: array<int, array<string, mixed>>, category_mapping_id: int|null, category_id: int|null, synced_at: string|null, needs_sync: bool}
      */
     protected function getEbayItemSpecificsData(Product $product, StoreMarketplace $marketplace, ?PlatformListing $listing): array
+    {
+        // Check listing-level category override first
+        $listingCategoryId = $listing?->platform_settings['primary_category_id'] ?? null;
+
+        if ($listingCategoryId) {
+            return $this->getEbayItemSpecificsFromListingOverride((string) $listingCategoryId, $marketplace, $listing);
+        }
+
+        // Fall back to category mapping resolution
+        return $this->getEbayItemSpecificsFromMapping($product, $marketplace, $listing);
+    }
+
+    /**
+     * Get item specifics using the listing-level eBay category override.
+     * If specifics don't exist locally, attempts to fetch them from the eBay API.
+     *
+     * @return array{specifics: array<int, array<string, mixed>>, category_mapping_id: int|null, category_id: int|null, synced_at: string|null, needs_sync: bool}
+     */
+    protected function getEbayItemSpecificsFromListingOverride(string $ebayCategoryId, StoreMarketplace $marketplace, ?PlatformListing $listing): array
+    {
+        $itemSpecificsService = app(EbayItemSpecificsService::class);
+
+        // Try to ensure specifics exist (fetches from API if needed)
+        try {
+            $itemSpecificsService->ensureItemSpecificsExist($ebayCategoryId, $marketplace);
+        } catch (\Throwable $e) {
+            // Log but don't fail the page load — user can retry via sync button
+        }
+
+        $specifics = $itemSpecificsService->getItemSpecifics($ebayCategoryId);
+
+        if ($specifics->isEmpty()) {
+            return [
+                'specifics' => [],
+                'category_mapping_id' => null,
+                'category_id' => null,
+                'synced_at' => null,
+                'needs_sync' => true,
+            ];
+        }
+
+        $listingAttributes = $listing?->attributes ?? [];
+
+        $specificsData = $specifics->map(function (EbayItemSpecific $specific) use ($listingAttributes) {
+            $isListingOverride = isset($listingAttributes[$specific->name]);
+            $resolvedValue = $listingAttributes[$specific->name] ?? null;
+
+            return [
+                'id' => $specific->id,
+                'name' => $specific->name,
+                'is_required' => $specific->is_required,
+                'is_recommended' => $specific->is_recommended,
+                'aspect_mode' => $specific->aspect_mode,
+                'allowed_values' => $specific->values->pluck('value')->toArray(),
+                'mapped_template_field' => null,
+                'resolved_value' => $resolvedValue,
+                'is_listing_override' => $isListingOverride,
+            ];
+        })->toArray();
+
+        return [
+            'specifics' => $specificsData,
+            'category_mapping_id' => null,
+            'category_id' => null,
+            'synced_at' => now()->toIso8601String(),
+            'needs_sync' => false,
+        ];
+    }
+
+    /**
+     * Get item specifics using the category mapping resolution (fallback).
+     *
+     * @return array{specifics: array<int, array<string, mixed>>, category_mapping_id: int|null, category_id: int|null, synced_at: string|null, needs_sync: bool}
+     */
+    protected function getEbayItemSpecificsFromMapping(Product $product, StoreMarketplace $marketplace, ?PlatformListing $listing): array
     {
         $resolution = $this->categoryMappingService->resolveCategory($product, $marketplace);
         $mapping = $resolution['mapping'];
@@ -548,6 +683,20 @@ class ProductPlatformController extends Controller
             'synced_at' => $mapping->item_specifics_synced_at?->toIso8601String(),
             'needs_sync' => $mapping->needsItemSpecificsSync(),
         ];
+    }
+
+    /**
+     * Get listing attributes for a product/marketplace.
+     *
+     * @return array<string, string>
+     */
+    protected function getListingAttributes(Product $product, StoreMarketplace $marketplace): array
+    {
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('store_marketplace_id', $marketplace->id)
+            ->first();
+
+        return $listing?->attributes ?? [];
     }
 
     /**

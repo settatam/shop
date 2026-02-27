@@ -252,8 +252,8 @@ class ListingBuilderService
             $updateData['platform_price'] = $data['price'];
         }
 
-        if (array_key_exists('quantity', $data) && $data['quantity'] !== null) {
-            $updateData['platform_quantity'] = $data['quantity'];
+        if (array_key_exists('quantity', $data)) {
+            $updateData['quantity_override'] = $data['quantity'];
         }
 
         if (! empty($updateData)) {
@@ -308,7 +308,7 @@ class ListingBuilderService
             'description' => $listing?->description ?? $product->description,
             'price' => $listing?->platform_price ?? $variant?->price,
             'compare_at_price' => $variant?->compare_at_price ?? $product->compare_at_price,
-            'quantity' => $listing?->platform_quantity ?? $variant?->quantity ?? $product->quantity ?? 0,
+            'quantity' => $listing ? $listing->getEffectiveQuantity() : ($variant?->quantity ?? $product->quantity ?? 0),
             'sku' => $variant?->sku,
             'barcode' => $variant?->barcode,
             'weight' => $product->weight,

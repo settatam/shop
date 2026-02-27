@@ -64,6 +64,11 @@ class ProductController extends Controller
         // Level 2 categories (parent is level 1)
         $level2Categories = $allCategories->whereIn('parent_id', $level1Ids)->values();
 
+        // If no level 2 categories exist (flat structure), use root categories directly
+        if ($level2Categories->isEmpty()) {
+            $level2Categories = $allCategories->whereNull('parent_id')->values();
+        }
+
         // Level 3 categories grouped by their Level 2 parent
         $level2Ids = $level2Categories->pluck('id')->toArray();
         $level3ByParent = $allCategories->whereIn('parent_id', $level2Ids)

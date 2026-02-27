@@ -65,3 +65,8 @@ Schedule::command('reports:send-scheduled')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Cleanup expired storefront chat sessions daily at 3am
+Schedule::command('storefront:cleanup-sessions')
+    ->dailyAt('03:00')
+    ->withoutOverlapping();

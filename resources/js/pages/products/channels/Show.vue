@@ -52,6 +52,9 @@ interface Listing {
     should_list: boolean;
     platform_price: number | null;
     platform_quantity: number | null;
+    quantity_override: number | null;
+    inventory_quantity: number;
+    effective_quantity: number;
     platform_data: {
         title?: string;
         description?: string;
@@ -82,7 +85,7 @@ const form = ref({
     title: props.listing?.platform_data?.title || '',
     description: props.listing?.platform_data?.description || '',
     price: props.listing?.platform_price ?? props.product.default_price ?? null,
-    quantity: props.listing?.platform_quantity ?? props.product.default_quantity ?? null,
+    quantity: props.listing?.quantity_override ?? null,
 });
 
 const saving = ref(false);
@@ -412,12 +415,12 @@ async function sync() {
                             </div>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <Label for="quantity">Quantity</Label>
-                                    <Badge v-if="form.quantity !== null && form.quantity !== product.default_quantity" variant="outline" class="text-xs">
-                                        Overridden
+                                    <Label for="quantity">Quantity Cap</Label>
+                                    <Badge v-if="form.quantity !== null" variant="outline" class="text-xs">
+                                        Capped
                                     </Badge>
                                     <span v-else class="text-xs text-gray-500 dark:text-gray-400">
-                                        Using product quantity
+                                        Using inventory ({{ listing?.inventory_quantity ?? product.default_quantity ?? 0 }})
                                     </span>
                                 </div>
                                 <Input
@@ -425,8 +428,12 @@ async function sync() {
                                     type="number"
                                     min="0"
                                     v-model.number="form.quantity"
-                                    :placeholder="String(product.default_quantity ?? 0)"
+                                    :placeholder="`Inventory: ${listing?.inventory_quantity ?? product.default_quantity ?? 0}`"
                                 />
+                                <p v-if="form.quantity !== null" class="text-xs text-gray-500 dark:text-gray-400">
+                                    Effective: {{ Math.min(form.quantity, listing?.inventory_quantity ?? product.default_quantity ?? 0) }}
+                                    (capped at override or inventory, whichever is lower)
+                                </p>
                             </div>
                         </div>
                     </div>

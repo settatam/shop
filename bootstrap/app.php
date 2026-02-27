@@ -5,6 +5,7 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetCurrentStore;
 use App\Http\Middleware\SetPortalStore;
+use App\Http\Middleware\VerifyShopifyProxy;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'products/*/generate-title',
             'products/*/generate-description',
+            'shopify/proxy/*',
         ]);
 
         $middleware->web(append: [
@@ -50,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => CheckPermission::class,
             'onboarding' => \App\Http\Middleware\EnsureOnboardingComplete::class,
             'portal.store' => SetPortalStore::class,
+            'verify.shopify.proxy' => VerifyShopifyProxy::class,
         ]);
 
         $middleware->redirectGuestsTo(function ($request) {

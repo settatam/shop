@@ -94,6 +94,9 @@ class ProductChannelController extends Controller
                 'should_list' => $listing->should_list,
                 'platform_price' => $listing->platform_price,
                 'platform_quantity' => $listing->platform_quantity,
+                'quantity_override' => $listing->quantity_override,
+                'inventory_quantity' => $product->total_quantity,
+                'effective_quantity' => $listing->getEffectiveQuantity(),
                 'platform_data' => $listing->platform_data,
                 'published_at' => $listing->published_at?->toIso8601String(),
                 'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
@@ -125,7 +128,7 @@ class ProductChannelController extends Controller
 
         // Update listing data
         $listing->platform_price = $validated['price'] ?? $listing->platform_price;
-        $listing->platform_quantity = $validated['quantity'] ?? $listing->platform_quantity;
+        $listing->quantity_override = array_key_exists('quantity', $validated) ? $validated['quantity'] : $listing->quantity_override;
         $listing->platform_data = array_merge($listing->platform_data ?? [], [
             'title' => $validated['title'] ?? $product->title,
             'description' => $validated['description'] ?? $product->description,
@@ -140,7 +143,8 @@ class ProductChannelController extends Controller
                 'id' => $listing->id,
                 'status' => $listing->status,
                 'platform_price' => $listing->platform_price,
-                'platform_quantity' => $listing->platform_quantity,
+                'quantity_override' => $listing->quantity_override,
+                'effective_quantity' => $listing->getEffectiveQuantity(),
                 'platform_data' => $listing->platform_data,
             ],
         ]);
@@ -265,7 +269,7 @@ class ProductChannelController extends Controller
                 'product_id' => $product->id,
                 'status' => PlatformListing::STATUS_NOT_FOR_SALE,
                 'platform_price' => $defaultVariant?->price ?? 0,
-                'platform_quantity' => $defaultVariant?->quantity ?? 0,
+                'platform_quantity' => null,
                 'platform_data' => [
                     'title' => $product->title,
                     'description' => $product->description,
@@ -330,7 +334,8 @@ class ProductChannelController extends Controller
                     'is_for_sale' => $listing->isForSale(),
                     'is_not_for_sale' => $listing->isNotForSale(),
                     'platform_price' => $listing->platform_price,
-                    'platform_quantity' => $listing->platform_quantity,
+                    'platform_quantity' => $listing->getEffectiveQuantity(),
+                    'quantity_override' => $listing->quantity_override,
                     'listing_url' => $listing->listing_url,
                     'published_at' => $listing->published_at?->toIso8601String(),
                     'last_synced_at' => $listing->last_synced_at?->toIso8601String(),
@@ -370,7 +375,6 @@ class ProductChannelController extends Controller
         // Update listing with latest product data
         $listing->update([
             'platform_price' => $defaultVariant?->price ?? $listing->platform_price,
-            'platform_quantity' => $defaultVariant?->quantity ?? $listing->platform_quantity,
             'platform_data' => array_merge($listing->platform_data ?? [], [
                 'title' => $product->title,
                 'description' => $product->description,
@@ -385,7 +389,7 @@ class ProductChannelController extends Controller
                 'id' => $listing->id,
                 'status' => $listing->status,
                 'platform_price' => $listing->platform_price,
-                'platform_quantity' => $listing->platform_quantity,
+                'platform_quantity' => $listing->getEffectiveQuantity(),
                 'last_synced_at' => $listing->last_synced_at->toIso8601String(),
             ],
         ]);
@@ -418,7 +422,6 @@ class ProductChannelController extends Controller
         foreach ($listings as $listing) {
             $listing->update([
                 'platform_price' => $defaultVariant?->price ?? $listing->platform_price,
-                'platform_quantity' => $defaultVariant?->quantity ?? $listing->platform_quantity,
                 'platform_data' => array_merge($listing->platform_data ?? [], [
                     'title' => $product->title,
                     'description' => $product->description,

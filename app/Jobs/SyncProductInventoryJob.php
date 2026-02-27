@@ -97,13 +97,8 @@ class SyncProductInventoryJob implements ShouldQueue
         try {
             $this->product->load('variants');
 
-            $quantity = $this->product->variants->isNotEmpty()
-                ? $this->product->variants->sum('quantity')
-                : ($this->product->quantity ?? 0);
-
             $results = [
                 'product_id' => $this->product->id,
-                'quantity' => $quantity,
                 'trigger' => $this->triggerReason,
                 'listings_processed' => 0,
                 'ended' => 0,
@@ -113,10 +108,10 @@ class SyncProductInventoryJob implements ShouldQueue
                 'errors' => [],
             ];
 
-            Log::info("SyncProductInventoryJob: Starting sync for product {$this->product->id}, quantity: {$quantity}");
+            Log::info("SyncProductInventoryJob: Starting sync for product {$this->product->id}");
 
             $listings = PlatformListing::where('product_id', $this->product->id)
-                ->where('status', PlatformListing::STATUS_LISTED)
+                ->whereIn('status', [PlatformListing::STATUS_LISTED, PlatformListing::STATUS_ACTIVE])
                 ->with('salesChannel')
                 ->get();
 
@@ -132,9 +127,10 @@ class SyncProductInventoryJob implements ShouldQueue
             foreach ($listings as $listing) {
                 try {
                     $channelName = $listing->salesChannel?->name ?? 'Unknown';
+                    $effectiveQuantity = $listing->getEffectiveQuantity();
 
-                    if ($quantity <= 0) {
-                        Log::info("SyncProductInventoryJob: Ending listing {$listing->id} on {$channelName} (quantity: 0)");
+                    if ($effectiveQuantity <= 0) {
+                        Log::info("SyncProductInventoryJob: Ending listing {$listing->id} on {$channelName} (effective quantity: 0)");
 
                         $result = Channel::listing($listing)->end();
 
@@ -164,9 +160,9 @@ class SyncProductInventoryJob implements ShouldQueue
                             Log::warning("SyncProductInventoryJob: Failed to end listing {$listing->id}: {$result->message}");
                         }
                     } else {
-                        Log::info("SyncProductInventoryJob: Updating inventory for listing {$listing->id} on {$channelName} to {$quantity}");
+                        Log::info("SyncProductInventoryJob: Updating inventory for listing {$listing->id} on {$channelName} to {$effectiveQuantity}");
 
-                        $result = Channel::listing($listing)->updateInventory($quantity);
+                        $result = Channel::listing($listing)->updateInventory($effectiveQuantity);
 
                         if ($result->success) {
                             $results['updated']++;
@@ -186,7 +182,6 @@ class SyncProductInventoryJob implements ShouldQueue
                     $results['errors'][] = [
                         'listing_id' => $listing->id,
                         'channel' => $listing->salesChannel?->name ?? 'Unknown',
-                        'action' => $quantity <= 0 ? 'end' : 'update_inventory',
                         'error' => $e->getMessage(),
                     ];
                     Log::error("SyncProductInventoryJob: Exception processing listing {$listing->id}: {$e->getMessage()}");

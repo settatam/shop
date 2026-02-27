@@ -1,0 +1,13 @@
+api_version = "2024-07"
+
+[[extensions]]
+name = "Shopmata AI Assistant"
+handle = "shopmata-ai-assistant"
+type = "theme"
+
+  [extensions.capabilities]
+  ajax_api = true
+
+  [[extensions.targeting]]
+  module = "./blocks/ai-assistant.liquid"
+  target = "body"

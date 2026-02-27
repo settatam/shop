@@ -94,6 +94,16 @@ class StoreMarketplace extends Model
         return $this->hasMany(ShopifyMetafieldDefinition::class);
     }
 
+    public function storefrontApiTokens(): HasMany
+    {
+        return $this->hasMany(StorefrontApiToken::class);
+    }
+
+    public function storefrontChatSessions(): HasMany
+    {
+        return $this->hasMany(StorefrontChatSession::class);
+    }
+
     public function salesChannels(): HasMany
     {
         return $this->hasMany(SalesChannel::class);
