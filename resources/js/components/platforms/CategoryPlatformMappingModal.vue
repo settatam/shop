@@ -18,6 +18,8 @@ interface PlatformCategory {
     name: string;
     ebay_category_id?: string;
     etsy_id?: string;
+    walmart_category_id?: string;
+    amazon_category_id?: string;
     level: number;
     parent_id: number | null;
     children_count: number;
@@ -80,7 +82,7 @@ const supportsSecondaryCategory = computed(() => props.platform === 'ebay');
 
 const selectedPrimaryCategoryId = computed(() => {
     if (primaryCategory.value) {
-        return String(primaryCategory.value.ebay_category_id || primaryCategory.value.etsy_id || primaryCategory.value.id);
+        return String(primaryCategory.value.ebay_category_id || primaryCategory.value.etsy_id || primaryCategory.value.walmart_category_id || primaryCategory.value.amazon_category_id || primaryCategory.value.id);
     }
     return props.existingPrimaryCategoryId ?? null;
 });
@@ -126,6 +128,8 @@ function getPrimaryExternalId(): string {
     return String(
         primaryCategory.value.ebay_category_id ||
         primaryCategory.value.etsy_id ||
+        primaryCategory.value.walmart_category_id ||
+        primaryCategory.value.amazon_category_id ||
         primaryCategory.value.id
     );
 }
@@ -135,6 +139,8 @@ function getSecondaryExternalId(): string | null {
     return String(
         secondaryCategory.value.ebay_category_id ||
         secondaryCategory.value.etsy_id ||
+        secondaryCategory.value.walmart_category_id ||
+        secondaryCategory.value.amazon_category_id ||
         secondaryCategory.value.id
     );
 }

@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\Storefront\StorefrontChatController;
 use App\Http\Controllers\Api\TaxonomyController;
 use App\Http\Controllers\InvitationController;
+use App\Http\Controllers\Shopify\ShopifyAppController;
+use App\Http\Controllers\Shopify\ShopifyEmbeddedController;
 use App\Http\Controllers\Web\AppraisalController;
 use App\Http\Controllers\Web\BucketsController;
 use App\Http\Controllers\Web\BuysController;
@@ -60,11 +62,42 @@ Route::prefix('shopify/proxy')
         Route::post('chat/session', [StorefrontChatController::class, 'session'])->name('storefront.chat.session');
     });
 
+/*
+|--------------------------------------------------------------------------
+| Shopify App Install Routes (Public, No Auth)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('shopify/app')->group(function () {
+    Route::get('install', [ShopifyAppController::class, 'install'])->name('shopify.app.install');
+    Route::get('callback', [ShopifyAppController::class, 'callback'])->name('shopify.app.callback');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Shopify Embedded Admin (No Auth — session token verified via middleware)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('shopify/embedded')->group(function () {
+    Route::get('/', [ShopifyEmbeddedController::class, 'index'])
+        ->middleware('shopify.frame')
+        ->name('shopify.embedded');
+
+    Route::prefix('api')->middleware('verify.shopify.session')->group(function () {
+        Route::get('settings', [ShopifyEmbeddedController::class, 'getSettings']);
+        Route::put('settings', [ShopifyEmbeddedController::class, 'updateSettings']);
+    });
+});
+
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
+    $isShopmata = str_contains(request()->getHost(), 'shopmata');
+
+    return Inertia::render($isShopmata ? 'Marketing/Home' : 'Welcome', [
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+
+Route::get('/terms', fn () => Inertia::render('Legal/Terms'))->name('terms');
+Route::get('/privacy', fn () => Inertia::render('Legal/Privacy'))->name('privacy');
 
 // Invitation routes (guest users)
 Route::get('invitation/{token}', [InvitationController::class, 'show'])->name('invitation.show');
@@ -821,6 +854,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('ebay/suggest', [TaxonomyController::class, 'suggestEbayCategory'])->name('ebay.suggest');
         Route::get('google/categories', [TaxonomyController::class, 'searchGoogleCategories'])->name('google.categories');
         Route::get('etsy/categories', [TaxonomyController::class, 'searchEtsyCategories'])->name('etsy.categories');
+        Route::get('walmart/categories', [TaxonomyController::class, 'searchWalmartCategories'])->name('walmart.categories');
+        Route::get('amazon/categories', [TaxonomyController::class, 'searchAmazonCategories'])->name('amazon.categories');
     });
 
     // Sales Reports

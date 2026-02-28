@@ -72,6 +72,9 @@ class ProductPlatformController extends Controller
         $metafields = $this->getMetafieldsConfig($product, $marketplace, $listing, $preview);
 
         $isEbay = $marketplace->platform->value === 'ebay';
+        $isWalmart = $marketplace->platform->value === 'walmart';
+        $isAmazon = $marketplace->platform->value === 'amazon';
+        $isEtsy = $marketplace->platform->value === 'etsy';
         $isShopify = $marketplace->platform->value === 'shopify';
 
         return Inertia::render('products/platforms/Show', [
@@ -135,7 +138,7 @@ class ProductPlatformController extends Controller
             'supportsMetafields' => $this->platformSupportsMetafields($marketplace),
             'marketplaceSettings' => $isEbay ? $this->getMarketplaceSettingsData($marketplace) : [],
             'policies' => $isEbay ? $this->getPoliciesForMarketplace($marketplace) : [],
-            'categoryMapping' => $isEbay ? $this->getCategoryMappingData($product, $marketplace) : [],
+            'categoryMapping' => ($isEbay || $isWalmart || $isAmazon || $isEtsy) ? $this->getCategoryMappingData($product, $marketplace) : [],
             'calculatedPrice' => $isEbay ? $this->getCalculatedPrice($product, $marketplace, $listing) : null,
             'warehouses' => $isEbay ? $this->getWarehousesForStore() : [],
             'ebayItemSpecifics' => $isEbay ? $this->getEbayItemSpecificsData($product, $marketplace, $listing) : null,

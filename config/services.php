@@ -127,6 +127,13 @@ return [
         'voice_id' => env('ELEVENLABS_VOICE_ID'),
     ],
 
+    'shopify' => [
+        'client_id' => env('SHOPIFY_CLIENT_ID'),
+        'client_secret' => env('SHOPIFY_CLIENT_SECRET'),
+        'webhook_secret' => env('SHOPIFY_WEBHOOK_SECRET'),
+        'scopes' => env('SHOPIFY_SCOPES', 'read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_locations'),
+    ],
+
     'ebay' => [
         'client_id' => env('EBAY_CLIENT_ID'),
         'client_secret' => env('EBAY_CLIENT_SECRET'),
@@ -145,12 +152,14 @@ return [
         'client_id' => env('ETSY_CLIENT_ID'),
         'client_secret' => env('ETSY_CLIENT_SECRET'),
         'redirect_uri' => env('ETSY_REDIRECT_URI'),
+        'keystring' => env('ETSY_CLIENT_ID'),
     ],
 
     'walmart' => [
         'client_id' => env('WALMART_CLIENT_ID'),
-        'client_secret' => env('WALMART_CLIENT_SECRET'),
+        'client_secret' => env('WALMART_CLIENT_SECRET', env('WALMART_SECRET')),
         'redirect_uri' => env('WALMART_REDIRECT_URI'),
+        'endpoint' => env('WALMART_ENDPOINT'),
         'sandbox' => env('WALMART_SANDBOX', true),
     ],
 

@@ -25,6 +25,11 @@ class AmazonWebhookController extends BaseWebhookController
         return true;
     }
 
+    protected function shouldProcessEvent(string $eventType): bool
+    {
+        return in_array($eventType, ['ORDER_STATUS_CHANGE', 'ANY_OFFER_CHANGED', 'FEED_PROCESSING_FINISHED'], true);
+    }
+
     protected function extractExternalId(Request $request): ?string
     {
         $payload = $request->all();

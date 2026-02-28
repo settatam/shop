@@ -69,6 +69,7 @@ export type AppPageProps<
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    isShopmata?: boolean;
     sidebarOpen: boolean;
     stores?: Store[];
     currentStore?: Store;

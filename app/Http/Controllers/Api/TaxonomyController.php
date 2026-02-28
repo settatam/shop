@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AmazonCategory;
 use App\Models\EbayCategory;
 use App\Models\EbayItemSpecific;
 use App\Models\EtsyCategory;
 use App\Models\GoogleCategory;
+use App\Models\WalmartCategory;
 use App\Services\AI\CategorySuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -216,6 +218,90 @@ class TaxonomyController extends Controller
                 'parent_id' => $cat->parent_id,
                 'children_count' => $cat->children_count,
                 'has_children' => $cat->children_count > 0,
+            ]);
+
+        return response()->json($categories);
+    }
+
+    /**
+     * Search Walmart categories.
+     */
+    public function searchWalmartCategories(Request $request): JsonResponse
+    {
+        $request->validate([
+            'query' => 'nullable|string|max:255',
+            'parent_id' => 'nullable|integer',
+        ]);
+
+        $query = WalmartCategory::query();
+
+        if ($request->filled('query')) {
+            $query->where('name', 'like', '%'.$request->input('query').'%')
+                ->whereDoesntHave('children');
+        } elseif ($request->filled('parent_id')) {
+            $query->where('parent_id', $request->parent_id);
+        } else {
+            $query->whereNull('parent_id');
+        }
+
+        $isSearch = $request->filled('query');
+
+        $categories = $query
+            ->withCount('children')
+            ->orderBy('name')
+            ->limit(100)
+            ->get()
+            ->map(fn ($cat) => [
+                'id' => $cat->id,
+                'name' => $cat->name,
+                'walmart_category_id' => $cat->walmart_category_id,
+                'level' => $cat->level,
+                'parent_id' => $cat->parent_id,
+                'children_count' => $cat->children_count,
+                'has_children' => $cat->children_count > 0,
+                'path' => $isSearch ? $cat->path : null,
+            ]);
+
+        return response()->json($categories);
+    }
+
+    /**
+     * Search Amazon categories.
+     */
+    public function searchAmazonCategories(Request $request): JsonResponse
+    {
+        $request->validate([
+            'query' => 'nullable|string|max:255',
+            'parent_id' => 'nullable|integer',
+        ]);
+
+        $query = AmazonCategory::query();
+
+        if ($request->filled('query')) {
+            $query->where('name', 'like', '%'.$request->input('query').'%')
+                ->whereDoesntHave('children');
+        } elseif ($request->filled('parent_id')) {
+            $query->where('parent_id', $request->parent_id);
+        } else {
+            $query->whereNull('parent_id');
+        }
+
+        $isSearch = $request->filled('query');
+
+        $categories = $query
+            ->withCount('children')
+            ->orderBy('name')
+            ->limit(100)
+            ->get()
+            ->map(fn ($cat) => [
+                'id' => $cat->id,
+                'name' => $cat->name,
+                'amazon_category_id' => $cat->amazon_category_id,
+                'level' => $cat->level,
+                'parent_id' => $cat->parent_id,
+                'children_count' => $cat->children_count,
+                'has_children' => $cat->children_count > 0,
+                'path' => $isSearch ? $cat->path : null,
             ]);
 
         return response()->json($categories);

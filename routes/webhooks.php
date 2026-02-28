@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Shopify\ShopifyAppController;
 use App\Http\Controllers\Webhooks\AmazonWebhookController;
 use App\Http\Controllers\Webhooks\BigCommerceWebhookController;
 use App\Http\Controllers\Webhooks\EbayWebhookController;
@@ -23,6 +24,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('webhooks')->withoutMiddleware(['web', 'csrf'])->group(function () {
+    // Shopify declarative webhook endpoint (TOML-declared, domain-based lookup)
+    Route::post('shopify/app', [ShopifyWebhookController::class, 'handleDeclarative'])
+        ->name('webhooks.shopify.app');
+
     // Shopify webhooks - specific action endpoints
     Route::post('shopify/{connectionId}/order-created', [ShopifyWebhookController::class, 'orderCreated'])
         ->name('webhooks.shopify.order-created');
@@ -77,4 +82,12 @@ Route::prefix('webhooks')->withoutMiddleware(['web', 'csrf'])->group(function ()
         ->name('webhooks.twilio.sms');
     Route::post('twilio/status', [TwilioWebhookController::class, 'handleStatusCallback'])
         ->name('webhooks.twilio.status');
+
+    // Shopify GDPR mandatory webhooks
+    Route::post('shopify/gdpr/customers-data-request', [ShopifyAppController::class, 'customerDataRequest'])
+        ->name('webhooks.shopify.gdpr.customers-data-request');
+    Route::post('shopify/gdpr/customers-redact', [ShopifyAppController::class, 'customerDataErasure'])
+        ->name('webhooks.shopify.gdpr.customers-redact');
+    Route::post('shopify/gdpr/shop-redact', [ShopifyAppController::class, 'shopDataErasure'])
+        ->name('webhooks.shopify.gdpr.shop-redact');
 });

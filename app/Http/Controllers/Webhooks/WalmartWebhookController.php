@@ -25,6 +25,11 @@ class WalmartWebhookController extends BaseWebhookController
         return true;
     }
 
+    protected function shouldProcessEvent(string $eventType): bool
+    {
+        return in_array($eventType, ['PO_CREATED', 'PO_LINE_UPDATED', 'ITEM_UPDATED'], true);
+    }
+
     protected function extractExternalId(Request $request): ?string
     {
         $payload = $request->all();

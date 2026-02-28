@@ -3,6 +3,7 @@
 namespace App\Services\Platforms\Amazon;
 
 use App\Enums\Platform;
+use App\Models\CategoryPlatformMapping;
 use App\Models\PlatformListing;
 use App\Models\PlatformOrder;
 use App\Models\Product;
@@ -197,7 +198,7 @@ class AmazonService extends BasePlatformService
             'store_marketplace_id' => $connection->id,
             'product_id' => $product->id,
             'external_listing_id' => $sku,
-            'status' => $response['status'] ?? 'ACCEPTED' ? 'active' : 'pending',
+            'status' => ($response['status'] ?? 'ACCEPTED') === 'ACCEPTED' ? PlatformListing::STATUS_PENDING : PlatformListing::STATUS_PENDING,
             'listing_url' => "https://www.amazon.com/dp/{$response['asin']}",
             'platform_data' => $response,
             'last_synced_at' => now(),
@@ -208,7 +209,7 @@ class AmazonService extends BasePlatformService
     public function updateListing(PlatformListing $listing): PlatformListing
     {
         $product = $listing->product;
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
 
         $this->ensureValidToken($connection);
 
@@ -233,7 +234,7 @@ class AmazonService extends BasePlatformService
 
     public function deleteListing(PlatformListing $listing): void
     {
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
         $this->ensureValidToken($connection);
 
         $marketplaceId = $connection->credentials['marketplace_ids'][0] ?? 'ATVPDKIKX0DER';
@@ -279,7 +280,7 @@ class AmazonService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_UNLISTED,
+            'status' => PlatformListing::STATUS_ENDED,
             'last_synced_at' => now(),
         ]);
 
@@ -318,7 +319,7 @@ class AmazonService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_ACTIVE,
+            'status' => PlatformListing::STATUS_LISTED,
             'published_at' => now(),
             'last_synced_at' => now(),
         ]);
@@ -387,15 +388,15 @@ class AmazonService extends BasePlatformService
 
     public function updateOrderFulfillment(PlatformOrder $order, array $fulfillmentData): void
     {
-        $this->ensureValidToken($order->connection);
+        $this->ensureValidToken($order->marketplace);
 
         $this->amazonRequest(
-            $order->connection,
+            $order->marketplace,
             'POST',
             '/feeds/2021-06-30/feeds',
             [
                 'feedType' => 'POST_ORDER_FULFILLMENT_DATA',
-                'marketplaceIds' => $order->connection->credentials['marketplace_ids'] ?? ['ATVPDKIKX0DER'],
+                'marketplaceIds' => $order->marketplace->credentials['marketplace_ids'] ?? ['ATVPDKIKX0DER'],
                 'inputFeedDocumentId' => $this->createFulfillmentFeed($order, $fulfillmentData),
             ]
         );
@@ -459,11 +460,12 @@ class AmazonService extends BasePlatformService
 
     // Helper methods
 
-    protected function amazonRequest(
+    public function amazonRequest(
         StoreMarketplace $connection,
         string $method,
         string $endpoint,
-        array $data = []
+        array $data = [],
+        array $queryParams = []
     ): array {
         $region = $connection->credentials['region'] ?? 'na';
         $baseUrl = $this->endpoints[$region] ?? $this->endpoints['na'];
@@ -474,8 +476,10 @@ class AmazonService extends BasePlatformService
             'Content-Type' => 'application/json',
         ]);
 
-        // Add query params for GET requests
-        if (strtoupper($method) === 'GET' && ! empty($data)) {
+        // Add query params
+        if (! empty($queryParams)) {
+            $url .= '?'.http_build_query($queryParams);
+        } elseif (strtoupper($method) === 'GET' && ! empty($data)) {
             $url .= '?'.http_build_query($data);
             $data = [];
         }
@@ -496,7 +500,7 @@ class AmazonService extends BasePlatformService
         return $response->json() ?? [];
     }
 
-    protected function ensureValidToken(StoreMarketplace $connection): void
+    public function ensureValidToken(StoreMarketplace $connection): void
     {
         if ($connection->token_expires_at && $connection->token_expires_at->isPast()) {
             $this->refreshToken($connection);
@@ -527,7 +531,7 @@ class AmazonService extends BasePlatformService
         ];
     }
 
-    protected function mapToAmazonListing(Product $product, ?StoreMarketplace $connection = null): array
+    public function mapToAmazonListing(Product $product, ?StoreMarketplace $connection = null): array
     {
         $variant = $product->variants->first();
         $settings = $connection?->settings ?? [];
@@ -538,7 +542,7 @@ class AmazonService extends BasePlatformService
         $adjustedPrice = $basePrice + ($basePrice * $priceMarkup);
 
         return [
-            'productType' => $product->category?->external_id ?? 'PRODUCT',
+            'productType' => $this->resolveAmazonProductType($product, $connection),
             'attributes' => [
                 'item_name' => [['value' => $product->title, 'language_tag' => $languageTag]],
                 'brand' => [['value' => $product->brand?->name ?? 'Generic']],
@@ -554,6 +558,24 @@ class AmazonService extends BasePlatformService
                 ]],
             ],
         ];
+    }
+
+    /**
+     * Resolve the Amazon product type from category mapping, falling back to product category.
+     */
+    public function resolveAmazonProductType(Product $product, ?StoreMarketplace $connection = null): string
+    {
+        if ($connection && $product->category_id) {
+            $mapping = CategoryPlatformMapping::where('category_id', $product->category_id)
+                ->where('store_marketplace_id', $connection->id)
+                ->first();
+
+            if ($mapping && $mapping->primary_category_id) {
+                return $mapping->primary_category_id;
+            }
+        }
+
+        return $product->category?->external_id ?? 'PRODUCT';
     }
 
     protected function getBulletPoints(Product $product, string $languageTag = 'en_US'): array

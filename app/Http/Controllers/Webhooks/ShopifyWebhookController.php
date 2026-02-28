@@ -137,6 +137,64 @@ class ShopifyWebhookController extends BaseWebhookController
     }
 
     /**
+     * Handle declarative (TOML-declared) webhooks.
+     *
+     * Looks up the connection by X-Shopify-Shop-Domain header instead of URL param.
+     * Handles app/uninstalled directly; all other topics go through ProcessWebhookJob.
+     */
+    public function handleDeclarative(Request $request): JsonResponse
+    {
+        $shopDomain = $request->header('X-Shopify-Shop-Domain');
+
+        if (! $shopDomain) {
+            return response()->json(['error' => 'Missing shop domain header'], 400);
+        }
+
+        $connection = StoreMarketplace::where('shop_domain', $shopDomain)
+            ->where('platform', Platform::Shopify)
+            ->first();
+
+        if (! $connection) {
+            return response()->json(['error' => 'Connection not found'], 404);
+        }
+
+        if (! $this->verifySignature($request, $connection)) {
+            Log::warning('Shopify declarative webhook failed signature verification', [
+                'shop_domain' => $shopDomain,
+            ]);
+
+            return response()->json(['error' => 'Invalid signature'], 401);
+        }
+
+        $topic = $this->getEventType($request);
+
+        // Handle app/uninstalled directly — deactivate marketplace + tokens
+        if ($topic === 'app/uninstalled') {
+            $connection->update(['status' => 'inactive']);
+
+            StorefrontApiToken::where('store_marketplace_id', $connection->id)
+                ->update(['is_active' => false]);
+
+            Log::info('Shopify app uninstalled via declarative webhook', [
+                'connection_id' => $connection->id,
+                'shop_domain' => $shopDomain,
+            ]);
+
+            return response()->json(['status' => 'ok']);
+        }
+
+        if (! $connection->isActive()) {
+            return response()->json(['error' => 'Connection is inactive'], 400);
+        }
+
+        $webhookLog = $this->logWebhookWithEventType($request, $connection, $topic);
+
+        ProcessWebhookJob::dispatch($webhookLog);
+
+        return response()->json(['status' => 'queued']);
+    }
+
+    /**
      * Handle webhook with a specific event type override.
      */
     protected function handleWithEventType(Request $request, string $connectionId, string $eventType): JsonResponse

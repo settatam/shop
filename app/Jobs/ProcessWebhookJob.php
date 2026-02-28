@@ -66,8 +66,12 @@ class ProcessWebhookJob implements ShouldQueue
             'order.completed',
             'order_change',
             'receipt.created',
+            'receipt.updated',
             'woocommerce_order_created',
             'woocommerce_order_updated',
+            'po_created',
+            'po_line_updated',
+            'order_status_change',
         ];
 
         foreach ($orderEvents as $event) {

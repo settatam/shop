@@ -3,6 +3,7 @@
 namespace App\Services\Platforms\Walmart;
 
 use App\Enums\Platform;
+use App\Models\CategoryPlatformMapping;
 use App\Models\PlatformListing;
 use App\Models\PlatformOrder;
 use App\Models\Product;
@@ -201,7 +202,7 @@ class WalmartService extends BasePlatformService
             'store_marketplace_id' => $connection->id,
             'product_id' => $product->id,
             'external_listing_id' => $product->variants->first()?->sku ?? $product->handle,
-            'status' => 'pending', // Will update when feed is processed
+            'status' => PlatformListing::STATUS_PENDING,
             'platform_data' => [
                 'feed_id' => $feedId,
                 'feed_status' => 'RECEIVED',
@@ -213,7 +214,7 @@ class WalmartService extends BasePlatformService
     public function updateListing(PlatformListing $listing): PlatformListing
     {
         $product = $listing->product;
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
 
         $this->ensureValidToken($connection);
 
@@ -234,7 +235,7 @@ class WalmartService extends BasePlatformService
 
     public function deleteListing(PlatformListing $listing): void
     {
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
         $this->ensureValidToken($connection);
 
         $this->walmartRequest(
@@ -261,7 +262,7 @@ class WalmartService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_UNLISTED,
+            'status' => PlatformListing::STATUS_ENDED,
             'last_synced_at' => now(),
         ]);
 
@@ -286,7 +287,7 @@ class WalmartService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_ACTIVE,
+            'status' => PlatformListing::STATUS_LISTED,
             'published_at' => now(),
             'last_synced_at' => now(),
         ]);
@@ -361,7 +362,7 @@ class WalmartService extends BasePlatformService
 
     public function updateOrderFulfillment(PlatformOrder $order, array $fulfillmentData): void
     {
-        $this->ensureValidToken($order->connection);
+        $this->ensureValidToken($order->marketplace);
 
         $orderLines = collect($order->line_items)->map(fn ($item) => [
             'lineNumber' => $item['lineNumber'],
@@ -384,7 +385,7 @@ class WalmartService extends BasePlatformService
         ])->all();
 
         $this->walmartRequest(
-            $order->connection,
+            $order->marketplace,
             'POST',
             "/v3/orders/{$order->external_order_id}/shipping",
             ['orderShipment' => ['orderLines' => ['orderLine' => $orderLines]]]
@@ -444,7 +445,7 @@ class WalmartService extends BasePlatformService
 
     // Helper methods
 
-    protected function walmartRequest(
+    public function walmartRequest(
         StoreMarketplace $connection,
         string $method,
         string $endpoint,
@@ -478,7 +479,7 @@ class WalmartService extends BasePlatformService
         return $response->json() ?? [];
     }
 
-    protected function ensureValidToken(StoreMarketplace $connection): void
+    public function ensureValidToken(StoreMarketplace $connection): void
     {
         if ($connection->token_expires_at && $connection->token_expires_at->isPast()) {
             $this->refreshToken($connection);
@@ -499,7 +500,7 @@ class WalmartService extends BasePlatformService
         ];
     }
 
-    protected function mapToWalmartItem(Product $product, ?StoreMarketplace $connection = null): array
+    public function mapToWalmartItem(Product $product, ?StoreMarketplace $connection = null): array
     {
         $variant = $product->variants->first();
         $settings = $connection?->settings ?? [];
@@ -521,13 +522,28 @@ class WalmartService extends BasePlatformService
                 'currency' => 'USD',
                 'amount' => $adjustedPrice,
             ],
-            'category' => $product->category?->name ?? 'Other',
+            'category' => $this->resolveWalmartCategory($product, $connection),
             'shippingWeight' => [
                 'value' => $variant?->weight ?? 1,
                 'unit' => $settings['weight_unit'] ?? 'LB',
             ],
             'fulfillmentType' => $settings['fulfillment_type'] ?? 'seller',
         ];
+    }
+
+    protected function resolveWalmartCategory(Product $product, ?StoreMarketplace $connection): string
+    {
+        if ($connection && $product->category_id) {
+            $mapping = CategoryPlatformMapping::where('category_id', $product->category_id)
+                ->where('store_marketplace_id', $connection->id)
+                ->first();
+
+            if ($mapping?->primary_category_name) {
+                return $mapping->primary_category_name;
+            }
+        }
+
+        return $product->category?->name ?? 'Other';
     }
 
     protected function importOrder(array $walmartOrder, StoreMarketplace $connection): PlatformOrder

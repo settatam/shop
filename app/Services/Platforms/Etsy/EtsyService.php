@@ -3,6 +3,7 @@
 namespace App\Services\Platforms\Etsy;
 
 use App\Enums\Platform;
+use App\Models\CategoryPlatformMapping;
 use App\Models\PlatformListing;
 use App\Models\PlatformOrder;
 use App\Models\Product;
@@ -207,7 +208,7 @@ class EtsyService extends BasePlatformService
             'store_marketplace_id' => $connection->id,
             'product_id' => $product->id,
             'external_listing_id' => (string) $listingId,
-            'status' => $response['state'] === 'active' ? 'active' : 'draft',
+            'status' => $response['state'] === 'active' ? PlatformListing::STATUS_LISTED : PlatformListing::STATUS_PENDING,
             'listing_url' => $response['url'] ?? "https://www.etsy.com/listing/{$listingId}",
             'platform_data' => $response,
             'last_synced_at' => now(),
@@ -218,7 +219,7 @@ class EtsyService extends BasePlatformService
     public function updateListing(PlatformListing $listing): PlatformListing
     {
         $product = $listing->product;
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
 
         $this->ensureValidToken($connection);
 
@@ -241,7 +242,7 @@ class EtsyService extends BasePlatformService
 
     public function deleteListing(PlatformListing $listing): void
     {
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
         $this->ensureValidToken($connection);
 
         $this->etsyRequest(
@@ -271,7 +272,7 @@ class EtsyService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_UNLISTED,
+            'status' => PlatformListing::STATUS_ENDED,
             'last_synced_at' => now(),
         ]);
 
@@ -296,7 +297,7 @@ class EtsyService extends BasePlatformService
         );
 
         $listing->update([
-            'status' => PlatformListing::STATUS_ACTIVE,
+            'status' => PlatformListing::STATUS_LISTED,
             'published_at' => now(),
             'last_synced_at' => now(),
         ]);
@@ -375,11 +376,11 @@ class EtsyService extends BasePlatformService
 
     public function updateOrderFulfillment(PlatformOrder $order, array $fulfillmentData): void
     {
-        $this->ensureValidToken($order->connection);
-        $shopId = $order->connection->credentials['shop_id'];
+        $this->ensureValidToken($order->marketplace);
+        $shopId = $order->marketplace->credentials['shop_id'];
 
         $this->etsyRequest(
-            $order->connection,
+            $order->marketplace,
             'POST',
             "/application/shops/{$shopId}/receipts/{$order->external_order_id}/tracking",
             [
@@ -458,7 +459,7 @@ class EtsyService extends BasePlatformService
 
     // Helper methods
 
-    protected function etsyRequest(
+    public function etsyRequest(
         StoreMarketplace $connection,
         string $method,
         string $endpoint,
@@ -488,7 +489,7 @@ class EtsyService extends BasePlatformService
         return $response->json() ?? [];
     }
 
-    protected function ensureValidToken(StoreMarketplace $connection): void
+    public function ensureValidToken(StoreMarketplace $connection): void
     {
         if ($connection->token_expires_at && $connection->token_expires_at->isPast()) {
             $this->refreshToken($connection);
@@ -550,7 +551,7 @@ class EtsyService extends BasePlatformService
         ];
     }
 
-    protected function mapToEtsyListing(Product $product, ?StoreMarketplace $connection = null): array
+    public function mapToEtsyListing(Product $product, ?StoreMarketplace $connection = null): array
     {
         $variant = $product->variants->first();
         $settings = $connection?->settings ?? [];
@@ -569,7 +570,7 @@ class EtsyService extends BasePlatformService
             'quantity' => $variant?->quantity ?? $product->quantity ?? 0,
             'who_made' => $settings['who_made'] ?? 'i_did',
             'when_made' => $settings['when_made'] ?? 'made_to_order',
-            'taxonomy_id' => $product->category?->external_id ?? 1,
+            'taxonomy_id' => $this->resolveEtsyTaxonomyId($product, $connection),
             'is_supply' => $settings['is_supply'] ?? false,
             'tags' => $product->tags ?? [],
             'materials' => [],
@@ -584,6 +585,24 @@ class EtsyService extends BasePlatformService
         }
 
         return $listing;
+    }
+
+    /**
+     * Resolve the Etsy taxonomy ID from category mapping, falling back to product category.
+     */
+    public function resolveEtsyTaxonomyId(Product $product, ?StoreMarketplace $connection = null): int
+    {
+        if ($connection && $product->category_id) {
+            $mapping = CategoryPlatformMapping::where('category_id', $product->category_id)
+                ->where('store_marketplace_id', $connection->id)
+                ->first();
+
+            if ($mapping && $mapping->primary_category_id) {
+                return (int) $mapping->primary_category_id;
+            }
+        }
+
+        return (int) ($product->category?->external_id ?? 1);
     }
 
     protected function uploadListingImages(StoreMarketplace $connection, int $listingId, Product $product): void

@@ -1,0 +1,31 @@
+name = "Shopmata AI Assistant"
+client_id = ""
+application_url = "https://app.shopmata.com"
+embedded = true
+handle = "shopmata-ai-assistant"
+
+[access_scopes]
+scopes = "read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_locations"
+
+[auth]
+redirect_urls = ["https://app.shopmata.com/shopify/app/callback"]
+
+[webhooks]
+api_version = "2024-07"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled", "orders/create", "orders/updated", "products/update", "inventory_levels/update"]
+  uri = "/api/webhooks/shopify/app"
+
+  [webhooks.privacy_compliance]
+  customer_data_request_url = "/api/webhooks/shopify/gdpr/customers-data-request"
+  customer_deletion_url = "/api/webhooks/shopify/gdpr/customers-redact"
+  shop_deletion_url = "/api/webhooks/shopify/gdpr/shop-redact"
+
+[app_proxy]
+url = "https://app.shopmata.com/shopify/proxy"
+subpath = "shopmata-assistant"
+prefix = "apps"
+
+[pos]
+embedded = false

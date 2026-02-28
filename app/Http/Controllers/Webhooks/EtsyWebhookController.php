@@ -41,6 +41,11 @@ class EtsyWebhookController extends BaseWebhookController
         return hash_equals($expectedSignature, $signature);
     }
 
+    protected function shouldProcessEvent(string $eventType): bool
+    {
+        return in_array($eventType, ['receipt.created', 'receipt.updated', 'listing.updated'], true);
+    }
+
     protected function extractExternalId(Request $request): ?string
     {
         $payload = $request->all();

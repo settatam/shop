@@ -53,6 +53,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
+            'isShopmata' => str_contains($request->getHost(), 'shopmata'),
             'auth' => [
                 'user' => $request->user(),
             ],

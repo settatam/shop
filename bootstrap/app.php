@@ -5,7 +5,9 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetCurrentStore;
 use App\Http\Middleware\SetPortalStore;
+use App\Http\Middleware\ShopifyFrameAncestors;
 use App\Http\Middleware\VerifyShopifyProxy;
+use App\Http\Middleware\VerifyShopifySessionToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -34,6 +36,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'products/*/generate-title',
             'products/*/generate-description',
             'shopify/proxy/*',
+            'shopify/app/*',
+            'shopify/embedded/*',
         ]);
 
         $middleware->web(append: [
@@ -53,6 +57,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'onboarding' => \App\Http\Middleware\EnsureOnboardingComplete::class,
             'portal.store' => SetPortalStore::class,
             'verify.shopify.proxy' => VerifyShopifyProxy::class,
+            'verify.shopify.session' => VerifyShopifySessionToken::class,
+            'shopify.frame' => ShopifyFrameAncestors::class,
         ]);
 
         $middleware->redirectGuestsTo(function ($request) {

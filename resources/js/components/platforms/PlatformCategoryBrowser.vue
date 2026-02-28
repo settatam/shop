@@ -18,6 +18,8 @@ interface PlatformCategory {
     name: string;
     ebay_category_id?: string;
     etsy_id?: string;
+    walmart_category_id?: string;
+    amazon_category_id?: string;
     level: number;
     parent_id: number | null;
     children_count: number;
@@ -72,6 +74,8 @@ const canSuggest = computed(() => props.platform === 'ebay' && !!props.categoryN
 const apiEndpoints: Record<string, string> = {
     ebay: '/api/taxonomy/ebay/categories',
     etsy: '/api/taxonomy/etsy/categories',
+    walmart: '/api/taxonomy/walmart/categories',
+    amazon: '/api/taxonomy/amazon/categories',
 };
 
 const endpoint = computed(() => apiEndpoints[props.platform] ?? '');
@@ -280,7 +284,7 @@ fetchCategories();
                 type="button"
                 class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted/50 transition-colors"
                 :class="{
-                    'bg-primary/5 border-l-2 border-l-primary': selectedCategoryId === String(cat.ebay_category_id || cat.etsy_id || cat.id),
+                    'bg-primary/5 border-l-2 border-l-primary': selectedCategoryId === String(cat.ebay_category_id || cat.etsy_id || cat.walmart_category_id || cat.amazon_category_id || cat.id),
                 }"
                 @click="cat.has_children ? navigateToCategory(cat) : selectCategory(cat)"
             >

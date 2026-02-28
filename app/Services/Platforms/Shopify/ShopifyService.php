@@ -487,6 +487,7 @@ class ShopifyService extends BasePlatformService
             'orders/updated',
             'products/update',
             'inventory_levels/update',
+            'app/uninstalled',
         ];
 
         foreach ($webhooks as $topic) {
