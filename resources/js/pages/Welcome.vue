@@ -180,7 +180,11 @@ withDefaults(
         <!-- Footer -->
         <footer class="border-t border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-900">
             <div class="mx-auto max-w-7xl px-6 py-12 lg:px-8">
-                <p class="text-center text-sm leading-5 text-gray-500 dark:text-gray-400">
+                <div class="flex items-center justify-center gap-6">
+                    <Link href="/terms" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Terms</Link>
+                    <Link href="/privacy" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Privacy</Link>
+                </div>
+                <p class="mt-4 text-center text-sm leading-5 text-gray-500 dark:text-gray-400">
                     &copy; {{ new Date().getFullYear() }} Shopmata. All rights reserved.
                 </p>
             </div>

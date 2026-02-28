@@ -117,9 +117,30 @@ import { Form, Head } from '@inertiajs/vue3';
             </div>
 
             <div>
+                <label class="flex items-start gap-2">
+                    <input
+                        id="terms_accepted"
+                        type="checkbox"
+                        name="terms_accepted"
+                        value="1"
+                        required
+                        :tabindex="6"
+                        class="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:focus:ring-indigo-500"
+                    />
+                    <span class="text-sm text-gray-600 dark:text-gray-400">
+                        I agree to the
+                        <a href="/terms" target="_blank" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">Terms of Service</a>
+                        and
+                        <a href="/privacy" target="_blank" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">Privacy Policy</a>
+                    </span>
+                </label>
+                <InputError :message="errors.terms_accepted" class="mt-2" />
+            </div>
+
+            <div>
                 <button
                     type="submit"
-                    :tabindex="6"
+                    :tabindex="7"
                     :disabled="processing"
                     class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
                     data-test="register-user-button"
@@ -133,7 +154,7 @@ import { Form, Head } from '@inertiajs/vue3';
                 Already have an account?
                 <TextLink
                     :href="login()"
-                    :tabindex="7"
+                    :tabindex="8"
                     class="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
                     Sign in

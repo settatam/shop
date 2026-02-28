@@ -73,7 +73,9 @@ class ShopifyAppController extends Controller
 
         $installService->provision($shop, $accessToken, $tokenData);
 
-        return redirect()->away("https://{$shop}/admin/apps");
+        $appHandle = 'shopmata-ai-assistant';
+
+        return redirect()->away("https://{$shop}/admin/apps/{$appHandle}");
     }
 
     /**

@@ -99,6 +99,21 @@
             }
         }
 
+        function getShopDomainFromToken(token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const dest = payload.dest || '';
+                return dest.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            } catch {
+                return null;
+            }
+        }
+
+        function redirectToInstall(shop) {
+            const installUrl = '{{ url("/shopify/app/install") }}?shop=' + encodeURIComponent(shop);
+            window.open(installUrl, '_top');
+        }
+
         async function apiFetch(path, options = {}) {
             const token = await getSessionToken();
             if (!token) return null;
@@ -112,6 +127,14 @@
                     ...(options.headers || {}),
                 },
             });
+
+            if (res.status === 404) {
+                const shop = getShopDomainFromToken(token);
+                if (shop) {
+                    redirectToInstall(shop);
+                    return null;
+                }
+            }
 
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));

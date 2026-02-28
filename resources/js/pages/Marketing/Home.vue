@@ -486,6 +486,8 @@ const steps = [
                         <a href="#about" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">About</a>
                         <a href="#faq" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">FAQ</a>
                         <a href="#pricing" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Pricing</a>
+                        <Link href="/terms" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Terms of Service</Link>
+                        <Link href="/privacy" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Privacy Policy</Link>
                         <Link :href="login()" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Sign in</Link>
                         <Link v-if="canRegister" :href="register()" class="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Register</Link>
                     </div>
