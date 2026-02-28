@@ -14,7 +14,7 @@ redirect_urls = ["https://shopmata.com/shopify/app/callback"]
 api_version = "2024-07"
 
   [[webhooks.subscriptions]]
-  topics = ["app/uninstalled", "orders/create", "orders/updated", "products/update", "inventory_levels/update"]
+  topics = ["app/uninstalled"]
   uri = "/api/webhooks/shopify/app"
 
   [webhooks.privacy_compliance]

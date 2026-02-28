@@ -3,6 +3,7 @@ api_version = "2024-07"
 [[extensions]]
 name = "Shopmata AI Assistant"
 handle = "shopmata-ai-assistant"
+uid = "d5030d08-ef29-373c-86a9-66dd6d8b631604e0fa7e"
 type = "theme"
 
   [extensions.capabilities]
