@@ -66,6 +66,18 @@ Schedule::command('reports:send-scheduled')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Sync eBay orders every 5 minutes
+Schedule::command('ebay:sync-orders')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Sync eBay listing statuses every 15 minutes
+Schedule::command('ebay:sync-listing-status')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Cleanup expired storefront chat sessions daily at 3am
 Schedule::command('storefront:cleanup-sessions')
     ->dailyAt('03:00')

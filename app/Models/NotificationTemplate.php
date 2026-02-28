@@ -318,6 +318,26 @@ class NotificationTemplate extends Model
                 'is_system' => true,
             ],
 
+            [
+                'slug' => 'chat-lead-captured',
+                'name' => 'Chat Lead Captured',
+                'channel' => NotificationChannel::TYPE_EMAIL,
+                'category' => 'customers',
+                'subject' => 'New Chat Lead: {{ customer.name }}',
+                'content' => '<h2>New Lead from Storefront Chat</h2>
+<p>A visitor to your online store shared their contact information during a chat conversation.</p>
+<table style="width:100%;border-collapse:collapse;font-size:14px">
+<tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;font-weight:600;width:140px">Name:</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb">{{ customer.name }}</td></tr>
+{% if customer.email %}<tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;font-weight:600">Email:</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb">{{ customer.email }}</td></tr>{% endif %}
+{% if customer.phone %}<tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;font-weight:600">Phone:</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb">{{ customer.phone }}</td></tr>{% endif %}
+{% if properties.interest %}<tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;font-weight:600">Interested In:</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb">{{ properties.interest }}</td></tr>{% endif %}
+<tr><td style="padding:8px 0;font-weight:600">Source:</td><td style="padding:8px 0">Storefront Chat</td></tr>
+</table>
+<p style="margin-top:16px">Follow up with this lead to convert their interest into a sale!</p>',
+                'available_variables' => ['customer', 'store', 'properties'],
+                'is_system' => true,
+            ],
+
             // Team notifications
             [
                 'slug' => 'team-invite',

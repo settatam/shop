@@ -2,7 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Models\PlatformListing;
 use App\Models\WebhookLog;
+use App\Services\Platforms\Ebay\EbayService;
 use App\Services\Returns\ReturnSyncService;
 use App\Services\Webhooks\OrderImportService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,7 +32,11 @@ class ProcessWebhookJob implements ShouldQueue
         try {
             $eventType = strtolower($this->webhookLog->event_type);
 
-            if ($this->isRefundEvent($eventType)) {
+            if ($this->isListingEvent($eventType)) {
+                $this->processListingWebhook();
+
+                return;
+            } elseif ($this->isRefundEvent($eventType)) {
                 $this->processRefundWebhook($returnSyncService);
             } elseif ($this->isOrderEvent($eventType)) {
                 $this->processOrderWebhook($orderImportService);
@@ -100,6 +106,61 @@ class ProcessWebhookJob implements ShouldQueue
         }
 
         return str_contains($eventType, 'refund');
+    }
+
+    protected function isListingEvent(string $eventType): bool
+    {
+        return in_array($eventType, ['item_sold', 'item_closed', 'item_suspended']);
+    }
+
+    protected function processListingWebhook(): void
+    {
+        $marketplace = $this->webhookLog->marketplace;
+
+        if (! $marketplace) {
+            throw new \RuntimeException('No store marketplace found for webhook');
+        }
+
+        $payload = $this->webhookLog->payload;
+        $eventType = strtolower($this->webhookLog->event_type);
+
+        $listingId = $payload['resource']['listingId']
+            ?? $payload['resource']['itemId']
+            ?? $payload['listingId']
+            ?? $payload['itemId']
+            ?? null;
+
+        if (! $listingId) {
+            $this->webhookLog->markAsSkipped('No listing ID in payload');
+
+            return;
+        }
+
+        $listing = PlatformListing::where('store_marketplace_id', $marketplace->id)
+            ->where('external_listing_id', $listingId)
+            ->first();
+
+        if (! $listing) {
+            $this->webhookLog->markAsSkipped("Listing not found for external ID: {$listingId}");
+
+            return;
+        }
+
+        $newStatus = match ($eventType) {
+            'item_closed' => PlatformListing::STATUS_ENDED,
+            'item_suspended' => PlatformListing::STATUS_ERROR,
+            default => null,
+        };
+
+        if ($newStatus) {
+            app(EbayService::class)->updateListingStatusFromEbay($listing, $newStatus);
+        }
+
+        $this->webhookLog->markAsCompleted([
+            'listing_id' => $listing->id,
+            'event' => $eventType,
+            'new_status' => $newStatus,
+        ]);
     }
 
     protected function processOrderWebhook(OrderImportService $orderImportService): void

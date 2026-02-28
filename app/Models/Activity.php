@@ -164,6 +164,8 @@ class Activity extends Model
 
     public const CUSTOMERS_VIEW_HISTORY = 'customers.view_history';
 
+    public const CUSTOMERS_CHAT_LEAD = 'customers.chat_lead';
+
     // Integration Activities
     public const INTEGRATIONS_VIEW = 'integrations.view';
 
@@ -422,6 +424,7 @@ class Activity extends Model
             self::CUSTOMERS_DELETE => ['name' => 'Delete Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'Remove customers'],
             self::CUSTOMERS_EXPORT => ['name' => 'Export Customers', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'Export customer data'],
             self::CUSTOMERS_VIEW_HISTORY => ['name' => 'View Customer History', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'View customer order history'],
+            self::CUSTOMERS_CHAT_LEAD => ['name' => 'Chat Lead Captured', 'category' => self::CATEGORY_CUSTOMERS, 'description' => 'A new lead was captured from the storefront chat'],
 
             // Integrations
             self::INTEGRATIONS_VIEW => ['name' => 'View Integrations', 'category' => self::CATEGORY_INTEGRATIONS, 'description' => 'View connected platforms'],

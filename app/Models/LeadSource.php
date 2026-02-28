@@ -42,6 +42,7 @@ class LeadSource extends Model
         ['name' => 'Referral', 'slug' => 'referral'],
         ['name' => 'Google Search', 'slug' => 'google-search'],
         ['name' => 'Email Campaign', 'slug' => 'email-campaign'],
+        ['name' => 'Storefront Chat', 'slug' => 'storefront-chat'],
         ['name' => 'Other', 'slug' => 'other'],
     ];
 
@@ -60,6 +61,17 @@ class LeadSource extends Model
     public function customers(): HasMany
     {
         return $this->hasMany(Customer::class);
+    }
+
+    /**
+     * Get or create the "Storefront Chat" lead source for a store.
+     */
+    public static function getStorefrontChatSource(int $storeId): self
+    {
+        return self::firstOrCreate(
+            ['store_id' => $storeId, 'slug' => 'storefront-chat'],
+            ['name' => 'Storefront Chat', 'sort_order' => 6]
+        );
     }
 
     /**

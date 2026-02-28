@@ -43,13 +43,29 @@ class EbayWebhookController extends BaseWebhookController
         return hash_equals($expectedSignature, $signature);
     }
 
+    protected function shouldProcessEvent(string $eventType): bool
+    {
+        $ebayEvents = [
+            'MARKETPLACE_ACCOUNT_DELETION',
+            'ITEM_SOLD',
+            'ITEM_CLOSED',
+            'ITEM_SUSPENDED',
+        ];
+
+        return in_array($eventType, $ebayEvents) || parent::shouldProcessEvent($eventType);
+    }
+
     protected function extractExternalId(Request $request): ?string
     {
         $payload = $request->all();
 
         return $payload['resource']['orderId']
+            ?? $payload['resource']['listingId']
+            ?? $payload['resource']['itemId']
             ?? $payload['orderId']
             ?? $payload['OrderID']
+            ?? $payload['listingId']
+            ?? $payload['itemId']
             ?? null;
     }
 }

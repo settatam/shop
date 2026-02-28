@@ -16,6 +16,7 @@ class StorefrontChatSession extends Model
     protected $fillable = [
         'store_id',
         'store_marketplace_id',
+        'customer_id',
         'visitor_id',
         'title',
         'last_message_at',
@@ -33,6 +34,16 @@ class StorefrontChatSession extends Model
     public function marketplace(): BelongsTo
     {
         return $this->belongsTo(StoreMarketplace::class, 'store_marketplace_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function linkCustomer(int $customerId): void
+    {
+        $this->update(['customer_id' => $customerId]);
     }
 
     public function messages(): HasMany

@@ -66,8 +66,12 @@ class StorefrontChatService
                     'status' => $this->toolExecutor->getToolDescription($event['name']),
                 ];
 
-                // Execute the tool
-                $result = $this->toolExecutor->execute($event['name'], $event['input'], $store->id);
+                // Execute the tool (inject session_id for lead capture)
+                $toolInput = $event['input'];
+                if ($event['name'] === 'capture_lead') {
+                    $toolInput['session_id'] = $session->id;
+                }
+                $result = $this->toolExecutor->execute($event['name'], $toolInput, $store->id);
 
                 yield [
                     'type' => 'tool_result',
@@ -173,6 +177,14 @@ class StorefrontChatService
         8. For availability, only say "in stock" or "currently unavailable" — never mention specific quantities.
         9. Keep responses concise and helpful. Customers want quick answers.
 
+        LEAD CAPTURE:
+        10. When a customer shows strong buying interest (asks about specific high-value items, wants pricing details, inquires about custom orders, asks to be contacted, or wants to schedule an appointment), naturally offer to connect them with the store team.
+        11. To connect them, ask for their name and either email address or phone number in a conversational way. For example: "I'd love to have one of our specialists reach out to you about this piece. Could I get your name and best email or phone number?"
+        12. If the customer provides their contact details, use the capture_lead tool to save their information. Include a brief summary of what they're interested in.
+        13. Never pressure the customer for contact information. If they decline or seem hesitant, respect their wishes and continue helping them as normal.
+        14. If a customer proactively volunteers their name and contact info (e.g., "I'm Sarah, my email is sarah@example.com"), capture it right away.
+        15. You do not need to ask for the session_id — it will be provided automatically.
+
         WHAT YOU MUST NEVER DO:
         - Never reveal product costs, wholesale prices, or profit margins
         - Never share exact inventory quantities (only in-stock or out-of-stock)
@@ -182,7 +194,7 @@ class StorefrontChatService
         - Never process orders or payments — direct customers to the product page for purchases
         - Never discuss topics unrelated to the store, its products, or jewelry in general
 
-        Use the available tools to search products, get details, check availability, and retrieve store policies. Always prefer tool results over your general knowledge.
+        Use the available tools to search products, get details, check availability, retrieve store policies, and capture leads. Always prefer tool results over your general knowledge.
         PROMPT;
 
         if ($knowledgeBase) {

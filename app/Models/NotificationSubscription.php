@@ -260,6 +260,11 @@ class NotificationSubscription extends Model
                 'name' => 'Welcome New Customers',
                 'recipients' => [['type' => self::RECIPIENT_CUSTOMER]],
             ],
+            'chat-lead-captured' => [
+                'activity' => Activity::CUSTOMERS_CHAT_LEAD,
+                'name' => 'Notify on Chat Leads',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
             'team-invite' => [
                 'activity' => Activity::TEAM_INVITE,
                 'name' => 'Team Member Invitation',

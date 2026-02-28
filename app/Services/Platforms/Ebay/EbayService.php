@@ -3,6 +3,8 @@
 namespace App\Services\Platforms\Ebay;
 
 use App\Enums\Platform;
+use App\Models\Activity;
+use App\Models\ActivityLog;
 use App\Models\MarketplacePolicy;
 use App\Models\PlatformListing;
 use App\Models\PlatformOrder;
@@ -206,12 +208,19 @@ class EbayService extends BasePlatformService
     {
         $this->ensureValidToken($connection);
 
+        $product->loadMissing('variants');
+        $variants = $product->variants;
+
+        if ($variants->count() > 1) {
+            return $this->pushMultiVariantProduct($product, $connection);
+        }
+
         // Load existing listing for per-listing setting overrides
         $listing = PlatformListing::where('product_id', $product->id)
             ->where('store_marketplace_id', $connection->id)
             ->first();
 
-        $sku = $product->variants->first()?->sku ?? $product->handle;
+        $sku = $variants->first()?->sku ?? $product->handle;
 
         // Build the full listing data to get aspects/item specifics
         $listingBuilder = app(\App\Services\Platforms\ListingBuilderService::class);
@@ -297,6 +306,306 @@ class EbayService extends BasePlatformService
         return $listing;
     }
 
+    /**
+     * Push a multi-variant product to eBay using Inventory Item Groups.
+     */
+    protected function pushMultiVariantProduct(Product $product, StoreMarketplace $connection): PlatformListing
+    {
+        $listing = PlatformListing::where('product_id', $product->id)
+            ->where('store_marketplace_id', $connection->id)
+            ->first();
+
+        $listingBuilder = app(\App\Services\Platforms\ListingBuilderService::class);
+        $builtListing = $listingBuilder->buildListing($product, $connection);
+        $aspects = $builtListing['aspects'] ?? null;
+
+        $groupKey = $product->handle ?? "product-{$product->id}";
+        $variants = $product->variants;
+        $variantSkus = [];
+        $offerIds = [];
+
+        // Step 1: Create inventory items for each variant
+        foreach ($variants as $variant) {
+            $sku = $variant->sku ?? "{$groupKey}-{$variant->id}";
+            $variantSkus[] = $sku;
+
+            $inventoryItem = $this->mapVariantToInventoryItem($variant, $product, $aspects, $listing);
+
+            $this->ebayRequest(
+                $connection,
+                'PUT',
+                "/sell/inventory/v1/inventory_item/{$sku}",
+                $inventoryItem
+            );
+        }
+
+        // Step 2: Create/update inventory item group
+        $variationAspects = $this->buildVariationAspects($variants);
+
+        $groupPayload = [
+            'title' => $listing?->getEffectiveTitle() ?? $product->title,
+            'description' => $listing?->getEffectiveDescription() ?? $product->description ?? '',
+            'imageUrls' => $listing?->getEffectiveImages() ?: $product->images->pluck('url')->all(),
+            'aspects' => $aspects ?? [],
+            'variantSKUs' => $variantSkus,
+            'variesBy' => [
+                'aspectsImageVariesBy' => array_keys($variationAspects),
+                'specifications' => collect($variationAspects)->map(fn (array $values, string $name) => [
+                    'name' => $name,
+                    'values' => $values,
+                ])->values()->all(),
+            ],
+        ];
+
+        $this->ebayRequest(
+            $connection,
+            'PUT',
+            "/sell/inventory/v1/inventory_item_group/{$groupKey}",
+            $groupPayload
+        );
+
+        // Step 3: Create/update offers for each variant
+        $existingOfferIds = $listing?->platform_data['offer_ids'] ?? [];
+
+        foreach ($variants as $index => $variant) {
+            $sku = $variantSkus[$index];
+            $offer = $this->mapVariantToOffer($variant, $sku, $product, $connection, $listing);
+            $existingOfferId = $existingOfferIds[$sku] ?? null;
+
+            $offerId = $this->createOrUpdateOffer($connection, $offer, $existingOfferId);
+            $offerIds[$sku] = $offerId;
+        }
+
+        // Step 4: Save state before publishing
+        $platformData = array_merge($listing?->platform_data ?? [], [
+            'group_key' => $groupKey,
+            'variant_skus' => $variantSkus,
+            'offer_ids' => $offerIds,
+            'multi_variant' => true,
+        ]);
+
+        if (! $listing) {
+            $listing = PlatformListing::create([
+                'store_marketplace_id' => $connection->id,
+                'product_id' => $product->id,
+                'status' => PlatformListing::STATUS_PENDING,
+                'platform_data' => $platformData,
+            ]);
+        } else {
+            $listing->update(['platform_data' => $platformData]);
+        }
+
+        // Step 5: Publish via inventory item group
+        $publishResponse = $this->ebayRequest(
+            $connection,
+            'POST',
+            '/sell/inventory/v1/offer/publish_by_inventory_item_group',
+            ['inventoryItemGroupKey' => $groupKey]
+        );
+
+        $listingId = $publishResponse['listingId'] ?? $groupKey;
+
+        $listing->update([
+            'external_listing_id' => $listingId,
+            'status' => PlatformListing::STATUS_LISTED,
+            'listing_url' => "https://www.ebay.com/itm/{$listingId}",
+            'platform_data' => array_merge($listing->platform_data ?? [], [
+                'listing_id' => $listingId,
+            ]),
+            'last_synced_at' => now(),
+            'published_at' => now(),
+        ]);
+
+        // Step 6: Sync variant external IDs to PlatformListingVariant records
+        foreach ($variants as $index => $variant) {
+            $sku = $variantSkus[$index];
+
+            \App\Models\PlatformListingVariant::updateOrCreate(
+                [
+                    'platform_listing_id' => $listing->id,
+                    'product_variant_id' => $variant->id,
+                ],
+                [
+                    'sku' => $sku,
+                    'price' => $variant->price,
+                    'quantity' => $variant->quantity,
+                    'external_variant_id' => $offerIds[$sku] ?? null,
+                    'external_inventory_item_id' => $sku,
+                    'platform_data' => [
+                        'offer_id' => $offerIds[$sku] ?? null,
+                    ],
+                ]
+            );
+        }
+
+        return $listing;
+    }
+
+    /**
+     * Map a product variant to an eBay inventory item payload.
+     *
+     * @param  array<string, array<string, string[]>>|null  $aspects  Pre-built aspects from ListingBuilderService
+     */
+    protected function mapVariantToInventoryItem(
+        \App\Models\ProductVariant $variant,
+        Product $product,
+        ?array $aspects = null,
+        ?PlatformListing $listing = null
+    ): array {
+        $item = [
+            'product' => [
+                'title' => $listing?->getEffectiveTitle() ?? $product->title,
+                'description' => $listing?->getEffectiveDescription() ?? $product->description ?? '',
+                'imageUrls' => $listing?->getEffectiveImages() ?: $product->images->pluck('url')->all(),
+            ],
+            'condition' => $this->resolveConditionEnum($listing?->getEffectiveSetting('default_condition') ?? $product->condition ?? 'NEW'),
+            'availability' => [
+                'shipToLocationAvailability' => [
+                    'quantity' => $variant->quantity ?? 0,
+                ],
+            ],
+        ];
+
+        // Include product-level aspects plus variant-specific aspect values
+        $variantAspects = $aspects ?? [];
+        foreach ($variant->options as $name => $value) {
+            $variantAspects[$name] = [$value];
+        }
+
+        if (! empty($variantAspects)) {
+            $item['product']['aspects'] = $variantAspects;
+        }
+
+        // Include package weight
+        $weight = $variant->weight ?? $product->weight;
+        $weightUnit = strtoupper($variant->weight_unit ?? $product->weight_unit ?? 'lb');
+        $ebayWeightUnit = match ($weightUnit) {
+            'LB', 'POUND' => 'POUND',
+            'OZ', 'OUNCE' => 'OUNCE',
+            'KG', 'KILOGRAM' => 'KILOGRAM',
+            'G', 'GRAM' => 'GRAM',
+            default => 'POUND',
+        };
+
+        $item['packageWeightAndSize'] = [
+            'weight' => [
+                'value' => (float) ($weight ?: 1),
+                'unit' => $ebayWeightUnit,
+            ],
+        ];
+
+        return $item;
+    }
+
+    /**
+     * Map a product variant to an eBay offer payload.
+     */
+    protected function mapVariantToOffer(
+        \App\Models\ProductVariant $variant,
+        string $sku,
+        Product $product,
+        StoreMarketplace $connection,
+        ?PlatformListing $listing = null
+    ): array {
+        $credentials = $connection->credentials ?? [];
+
+        $setting = function (string $key, mixed $default = null) use ($listing, $connection) {
+            if ($listing) {
+                return $listing->getEffectiveSetting($key, $default);
+            }
+
+            return $connection->settings[$key] ?? $default;
+        };
+
+        $format = $setting('listing_type', 'FIXED_PRICE');
+        $price = (float) ($variant->price ?? 0);
+
+        $auctionMarkup = $setting('auction_markup');
+        $fixedMarkup = $setting('fixed_price_markup');
+        if ($format === 'AUCTION' && ! empty($auctionMarkup)) {
+            $price = $price * (1 + $auctionMarkup / 100);
+        } elseif ($format === 'FIXED_PRICE' && ! empty($fixedMarkup)) {
+            $price = $price * (1 + $fixedMarkup / 100);
+        }
+
+        $marketplaceId = $setting('marketplace_id', 'EBAY_US');
+
+        return [
+            'sku' => $sku,
+            'marketplaceId' => $marketplaceId,
+            'format' => $format,
+            'listingDescription' => $listing?->getEffectiveDescription() ?? $product->description ?? '',
+            'availableQuantity' => $variant->quantity ?? 0,
+            'pricingSummary' => [
+                'price' => [
+                    'value' => (string) round($price, 2),
+                    'currency' => $this->getCurrencyForMarketplace($marketplaceId),
+                ],
+            ],
+            'listingPolicies' => [
+                'fulfillmentPolicyId' => $setting('fulfillment_policy_id', $credentials['fulfillment_policy_id'] ?? null),
+                'paymentPolicyId' => $setting('payment_policy_id', $credentials['payment_policy_id'] ?? null),
+                'returnPolicyId' => $setting('return_policy_id', $credentials['return_policy_id'] ?? null),
+            ],
+            'categoryId' => $setting('primary_category_id', $listing?->platform_category_id ?? $product->category?->platform_category_id ?? '1'),
+            'merchantLocationKey' => $setting('location_key', $credentials['location_key'] ?? 'default'),
+        ];
+    }
+
+    /**
+     * Build variation aspects from product variants.
+     *
+     * @return array<string, string[]> e.g. {"Color": ["Red", "Blue"], "Size": ["S", "M"]}
+     */
+    protected function buildVariationAspects(Collection $variants): array
+    {
+        $aspects = [];
+
+        foreach ($variants as $variant) {
+            foreach ($variant->options as $name => $value) {
+                if (! isset($aspects[$name])) {
+                    $aspects[$name] = [];
+                }
+                if (! in_array($value, $aspects[$name])) {
+                    $aspects[$name][] = $value;
+                }
+            }
+        }
+
+        return $aspects;
+    }
+
+    /**
+     * Create or update an eBay offer, handling duplicate offer recovery.
+     */
+    protected function createOrUpdateOffer(StoreMarketplace $connection, array $offer, ?string $existingOfferId = null): string
+    {
+        if ($existingOfferId) {
+            try {
+                $this->ebayRequest($connection, 'PUT', "/sell/inventory/v1/offer/{$existingOfferId}", $offer);
+
+                return $existingOfferId;
+            } catch (\Exception $e) {
+                Log::warning("EbayService: Stale offer {$existingOfferId}, creating new: {$e->getMessage()}");
+            }
+        }
+
+        try {
+            $offerResponse = $this->ebayRequest($connection, 'POST', '/sell/inventory/v1/offer', $offer);
+
+            return $offerResponse['offerId'];
+        } catch (\Exception $e) {
+            $recoveredId = $this->extractExistingOfferId($e->getMessage());
+            if ($recoveredId) {
+                $this->ebayRequest($connection, 'PUT', "/sell/inventory/v1/offer/{$recoveredId}", $offer);
+
+                return $recoveredId;
+            }
+
+            throw $e;
+        }
+    }
+
     public function updateListing(PlatformListing $listing): PlatformListing
     {
         $product = $listing->product;
@@ -321,21 +630,56 @@ class EbayService extends BasePlatformService
 
     public function deleteListing(PlatformListing $listing): void
     {
-        $connection = $listing->connection;
+        $connection = $listing->marketplace;
         $this->ensureValidToken($connection);
 
-        $offerId = $listing->platform_data['offer_id'] ?? null;
+        $isMultiVariant = $listing->platform_data['multi_variant'] ?? false;
 
-        if ($offerId) {
-            $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/offer/{$offerId}");
+        if ($isMultiVariant) {
+            // Delete all variant offers
+            foreach ($listing->platform_data['offer_ids'] ?? [] as $sku => $offerId) {
+                try {
+                    $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/offer/{$offerId}");
+                } catch (\Throwable $e) {
+                    Log::warning("EbayService: Failed to delete offer {$offerId}: {$e->getMessage()}");
+                }
+            }
+
+            // Delete inventory item group
+            $groupKey = $listing->platform_data['group_key'] ?? null;
+            if ($groupKey) {
+                try {
+                    $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/inventory_item_group/{$groupKey}");
+                } catch (\Throwable $e) {
+                    Log::warning("EbayService: Failed to delete group {$groupKey}: {$e->getMessage()}");
+                }
+            }
+
+            // Delete individual inventory items
+            foreach ($listing->platform_data['variant_skus'] ?? [] as $sku) {
+                try {
+                    $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/inventory_item/{$sku}");
+                } catch (\Throwable $e) {
+                    Log::warning("EbayService: Failed to delete inventory item {$sku}: {$e->getMessage()}");
+                }
+            }
+
+            // Clean up listing variant records
+            $listing->listingVariants()->delete();
+        } else {
+            $offerId = $listing->platform_data['offer_id'] ?? null;
+            if ($offerId) {
+                $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/offer/{$offerId}");
+            }
+
+            $sku = $listing->platform_data['sku'] ?? null;
+            if ($sku) {
+                $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/inventory_item/{$sku}");
+            }
         }
 
-        $sku = $listing->platform_data['sku'] ?? null;
-        if ($sku) {
-            $this->ebayRequest($connection, 'DELETE', "/sell/inventory/v1/inventory_item/{$sku}");
-        }
-
-        $listing->delete();
+        // Use query builder to bypass PlatformListing::delete() override which archives
+        PlatformListing::withTrashed()->where('id', $listing->id)->forceDelete();
     }
 
     public function unlistListing(PlatformListing $listing): PlatformListing
@@ -343,15 +687,26 @@ class EbayService extends BasePlatformService
         $connection = $listing->marketplace;
         $this->ensureValidToken($connection);
 
-        $offerId = $listing->platform_data['offer_id'] ?? null;
+        $isMultiVariant = $listing->platform_data['multi_variant'] ?? false;
 
-        if ($offerId) {
-            // Withdraw the offer (ends the listing but keeps the inventory item)
-            $this->ebayRequest($connection, 'POST', "/sell/inventory/v1/offer/{$offerId}/withdraw");
+        if ($isMultiVariant) {
+            // Withdraw all variant offers
+            foreach ($listing->platform_data['offer_ids'] ?? [] as $sku => $offerId) {
+                try {
+                    $this->ebayRequest($connection, 'POST', "/sell/inventory/v1/offer/{$offerId}/withdraw");
+                } catch (\Throwable $e) {
+                    Log::warning("EbayService: Failed to withdraw offer {$offerId}: {$e->getMessage()}");
+                }
+            }
+        } else {
+            $offerId = $listing->platform_data['offer_id'] ?? null;
+            if ($offerId) {
+                $this->ebayRequest($connection, 'POST', "/sell/inventory/v1/offer/{$offerId}/withdraw");
+            }
         }
 
         $listing->update([
-            'status' => PlatformListing::STATUS_UNLISTED,
+            'status' => PlatformListing::STATUS_ENDED,
             'last_synced_at' => now(),
         ]);
 
@@ -493,6 +848,9 @@ class EbayService extends BasePlatformService
 
         $topics = [
             'MARKETPLACE_ACCOUNT_DELETION',
+            'ITEM_SOLD',
+            'ITEM_CLOSED',
+            'ITEM_SUSPENDED',
         ];
 
         foreach ($topics as $topic) {
@@ -515,6 +873,9 @@ class EbayService extends BasePlatformService
 
         match ($topic) {
             'MARKETPLACE_ACCOUNT_DELETION' => $this->handleAccountDeletion($data, $connection),
+            'ITEM_SOLD' => $this->handleItemSold($data, $connection),
+            'ITEM_CLOSED' => $this->handleItemClosed($data, $connection),
+            'ITEM_SUSPENDED' => $this->handleItemSuspended($data, $connection),
             default => null,
         };
     }
@@ -801,7 +1162,7 @@ class EbayService extends BasePlatformService
     /**
      * Get the currency code for a given eBay marketplace.
      */
-    protected function getCurrencyForMarketplace(string $marketplaceId): string
+    public function getCurrencyForMarketplace(string $marketplaceId): string
     {
         return match ($marketplaceId) {
             'EBAY_GB' => 'GBP',
@@ -941,8 +1302,107 @@ class EbayService extends BasePlatformService
         return collect($result);
     }
 
+    /**
+     * Fetch the status of a single eBay offer.
+     *
+     * @return array{status: string, listingId: ?string, availableQuantity: ?int}|null
+     */
+    public function getOfferStatus(StoreMarketplace $connection, string $offerId): ?array
+    {
+        try {
+            $data = $this->ebayRequest($connection, 'GET', "/sell/inventory/v1/offer/{$offerId}");
+
+            return [
+                'status' => $data['status'] ?? 'UNKNOWN',
+                'listingId' => $data['listing']['listingId'] ?? null,
+                'availableQuantity' => $data['availableQuantity'] ?? null,
+            ];
+        } catch (\Throwable $e) {
+            if (str_contains($e->getMessage(), '404') || str_contains($e->getMessage(), 'Not Found')) {
+                return null;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Update a listing's status based on what eBay reports and log the change.
+     */
+    public function updateListingStatusFromEbay(PlatformListing $listing, string $newStatus): void
+    {
+        $oldStatus = $listing->status;
+
+        if ($oldStatus === $newStatus) {
+            return;
+        }
+
+        $listing->update(['status' => $newStatus]);
+
+        $storeId = $listing->marketplace?->store_id;
+
+        if ($storeId) {
+            ActivityLog::create([
+                'store_id' => $storeId,
+                'activity_slug' => Activity::LISTINGS_STATUS_CHANGE,
+                'subject_type' => $listing->getMorphClass(),
+                'subject_id' => $listing->getKey(),
+                'properties' => [
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                    'source' => 'ebay_sync',
+                ],
+                'description' => "eBay listing status changed from {$oldStatus} to {$newStatus}",
+            ]);
+        }
+    }
+
     protected function handleAccountDeletion(array $data, StoreMarketplace $connection): void
     {
         $connection->update(['status' => 'inactive']);
+    }
+
+    protected function handleItemSold(array $data, StoreMarketplace $connection): void
+    {
+        Log::info('[eBay] Item sold webhook received', [
+            'connection_id' => $connection->id,
+            'data' => $data,
+        ]);
+
+        // Order sync will pick up the actual order — just log here
+    }
+
+    protected function handleItemClosed(array $data, StoreMarketplace $connection): void
+    {
+        $listingId = $data['resource']['listingId'] ?? $data['listingId'] ?? null;
+
+        if (! $listingId) {
+            return;
+        }
+
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
+            ->where('external_listing_id', $listingId)
+            ->first();
+
+        if ($listing) {
+            $this->updateListingStatusFromEbay($listing, PlatformListing::STATUS_ENDED);
+        }
+    }
+
+    protected function handleItemSuspended(array $data, StoreMarketplace $connection): void
+    {
+        $listingId = $data['resource']['listingId'] ?? $data['listingId'] ?? null;
+
+        if (! $listingId) {
+            return;
+        }
+
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
+            ->where('external_listing_id', $listingId)
+            ->first();
+
+        if ($listing) {
+            $this->updateListingStatusFromEbay($listing, PlatformListing::STATUS_ERROR);
+        }
     }
 }
