@@ -3,6 +3,7 @@
 namespace App\Services\StorefrontChat;
 
 use App\Services\Chat\Tools\ChatToolInterface;
+use App\Services\StorefrontChat\Tools\StorefrontAddToCartTool;
 use App\Services\StorefrontChat\Tools\StorefrontAvailabilityTool;
 use App\Services\StorefrontChat\Tools\StorefrontLeadCaptureTool;
 use App\Services\StorefrontChat\Tools\StorefrontProductCompareTool;
@@ -23,6 +24,7 @@ class StorefrontChatToolExecutor
         $this->register(new StorefrontStoreInfoTool);
         $this->register(new StorefrontProductCompareTool);
         $this->register(new StorefrontLeadCaptureTool);
+        $this->register(new StorefrontAddToCartTool);
     }
 
     public function register(ChatToolInterface $tool): void
@@ -78,6 +80,7 @@ class StorefrontChatToolExecutor
             'get_store_info' => 'Looking up store information...',
             'compare_products' => 'Comparing products...',
             'capture_lead' => 'Saving contact information...',
+            'add_to_cart' => 'Adding to cart...',
             default => 'Processing...',
         };
     }

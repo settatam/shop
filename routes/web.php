@@ -64,6 +64,16 @@ Route::prefix('shopify/proxy')
 
 /*
 |--------------------------------------------------------------------------
+| Voice Gateway Internal API (authenticated via X-Internal-Key header)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('api/storefront')->group(function () {
+    Route::get('voice-config', [StorefrontChatController::class, 'voiceConfig'])->name('storefront.voice-config');
+    Route::post('tools/{tool}', [StorefrontChatController::class, 'executeTool'])->name('storefront.tools.execute');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Shopify App Install Routes (Public, No Auth)
 |--------------------------------------------------------------------------
 */

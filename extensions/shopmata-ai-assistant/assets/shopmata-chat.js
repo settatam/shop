@@ -1,257 +1,215 @@
 (function () {
   'use strict';
+  var r = document.getElementById('shopmata-chat-root');
+  if (!r) return;
+  var ce = function (t) { return document.createElement(t); };
+  var pu = r.dataset.proxyUrl || '/apps/shopmata-assistant';
+  var ac = r.dataset.accentColor || '#1a1a2e';
+  var pos = r.dataset.position || 'right';
+  var wm = r.dataset.welcomeMessage || 'Hi! How can I help you today?';
+  var an = r.dataset.assistantName || 'Assistant';
+  var sh = r.dataset.shop || '';
+  document.documentElement.style.setProperty('--smc-accent', ac);
 
-  const root = document.getElementById('shopmata-chat-root');
-  if (!root) return;
-
-  const proxyUrl = root.dataset.proxyUrl || '/apps/shopmata-assistant';
-  const accentColor = root.dataset.accentColor || '#1a1a2e';
-  const position = root.dataset.position || 'right';
-  const welcomeMessage = root.dataset.welcomeMessage || 'Hi! How can I help you today?';
-  const assistantName = root.dataset.assistantName || 'Assistant';
-  const shop = root.dataset.shop || '';
-
-  document.documentElement.style.setProperty('--smc-accent', accentColor);
-
-  function getVisitorId() {
-    let id = localStorage.getItem('smc_visitor_id');
+  function gvid() {
+    var id = localStorage.getItem('smc_visitor_id');
     if (!id) {
       id = crypto.randomUUID ? crypto.randomUUID() : 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2);
       localStorage.setItem('smc_visitor_id', id);
     }
     return id;
   }
-
-  function getSessionId() {
-    const data = localStorage.getItem('smc_session');
-    if (!data) return null;
+  function gsid() {
+    var d = localStorage.getItem('smc_session');
+    if (!d) return null;
     try {
-      const parsed = JSON.parse(data);
-      if (parsed.expires_at && new Date(parsed.expires_at) < new Date()) {
-        localStorage.removeItem('smc_session');
-        return null;
-      }
-      return parsed.id;
+      var p = JSON.parse(d);
+      if (p.expires_at && new Date(p.expires_at) < new Date()) { localStorage.removeItem('smc_session'); return null; }
+      return p.id;
     } catch { return null; }
   }
+  function ssid(id, ex) { localStorage.setItem('smc_session', JSON.stringify({ id: id, expires_at: ex })); }
 
-  function setSessionId(id, expiresAt) {
-    localStorage.setItem('smc_session', JSON.stringify({ id, expires_at: expiresAt }));
-  }
+  var vid = gvid(), sid = gsid(), io = false, str = false, msgs = [];
 
-  const visitorId = getVisitorId();
-  let sessionId = getSessionId();
-  let isOpen = false;
-  let isStreaming = false;
-  let messages = [];
+  var tb = ce('button');
+  tb.className = 'smc-toggle smc-' + pos;
+  tb.setAttribute('aria-label', 'Open chat');
+  tb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>';
 
-  const toggleBtn = document.createElement('button');
-  toggleBtn.className = 'smc-toggle smc-' + position;
-  toggleBtn.setAttribute('aria-label', 'Open chat');
-  toggleBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>';
+  var pn = ce('div');
+  pn.className = 'smc-panel smc-' + pos;
+  var hd = ce('div');
+  hd.className = 'smc-header';
+  var ht = ce('h3');
+  ht.className = 'smc-header-title';
+  ht.textContent = an;
+  var cb = ce('button');
+  cb.className = 'smc-header-close';
+  cb.setAttribute('aria-label', 'Close chat');
+  cb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  hd.appendChild(ht);
+  hd.appendChild(cb);
 
-  const panel = document.createElement('div');
-  panel.className = 'smc-panel smc-' + position;
+  var me = ce('div');
+  me.className = 'smc-messages';
+  var we = ce('div');
+  we.className = 'smc-welcome';
+  we.textContent = wm;
+  me.appendChild(we);
 
-  const header = document.createElement('div');
-  header.className = 'smc-header';
+  var ia = ce('div');
+  ia.className = 'smc-input-area';
+  var inp = ce('textarea');
+  inp.className = 'smc-input';
+  inp.placeholder = 'Type your message...';
+  inp.rows = 1;
 
-  const headerTitle = document.createElement('h3');
-  headerTitle.className = 'smc-header-title';
-  headerTitle.textContent = assistantName;
+  var mb = ce('button');
+  mb.className = 'smc-mic-btn';
+  mb.setAttribute('aria-label', 'Voice mode');
+  mb.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>';
 
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'smc-header-close';
-  closeBtn.setAttribute('aria-label', 'Close chat');
-  closeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  var sb = ce('button');
+  sb.className = 'smc-send-btn';
+  sb.setAttribute('aria-label', 'Send');
+  sb.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
 
-  header.appendChild(headerTitle);
-  header.appendChild(closeBtn);
+  ia.appendChild(inp);
+  ia.appendChild(mb);
+  ia.appendChild(sb);
+  pn.appendChild(hd);
+  pn.appendChild(me);
+  pn.appendChild(ia);
+  r.appendChild(tb);
+  r.appendChild(pn);
 
-  const messagesEl = document.createElement('div');
-  messagesEl.className = 'smc-messages';
-
-  const welcomeEl = document.createElement('div');
-  welcomeEl.className = 'smc-welcome';
-  welcomeEl.textContent = welcomeMessage;
-  messagesEl.appendChild(welcomeEl);
-
-  const inputArea = document.createElement('div');
-  inputArea.className = 'smc-input-area';
-
-  const input = document.createElement('textarea');
-  input.className = 'smc-input';
-  input.placeholder = 'Type your message...';
-  input.rows = 1;
-
-  const sendBtn = document.createElement('button');
-  sendBtn.className = 'smc-send-btn';
-  sendBtn.setAttribute('aria-label', 'Send');
-  sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
-
-  inputArea.appendChild(input);
-  inputArea.appendChild(sendBtn);
-  panel.appendChild(header);
-  panel.appendChild(messagesEl);
-  panel.appendChild(inputArea);
-  root.appendChild(toggleBtn);
-  root.appendChild(panel);
-
-  toggleBtn.addEventListener('click', function () {
-    isOpen = !isOpen;
-    panel.classList.toggle('smc-open', isOpen);
-    if (isOpen) { initSession(); input.focus(); }
+  tb.addEventListener('click', function () {
+    io = !io;
+    pn.classList.toggle('smc-open', io);
+    if (io) { initSess(); inp.focus(); }
   });
+  cb.addEventListener('click', function () { io = false; pn.classList.remove('smc-open'); });
 
-  closeBtn.addEventListener('click', function () {
-    isOpen = false;
-    panel.classList.remove('smc-open');
-  });
-
-  sendBtn.addEventListener('click', sendMessage);
-
-  input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  });
-
-  input.addEventListener('input', function () {
-    this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 80) + 'px';
-  });
-
-  async function initSession() {
-    if (sessionId) return;
+  var va = false, vm = null;
+  mb.addEventListener('click', async function () {
+    if (va) { stopVc(); return; }
     try {
-      const res = await fetch(proxyUrl + '/chat/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visitor_id: visitorId, session_id: sessionId }),
+      if (!vm) {
+        var s = ce('script');
+        s.src = pu.replace(/\/[^/]*$/, '') + '/shopmata-voice.js';
+        await new Promise(function (ok, no) { s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+        vm = window.ShopmataChatVoice;
+      }
+      if (!vm) return;
+      va = true;
+      mb.classList.add('smc-mic-active');
+      rmEl(we);
+      vm.start({
+        gatewayUrl: r.dataset.voiceGatewayUrl || 'wss://voice.shopmata.com',
+        shop: sh, visitorId: vid, sessionId: sid,
+        onTranscript: function (t) { addMsg('user', t); },
+        onResponse: function (t) { addMsg('assistant', t); },
+        onAddToCart: function (d) {
+          fetch('/cart/add.js', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: [{ id: parseInt(d.variant_id), quantity: d.quantity || 1 }] }),
+          }).catch(function () {});
+        },
+        onEnd: function () { stopVc(); },
+      });
+    } catch (e) { console.error('[smc] Voice error:', e); stopVc(); }
+  });
+  function stopVc() { va = false; mb.classList.remove('smc-mic-active'); if (vm) vm.stop(); }
+
+  sb.addEventListener('click', send);
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  inp.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 80) + 'px'; });
+
+  async function initSess() {
+    if (sid) return;
+    try {
+      var res = await fetch(pu + '/chat/session', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitor_id: vid, session_id: sid }),
       });
       if (!res.ok) return;
-      const data = await res.json();
-      sessionId = data.session_id;
-      setSessionId(data.session_id, data.expires_at);
-    } catch { /* retry on next message */ }
+      var d = await res.json();
+      sid = d.session_id;
+      ssid(d.session_id, d.expires_at);
+    } catch {}
   }
 
-  async function sendMessage() {
-    const text = input.value.trim();
-    if (!text || isStreaming) return;
-
-    input.value = '';
-    input.style.height = 'auto';
-    if (welcomeEl.parentNode) welcomeEl.parentNode.removeChild(welcomeEl);
-
-    addMessage('user', text);
-    isStreaming = true;
-    sendBtn.disabled = true;
-    const typingEl = showTyping();
-
+  async function send() {
+    var txt = inp.value.trim();
+    if (!txt || str) return;
+    inp.value = '';
+    inp.style.height = 'auto';
+    rmEl(we);
+    addMsg('user', txt);
+    str = true;
+    sb.disabled = true;
+    var typ = showTyp();
     try {
-      const res = await fetch(proxyUrl + '/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, visitor_id: visitorId, session_id: sessionId }),
+      var res = await fetch(pu + '/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: txt, visitor_id: vid, session_id: sid }),
       });
-
-      if (!res.ok) {
-        removeTyping(typingEl);
-        addMessage('assistant', 'Sorry, I\'m having trouble connecting. Please try again.');
-        return;
-      }
-
-      removeTyping(typingEl);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let curEl = null;
-      let aText = '';
-
+      if (!res.ok) { rmEl(typ); addMsg('assistant', 'Sorry, I\'m having trouble connecting. Please try again.'); return; }
+      rmEl(typ);
+      var rd = res.body.getReader(), dec = new TextDecoder(), buf = '', cur = null, at = '', evt = '';
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        let evt = '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) { evt = line.slice(7).trim(); }
-          else if (line.startsWith('data: ')) {
-            try { handleSSE(evt, JSON.parse(line.slice(6))); } catch {}
+        var ch = await rd.read();
+        if (ch.done) break;
+        buf += dec.decode(ch.value, { stream: true });
+        var ln = buf.split('\n');
+        buf = ln.pop() || '';
+        for (var i = 0; i < ln.length; i++) {
+          if (ln[i].startsWith('event: ')) { evt = ln[i].slice(7).trim(); }
+          else if (ln[i].startsWith('data: ')) {
+            try {
+              var d = JSON.parse(ln[i].slice(6));
+              if (evt === 'token') {
+                if (!cur) { cur = mkBub('assistant'); me.appendChild(cur); }
+                at += d.content || '';
+                cur.innerHTML = rMd(at);
+                scr();
+              } else if (evt === 'tool_use') { showTool(d.status || 'Processing...'); }
+              else if (evt === 'tool_result') { rmTool(); }
+              else if (evt === 'done') { if (d.session_id) sid = d.session_id; }
+              else if (evt === 'error' && !cur) { addMsg('assistant', 'Sorry, something went wrong. Please try again.'); }
+            } catch {}
           }
         }
       }
-
-      function handleSSE(type, data) {
-        switch (type) {
-          case 'token':
-            if (!curEl) { curEl = createBubble('assistant'); messagesEl.appendChild(curEl); }
-            aText += data.content || '';
-            curEl.innerHTML = renderMd(aText);
-            scrollDown();
-            break;
-          case 'tool_use': showToolStatus(data.status || 'Processing...'); break;
-          case 'tool_result': removeToolStatus(); break;
-          case 'done': if (data.session_id) sessionId = data.session_id; break;
-          case 'error':
-            if (!curEl) addMessage('assistant', 'Sorry, something went wrong. Please try again.');
-            break;
-        }
-      }
-    } catch {
-      removeTyping(typingEl);
-      addMessage('assistant', 'Sorry, I\'m having trouble connecting. Please try again.');
-    } finally {
-      isStreaming = false;
-      sendBtn.disabled = false;
-      input.focus();
-    }
+    } catch { rmEl(typ); addMsg('assistant', 'Sorry, I\'m having trouble connecting. Please try again.'); }
+    finally { str = false; sb.disabled = false; inp.focus(); }
   }
 
-  function addMessage(role, text) {
-    const el = createBubble(role);
-    el.innerHTML = role === 'assistant' ? renderMd(text) : escHtml(text);
-    messagesEl.appendChild(el);
-    scrollDown();
-    messages.push({ role, text });
+  function addMsg(rl, txt) {
+    var el = mkBub(rl);
+    el.innerHTML = rl === 'assistant' ? rMd(txt) : escH(txt);
+    me.appendChild(el);
+    scr();
+    msgs.push({ role: rl, text: txt });
   }
-
-  function createBubble(role) {
-    const el = document.createElement('div');
-    el.className = 'smc-msg smc-msg-' + role;
-    return el;
-  }
-
-  function showTyping() {
-    const el = document.createElement('div');
+  function mkBub(rl) { var el = ce('div'); el.className = 'smc-msg smc-msg-' + rl; return el; }
+  function showTyp() {
+    var el = ce('div');
     el.className = 'smc-typing';
     el.innerHTML = '<div class="smc-typing-dot"></div><div class="smc-typing-dot"></div><div class="smc-typing-dot"></div>';
-    messagesEl.appendChild(el);
-    scrollDown();
+    me.appendChild(el);
+    scr();
     return el;
   }
+  function rmEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
 
-  function removeTyping(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
-
-  let toolStatusEl = null;
-
-  function showToolStatus(text) {
-    removeToolStatus();
-    toolStatusEl = document.createElement('div');
-    toolStatusEl.className = 'smc-tool-status';
-    toolStatusEl.textContent = text;
-    messagesEl.appendChild(toolStatusEl);
-    scrollDown();
-  }
-
-  function removeToolStatus() {
-    if (toolStatusEl && toolStatusEl.parentNode) { toolStatusEl.parentNode.removeChild(toolStatusEl); toolStatusEl = null; }
-  }
-
-  function scrollDown() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-
-  function renderMd(text) {
-    let h = escHtml(text);
+  var tse = null;
+  function showTool(t) { rmTool(); tse = ce('div'); tse.className = 'smc-tool-status'; tse.textContent = t; me.appendChild(tse); scr(); }
+  function rmTool() { if (tse && tse.parentNode) { tse.parentNode.removeChild(tse); tse = null; } }
+  function scr() { me.scrollTop = me.scrollHeight; }
+  function rMd(t) {
+    var h = escH(t);
     h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
     h = h.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
@@ -259,10 +217,5 @@
     h = h.replace(/\n/g, '<br>');
     return h;
   }
-
-  function escHtml(text) {
-    const d = document.createElement('div');
-    d.textContent = text;
-    return d.innerHTML;
-  }
+  function escH(t) { var d = ce('div'); d.textContent = t; return d.innerHTML; }
 })();

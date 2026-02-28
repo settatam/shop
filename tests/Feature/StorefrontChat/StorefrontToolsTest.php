@@ -322,12 +322,12 @@ class StorefrontToolsTest extends TestCase
 
     // --- StorefrontChatToolExecutor ---
 
-    public function test_executor_registers_all_five_tools(): void
+    public function test_executor_registers_all_tools(): void
     {
         $executor = new StorefrontChatToolExecutor;
         $definitions = $executor->getDefinitions();
 
-        $this->assertCount(5, $definitions);
+        $this->assertCount(7, $definitions);
 
         $toolNames = array_column($definitions, 'name');
         $this->assertContains('search_products', $toolNames);
@@ -335,6 +335,8 @@ class StorefrontToolsTest extends TestCase
         $this->assertContains('check_availability', $toolNames);
         $this->assertContains('get_store_info', $toolNames);
         $this->assertContains('compare_products', $toolNames);
+        $this->assertContains('capture_lead', $toolNames);
+        $this->assertContains('add_to_cart', $toolNames);
     }
 
     public function test_executor_returns_error_for_unknown_tool(): void

@@ -120,6 +120,7 @@ return [
     'voice_gateway' => [
         'url' => env('VOICE_GATEWAY_URL', 'http://localhost:3001'),
         'secret' => env('VOICE_GATEWAY_SECRET'),
+        'internal_key' => env('VOICE_GATEWAY_INTERNAL_KEY'),
     ],
 
     'elevenlabs' => [
