@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
+use App\Jobs\ImportWooCommerceProductsJob;
+use App\Models\StorefrontApiToken;
 use App\Models\StoreMarketplace;
 use App\Services\Platforms\PlatformManager;
 use App\Services\StoreContext;
@@ -153,6 +155,28 @@ class MarketplaceController extends Controller
         $service = $this->platformManager->getService($platformEnum);
 
         // For platforms with special credential connection methods
+        if ($platformEnum === Platform::WooCommerce && method_exists($service, 'connectWithCredentials')) {
+            try {
+                $connection = $service->connectWithCredentials($store, [
+                    'site_url' => $validated['shop_domain'] ?? $validated['credentials']['site_url'] ?? '',
+                    'consumer_key' => $validated['credentials']['api_key'] ?? '',
+                    'consumer_secret' => $validated['credentials']['api_secret'] ?? '',
+                ]);
+
+                $this->ensureStorefrontApiToken($connection, $store);
+
+                $service->registerWebhooks($connection);
+
+                ImportWooCommerceProductsJob::dispatch($connection);
+
+                return redirect()->route('settings.marketplaces.index')
+                    ->with('success', "{$platformEnum->label()} marketplace connected successfully!");
+            } catch (\Exception $e) {
+                return redirect()->route('settings.marketplaces.index')
+                    ->with('error', "Failed to connect {$platformEnum->label()}: {$e->getMessage()}");
+            }
+        }
+
         if ($platformEnum === Platform::Walmart && method_exists($service, 'connectWithCredentials')) {
             try {
                 $connection = $service->connectWithCredentials($store, [
@@ -375,5 +399,27 @@ class MarketplaceController extends Controller
             Platform::WooCommerce, Platform::Walmart => true,
             default => false,
         };
+    }
+
+    /**
+     * Create a StorefrontApiToken for a marketplace connection if one doesn't exist.
+     */
+    protected function ensureStorefrontApiToken(StoreMarketplace $marketplace, \App\Models\Store $store): StorefrontApiToken
+    {
+        $token = StorefrontApiToken::where('store_marketplace_id', $marketplace->id)
+            ->where('is_active', true)
+            ->first();
+
+        if ($token) {
+            return $token;
+        }
+
+        return StorefrontApiToken::create([
+            'store_id' => $store->id,
+            'store_marketplace_id' => $marketplace->id,
+            'token' => StorefrontApiToken::generateToken(),
+            'name' => $marketplace->name.' Widget',
+            'is_active' => true,
+        ]);
     }
 }

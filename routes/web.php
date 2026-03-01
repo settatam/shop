@@ -64,6 +64,19 @@ Route::prefix('shopify/proxy')
 
 /*
 |--------------------------------------------------------------------------
+| Storefront Widget API (authenticated via Bearer token)
+| Used by non-Shopify platforms (WooCommerce, etc.)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('api/storefront/widget')
+    ->middleware(['verify.storefront.token', 'throttle:storefront-chat'])
+    ->group(function () {
+        Route::post('chat', [StorefrontChatController::class, 'chat'])->name('storefront.widget.chat');
+        Route::post('chat/session', [StorefrontChatController::class, 'session'])->name('storefront.widget.session');
+    });
+
+/*
+|--------------------------------------------------------------------------
 | Voice Gateway Internal API (authenticated via X-Internal-Key header)
 |--------------------------------------------------------------------------
 */

@@ -8,6 +8,7 @@ use App\Http\Middleware\SetPortalStore;
 use App\Http\Middleware\ShopifyFrameAncestors;
 use App\Http\Middleware\VerifyShopifyProxy;
 use App\Http\Middleware\VerifyShopifySessionToken;
+use App\Http\Middleware\VerifyStorefrontToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'shopify/proxy/*',
             'shopify/app/*',
             'shopify/embedded/*',
+            'api/storefront/*',
         ]);
 
         $middleware->web(append: [
@@ -58,6 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'portal.store' => SetPortalStore::class,
             'verify.shopify.proxy' => VerifyShopifyProxy::class,
             'verify.shopify.session' => VerifyShopifySessionToken::class,
+            'verify.storefront.token' => VerifyStorefrontToken::class,
             'shopify.frame' => ShopifyFrameAncestors::class,
         ]);
 

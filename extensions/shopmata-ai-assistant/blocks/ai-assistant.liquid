@@ -10,6 +10,9 @@
   data-proxy-url="/apps/shopmata-assistant"
   data-accent-color="{{ block.settings.accent_color }}"
   data-position="{{ block.settings.position }}"
+  data-display-mode="{{ block.settings.display_mode }}"
+  data-auto-open="{{ block.settings.auto_open }}"
+  data-suggested-questions="{{ block.settings.suggested_questions | escape }}"
   data-welcome-message="{{ block.settings.welcome_message | escape }}"
   data-assistant-name="{{ block.settings.assistant_name | escape }}"
   data-shop="{{ shop.permanent_domain }}"
@@ -39,6 +42,31 @@
         { "value": "left", "label": "t:settings.position.options__2" }
       ],
       "default": "right"
+    },
+    {
+      "type": "select",
+      "id": "display_mode",
+      "label": "t:settings.display_mode.label",
+      "info": "t:settings.display_mode.info",
+      "options": [
+        { "value": "popup", "label": "t:settings.display_mode.options__1" },
+        { "value": "panel", "label": "t:settings.display_mode.options__2" }
+      ],
+      "default": "popup"
+    },
+    {
+      "type": "checkbox",
+      "id": "auto_open",
+      "label": "t:settings.auto_open.label",
+      "info": "t:settings.auto_open.info",
+      "default": false
+    },
+    {
+      "type": "textarea",
+      "id": "suggested_questions",
+      "label": "t:settings.suggested_questions.label",
+      "info": "t:settings.suggested_questions.info",
+      "default": "What are your best sellers?,Do you have any deals today?,Help me find a gift"
     },
     {
       "type": "text",

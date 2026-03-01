@@ -6,10 +6,14 @@
   var pu = r.dataset.proxyUrl || '/apps/shopmata-assistant';
   var ac = r.dataset.accentColor || '#1a1a2e';
   var pos = r.dataset.position || 'right';
+  var dm = r.dataset.displayMode || 'popup';
+  var ao = r.dataset.autoOpen === 'true';
+  var sq = r.dataset.suggestedQuestions || '';
   var wm = r.dataset.welcomeMessage || 'Hi! How can I help you today?';
   var an = r.dataset.assistantName || 'Assistant';
   var sh = r.dataset.shop || '';
   document.documentElement.style.setProperty('--smc-accent', ac);
+  if (dm === 'panel') r.classList.add('smc-mode-panel');
 
   function gvid() {
     var id = localStorage.getItem('smc_visitor_id');
@@ -58,6 +62,17 @@
   we.textContent = wm;
   me.appendChild(we);
 
+  var sg = null;
+  if (sq) {
+    sg = ce('div'); sg.className = 'smc-suggestions';
+    sq.split(',').forEach(function (q) {
+      q = q.trim(); if (!q) return;
+      var c = ce('button'); c.className = 'smc-chip'; c.textContent = q;
+      c.addEventListener('click', function () { inp.value = q; send(); rmEl(sg); sg = null; });
+      sg.appendChild(c);
+    });
+  }
+
   var ia = ce('div');
   ia.className = 'smc-input-area';
   var inp = ce('textarea');
@@ -79,17 +94,31 @@
   ia.appendChild(mb);
   ia.appendChild(sb);
   pn.appendChild(hd);
+  if (sg) pn.appendChild(sg);
   pn.appendChild(me);
   pn.appendChild(ia);
-  r.appendChild(tb);
-  r.appendChild(pn);
 
-  tb.addEventListener('click', function () {
-    io = !io;
-    pn.classList.toggle('smc-open', io);
-    if (io) { initSess(); inp.focus(); }
-  });
-  cb.addEventListener('click', function () { io = false; pn.classList.remove('smc-open'); });
+  var bd = null;
+  if (dm === 'panel') {
+    bd = ce('div'); bd.className = 'smc-backdrop';
+    r.appendChild(bd);
+    bd.addEventListener('click', closePanel);
+  }
+  r.appendChild(pn);
+  r.appendChild(tb);
+
+  function openPanel() {
+    io = true; pn.classList.add('smc-open');
+    if (bd) bd.classList.add('smc-visible');
+    initSess(); inp.focus();
+  }
+  function closePanel() {
+    io = false; pn.classList.remove('smc-open');
+    if (bd) bd.classList.remove('smc-visible');
+  }
+
+  tb.addEventListener('click', function () { if (io) closePanel(); else openPanel(); });
+  cb.addEventListener('click', closePanel);
 
   var va = false, vm = null;
   mb.addEventListener('click', async function () {
@@ -146,6 +175,7 @@
     inp.value = '';
     inp.style.height = 'auto';
     rmEl(we);
+    if (sg) { rmEl(sg); sg = null; }
     addMsg('user', txt);
     str = true;
     sb.disabled = true;
@@ -218,4 +248,9 @@
     return h;
   }
   function escH(t) { var d = ce('div'); d.textContent = t; return d.innerHTML; }
+
+  if (ao && !sessionStorage.getItem('smc_ao')) {
+    sessionStorage.setItem('smc_ao', '1');
+    openPanel();
+  }
 })();
