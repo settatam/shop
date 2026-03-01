@@ -5,6 +5,7 @@ namespace App\Services\StorefrontChat;
 use App\Services\Chat\Tools\ChatToolInterface;
 use App\Services\StorefrontChat\Tools\StorefrontAddToCartTool;
 use App\Services\StorefrontChat\Tools\StorefrontAvailabilityTool;
+use App\Services\StorefrontChat\Tools\StorefrontKnowledgeSearchTool;
 use App\Services\StorefrontChat\Tools\StorefrontLeadCaptureTool;
 use App\Services\StorefrontChat\Tools\StorefrontProductCompareTool;
 use App\Services\StorefrontChat\Tools\StorefrontProductDetailTool;
@@ -25,6 +26,7 @@ class StorefrontChatToolExecutor
         $this->register(new StorefrontProductCompareTool);
         $this->register(new StorefrontLeadCaptureTool);
         $this->register(new StorefrontAddToCartTool);
+        $this->register(app(StorefrontKnowledgeSearchTool::class));
     }
 
     public function register(ChatToolInterface $tool): void
@@ -81,6 +83,7 @@ class StorefrontChatToolExecutor
             'compare_products' => 'Comparing products...',
             'capture_lead' => 'Saving contact information...',
             'add_to_cart' => 'Adding to cart...',
+            'knowledge_search' => 'Searching store knowledge...',
             default => 'Processing...',
         };
     }

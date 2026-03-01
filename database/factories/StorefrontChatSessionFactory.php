@@ -20,14 +20,12 @@ class StorefrontChatSessionFactory extends Factory
             'visitor_id' => Str::uuid()->toString(),
             'title' => null,
             'last_message_at' => now(),
-            'expires_at' => now()->addMinutes(30),
         ];
     }
 
-    public function expired(): static
+    public function inactive(): static
     {
         return $this->state(fn (array $attributes) => [
-            'expires_at' => now()->subHour(),
             'last_message_at' => now()->subHours(2),
         ]);
     }

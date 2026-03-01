@@ -84,6 +84,21 @@ class StoreMarketplaceFactory extends Factory
         ]);
     }
 
+    public function bigcommerce(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'platform' => Platform::BigCommerce,
+            'name' => 'BigCommerce Store',
+            'shop_domain' => 'store-abc123.mybigcommerce.com',
+            'access_token' => 'bc_test_token',
+            'credentials' => [
+                'store_hash' => 'abc123',
+                'client_id' => 'test_client_id',
+                'access_token' => 'bc_test_token',
+            ],
+        ]);
+    }
+
     public function inactive(): static
     {
         return $this->state(fn (array $attributes) => [

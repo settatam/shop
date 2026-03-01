@@ -16,6 +16,7 @@
   data-welcome-message="{{ block.settings.welcome_message | escape }}"
   data-assistant-name="{{ block.settings.assistant_name | escape }}"
   data-shop="{{ shop.permanent_domain }}"
+  data-voice-js-url="{{ 'shopmata-voice.js' | asset_url }}"
 ></div>
 
 <script src="{{ 'shopmata-chat.js' | asset_url }}" defer></script>

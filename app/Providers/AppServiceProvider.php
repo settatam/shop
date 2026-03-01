@@ -4,7 +4,13 @@ namespace App\Providers;
 
 use App\Facades\Channel;
 use App\Models\Activity;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\StoreKnowledgeBaseEntry;
 use App\Models\User;
+use App\Observers\CategoryRagObserver;
+use App\Observers\KnowledgeBaseRagObserver;
+use App\Observers\ProductRagObserver;
 use App\Services\Platforms\ChannelService;
 use App\Services\StoreContext;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -45,6 +51,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->registerGates();
         $this->configureRateLimiting();
+
+        if (config('services.openai.api_key') && config('services.qdrant.url')) {
+            Product::observe(ProductRagObserver::class);
+            StoreKnowledgeBaseEntry::observe(KnowledgeBaseRagObserver::class);
+            Category::observe(CategoryRagObserver::class);
+        }
     }
 
     /**

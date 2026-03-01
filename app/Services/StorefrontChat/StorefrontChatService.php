@@ -5,7 +5,6 @@ namespace App\Services\StorefrontChat;
 use App\Models\Store;
 use App\Models\StorefrontChatMessage;
 use App\Models\StorefrontChatSession;
-use App\Models\StoreKnowledgeBaseEntry;
 use Generator;
 use Illuminate\Support\Facades\Http;
 
@@ -27,7 +26,17 @@ class StorefrontChatService
     }
 
     /**
-     * Send a message and stream the response.
+     * Maximum number of agentic tool-use loops before forcing a text response.
+     */
+    protected int $maxToolLoops = 5;
+
+    /**
+     * Send a message and stream the response via an agentic tool-use loop.
+     *
+     * Claude can call one or more tools per turn. After executing them, we send
+     * the results back and let Claude decide whether to call more tools or
+     * respond with text. The loop continues until Claude produces a text-only
+     * response or we hit the safety limit.
      *
      * @return Generator<int, array<string, mixed>>
      */
@@ -49,72 +58,95 @@ class StorefrontChatService
         // Get system prompt
         $systemPrompt = $this->getSystemPrompt($store);
 
-        // Call Claude with streaming
         $fullResponse = '';
-        $toolCalls = [];
+        $allToolCalls = [];
         $totalTokens = 0;
+        $loops = 0;
 
-        foreach ($this->callClaude($systemPrompt, $messages, $store->id) as $event) {
-            if ($event['type'] === 'token') {
-                $fullResponse .= $event['content'];
-                yield $event;
-            } elseif ($event['type'] === 'tool_use') {
-                $toolCalls[] = $event;
-                yield [
-                    'type' => 'tool_use',
-                    'tool' => $event['name'],
-                    'status' => $this->toolExecutor->getToolDescription($event['name']),
+        // Agentic loop: keep calling Claude until it responds with only text
+        while ($loops < $this->maxToolLoops) {
+            $loops++;
+            $turnToolCalls = [];
+            $turnTextParts = [];
+
+            foreach ($this->callClaude($systemPrompt, $messages, $store->id) as $event) {
+                if ($event['type'] === 'token') {
+                    $fullResponse .= $event['content'];
+                    $turnTextParts[] = $event['content'];
+                    yield $event;
+                } elseif ($event['type'] === 'tool_use') {
+                    $turnToolCalls[] = $event;
+                    $allToolCalls[] = $event;
+                    yield [
+                        'type' => 'tool_use',
+                        'tool' => $event['name'],
+                        'status' => $this->toolExecutor->getToolDescription($event['name']),
+                    ];
+                } elseif ($event['type'] === 'usage') {
+                    $totalTokens += $event['total'];
+                }
+            }
+
+            // If Claude made no tool calls this turn, we're done
+            if (empty($turnToolCalls)) {
+                break;
+            }
+
+            // Build the assistant message with any text + all tool_use blocks
+            $assistantContent = [];
+
+            $turnText = implode('', $turnTextParts);
+            if ($turnText !== '') {
+                $assistantContent[] = [
+                    'type' => 'text',
+                    'text' => $turnText,
                 ];
+            }
 
-                // Execute the tool (inject session_id for lead capture)
-                $toolInput = $event['input'];
-                if ($event['name'] === 'capture_lead') {
+            foreach ($turnToolCalls as $toolCall) {
+                $assistantContent[] = [
+                    'type' => 'tool_use',
+                    'id' => $toolCall['id'],
+                    'name' => $toolCall['name'],
+                    'input' => $toolCall['input'],
+                ];
+            }
+
+            $messages[] = [
+                'role' => 'assistant',
+                'content' => $assistantContent,
+            ];
+
+            // Execute all tools and build the tool_result user message
+            $toolResults = [];
+
+            foreach ($turnToolCalls as $toolCall) {
+                $toolInput = $toolCall['input'];
+                if ($toolCall['name'] === 'capture_lead') {
                     $toolInput['session_id'] = $session->id;
                 }
-                $result = $this->toolExecutor->execute($event['name'], $toolInput, $store->id);
+
+                $result = $this->toolExecutor->execute($toolCall['name'], $toolInput, $store->id);
 
                 yield [
                     'type' => 'tool_result',
-                    'tool' => $event['name'],
+                    'tool' => $toolCall['name'],
                     'result' => $result,
                 ];
 
-                // Continue conversation with tool result
-                $messages[] = [
-                    'role' => 'assistant',
-                    'content' => [
-                        [
-                            'type' => 'tool_use',
-                            'id' => $event['id'],
-                            'name' => $event['name'],
-                            'input' => $event['input'],
-                        ],
-                    ],
+                $toolResults[] = [
+                    'type' => 'tool_result',
+                    'tool_use_id' => $toolCall['id'],
+                    'content' => json_encode($result),
                 ];
-
-                $messages[] = [
-                    'role' => 'user',
-                    'content' => [
-                        [
-                            'type' => 'tool_result',
-                            'tool_use_id' => $event['id'],
-                            'content' => json_encode($result),
-                        ],
-                    ],
-                ];
-
-                // Get the follow-up response
-                foreach ($this->callClaude($systemPrompt, $messages, $store->id, false) as $followUp) {
-                    if ($followUp['type'] === 'token') {
-                        $fullResponse .= $followUp['content'];
-                        yield $followUp;
-                    } elseif ($followUp['type'] === 'usage') {
-                        $totalTokens += $followUp['total'];
-                    }
-                }
-            } elseif ($event['type'] === 'usage') {
-                $totalTokens += $event['total'];
             }
+
+            $messages[] = [
+                'role' => 'user',
+                'content' => $toolResults,
+            ];
+
+            // Loop back — Claude will see the tool results and decide next action
         }
 
         // Save the assistant message
@@ -122,7 +154,7 @@ class StorefrontChatService
             'storefront_chat_session_id' => $session->id,
             'role' => 'assistant',
             'content' => $fullResponse,
-            'tool_calls' => ! empty($toolCalls) ? $toolCalls : null,
+            'tool_calls' => ! empty($allToolCalls) ? $allToolCalls : null,
             'tokens_used' => $totalTokens,
         ]);
 
@@ -141,11 +173,8 @@ class StorefrontChatService
     protected function buildMessages(StorefrontChatSession $session): array
     {
         $recentMessages = $session->messages()
-            ->orderByDesc('created_at')
-            ->limit(8)
-            ->get()
-            ->reverse()
-            ->values();
+            ->orderBy('created_at')
+            ->get();
 
         return $recentMessages->map(function (StorefrontChatMessage $msg) {
             return [
@@ -160,83 +189,52 @@ class StorefrontChatService
      */
     protected function getSystemPrompt(Store $store): string
     {
-        $knowledgeBase = $this->buildKnowledgeBaseContext($store->id);
         $storeName = $store->name;
 
-        $prompt = <<<PROMPT
-        You are a knowledgeable and friendly jewelry sales assistant for {$storeName}. You help customers find the perfect piece by answering questions about products, materials, availability, and store policies.
+        return <<<PROMPT
+        You are a friendly, natural sales assistant for {$storeName}. Talk like a real person working behind the counter — warm, concise, and helpful.
 
-        GUIDELINES:
-        1. Be warm, helpful, and professional. Use conversational language.
-        2. When discussing jewelry, demonstrate expertise about materials (gold karats, gemstone types, precious metals, settings, etc.)
-        3. Always use the available tools to fetch real product data — never guess about prices, availability, or product details.
-        4. If a customer asks about something you cannot find, suggest they contact the store directly.
-        5. Recommend products that match what the customer describes. Ask clarifying questions about preferences (budget, style, occasion, etc.).
-        6. Format prices nicely with currency symbols.
-        7. When showing products, include the product name, price, and a brief highlight of key features.
-        8. For availability, only say "in stock" or "currently unavailable" — never mention specific quantities.
-        9. Keep responses concise and helpful. Customers want quick answers.
+        HOW TO HAVE A CONVERSATION:
+        1. Act like a real salesperson. When a customer asks something broad like "any deals?" or "what do you have?", don't immediately search. Instead, ask a natural follow-up to understand what they need:
+           - "What are you shopping for today — rings, necklaces, bracelets?"
+           - "Is this for yourself or a gift?"
+           - "Do you have a budget in mind?"
+           - "What's the occasion?"
+        2. Guide the conversation with one or two short questions at a time. Don't ask everything at once.
+        3. Only use tools to search products or look things up AFTER you understand what the customer wants. A vague query gives vague results — narrow it down first through conversation.
+        4. Keep responses short and natural. One to three sentences is usually enough. Customers want a quick chat, not an essay.
+        5. Never narrate what you're doing internally. Don't say "Let me search our system" or "I notice our database shows..." — just talk like a person.
+
+        FINDING INFORMATION:
+        6. Use the knowledge_search tool to find information about store policies, FAQs, shipping, returns, product knowledge, and anything else the customer asks about. Always search before saying you don't know.
+        7. Use search_products for specific product searches when you know what the customer is looking for.
+        8. Use knowledge_search for broader questions like "do you offer layaway?", "what's your return policy?", or "tell me about your store".
+
+        SHOWING PRODUCTS:
+        9. When you have enough context, use the tools to find real products. Never make up prices or details.
+        10. Show the product name, price, and one key highlight. Keep it scannable.
+        11. Format prices with currency symbols ($).
+        12. For availability, say "in stock" or "currently unavailable" — never mention specific quantities.
+        13. If nothing matches, suggest they contact the store directly.
 
         LEAD CAPTURE:
-        10. When a customer shows strong buying interest (asks about specific high-value items, wants pricing details, inquires about custom orders, asks to be contacted, or wants to schedule an appointment), naturally offer to connect them with the store team.
-        11. To connect them, ask for their name and either email address or phone number in a conversational way. For example: "I'd love to have one of our specialists reach out to you about this piece. Could I get your name and best email or phone number?"
-        12. If the customer provides their contact details, use the capture_lead tool to save their information. Include a brief summary of what they're interested in.
-        13. Never pressure the customer for contact information. If they decline or seem hesitant, respect their wishes and continue helping them as normal.
-        14. If a customer proactively volunteers their name and contact info (e.g., "I'm Sarah, my email is sarah@example.com"), capture it right away.
-        15. You do not need to ask for the session_id — it will be provided automatically.
+        14. When a customer shows strong buying interest (asks about specific high-value items, wants pricing details, inquires about custom orders, asks to be contacted, or wants to schedule an appointment), naturally offer to connect them with the store team.
+        15. To connect them, ask for their name and either email or phone in a conversational way. For example: "I'd love to have one of our specialists reach out to you about this piece. Could I get your name and best email or phone number?"
+        16. If the customer provides their contact details, use the capture_lead tool to save their information. Include a brief summary of what they're interested in.
+        17. Never pressure for contact info. If they decline, move on.
+        18. If a customer proactively volunteers their name and contact info, capture it right away.
+        19. You do not need to ask for the session_id — it will be provided automatically.
 
         WHAT YOU MUST NEVER DO:
         - Never reveal product costs, wholesale prices, or profit margins
-        - Never share exact inventory quantities (only in-stock or out-of-stock)
+        - Never share exact inventory quantities
         - Never discuss other customers or their purchases
         - Never share sales data, revenue figures, or business metrics
         - Never provide information about the store's suppliers or vendors
-        - Never process orders or payments — direct customers to the product page for purchases
+        - Never process orders or payments — direct customers to the product page
         - Never discuss topics unrelated to the store, its products, or jewelry in general
-
-        Use the available tools to search products, get details, check availability, retrieve store policies, and capture leads. Always prefer tool results over your general knowledge.
+        - Never describe your internal process or what tools you're using
         PROMPT;
-
-        if ($knowledgeBase) {
-            $prompt .= "\n\nSTORE KNOWLEDGE BASE:\n{$knowledgeBase}";
-        }
-
-        return $prompt;
-    }
-
-    /**
-     * Build knowledge base context from store entries.
-     */
-    protected function buildKnowledgeBaseContext(int $storeId): string
-    {
-        $entries = StoreKnowledgeBaseEntry::where('store_id', $storeId)
-            ->where('is_active', true)
-            ->orderBy('type')
-            ->orderBy('sort_order')
-            ->get();
-
-        if ($entries->isEmpty()) {
-            return '';
-        }
-
-        $sections = [];
-        $grouped = $entries->groupBy('type');
-
-        foreach ($grouped as $type => $group) {
-            $label = match ($type) {
-                'return_policy' => 'Return Policy',
-                'shipping_info' => 'Shipping Information',
-                'care_instructions' => 'Jewelry Care Instructions',
-                'faq' => 'Frequently Asked Questions',
-                'about' => 'About the Store',
-                default => ucfirst(str_replace('_', ' ', $type)),
-            };
-
-            $content = $group->map(fn ($entry) => "**{$entry->title}**: {$entry->content}")->implode("\n");
-            $sections[] = "[{$label}]\n{$content}";
-        }
-
-        return implode("\n\n", $sections);
     }
 
     /**
@@ -245,7 +243,7 @@ class StorefrontChatService
      * @param  array<int, array<string, mixed>>  $messages
      * @return Generator<int, array<string, mixed>>
      */
-    protected function callClaude(string $systemPrompt, array $messages, int $storeId, bool $includeTools = true): Generator
+    protected function callClaude(string $systemPrompt, array $messages, int $storeId): Generator
     {
         $payload = [
             'model' => $this->model,
@@ -255,11 +253,9 @@ class StorefrontChatService
             'stream' => true,
         ];
 
-        if ($includeTools) {
-            $tools = $this->toolExecutor->getDefinitions();
-            if (! empty($tools)) {
-                $payload['tools'] = $tools;
-            }
+        $tools = $this->toolExecutor->getDefinitions();
+        if (! empty($tools)) {
+            $payload['tools'] = $tools;
         }
 
         $response = Http::withHeaders([
@@ -382,7 +378,7 @@ class StorefrontChatService
                 ->where('visitor_id', $visitorId)
                 ->first();
 
-            if ($session && ! $session->isExpired()) {
+            if ($session) {
                 return $session;
             }
         }
@@ -391,7 +387,6 @@ class StorefrontChatService
             'store_id' => $storeId,
             'store_marketplace_id' => $marketplaceId,
             'visitor_id' => $visitorId,
-            'expires_at' => now()->addMinutes(30),
         ]);
     }
 }

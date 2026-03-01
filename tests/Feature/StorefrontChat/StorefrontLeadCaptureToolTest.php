@@ -118,7 +118,6 @@ class StorefrontLeadCaptureToolTest extends TestCase
             'store_id' => $this->store->id,
             'store_marketplace_id' => $this->marketplace->id,
             'visitor_id' => 'visitor-abc',
-            'expires_at' => now()->addMinutes(30),
         ]);
 
         $result = $this->tool->execute([

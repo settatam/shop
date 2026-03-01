@@ -4,6 +4,7 @@ namespace App\Services\Platforms;
 
 use App\Enums\Platform;
 use App\Services\Platforms\Amazon\AmazonService;
+use App\Services\Platforms\BigCommerce\BigCommerceService;
 use App\Services\Platforms\Contracts\PlatformInterface;
 use App\Services\Platforms\Ebay\EbayService;
 use App\Services\Platforms\Etsy\EtsyService;
@@ -33,6 +34,7 @@ class PlatformManager
             Platform::Etsy->value => app(EtsyService::class),
             Platform::Walmart->value => app(WalmartService::class),
             Platform::WooCommerce->value => app(WooCommerceService::class),
+            Platform::BigCommerce->value => app(BigCommerceService::class),
         ];
     }
 

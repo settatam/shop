@@ -126,7 +126,7 @@
     try {
       if (!vm) {
         var s = ce('script');
-        s.src = pu.replace(/\/[^/]*$/, '') + '/shopmata-voice.js';
+        s.src = r.dataset.voiceJsUrl || (pu.replace(/\/[^/]*$/, '') + '/shopmata-voice.js');
         await new Promise(function (ok, no) { s.onload = ok; s.onerror = no; document.head.appendChild(s); });
         vm = window.ShopmataChatVoice;
       }
@@ -135,7 +135,7 @@
       mb.classList.add('smc-mic-active');
       rmEl(we);
       vm.start({
-        gatewayUrl: r.dataset.voiceGatewayUrl || 'wss://voice.shopmata.com',
+        gatewayUrl: r.dataset.voiceGatewayUrl || 'https://voice.shopmata.com',
         shop: sh, visitorId: vid, sessionId: sid,
         onTranscript: function (t) { addMsg('user', t); },
         onResponse: function (t) { addMsg('assistant', t); },

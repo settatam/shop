@@ -155,7 +155,6 @@ class StorefrontChatControllerTest extends TestCase
         $response->assertOk();
         $response->assertJsonStructure([
             'session_id',
-            'expires_at',
             'config' => ['welcome_message', 'assistant_name', 'accent_color'],
         ]);
 
@@ -171,7 +170,6 @@ class StorefrontChatControllerTest extends TestCase
             'store_id' => $this->store->id,
             'store_marketplace_id' => $this->marketplace->id,
             'visitor_id' => 'test-visitor-123',
-            'expires_at' => now()->addMinutes(30),
         ]);
 
         $query = http_build_query($this->proxyQuery());
@@ -187,23 +185,20 @@ class StorefrontChatControllerTest extends TestCase
         ]);
     }
 
-    public function test_creates_new_session_when_expired(): void
+    public function test_creates_new_session_when_not_found(): void
     {
-        $expiredSession = StorefrontChatSession::factory()->expired()->create([
-            'store_id' => $this->store->id,
-            'store_marketplace_id' => $this->marketplace->id,
-            'visitor_id' => 'test-visitor-123',
-        ]);
-
         $query = http_build_query($this->proxyQuery());
 
         $response = $this->postJson("/shopify/proxy/chat/session?{$query}", [
             'visitor_id' => 'test-visitor-123',
-            'session_id' => $expiredSession->id,
+            'session_id' => fake()->uuid(),
         ]);
 
         $response->assertOk();
-        $this->assertNotEquals($expiredSession->id, $response->json('session_id'));
+        $this->assertDatabaseHas('storefront_chat_sessions', [
+            'id' => $response->json('session_id'),
+            'visitor_id' => 'test-visitor-123',
+        ]);
     }
 
     public function test_updates_last_used_at_on_token(): void

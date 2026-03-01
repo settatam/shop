@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\Platform;
 use App\Http\Controllers\Controller;
+use App\Jobs\ImportBigCommerceProductsJob;
 use App\Jobs\ImportWooCommerceProductsJob;
 use App\Models\StorefrontApiToken;
 use App\Models\StoreMarketplace;
@@ -55,6 +56,7 @@ class MarketplaceController extends Controller
             Platform::Etsy,
             Platform::Walmart,
             Platform::WooCommerce,
+            Platform::BigCommerce,
         ])->map(fn (Platform $platform) => [
             'value' => $platform->value,
             'label' => $platform->label(),
@@ -123,6 +125,13 @@ class MarketplaceController extends Controller
                 ->where('type', $platformEnum->value)
                 ->whereNull('store_marketplace_id')
                 ->update(['store_marketplace_id' => $connection->id]);
+
+            // Platform-specific post-connect actions
+            if ($platformEnum === Platform::BigCommerce) {
+                $this->ensureStorefrontApiToken($connection, $store);
+                $service->registerWebhooks($connection);
+                ImportBigCommerceProductsJob::dispatch($connection);
+            }
 
             return redirect()->route('settings.channels.index')
                 ->with('success', "{$platformEnum->label()} connected successfully!");
@@ -373,6 +382,7 @@ class MarketplaceController extends Controller
             Platform::Etsy => 'Connect to Etsy for handmade and vintage items.',
             Platform::Walmart => 'List products on Walmart Marketplace.',
             Platform::WooCommerce => 'Sync with your WooCommerce store.',
+            Platform::BigCommerce => 'Connect your BigCommerce store to sync products and orders.',
             default => 'Connect to this marketplace.',
         };
     }
@@ -383,7 +393,7 @@ class MarketplaceController extends Controller
     protected function getPlatformAuthType(Platform $platform): string
     {
         return match ($platform) {
-            Platform::Shopify, Platform::Ebay, Platform::Amazon, Platform::Etsy => 'oauth',
+            Platform::Shopify, Platform::Ebay, Platform::Amazon, Platform::Etsy, Platform::BigCommerce => 'oauth',
             Platform::WooCommerce => 'credentials',
             Platform::Walmart => 'credentials',
             default => 'credentials',

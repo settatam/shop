@@ -1,0 +1,33 @@
+{
+  "name": "Shopmata AI Assistant",
+  "settings": {
+    "accent_color": {
+      "label": "Accent Color"
+    },
+    "position": {
+      "label": "Widget Position",
+      "options__1": "Bottom Right",
+      "options__2": "Bottom Left"
+    },
+    "display_mode": {
+      "label": "Display Mode",
+      "info": "Choose between a small popup or a full-height side panel.",
+      "options__1": "Popup (Classic)",
+      "options__2": "Side Panel"
+    },
+    "auto_open": {
+      "label": "Open on Page Load",
+      "info": "Automatically open the assistant when the page loads (once per session)."
+    },
+    "suggested_questions": {
+      "label": "Suggested Questions",
+      "info": "Comma-separated questions shown as quick-action chips."
+    },
+    "welcome_message": {
+      "label": "Welcome Message"
+    },
+    "assistant_name": {
+      "label": "Assistant Name"
+    }
+  }
+}

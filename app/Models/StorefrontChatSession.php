@@ -20,14 +20,12 @@ class StorefrontChatSession extends Model
         'visitor_id',
         'title',
         'last_message_at',
-        'expires_at',
     ];
 
     protected function casts(): array
     {
         return [
             'last_message_at' => 'datetime',
-            'expires_at' => 'datetime',
         ];
     }
 
@@ -70,21 +68,12 @@ class StorefrontChatSession extends Model
     }
 
     /**
-     * Touch the last_message_at timestamp and extend expiry.
+     * Touch the last_message_at timestamp.
      */
     public function touchLastMessage(): void
     {
         $this->update([
             'last_message_at' => now(),
-            'expires_at' => now()->addMinutes(30),
         ]);
-    }
-
-    /**
-     * Check if the session has expired.
-     */
-    public function isExpired(): bool
-    {
-        return $this->expires_at && $this->expires_at->isPast();
     }
 }

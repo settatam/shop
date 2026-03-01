@@ -84,7 +84,6 @@ class StorefrontChatController extends Controller
 
         return response()->json([
             'session_id' => $session->id,
-            'expires_at' => $session->expires_at?->toISOString(),
             'config' => [
                 'welcome_message' => $settings['welcome_message'] ?? 'Hi! How can I help you find the perfect piece today?',
                 'assistant_name' => $settings['assistant_name'] ?? $store->name.' Assistant',

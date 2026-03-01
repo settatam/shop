@@ -102,6 +102,7 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'embedding_model' => env('OPENAI_EMBEDDING_MODEL', 'text-embedding-3-small'),
         'whisper_model' => env('OPENAI_WHISPER_MODEL', 'whisper-1'),
         'tts_model' => env('OPENAI_TTS_MODEL', 'tts-1'),
         'tts_voice' => env('OPENAI_TTS_VOICE', 'alloy'),
@@ -110,6 +111,12 @@ return [
     'anthropic' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+    ],
+
+    'qdrant' => [
+        'url' => env('QDRANT_URL', 'http://127.0.0.1:6333'),
+        'api_key' => env('QDRANT_API_KEY'),
+        'collection' => env('QDRANT_COLLECTION', 'shopmata_store_content'),
     ],
 
     'metals' => [
@@ -162,6 +169,12 @@ return [
         'redirect_uri' => env('WALMART_REDIRECT_URI'),
         'endpoint' => env('WALMART_ENDPOINT'),
         'sandbox' => env('WALMART_SANDBOX', true),
+    ],
+
+    'bigcommerce' => [
+        'client_id' => env('BIGCOMMERCE_CLIENT_ID'),
+        'client_secret' => env('BIGCOMMERCE_CLIENT_SECRET'),
+        'redirect_uri' => env('BIGCOMMERCE_REDIRECT_URI'),
     ],
 
 ];

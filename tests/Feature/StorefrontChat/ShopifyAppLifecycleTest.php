@@ -120,20 +120,21 @@ class ShopifyAppLifecycleTest extends TestCase
         $response->assertStatus(404);
     }
 
-    public function test_cleanup_command_deletes_expired_sessions(): void
+    public function test_cleanup_command_deletes_empty_sessions(): void
     {
-        // Expired session
-        StorefrontChatSession::factory()->expired()->create([
+        // Empty session with no messages, old
+        StorefrontChatSession::factory()->create([
             'store_id' => $this->store->id,
             'store_marketplace_id' => $this->marketplace->id,
-            'expires_at' => now()->subDays(2),
+            'last_message_at' => null,
+            'created_at' => now()->subDays(2),
         ]);
 
-        // Active session
+        // Active session with messages
         $activeSession = StorefrontChatSession::factory()->create([
             'store_id' => $this->store->id,
             'store_marketplace_id' => $this->marketplace->id,
-            'expires_at' => now()->addMinutes(30),
+            'last_message_at' => now(),
         ]);
 
         $this->artisan('storefront:cleanup-sessions')
@@ -142,7 +143,7 @@ class ShopifyAppLifecycleTest extends TestCase
         // Active session should still exist
         $this->assertDatabaseHas('storefront_chat_sessions', ['id' => $activeSession->id]);
 
-        // Should have deleted the expired one
+        // Should have deleted the empty one
         $this->assertEquals(1, StorefrontChatSession::count());
     }
 
