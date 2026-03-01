@@ -515,13 +515,51 @@ class BigCommerceService extends BasePlatformService
     protected function handleProductWebhook(array $data, StoreMarketplace $connection): void
     {
         $productId = $data['id'] ?? null;
+
         if (! $productId) {
             return;
         }
 
-        PlatformListing::where('store_marketplace_id', $connection->id)
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
             ->where('external_listing_id', $productId)
-            ->update(['last_synced_at' => now()]);
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        try {
+            $response = $this->bigCommerceRequest($connection, 'GET', "/v3/catalog/products/{$productId}", [
+                'include' => 'variants',
+            ]);
+
+            $bcProduct = $response->json('data');
+
+            if (! $bcProduct) {
+                return;
+            }
+
+            $listing->update([
+                'platform_data' => $bcProduct,
+                'last_synced_at' => now(),
+            ]);
+
+            $variants = array_map(fn ($v) => [
+                'external_id' => (string) $v['id'],
+                'price' => $v['price'] ?? null,
+                'quantity' => $v['inventory_level'] ?? null,
+                'sku' => $v['sku'] ?? null,
+            ], $bcProduct['variants'] ?? []);
+
+            $this->syncListingToProduct($listing, [
+                'title' => $bcProduct['name'] ?? null,
+                'description' => $bcProduct['description'] ?? null,
+                'is_published' => $bcProduct['is_visible'] ?? false,
+                'variants' => $variants,
+            ]);
+        } catch (\Throwable) {
+            // Log and continue — don't fail the webhook
+        }
     }
 
     protected function handleProductDeletedWebhook(array $data, StoreMarketplace $connection): void

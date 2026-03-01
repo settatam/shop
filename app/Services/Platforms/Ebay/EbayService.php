@@ -851,6 +851,7 @@ class EbayService extends BasePlatformService
             'ITEM_SOLD',
             'ITEM_CLOSED',
             'ITEM_SUSPENDED',
+            'ITEM_REVISED',
         ];
 
         foreach ($topics as $topic) {
@@ -876,6 +877,7 @@ class EbayService extends BasePlatformService
             'ITEM_SOLD' => $this->handleItemSold($data, $connection),
             'ITEM_CLOSED' => $this->handleItemClosed($data, $connection),
             'ITEM_SUSPENDED' => $this->handleItemSuspended($data, $connection),
+            'ITEM_REVISED' => $this->handleItemRevised($data, $connection),
             default => null,
         };
     }
@@ -1403,6 +1405,72 @@ class EbayService extends BasePlatformService
 
         if ($listing) {
             $this->updateListingStatusFromEbay($listing, PlatformListing::STATUS_ERROR);
+        }
+    }
+
+    protected function handleItemRevised(array $data, StoreMarketplace $connection): void
+    {
+        $listingId = $data['resource']['listingId'] ?? $data['listingId'] ?? null;
+
+        if (! $listingId) {
+            return;
+        }
+
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
+            ->where('external_listing_id', $listingId)
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        $sku = $listing->platform_data['sku'] ?? null;
+
+        if (! $sku) {
+            $listing->update(['last_synced_at' => now()]);
+
+            return;
+        }
+
+        try {
+            $this->ensureValidToken($connection);
+
+            $inventoryItem = $this->ebayRequest($connection, 'GET', "/sell/inventory/v1/inventory_item/{$sku}");
+
+            $product = $inventoryItem['product'] ?? [];
+            $quantity = $inventoryItem['availability']['shipToLocationAvailability']['quantity'] ?? null;
+
+            $listing->update([
+                'platform_data' => array_merge($listing->platform_data ?? [], ['inventory_item' => $inventoryItem]),
+                'last_synced_at' => now(),
+            ]);
+
+            // Fetch the offer to get price
+            $offerId = $listing->platform_data['offer_id'] ?? null;
+            $price = null;
+
+            if ($offerId) {
+                try {
+                    $offer = $this->ebayRequest($connection, 'GET', "/sell/inventory/v1/offer/{$offerId}");
+                    $price = $offer['pricingSummary']['price']['value'] ?? null;
+                } catch (\Throwable) {
+                    // Offer fetch failed, skip price update
+                }
+            }
+
+            $this->syncListingToProduct($listing, array_filter([
+                'title' => $product['title'] ?? null,
+                'description' => $product['description'] ?? null,
+                'variants' => $listing->listingVariants()->exists() ? [[
+                    'external_id' => $listing->listingVariants()->first()?->external_variant_id,
+                    'price' => $price,
+                    'quantity' => $quantity,
+                    'sku' => $sku,
+                ]] : [],
+            ], fn ($v) => $v !== null));
+        } catch (\Throwable $e) {
+            Log::warning("[eBay] Failed to handle ITEM_REVISED for listing {$listingId}: {$e->getMessage()}");
+            $listing->update(['last_synced_at' => now()]);
         }
     }
 }

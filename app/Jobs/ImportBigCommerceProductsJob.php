@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StoreMarketplace;
@@ -68,27 +69,44 @@ class ImportBigCommerceProductsJob implements ShouldQueue
             'quantity' => $bcProduct['quantity'] ?? 0,
         ]);
 
+        $createdVariants = [];
+
         if (! empty($bcProduct['variants'])) {
             foreach ($bcProduct['variants'] as $variantData) {
-                ProductVariant::create([
+                $productVariant = ProductVariant::create([
                     'product_id' => $product->id,
                     'sku' => $variantData['sku'] ?? null,
                     'price' => $variantData['price'] ?? 0,
                     'quantity' => $variantData['quantity'] ?? 0,
                 ]);
+
+                $createdVariants[] = [
+                    'product_variant' => $productVariant,
+                    'variant_data' => $variantData,
+                ];
             }
         } else {
-            ProductVariant::create([
+            $productVariant = ProductVariant::create([
                 'product_id' => $product->id,
                 'sku' => $bcProduct['sku'] ?? null,
                 'price' => $bcProduct['price'] ?? $bcProduct['regular_price'] ?? 0,
                 'quantity' => $bcProduct['quantity'] ?? 0,
             ]);
+
+            $createdVariants[] = [
+                'product_variant' => $productVariant,
+                'variant_data' => [
+                    'external_id' => $bcProduct['external_id'],
+                    'sku' => $bcProduct['sku'] ?? null,
+                    'price' => $bcProduct['price'] ?? $bcProduct['regular_price'] ?? 0,
+                    'quantity' => $bcProduct['quantity'] ?? 0,
+                ],
+            ];
         }
 
         $shopDomain = $this->marketplace->shop_domain ?? '';
 
-        PlatformListing::create([
+        $listing = PlatformListing::create([
             'store_marketplace_id' => $this->marketplace->id,
             'product_id' => $product->id,
             'external_listing_id' => $bcProduct['external_id'],
@@ -97,5 +115,16 @@ class ImportBigCommerceProductsJob implements ShouldQueue
             'last_synced_at' => now(),
             'published_at' => $bcProduct['status'] === 'active' ? now() : null,
         ]);
+
+        foreach ($createdVariants as $entry) {
+            PlatformListingVariant::create([
+                'platform_listing_id' => $listing->id,
+                'product_variant_id' => $entry['product_variant']->id,
+                'external_variant_id' => (string) ($entry['variant_data']['external_id'] ?? ''),
+                'price' => $entry['variant_data']['price'] ?? null,
+                'quantity' => $entry['variant_data']['quantity'] ?? 0,
+                'sku' => $entry['variant_data']['sku'] ?? null,
+            ]);
+        }
     }
 }

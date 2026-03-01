@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StoreMarketplace;
@@ -69,17 +70,24 @@ class ImportShopifyProductsJob implements ShouldQueue
             'quantity' => collect($shopifyProduct['variants'] ?? [])->sum('quantity'),
         ]);
 
+        $createdVariants = [];
+
         foreach ($shopifyProduct['variants'] ?? [] as $variantData) {
-            ProductVariant::create([
+            $productVariant = ProductVariant::create([
                 'product_id' => $product->id,
                 'sku' => $variantData['sku'] ?? null,
                 'price' => $variantData['price'] ?? 0,
                 'quantity' => $variantData['quantity'] ?? 0,
                 'barcode' => $variantData['barcode'] ?? null,
             ]);
+
+            $createdVariants[] = [
+                'product_variant' => $productVariant,
+                'variant_data' => $variantData,
+            ];
         }
 
-        PlatformListing::create([
+        $listing = PlatformListing::create([
             'store_marketplace_id' => $this->marketplace->id,
             'product_id' => $product->id,
             'external_listing_id' => $shopifyProduct['external_id'],
@@ -90,5 +98,18 @@ class ImportShopifyProductsJob implements ShouldQueue
             'last_synced_at' => now(),
             'published_at' => now(),
         ]);
+
+        foreach ($createdVariants as $entry) {
+            PlatformListingVariant::create([
+                'platform_listing_id' => $listing->id,
+                'product_variant_id' => $entry['product_variant']->id,
+                'external_variant_id' => (string) ($entry['variant_data']['external_id'] ?? ''),
+                'external_inventory_item_id' => (string) ($entry['variant_data']['inventory_item_id'] ?? ''),
+                'price' => $entry['variant_data']['price'] ?? null,
+                'quantity' => $entry['variant_data']['quantity'] ?? 0,
+                'sku' => $entry['variant_data']['sku'] ?? null,
+                'barcode' => $entry['variant_data']['barcode'] ?? null,
+            ]);
+        }
     }
 }

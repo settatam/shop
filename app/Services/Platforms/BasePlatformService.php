@@ -2,6 +2,7 @@
 
 namespace App\Services\Platforms;
 
+use App\Models\PlatformListing;
 use App\Models\StoreMarketplace;
 use App\Models\SyncLog;
 use App\Services\Platforms\Contracts\PlatformInterface;
@@ -53,5 +54,46 @@ abstract class BasePlatformService implements PlatformInterface
         return route('webhooks.'.$this->getPlatform(), [
             'connection' => $connection->id,
         ]);
+    }
+
+    /**
+     * Sync platform product data back to the local Product and ProductVariant models.
+     *
+     * @param  array{title?: string, description?: string, is_published?: bool, variants?: array<int, array{external_id?: string, price?: float|string, quantity?: int, sku?: string, barcode?: string}>}  $productData
+     */
+    protected function syncListingToProduct(PlatformListing $listing, array $productData): void
+    {
+        $product = $listing->product;
+
+        if (! $product) {
+            return;
+        }
+
+        $product->update(array_filter([
+            'title' => $productData['title'] ?? null,
+            'description' => $productData['description'] ?? null,
+            'is_published' => $productData['is_published'] ?? null,
+        ], fn ($v) => $v !== null));
+
+        foreach ($productData['variants'] ?? [] as $variantData) {
+            $externalId = (string) ($variantData['external_id'] ?? '');
+
+            if (! $externalId) {
+                continue;
+            }
+
+            $listingVariant = $listing->listingVariants()
+                ->where('external_variant_id', $externalId)
+                ->first();
+
+            if ($listingVariant && $listingVariant->productVariant) {
+                $listingVariant->productVariant->update(array_filter([
+                    'price' => $variantData['price'] ?? null,
+                    'quantity' => $variantData['quantity'] ?? null,
+                    'sku' => $variantData['sku'] ?? null,
+                    'barcode' => $variantData['barcode'] ?? null,
+                ], fn ($v) => $v !== null));
+            }
+        }
     }
 }

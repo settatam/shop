@@ -432,6 +432,7 @@ class AmazonService extends BasePlatformService
             'FEED_PROCESSING_FINISHED',
             'ORDER_STATUS_CHANGE',
             'REPORT_PROCESSING_FINISHED',
+            'LISTINGS_ITEM_STATUS_CHANGE',
         ];
 
         foreach ($notificationTypes as $type) {
@@ -454,6 +455,7 @@ class AmazonService extends BasePlatformService
         match ($notificationType) {
             'ORDER_STATUS_CHANGE' => $this->handleOrderStatusChange($payload, $connection),
             'ANY_OFFER_CHANGED' => $this->handleOfferChange($payload, $connection),
+            'LISTINGS_ITEM_STATUS_CHANGE' => $this->handleListingStatusChange($payload, $connection),
             default => null,
         };
     }
@@ -671,6 +673,69 @@ class AmazonService extends BasePlatformService
 
     protected function handleOfferChange(array $payload, StoreMarketplace $connection): void
     {
-        // Update listing data when offer changes
+        $offerTrigger = $payload['OfferChangeTrigger'] ?? [];
+        $asin = $offerTrigger['ASIN'] ?? null;
+
+        if (! $asin) {
+            return;
+        }
+
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
+            ->where(function ($q) use ($asin) {
+                $q->where('external_listing_id', $asin)
+                    ->orWhereJsonContains('platform_data->asin', $asin);
+            })
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        $listing->update(['last_synced_at' => now()]);
+
+        $price = $offerTrigger['ItemCondition'] === 'New'
+            ? ($payload['Offers'][0]['ListingPrice']['Amount'] ?? null)
+            : null;
+
+        if ($price && $listing->listingVariants()->exists()) {
+            $listingVariant = $listing->listingVariants()->first();
+
+            if ($listingVariant && $listingVariant->productVariant) {
+                $listingVariant->productVariant->update(array_filter([
+                    'price' => $price,
+                ], fn ($v) => $v !== null));
+            }
+        }
+    }
+
+    protected function handleListingStatusChange(array $payload, StoreMarketplace $connection): void
+    {
+        $sku = $payload['SellerSKU'] ?? $payload['sku'] ?? null;
+        $status = $payload['Status'] ?? $payload['status'] ?? null;
+
+        if (! $sku) {
+            return;
+        }
+
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
+            ->where('external_listing_id', $sku)
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        $newStatus = match (strtolower($status ?? '')) {
+            'buyable', 'active' => PlatformListing::STATUS_LISTED,
+            'inactive', 'incomplete' => PlatformListing::STATUS_ENDED,
+            default => null,
+        };
+
+        if ($newStatus) {
+            $listing->update([
+                'status' => $newStatus,
+                'last_synced_at' => now(),
+            ]);
+        }
     }
 }

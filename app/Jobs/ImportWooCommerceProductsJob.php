@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StoreMarketplace;
@@ -68,28 +69,43 @@ class ImportWooCommerceProductsJob implements ShouldQueue
             'quantity' => $wooProduct['quantity'] ?? 0,
         ]);
 
+        $createdVariants = [];
+
         if (! empty($wooProduct['variants'])) {
             foreach ($wooProduct['variants'] as $variantData) {
-                ProductVariant::create([
+                $productVariant = ProductVariant::create([
                     'product_id' => $product->id,
                     'sku' => $variantData['sku'] ?? null,
                     'price' => $variantData['price'] ?? 0,
                     'quantity' => $variantData['quantity'] ?? 0,
                     'barcode' => $variantData['barcode'] ?? null,
                 ]);
+
+                $createdVariants[] = [
+                    'product_variant' => $productVariant,
+                    'variant_data' => $variantData,
+                ];
             }
         } else {
-            ProductVariant::create([
+            $productVariant = ProductVariant::create([
                 'product_id' => $product->id,
                 'sku' => $wooProduct['sku'] ?? null,
                 'price' => $wooProduct['price'] ?? $wooProduct['regular_price'] ?? 0,
                 'quantity' => $wooProduct['quantity'] ?? 0,
             ]);
+
+            $createdVariants[] = [
+                'product_variant' => $productVariant,
+                'variant_data' => [
+                    'external_id' => $wooProduct['external_id'],
+                    'sku' => $wooProduct['sku'] ?? null,
+                    'price' => $wooProduct['price'] ?? $wooProduct['regular_price'] ?? 0,
+                    'quantity' => $wooProduct['quantity'] ?? 0,
+                ],
+            ];
         }
 
-        $siteUrl = $this->marketplace->credentials['site_url'] ?? $this->marketplace->shop_domain;
-
-        PlatformListing::create([
+        $listing = PlatformListing::create([
             'store_marketplace_id' => $this->marketplace->id,
             'product_id' => $product->id,
             'external_listing_id' => $wooProduct['external_id'],
@@ -98,5 +114,17 @@ class ImportWooCommerceProductsJob implements ShouldQueue
             'last_synced_at' => now(),
             'published_at' => $wooProduct['status'] === 'publish' ? now() : null,
         ]);
+
+        foreach ($createdVariants as $entry) {
+            PlatformListingVariant::create([
+                'platform_listing_id' => $listing->id,
+                'product_variant_id' => $entry['product_variant']->id,
+                'external_variant_id' => (string) ($entry['variant_data']['external_id'] ?? ''),
+                'price' => $entry['variant_data']['price'] ?? null,
+                'quantity' => $entry['variant_data']['quantity'] ?? 0,
+                'sku' => $entry['variant_data']['sku'] ?? null,
+                'barcode' => $entry['variant_data']['barcode'] ?? null,
+            ]);
+        }
     }
 }

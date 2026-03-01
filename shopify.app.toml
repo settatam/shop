@@ -17,6 +17,17 @@ api_version = "2024-07"
   topics = ["app/uninstalled"]
   uri = "/api/webhooks/shopify/app"
 
+  [[webhooks.subscriptions]]
+  topics = [
+    "orders/create",
+    "orders/updated",
+    "products/create",
+    "products/update",
+    "products/delete",
+    "inventory_levels/update",
+  ]
+  uri = "/api/webhooks/shopify/app"
+
   [webhooks.privacy_compliance]
   customer_data_request_url = "/api/webhooks/shopify/gdpr/customers-data-request"
   customer_deletion_url = "/api/webhooks/shopify/gdpr/customers-redact"

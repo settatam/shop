@@ -50,6 +50,7 @@ class EbayWebhookController extends BaseWebhookController
             'ITEM_SOLD',
             'ITEM_CLOSED',
             'ITEM_SUSPENDED',
+            'ITEM_REVISED',
         ];
 
         return in_array($eventType, $ebayEvents) || parent::shouldProcessEvent($eventType);

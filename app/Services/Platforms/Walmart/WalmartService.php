@@ -637,12 +637,51 @@ class WalmartService extends BasePlatformService
     protected function handleItemWebhook(array $payload, StoreMarketplace $connection): void
     {
         $sku = $payload['sku'] ?? null;
+
         if (! $sku) {
             return;
         }
 
-        PlatformListing::where('store_marketplace_id', $connection->id)
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
             ->where('external_listing_id', $sku)
-            ->update(['last_synced_at' => now()]);
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        try {
+            $this->ensureValidToken($connection);
+
+            $response = $this->walmartRequest($connection, 'GET', "/v3/items/{$sku}");
+
+            $listing->update([
+                'platform_data' => $response,
+                'last_synced_at' => now(),
+            ]);
+
+            $isPublished = ($response['publishedStatus'] ?? '') === 'PUBLISHED';
+
+            $this->syncListingToProduct($listing, array_filter([
+                'title' => $response['productName'] ?? null,
+                'description' => $response['shortDescription'] ?? null,
+                'is_published' => $isPublished,
+            ], fn ($v) => $v !== null));
+
+            // Update variant price and quantity if available
+            if ($listing->listingVariants()->exists()) {
+                $listingVariant = $listing->listingVariants()->first();
+
+                if ($listingVariant && $listingVariant->productVariant) {
+                    $listingVariant->productVariant->update(array_filter([
+                        'price' => $response['price']['amount'] ?? null,
+                        'quantity' => $response['availableQuantity']['amount'] ?? null,
+                    ], fn ($v) => $v !== null));
+                }
+            }
+        } catch (\Throwable) {
+            // API fetch failed, just update timestamp
+            $listing->update(['last_synced_at' => now()]);
+        }
     }
 }

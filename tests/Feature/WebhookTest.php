@@ -84,17 +84,17 @@ class WebhookTest extends TestCase
         $response->assertStatus(400);
     }
 
-    public function test_non_order_events_are_skipped(): void
+    public function test_non_processable_events_are_skipped(): void
     {
         Queue::fake();
 
-        $payload = ['product' => ['id' => 123]];
+        $payload = ['theme' => ['id' => 123]];
 
         $response = $this->postJson(
             "/api/webhooks/shopify/{$this->connection->id}",
             $payload,
             [
-                'X-Shopify-Topic' => 'products/create',
+                'X-Shopify-Topic' => 'themes/update',
                 'X-Shopify-Hmac-Sha256' => $this->calculateShopifyHmac($payload),
             ]
         );

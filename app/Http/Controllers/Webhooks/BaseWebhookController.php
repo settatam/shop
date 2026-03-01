@@ -140,6 +140,23 @@ abstract class BaseWebhookController extends Controller
             'refund.created',
             'refund.updated',
             'order.refunded',
+            // Product events
+            'products/create',
+            'products/update',
+            'products/delete',
+            'store/product/updated',
+            'store/product/deleted',
+            'woocommerce_product_created',
+            'woocommerce_product_updated',
+            'product.updated',
+            'product.deleted',
+            'ITEM_REVISED',
+            'ITEM_UPDATED',
+            'ANY_OFFER_CHANGED',
+            'LISTINGS_ITEM_STATUS_CHANGE',
+            // Inventory events
+            'inventory_levels/update',
+            'inventory_levels/connect',
         ];
 
         foreach ($processableEvents as $event) {
@@ -148,6 +165,11 @@ abstract class BaseWebhookController extends Controller
             }
         }
 
-        return str_contains(strtolower($eventType), 'order') || str_contains(strtolower($eventType), 'refund');
+        $lower = strtolower($eventType);
+
+        return str_contains($lower, 'order')
+            || str_contains($lower, 'refund')
+            || str_contains($lower, 'product')
+            || str_contains($lower, 'inventory');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Services\Platforms\Shopify;
 
 use App\Enums\Platform;
 use App\Models\PlatformListing;
+use App\Models\PlatformListingVariant;
 use App\Models\PlatformOrder;
 use App\Models\Product;
 use App\Models\ShopifyMetafieldDefinition;
@@ -125,8 +126,8 @@ class ShopifyService extends BasePlatformService
                     $params['page_info'] = $page;
                 }
 
-                $response = $this->shopifyRequest($connection, 'GET', 'products.json', $params);
-                $shopifyProducts = $response['products'] ?? [];
+                $result = $this->shopifyPaginatedRequest($connection, 'GET', 'products.json', $params);
+                $shopifyProducts = $result['data']['products'] ?? [];
 
                 foreach ($shopifyProducts as $shopifyProduct) {
                     $products->push($this->mapShopifyProduct($shopifyProduct, $connection));
@@ -134,8 +135,7 @@ class ShopifyService extends BasePlatformService
                     $syncLog->incrementSuccess();
                 }
 
-                // Get next page from Link header
-                $page = $this->getNextPage($response);
+                $page = $result['next_page'];
             } while ($page);
 
             $syncLog->markCompleted(['imported_count' => $products->count()]);
@@ -638,6 +638,42 @@ class ShopifyService extends BasePlatformService
         return $response->json() ?? [];
     }
 
+    protected function shopifyPaginatedRequest(
+        StoreMarketplace $connection,
+        string $method,
+        string $endpoint,
+        array $data = []
+    ): array {
+        $url = "https://{$connection->shop_domain}/admin/api/{$this->apiVersion}/{$endpoint}";
+
+        $response = Http::withHeaders([
+            'X-Shopify-Access-Token' => $connection->access_token,
+            'Content-Type' => 'application/json',
+        ])->{strtolower($method)}($url, $data);
+
+        if ($response->failed()) {
+            throw new \Exception("Shopify API error: {$response->body()}");
+        }
+
+        return [
+            'data' => $response->json() ?? [],
+            'next_page' => $this->parseLinkHeader($response->header('Link')),
+        ];
+    }
+
+    protected function parseLinkHeader(?string $linkHeader): ?string
+    {
+        if (! $linkHeader) {
+            return null;
+        }
+
+        if (preg_match('/<[^>]*page_info=([^&>]+)[^>]*>;\s*rel="next"/', $linkHeader, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
     protected function getRequiredScopes(): array
     {
         return [
@@ -678,6 +714,7 @@ class ShopifyService extends BasePlatformService
                 'price' => $v['price'],
                 'quantity' => $v['inventory_quantity'] ?? 0,
                 'barcode' => $v['barcode'],
+                'inventory_item_id' => $v['inventory_item_id'] ?? null,
             ])->all(),
             'images' => collect($shopifyProduct['images'] ?? [])->pluck('src')->all(),
         ];
@@ -846,12 +883,6 @@ class ShopifyService extends BasePlatformService
         return $response['locations'][0]['id'] ?? null;
     }
 
-    protected function getNextPage(array $response): ?string
-    {
-        // Implement cursor-based pagination parsing
-        return null;
-    }
-
     protected function handleOrderWebhook(array $data, StoreMarketplace $connection): void
     {
         $this->importOrder($data, $connection);
@@ -859,14 +890,62 @@ class ShopifyService extends BasePlatformService
 
     protected function handleProductWebhook(array $data, StoreMarketplace $connection): void
     {
-        // Update local listing if exists
-        PlatformListing::where('store_marketplace_id', $connection->id)
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
             ->where('external_listing_id', $data['id'])
-            ->update(['platform_data' => $data, 'last_synced_at' => now()]);
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        $listing->update([
+            'platform_data' => $data,
+            'last_synced_at' => now(),
+        ]);
+
+        $product = $listing->product;
+
+        if ($product) {
+            $product->update([
+                'title' => $data['title'] ?? $product->title,
+                'description' => $data['body_html'] ?? $product->description,
+                'is_published' => ($data['status'] ?? 'active') === 'active',
+            ]);
+
+            foreach ($data['variants'] ?? [] as $shopifyVariant) {
+                $listingVariant = $listing->listingVariants()
+                    ->where('external_variant_id', (string) $shopifyVariant['id'])
+                    ->first();
+
+                if ($listingVariant && $listingVariant->productVariant) {
+                    $listingVariant->productVariant->update([
+                        'price' => $shopifyVariant['price'],
+                        'quantity' => $shopifyVariant['inventory_quantity'] ?? 0,
+                        'sku' => $shopifyVariant['sku'],
+                        'barcode' => $shopifyVariant['barcode'] ?? null,
+                    ]);
+                }
+            }
+        }
     }
 
     protected function handleInventoryWebhook(array $data, StoreMarketplace $connection): void
     {
-        // Inventory sync logic
+        $inventoryItemId = (string) ($data['inventory_item_id'] ?? '');
+        $available = $data['available'] ?? null;
+
+        if (! $inventoryItemId || $available === null) {
+            return;
+        }
+
+        $listingVariant = PlatformListingVariant::whereHas('listing', function ($q) use ($connection) {
+            $q->where('store_marketplace_id', $connection->id);
+        })->where('external_inventory_item_id', $inventoryItemId)->first();
+
+        if ($listingVariant && $listingVariant->productVariant) {
+            $listingVariant->productVariant->update([
+                'quantity' => $available,
+            ]);
+        }
     }
 }

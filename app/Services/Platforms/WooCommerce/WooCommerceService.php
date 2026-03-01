@@ -410,16 +410,34 @@ class WooCommerceService extends BasePlatformService
             'sale_price' => $wooProduct['sale_price'],
             'quantity' => $wooProduct['stock_quantity'],
             'status' => $wooProduct['status'],
+            'permalink' => $wooProduct['permalink'] ?? null,
             'categories' => collect($wooProduct['categories'] ?? [])->pluck('name')->all(),
             'images' => collect($wooProduct['images'] ?? [])->pluck('src')->all(),
-            'variants' => $this->mapWooVariations($wooProduct['variations'] ?? [], $connection),
+            'variants' => $this->mapWooVariations($wooProduct['variations'] ?? [], $connection, $wooProduct['id']),
         ];
     }
 
-    protected function mapWooVariations(array $variationIds, StoreMarketplace $connection): array
+    protected function mapWooVariations(array $variationIds, StoreMarketplace $connection, int $productId = 0): array
     {
-        // In a real implementation, you'd fetch each variation
-        return [];
+        $variations = [];
+
+        foreach ($variationIds as $variationId) {
+            try {
+                $response = $this->wooRequest($connection, 'GET', "products/{$productId}/variations/{$variationId}");
+
+                $variations[] = [
+                    'external_id' => (string) $response['id'],
+                    'sku' => $response['sku'] ?? null,
+                    'price' => $response['price'] ?? $response['regular_price'] ?? 0,
+                    'quantity' => $response['stock_quantity'] ?? 0,
+                    'barcode' => $response['barcode'] ?? null,
+                ];
+            } catch (\Throwable) {
+                // Skip variations that fail to fetch
+            }
+        }
+
+        return $variations;
     }
 
     protected function mapToWooProduct(Product $product): array
@@ -571,12 +589,51 @@ class WooCommerceService extends BasePlatformService
 
     protected function handleProductWebhook(array $data, StoreMarketplace $connection): void
     {
-        PlatformListing::where('store_marketplace_id', $connection->id)
+        $listing = PlatformListing::where('store_marketplace_id', $connection->id)
             ->where('external_listing_id', $data['id'])
-            ->update([
-                'platform_data' => $data,
-                'last_synced_at' => now(),
-            ]);
+            ->first();
+
+        if (! $listing) {
+            return;
+        }
+
+        $listing->update([
+            'platform_data' => $data,
+            'last_synced_at' => now(),
+        ]);
+
+        $variants = [];
+
+        foreach ($data['variations'] ?? [] as $variation) {
+            if (is_array($variation)) {
+                $variants[] = [
+                    'external_id' => (string) $variation['id'],
+                    'price' => $variation['price'] ?? $variation['regular_price'] ?? null,
+                    'quantity' => $variation['stock_quantity'] ?? null,
+                    'sku' => $variation['sku'] ?? null,
+                ];
+            }
+        }
+
+        // For simple products (no variations), sync from top-level data
+        if (empty($variants) && $listing->listingVariants()->exists()) {
+            $firstVariant = $listing->listingVariants()->first();
+
+            if ($firstVariant && $firstVariant->productVariant) {
+                $firstVariant->productVariant->update(array_filter([
+                    'price' => $data['price'] ?? $data['regular_price'] ?? null,
+                    'quantity' => $data['stock_quantity'] ?? null,
+                    'sku' => $data['sku'] ?? null,
+                ], fn ($v) => $v !== null));
+            }
+        }
+
+        $this->syncListingToProduct($listing, [
+            'title' => $data['name'] ?? null,
+            'description' => $data['description'] ?? null,
+            'is_published' => ($data['status'] ?? '') === 'publish',
+            'variants' => $variants,
+        ]);
     }
 
     protected function handleProductDeletedWebhook(array $data, StoreMarketplace $connection): void

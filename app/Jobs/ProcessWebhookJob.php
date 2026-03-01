@@ -5,10 +5,12 @@ namespace App\Jobs;
 use App\Models\PlatformListing;
 use App\Models\WebhookLog;
 use App\Services\Platforms\Ebay\EbayService;
+use App\Services\Platforms\PlatformManager;
 use App\Services\Returns\ReturnSyncService;
 use App\Services\Webhooks\OrderImportService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Http\Request;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Throwable;
@@ -36,6 +38,10 @@ class ProcessWebhookJob implements ShouldQueue
                 $this->processListingWebhook();
 
                 return;
+            } elseif ($this->isProductEvent($eventType)) {
+                $this->processProductWebhook();
+            } elseif ($this->isInventoryEvent($eventType)) {
+                $this->processInventoryWebhook();
             } elseif ($this->isRefundEvent($eventType)) {
                 $this->processRefundWebhook($returnSyncService);
             } elseif ($this->isOrderEvent($eventType)) {
@@ -108,9 +114,64 @@ class ProcessWebhookJob implements ShouldQueue
         return str_contains($eventType, 'refund');
     }
 
+    protected function isProductEvent(string $eventType): bool
+    {
+        return str_contains($eventType, 'products/')
+            || str_contains($eventType, 'product.')
+            || str_contains($eventType, 'store/product/')
+            || $eventType === 'item_revised'
+            || $eventType === 'item_updated'
+            || $eventType === 'any_offer_changed'
+            || $eventType === 'listings_item_status_change';
+    }
+
+    protected function isInventoryEvent(string $eventType): bool
+    {
+        return str_contains($eventType, 'inventory');
+    }
+
     protected function isListingEvent(string $eventType): bool
     {
         return in_array($eventType, ['item_sold', 'item_closed', 'item_suspended']);
+    }
+
+    protected function processProductWebhook(): void
+    {
+        $marketplace = $this->webhookLog->marketplace;
+
+        if (! $marketplace) {
+            throw new \RuntimeException('No store marketplace found for webhook');
+        }
+
+        $service = app(PlatformManager::class)->driver($this->webhookLog->platform);
+
+        $request = $this->buildWebhookRequest();
+
+        $service->handleWebhook($request, $marketplace);
+    }
+
+    protected function processInventoryWebhook(): void
+    {
+        $marketplace = $this->webhookLog->marketplace;
+
+        if (! $marketplace) {
+            throw new \RuntimeException('No store marketplace found for webhook');
+        }
+
+        $service = app(PlatformManager::class)->driver($this->webhookLog->platform);
+
+        $request = $this->buildWebhookRequest();
+
+        $service->handleWebhook($request, $marketplace);
+    }
+
+    protected function buildWebhookRequest(): Request
+    {
+        $request = Request::create('/', 'POST', $this->webhookLog->payload ?? []);
+        $request->headers->set('X-Shopify-Topic', $this->webhookLog->event_type);
+        $request->headers->set('X-WC-Webhook-Topic', $this->webhookLog->event_type);
+
+        return $request;
     }
 
     protected function processListingWebhook(): void
