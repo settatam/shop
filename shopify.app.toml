@@ -1,6 +1,6 @@
 name = "Shopmata AI Assistant"
 client_id = "eecdbc4f22070061311834b7e165aa38"
-application_url = "https://shopmata.com"
+application_url = "https://shopmata.com/shopify/embedded"
 embedded = true
 handle = "shopmata-ai-assistant"
 

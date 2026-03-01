@@ -269,6 +269,7 @@ class WooCommerceAdapter extends BaseAdapter
     protected function buildWooProductData(PlatformListing $listing): array
     {
         $data = $this->buildProductData($listing);
+        $platformSettings = $listing->platform_settings ?? [];
 
         $wooData = [
             'name' => $data['title'],
@@ -276,38 +277,48 @@ class WooCommerceAdapter extends BaseAdapter
             'status' => 'publish',
         ];
 
+        // Short description from listing page
+        if (! empty($platformSettings['short_description'])) {
+            $wooData['short_description'] = $platformSettings['short_description'];
+        }
+
         $variants = $data['variants'] ?? [];
         if (count($variants) > 1) {
             $wooData['type'] = 'variable';
 
-            $options = [[], [], []];
-            foreach ($variants as $variant) {
-                if ($variant['option1'] ?? null) {
-                    $options[0][] = $variant['option1'];
+            // Use custom attributes from listing page if set, otherwise build from variants
+            if (! empty($platformSettings['woo_attributes'])) {
+                $wooData['attributes'] = $platformSettings['woo_attributes'];
+            } else {
+                $options = [[], [], []];
+                foreach ($variants as $variant) {
+                    if ($variant['option1'] ?? null) {
+                        $options[0][] = $variant['option1'];
+                    }
+                    if ($variant['option2'] ?? null) {
+                        $options[1][] = $variant['option2'];
+                    }
+                    if ($variant['option3'] ?? null) {
+                        $options[2][] = $variant['option3'];
+                    }
                 }
-                if ($variant['option2'] ?? null) {
-                    $options[1][] = $variant['option2'];
-                }
-                if ($variant['option3'] ?? null) {
-                    $options[2][] = $variant['option3'];
-                }
-            }
 
-            $optionNames = ['Option 1', 'Option 2', 'Option 3'];
-            $attributes = [];
-            foreach ($options as $index => $values) {
-                $uniqueValues = array_unique(array_filter($values));
-                if (! empty($uniqueValues)) {
-                    $attributes[] = [
-                        'name' => $optionNames[$index],
-                        'options' => array_values($uniqueValues),
-                        'visible' => true,
-                        'variation' => true,
-                    ];
+                $optionNames = ['Option 1', 'Option 2', 'Option 3'];
+                $attributes = [];
+                foreach ($options as $index => $values) {
+                    $uniqueValues = array_unique(array_filter($values));
+                    if (! empty($uniqueValues)) {
+                        $attributes[] = [
+                            'name' => $optionNames[$index],
+                            'options' => array_values($uniqueValues),
+                            'visible' => true,
+                            'variation' => true,
+                        ];
+                    }
                 }
-            }
 
-            $wooData['attributes'] = $attributes;
+                $wooData['attributes'] = $attributes;
+            }
         } elseif (! empty($variants)) {
             $variant = $variants[0];
             $wooData['type'] = 'simple';
@@ -326,7 +337,10 @@ class WooCommerceAdapter extends BaseAdapter
             $wooData['images'] = array_map(fn ($url) => ['src' => $url], $data['images']);
         }
 
-        if (! empty($data['category'])) {
+        // Category from listing page override, then from product data
+        if (! empty($platformSettings['woo_category'])) {
+            $wooData['categories'] = [['name' => $platformSettings['woo_category']]];
+        } elseif (! empty($data['category'])) {
             $wooData['categories'] = [['name' => $data['category']]];
         }
 

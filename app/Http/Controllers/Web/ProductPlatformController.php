@@ -76,6 +76,7 @@ class ProductPlatformController extends Controller
         $isAmazon = $marketplace->platform->value === 'amazon';
         $isEtsy = $marketplace->platform->value === 'etsy';
         $isShopify = $marketplace->platform->value === 'shopify';
+        $isWooCommerce = $marketplace->platform->value === 'woocommerce';
 
         return Inertia::render('products/platforms/Show', [
             'product' => [
@@ -143,6 +144,7 @@ class ProductPlatformController extends Controller
             'warehouses' => $isEbay ? $this->getWarehousesForStore() : [],
             'ebayItemSpecifics' => $isEbay ? $this->getEbayItemSpecificsData($product, $marketplace, $listing) : null,
             'shopifyMetafields' => $isShopify ? $this->getShopifyMetafieldDefinitionsData($product, $marketplace, $listing) : null,
+            'woocommerceAttributes' => $isWooCommerce ? $this->getWooCommerceAttributesData($product, $listing) : [],
         ]);
     }
 
@@ -1161,5 +1163,54 @@ class ProductPlatformController extends Controller
     protected function platformSupportsMetafields(StoreMarketplace $marketplace): bool
     {
         return in_array($marketplace->platform->value, ['shopify', 'bigcommerce']);
+    }
+
+    /**
+     * Get WooCommerce product attributes data.
+     *
+     * Builds attributes from the product's variants (option values) and
+     * any existing platform_settings overrides on the listing.
+     *
+     * @return array<array{name: string, options: string[], visible: bool, variation: bool}>
+     */
+    protected function getWooCommerceAttributesData(Product $product, ?PlatformListing $listing): array
+    {
+        // Check for listing-level overrides first
+        $overrides = $listing?->platform_settings['woo_attributes'] ?? null;
+        if ($overrides) {
+            return $overrides;
+        }
+
+        // Build from product variants
+        $product->loadMissing('variants');
+        $attributes = [];
+        $optionGroups = [[], [], []];
+        $optionNames = ['Option 1', 'Option 2', 'Option 3'];
+
+        foreach ($product->variants as $variant) {
+            if ($variant->option1_value) {
+                $optionGroups[0][] = $variant->option1_value;
+            }
+            if ($variant->option2_value) {
+                $optionGroups[1][] = $variant->option2_value;
+            }
+            if ($variant->option3_value) {
+                $optionGroups[2][] = $variant->option3_value;
+            }
+        }
+
+        foreach ($optionGroups as $index => $values) {
+            $uniqueValues = array_values(array_unique(array_filter($values)));
+            if (! empty($uniqueValues)) {
+                $attributes[] = [
+                    'name' => $optionNames[$index],
+                    'options' => $uniqueValues,
+                    'visible' => true,
+                    'variation' => true,
+                ];
+            }
+        }
+
+        return $attributes;
     }
 }

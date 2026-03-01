@@ -27,6 +27,7 @@ import PlatformCategoryBrowser from '@/components/platforms/PlatformCategoryBrow
 import EbayLocationFormModal from '@/components/platforms/EbayLocationFormModal.vue';
 import EbayItemSpecificsEditor from '@/components/platforms/EbayItemSpecificsEditor.vue';
 import ShopifyMetafieldEditor from '@/components/platforms/ShopifyMetafieldEditor.vue';
+import WooCommerceAttributeEditor from '@/components/platforms/WooCommerceAttributeEditor.vue';
 import axios from 'axios';
 
 interface Product {
@@ -229,12 +230,14 @@ interface Props {
     warehouses: WarehouseOption[];
     ebayItemSpecifics: EbayItemSpecificsData | null;
     shopifyMetafields: ShopifyMetafieldsData | null;
+    woocommerceAttributes: Array<{ name: string; options: string[]; visible: boolean; variation: boolean }>;
 }
 
 const props = defineProps<Props>();
 
 const isEbay = computed(() => props.marketplace.platform === 'ebay');
 const isShopify = computed(() => props.marketplace.platform === 'shopify');
+const isWooCommerce = computed(() => props.marketplace.platform === 'woocommerce');
 
 // Platform icons
 const platformIcons: Record<string, string> = {
@@ -243,6 +246,7 @@ const platformIcons: Record<string, string> = {
     amazon: '/images/platforms/amazon.svg',
     etsy: '/images/platforms/etsy.svg',
     walmart: '/images/platforms/walmart.svg',
+    woocommerce: '/images/platforms/woocommerce.svg',
 };
 
 const selectClass = 'mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
@@ -721,6 +725,11 @@ function handleShopifyValueOverridesChanged(overrides: Record<string, string>) {
         }
     }
     form.value.attributes = { ...form.value.attributes, ...attrs };
+}
+
+// WooCommerce attribute handler
+function handleWooAttributesChanged(attributes: Array<{ name: string; options: string[]; visible: boolean; variation: boolean }>) {
+    form.value.platform_settings = { ...form.value.platform_settings, woo_attributes: attributes };
 }
 
 async function fetchEbayLocations() {
@@ -1356,8 +1365,52 @@ async function aiSuggest(type: 'auto_fill' | 'title' | 'description' | 'ebay_lis
                         />
                     </div>
 
-                    <!-- Attributes / Metafields (non-Shopify) -->
-                    <div v-if="!isShopify && templateFields.length > 0" class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                    <!-- WooCommerce Short Description -->
+                    <div v-if="isWooCommerce" class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                        <h2 class="mb-4 text-base font-semibold text-gray-900 dark:text-white">Short Description</h2>
+                        <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">
+                            WooCommerce displays this as a brief summary above the product tabs.
+                        </p>
+                        <RichTextEditor
+                            :model-value="form.platform_settings.short_description || ''"
+                            @update:model-value="form.platform_settings = { ...form.platform_settings, short_description: $event || undefined }"
+                        />
+                    </div>
+
+                    <!-- WooCommerce Product Attributes -->
+                    <div v-if="isWooCommerce" class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                        <div class="mb-4">
+                            <h2 class="text-base font-semibold text-gray-900 dark:text-white">Product Attributes</h2>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                Define attributes like Size, Color, or Material. Mark attributes as "variation" to create variable products.
+                            </p>
+                        </div>
+                        <WooCommerceAttributeEditor
+                            :attributes="woocommerceAttributes || []"
+                            :template-fields="templateFields"
+                            @attributes-changed="handleWooAttributesChanged"
+                        />
+                    </div>
+
+                    <!-- WooCommerce Category -->
+                    <div v-if="isWooCommerce" class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                        <h2 class="mb-4 text-base font-semibold text-gray-900 dark:text-white">WooCommerce Category</h2>
+                        <div class="space-y-2">
+                            <Label for="woo-category">Category Name</Label>
+                            <Input
+                                id="woo-category"
+                                :model-value="form.platform_settings.woo_category || preview.listing.attributes?.category || ''"
+                                @update:model-value="form.platform_settings = { ...form.platform_settings, woo_category: $event || undefined }"
+                                placeholder="e.g. Clothing > T-Shirts"
+                            />
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                The product category as it should appear in WooCommerce.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Attributes / Metafields (non-Shopify, non-WooCommerce) -->
+                    <div v-if="!isShopify && !isWooCommerce && templateFields.length > 0" class="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
                         <div class="mb-4 flex items-center justify-between">
                             <h2 class="text-base font-semibold text-gray-900 dark:text-white">Attributes</h2>
                             <p class="text-sm text-gray-500 dark:text-gray-400">

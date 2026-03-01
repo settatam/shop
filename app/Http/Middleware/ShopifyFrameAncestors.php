@@ -12,12 +12,18 @@ class ShopifyFrameAncestors
     {
         $response = $next($request);
 
+        // Remove any server-level X-Frame-Options that would block embedding
+        $response->headers->remove('X-Frame-Options');
+
         $shop = $request->query('shop', '');
-        $frameAncestors = "https://admin.shopify.com https://{$shop}";
+        $ancestors = ['https://admin.shopify.com', 'https://*.myshopify.com'];
+        if ($shop) {
+            $ancestors[] = "https://{$shop}";
+        }
 
         $response->headers->set(
             'Content-Security-Policy',
-            "frame-ancestors {$frameAncestors}"
+            'frame-ancestors '.implode(' ', $ancestors)
         );
 
         return $response;
