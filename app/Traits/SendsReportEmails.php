@@ -91,17 +91,6 @@ trait SendsReportEmails
             $csvFilename ?? $this->generateCsvFilename($reportTitle)
         );
 
-        // Set from address using store settings if provided
-        if ($store) {
-            $fromAddress = $store->email_from_address ?: config('mail.from.address');
-            $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
-            $mailable->from($fromAddress, $fromName);
-
-            if ($store->email_reply_to_address) {
-                $mailable->replyTo($store->email_reply_to_address);
-            }
-        }
-
         // Send to all recipients
         try {
             foreach ($emails as $email) {

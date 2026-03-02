@@ -1002,6 +1002,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('yearly', [TransactionsReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [TransactionsReportController::class, 'exportYearly'])->name('yearly.export');
         Route::get('cohort', [TransactionsReportController::class, 'cohort'])->name('cohort');
+        Route::get('cohort/drilldown', [TransactionsReportController::class, 'cohortDrilldown'])->name('cohort.drilldown');
         Route::get('cohort/export', [TransactionsReportController::class, 'exportCohort'])->name('cohort.export');
         Route::post('cohort/email', [TransactionsReportController::class, 'emailCohort'])->name('cohort.email');
     });

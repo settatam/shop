@@ -223,15 +223,6 @@ class ScheduledReportController extends Controller
                 generatedAt: $reportDate
             ))->withSubject($subject);
 
-            // Set from address using store settings
-            $fromAddress = $store->email_from_address ?: config('mail.from.address');
-            $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
-            $mailable->from($fromAddress, $fromName);
-
-            if ($store->email_reply_to_address) {
-                $mailable->replyTo($store->email_reply_to_address);
-            }
-
             Mail::to($testRecipient)->send($mailable);
 
             // Log the test notification
@@ -485,15 +476,6 @@ HTML;
                 rowCount: $totalRowCount,
                 generatedAt: $reportDate
             ))->withSubject($subject);
-
-            // Set from address using store settings
-            $fromAddress = $store->email_from_address ?: config('mail.from.address');
-            $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
-            $mailable->from($fromAddress, $fromName);
-
-            if ($store->email_reply_to_address) {
-                $mailable->replyTo($store->email_reply_to_address);
-            }
 
             // Send to ALL recipients and log each
             $sentCount = 0;

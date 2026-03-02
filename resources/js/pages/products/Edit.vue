@@ -18,6 +18,7 @@ import {
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
 import TagInput from '@/components/tags/TagInput.vue';
+import DeleteProductDialog from '@/components/products/DeleteProductDialog.vue';
 
 interface Category {
     id: number;
@@ -709,11 +710,6 @@ function formatDate(date: string): string {
     });
 }
 
-function deleteProduct() {
-    if (confirm(`Are you sure you want to delete "${props.product.title}"?`)) {
-        router.delete(`/products/${props.product.id}`);
-    }
-}
 </script>
 
 <template>
@@ -739,13 +735,14 @@ function deleteProduct() {
                         </div>
                     </div>
                     <div class="flex gap-3">
-                        <button
-                            type="button"
-                            class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 dark:bg-gray-800 dark:ring-gray-600 dark:hover:bg-red-900/20"
-                            @click="deleteProduct"
-                        >
-                            <TrashIcon class="size-5" />
-                        </button>
+                        <DeleteProductDialog :product="product">
+                            <button
+                                type="button"
+                                class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 dark:bg-gray-800 dark:ring-gray-600 dark:hover:bg-red-900/20"
+                            >
+                                <TrashIcon class="size-5" />
+                            </button>
+                        </DeleteProductDialog>
                         <Link
                             :href="`/products/${product.id}/print-barcode`"
                             class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"

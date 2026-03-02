@@ -7,6 +7,7 @@ use App\Models\Transaction;
 use App\Services\StoreContext;
 use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -338,7 +339,7 @@ class TransactionsReportController extends Controller
         // Calculate aggregate offer total for profit percent
         $totalFinalOffer = $estimatedValue - $profit;
 
-        return [
+        $totals = [
             'kits_requested' => $kitsRequested,
             'kits_declined' => $kitsDeclined,
             'kits_declined_percent' => $kitsRequested > 0 ? round(($kitsDeclined / $kitsRequested) * 100, 1) : 0,
@@ -354,10 +355,19 @@ class TransactionsReportController extends Controller
             'profit' => $profit,
             'profit_percent' => $totalFinalOffer > 0 ? round(($profit / $totalFinalOffer) * 100, 1) : 0,
         ];
+
+        // Include actionable lead totals when the data contains them
+        if ($data->first() && array_key_exists('actionable_received_no_offer', $data->first())) {
+            $totals['actionable_received_no_offer'] = $data->sum('actionable_received_no_offer');
+            $totals['actionable_offer_no_response'] = $data->sum('actionable_offer_no_response');
+            $totals['actionable_delivered_not_received'] = $data->sum('actionable_delivered_not_received');
+        }
+
+        return $totals;
     }
 
     /**
-     * Cohort transactions report (groups by creation month, tracks milestone completion).
+     * Cohort transactions report (groups by creation period, tracks milestone completion).
      */
     public function cohort(Request $request): Response
     {
@@ -365,8 +375,9 @@ class TransactionsReportController extends Controller
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
         $status = $request->query('status');
+        $granularity = $request->query('granularity', 'monthly');
 
-        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status);
+        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status, $granularity);
         $totals = $this->calculateTotals($cohortData);
 
         return Inertia::render('reports/transactions/Cohort', [
@@ -374,6 +385,7 @@ class TransactionsReportController extends Controller
             'totals' => $totals,
             'startDate' => $startDate,
             'endDate' => $endDate,
+            'granularity' => $granularity,
             'statuses' => Transaction::getAvailableStatuses(),
             'filters' => [
                 'status' => $status,
@@ -390,8 +402,9 @@ class TransactionsReportController extends Controller
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
         $status = $request->query('status');
+        $granularity = $request->query('granularity', 'monthly');
 
-        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status);
+        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status, $granularity);
 
         return $this->exportToCsv($cohortData, 'transactions-cohort-'.now()->format('Y-m-d').'.csv', 'Cohort');
     }
@@ -405,8 +418,9 @@ class TransactionsReportController extends Controller
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
         $status = $request->query('status');
+        $granularity = $request->query('granularity', 'monthly');
 
-        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status);
+        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status, $granularity);
         $totals = $this->calculateTotals($cohortData);
 
         $headers = [
@@ -434,7 +448,8 @@ class TransactionsReportController extends Controller
             $row['profit_percent'].'%',
         ];
 
-        $description = 'Cohort Analysis';
+        $granularityLabels = ['daily' => 'Daily', 'monthly' => 'Monthly', 'yearly' => 'Yearly'];
+        $description = 'Cohort Analysis ('.($granularityLabels[$granularity] ?? 'Monthly').')';
         if ($startDate && $endDate) {
             $description .= " ({$startDate} to {$endDate})";
         }
@@ -453,13 +468,120 @@ class TransactionsReportController extends Controller
     }
 
     /**
-     * Get cohort data grouped by creation month.
+     * Drilldown into a specific cohort metric, returning individual transactions.
+     */
+    public function cohortDrilldown(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date'],
+            'metric' => ['required', 'in:kits_requested,kits_declined,kits_received,kits_rejected,kits_returned,offers_given,offers_declined,offers_pending,offers_accepted,received_no_offer,offer_no_response,delivered_not_received'],
+            'status' => ['nullable', 'string'],
+        ]);
+
+        $store = $this->storeContext->getCurrentStore();
+        $start = Carbon::parse($validated['start_date'])->startOfDay();
+        $end = Carbon::parse($validated['end_date'])->endOfDay();
+
+        $query = Transaction::where('store_id', $store->id)
+            ->whereBetween('created_at', [$start, $end]);
+
+        if (! empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        $groups = $this->getCohortStatusGroups();
+
+        match ($validated['metric']) {
+            'kits_declined' => $query->whereIn('status', $groups['kit_declined']),
+            'kits_received' => $query->whereNotIn('status', $groups['pre_received']),
+            'kits_rejected', 'kits_returned' => $query->whereIn('status', $groups['kit_rejected_returned']),
+            'offers_given' => $query->whereIn('status', $groups['offer_given']),
+            'offers_declined' => $query->whereIn('status', $groups['offer_declined']),
+            'offers_pending' => $query->whereIn('status', $groups['offer_pending']),
+            'offers_accepted' => $query->whereIn('status', $groups['offer_accepted']),
+            'received_no_offer' => $query->whereIn('status', $groups['received_no_offer']),
+            'offer_no_response' => $query->whereIn('status', $groups['offer_no_response']),
+            'delivered_not_received' => $query->whereIn('status', $groups['delivered_not_received']),
+            default => null, // kits_requested — no additional filter
+        };
+
+        $statuses = Transaction::getAvailableStatuses();
+
+        $transactions = $query->with('customer')
+            ->latest()
+            ->limit(200)
+            ->get()
+            ->map(fn (Transaction $t) => [
+                'id' => $t->id,
+                'transaction_number' => $t->transaction_number,
+                'customer_name' => $t->customer?->full_name,
+                'customer_email' => $t->customer?->email,
+                'status' => $t->status,
+                'status_label' => $statuses[$t->status] ?? $t->status,
+                'final_offer' => $t->final_offer,
+                'created_at' => $t->created_at->format('M d, Y'),
+                'url' => "/transactions/{$t->id}",
+            ]);
+
+        return response()->json([
+            'transactions' => $transactions,
+        ]);
+    }
+
+    /**
+     * Get cohort data grouped by the specified granularity.
      *
      * Unlike getPeriodData which filters each metric by its own timestamp,
-     * cohort data groups all transactions by created_at month and tracks
+     * cohort data groups all transactions by created_at period and tracks
      * what percentage reached each milestone over their lifetime.
      */
-    protected function getCohortData(int $storeId, ?string $year = null, ?string $startDate = null, ?string $endDate = null, ?string $status = null)
+    protected function getCohortData(int $storeId, ?string $year = null, ?string $startDate = null, ?string $endDate = null, ?string $status = null, string $granularity = 'monthly')
+    {
+        $rows = collect();
+
+        if ($granularity === 'daily') {
+            $rows = $this->getCohortDailyData($storeId, $startDate, $endDate, $status);
+        } elseif ($granularity === 'yearly') {
+            $rows = $this->getCohortYearlyData($storeId, $startDate, $endDate, $status);
+        } else {
+            $rows = $this->getCohortMonthlyData($storeId, $year, $startDate, $endDate, $status);
+        }
+
+        return $rows->reverse()->values();
+    }
+
+    /**
+     * Get cohort data grouped by day.
+     */
+    protected function getCohortDailyData(int $storeId, ?string $startDate, ?string $endDate, ?string $status): \Illuminate\Support\Collection
+    {
+        $days = collect();
+
+        if ($startDate && $endDate) {
+            $rangeStart = Carbon::parse($startDate)->startOfDay();
+            $rangeEnd = Carbon::parse($endDate)->endOfDay();
+        } else {
+            $rangeStart = now()->startOfMonth()->startOfDay();
+            $rangeEnd = now()->endOfDay();
+        }
+
+        $current = $rangeStart->copy();
+
+        while ($current->lte($rangeEnd)) {
+            $dayStart = $current->copy()->startOfDay();
+            $dayEnd = $current->copy()->endOfDay();
+            $days->push($this->getCohortPeriodData($storeId, $dayStart, $dayEnd, $current->format('M d, Y'), $status));
+            $current->addDay();
+        }
+
+        return $days;
+    }
+
+    /**
+     * Get cohort data grouped by month.
+     */
+    protected function getCohortMonthlyData(int $storeId, ?string $year, ?string $startDate, ?string $endDate, ?string $status): \Illuminate\Support\Collection
     {
         $months = collect();
 
@@ -490,30 +612,46 @@ class TransactionsReportController extends Controller
             }
         }
 
-        return $months->reverse()->values();
+        return $months;
     }
 
     /**
-     * Get cohort data for transactions created in a specific period.
-     *
-     * All metrics are based on transactions created in the period,
-     * regardless of when each milestone was reached.
-     *
-     * @return array<string, mixed>
+     * Get cohort data grouped by year.
      */
-    protected function getCohortPeriodData(int $storeId, Carbon $start, Carbon $end, string $periodLabel, ?string $status = null): array
+    protected function getCohortYearlyData(int $storeId, ?string $startDate, ?string $endDate, ?string $status): \Illuminate\Support\Collection
     {
-        $startDate = $start->format('Y-m-d');
-        $endDate = $end->format('Y-m-d');
+        $years = collect();
 
-        $baseQuery = Transaction::where('store_id', $storeId)
-            ->whereBetween('created_at', [$start, $end]);
+        if ($startDate && $endDate) {
+            $startYear = (int) Carbon::parse($startDate)->format('Y');
+            $endYear = (int) Carbon::parse($endDate)->format('Y');
 
-        if ($status) {
-            $baseQuery->where('status', $status);
+            for ($y = $startYear; $y <= $endYear; $y++) {
+                $yearStart = Carbon::createFromDate($y, 1, 1)->startOfDay();
+                $yearEnd = Carbon::createFromDate($y, 12, 31)->endOfDay();
+                $years->push($this->getCohortPeriodData($storeId, $yearStart, $yearEnd, (string) $y, $status));
+            }
+        } else {
+            $currentYear = now()->year;
+
+            for ($i = 4; $i >= 0; $i--) {
+                $y = $currentYear - $i;
+                $yearStart = Carbon::createFromDate($y, 1, 1)->startOfDay();
+                $yearEnd = Carbon::createFromDate($y, 12, 31)->endOfDay();
+                $years->push($this->getCohortPeriodData($storeId, $yearStart, $yearEnd, (string) $y, $status));
+            }
         }
 
-        // Status groups for milestone detection (supports both standard and legacy statuses)
+        return $years;
+    }
+
+    /**
+     * Get cohort status groups for milestone detection.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function getCohortStatusGroups(): array
+    {
         $kitDeclinedStatuses = [
             'kit_request_rejected',
             'pending_kit_requests_rejected_by_admin',
@@ -527,7 +665,6 @@ class TransactionsReportController extends Controller
             'offers_declined_send_back',
         ];
 
-        // Statuses that have NOT yet been received (everything else implies received)
         $preReceivedStatuses = array_merge($kitDeclinedStatuses, [
             'pending', 'pending_kit_request', 'pending_kit_request_confirmed',
             'kit_request_on_hold', 'kit_sent', 'kit_delivered',
@@ -555,22 +692,71 @@ class TransactionsReportController extends Controller
             'offer_accepted', 'payment_pending', 'payment_processed',
         ];
 
+        $receivedNoOfferStatuses = [
+            'items_received', 'items_reviewed', 'kit_received',
+        ];
+
+        $offerNoResponseStatuses = [
+            'offer_given', 'offer_2_given', 'offer_given_cnotes_picture',
+            '14_day_on_hold',
+        ];
+
+        $deliveredNotReceivedStatuses = [
+            'kit_delivered',
+        ];
+
+        return [
+            'kit_declined' => $kitDeclinedStatuses,
+            'kit_rejected_returned' => $kitRejectedReturnedStatuses,
+            'pre_received' => $preReceivedStatuses,
+            'offer_given' => $offerGivenStatuses,
+            'offer_declined' => $offerDeclinedStatuses,
+            'offer_pending' => $offerPendingStatuses,
+            'offer_accepted' => $offerAcceptedStatuses,
+            'received_no_offer' => $receivedNoOfferStatuses,
+            'offer_no_response' => $offerNoResponseStatuses,
+            'delivered_not_received' => $deliveredNotReceivedStatuses,
+        ];
+    }
+
+    /**
+     * Get cohort data for transactions created in a specific period.
+     *
+     * All metrics are based on transactions created in the period,
+     * regardless of when each milestone was reached.
+     *
+     * @return array<string, mixed>
+     */
+    protected function getCohortPeriodData(int $storeId, Carbon $start, Carbon $end, string $periodLabel, ?string $status = null): array
+    {
+        $startDate = $start->format('Y-m-d');
+        $endDate = $end->format('Y-m-d');
+
+        $baseQuery = Transaction::where('store_id', $storeId)
+            ->whereBetween('created_at', [$start, $end]);
+
+        if ($status) {
+            $baseQuery->where('status', $status);
+        }
+
+        $groups = $this->getCohortStatusGroups();
+
         // Kit Requests (all transactions created in period — the cohort baseline)
         $kitsRequested = (clone $baseQuery)->count();
 
         // Kit Requests Declined
         $kitsDeclined = (clone $baseQuery)
-            ->whereIn('status', $kitDeclinedStatuses)
+            ->whereIn('status', $groups['kit_declined'])
             ->count();
 
         // Kits Received (status implies items arrived)
         $kitsReceived = (clone $baseQuery)
-            ->whereNotIn('status', $preReceivedStatuses)
+            ->whereNotIn('status', $groups['pre_received'])
             ->count();
 
         // Kits Received but Rejected/Returned
         $kitsRejected = (clone $baseQuery)
-            ->whereIn('status', $kitRejectedReturnedStatuses)
+            ->whereIn('status', $groups['kit_rejected_returned'])
             ->count();
 
         // Kits Returned (same as rejected — items shipped back)
@@ -578,33 +764,46 @@ class TransactionsReportController extends Controller
 
         // Offers Given
         $offersGiven = (clone $baseQuery)
-            ->whereIn('status', $offerGivenStatuses)
+            ->whereIn('status', $groups['offer_given'])
             ->count();
 
         // Offers Declined
         $offersDeclined = (clone $baseQuery)
-            ->whereIn('status', $offerDeclinedStatuses)
+            ->whereIn('status', $groups['offer_declined'])
             ->count();
 
         // Offers Pending
         $offersPending = (clone $baseQuery)
-            ->whereIn('status', $offerPendingStatuses)
+            ->whereIn('status', $groups['offer_pending'])
             ->count();
 
         // Offers Accepted
         $offersAccepted = (clone $baseQuery)
-            ->whereIn('status', $offerAcceptedStatuses)
+            ->whereIn('status', $groups['offer_accepted'])
+            ->count();
+
+        // Actionable lead counts
+        $actionableReceivedNoOffer = (clone $baseQuery)
+            ->whereIn('status', $groups['received_no_offer'])
+            ->count();
+
+        $actionableOfferNoResponse = (clone $baseQuery)
+            ->whereIn('status', $groups['offer_no_response'])
+            ->count();
+
+        $actionableDeliveredNotReceived = (clone $baseQuery)
+            ->whereIn('status', $groups['delivered_not_received'])
             ->count();
 
         // Financial data for accepted transactions from this cohort
         $financialData = (clone $baseQuery)
-            ->whereIn('status', $offerAcceptedStatuses)
+            ->whereIn('status', $groups['offer_accepted'])
             ->selectRaw('COALESCE(SUM(final_offer), 0) as final_offer')
             ->first();
 
-        $estimatedValueData = \App\Models\TransactionItem::whereHas('transaction', function ($query) use ($storeId, $start, $end, $status, $offerAcceptedStatuses) {
+        $estimatedValueData = \App\Models\TransactionItem::whereHas('transaction', function ($query) use ($storeId, $start, $end, $status, $groups) {
             $query->where('store_id', $storeId)
-                ->whereIn('status', $offerAcceptedStatuses)
+                ->whereIn('status', $groups['offer_accepted'])
                 ->whereBetween('created_at', [$start, $end]);
             if ($status) {
                 $query->where('status', $status);
@@ -638,6 +837,9 @@ class TransactionsReportController extends Controller
             'estimated_value' => $estimatedValue,
             'profit' => $profit,
             'profit_percent' => round($profitPercent, 1),
+            'actionable_received_no_offer' => $actionableReceivedNoOffer,
+            'actionable_offer_no_response' => $actionableOfferNoResponse,
+            'actionable_delivered_not_received' => $actionableDeliveredNotReceived,
         ];
     }
 

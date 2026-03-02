@@ -725,15 +725,6 @@ class BuysReportController extends Controller
         // Attach CSV
         $mailable->attachCsv($headers, $rows, 'monthly-buys-report.csv');
 
-        // Set from address using store settings
-        $fromAddress = $store->email_from_address ?: config('mail.from.address');
-        $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
-        $mailable->from($fromAddress, $fromName);
-
-        if ($store->email_reply_to_address) {
-            $mailable->replyTo($store->email_reply_to_address);
-        }
-
         // Send to all recipients
         foreach ($request->input('emails') as $email) {
             \Illuminate\Support\Facades\Mail::to($email)->send(clone $mailable);
@@ -831,15 +822,6 @@ class BuysReportController extends Controller
 
         // Attach CSV
         $mailable->attachCsv($headers, $rows, 'buys-by-category-report.csv');
-
-        // Set from address using store settings
-        $fromAddress = $store->email_from_address ?: config('mail.from.address');
-        $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
-        $mailable->from($fromAddress, $fromName);
-
-        if ($store->email_reply_to_address) {
-            $mailable->replyTo($store->email_reply_to_address);
-        }
 
         // Send to all recipients
         foreach ($request->input('emails') as $email) {

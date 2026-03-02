@@ -45,6 +45,11 @@ interface Customer {
     full_name: string;
     email?: string;
     phone?: string;
+    company_name?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
     lead_source?: LeadSource;
 }
 
@@ -1232,24 +1237,6 @@ function processReturn() {
                             <p class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{{ order.notes }}</p>
                         </div>
 
-                        <!-- Addresses -->
-                        <div v-if="order.shipping_address || order.billing_address" class="grid gap-6 md:grid-cols-2">
-                            <div v-if="order.shipping_address" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                                <h2 class="mb-3 flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
-                                    <MapPinIcon class="size-5" />
-                                    Shipping Address
-                                </h2>
-                                <p class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{{ formatAddress(order.shipping_address) }}</p>
-                            </div>
-                            <div v-if="order.billing_address" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                                <h2 class="mb-3 flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
-                                    <MapPinIcon class="size-5" />
-                                    Billing Address
-                                </h2>
-                                <p class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{{ formatAddress(order.billing_address) }}</p>
-                            </div>
-                        </div>
-
                         <!-- Tracking Information -->
                         <div v-if="order.tracking_number" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-3 flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
@@ -1355,6 +1342,73 @@ function processReturn() {
                             </dl>
                         </div>
 
+                        <!-- Customer -->
+                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
+
+                            <!-- Existing customer -->
+                            <CustomerCard v-if="order.customer" :customer="order.customer" />
+
+                            <!-- No customer - Add customer form -->
+                            <div v-else>
+                                <div v-if="isAddingCustomer" class="space-y-3">
+                                    <CustomerSearch
+                                        v-model="selectedCustomer"
+                                        placeholder="Search for customer..."
+                                    />
+                                    <div class="flex gap-2">
+                                        <button
+                                            type="button"
+                                            @click="saveCustomer"
+                                            :disabled="isProcessing || !selectedCustomer"
+                                            class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="cancelAddingCustomer"
+                                            class="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                                <div v-else class="text-center">
+                                    <div class="flex size-12 mx-auto items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+                                        <UserIcon class="size-6 text-gray-400" />
+                                    </div>
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No customer assigned</p>
+                                    <button
+                                        type="button"
+                                        @click="isAddingCustomer = true"
+                                        class="mt-3 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+                                    >
+                                        <UserIcon class="size-4" />
+                                        Add Customer
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Shipping & Billing Addresses -->
+                            <div v-if="order.shipping_address || order.billing_address" class="mt-4 space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+                                <div v-if="order.shipping_address">
+                                    <h3 class="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-white">
+                                        <MapPinIcon class="size-4 text-gray-400" />
+                                        Shipping Address
+                                    </h3>
+                                    <p class="mt-1 whitespace-pre-wrap pl-5.5 text-sm text-gray-500 dark:text-gray-400">{{ formatAddress(order.shipping_address) }}</p>
+                                </div>
+                                <div v-if="order.billing_address">
+                                    <h3 class="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-white">
+                                        <CreditCardIcon class="size-4 text-gray-400" />
+                                        Billing Address
+                                    </h3>
+                                    <p class="mt-1 whitespace-pre-wrap pl-5.5 text-sm text-gray-500 dark:text-gray-400">{{ formatAddress(order.billing_address) }}</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Details -->
                         <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Details</h2>
@@ -1426,55 +1480,6 @@ function processReturn() {
                                     </div>
                                 </div>
                             </dl>
-                        </div>
-
-                        <!-- Customer -->
-                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
-
-                            <!-- Existing customer -->
-                            <CustomerCard v-if="order.customer" :customer="order.customer" />
-
-                            <!-- No customer - Add customer form -->
-                            <div v-else>
-                                <div v-if="isAddingCustomer" class="space-y-3">
-                                    <CustomerSearch
-                                        v-model="selectedCustomer"
-                                        placeholder="Search for customer..."
-                                    />
-                                    <div class="flex gap-2">
-                                        <button
-                                            type="button"
-                                            @click="saveCustomer"
-                                            :disabled="isProcessing || !selectedCustomer"
-                                            class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            type="button"
-                                            @click="cancelAddingCustomer"
-                                            class="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                                <div v-else class="text-center">
-                                    <div class="flex size-12 mx-auto items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
-                                        <UserIcon class="size-6 text-gray-400" />
-                                    </div>
-                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">No customer assigned</p>
-                                    <button
-                                        type="button"
-                                        @click="isAddingCustomer = true"
-                                        class="mt-3 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-                                    >
-                                        <UserIcon class="size-4" />
-                                        Add Customer
-                                    </button>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- Employee -->

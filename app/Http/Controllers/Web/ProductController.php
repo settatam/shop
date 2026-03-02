@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BulkUpdateProductsRequest;
+use App\Mail\ProductDeletedMail;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Image;
@@ -27,6 +28,7 @@ use App\Services\Video\VideoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -1258,7 +1260,7 @@ class ProductController extends Controller
             ->with('success', 'Product updated successfully.');
     }
 
-    public function destroy(Product $product): RedirectResponse
+    public function destroy(Request $request, Product $product): RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
@@ -1266,7 +1268,24 @@ class ProductController extends Controller
             abort(404);
         }
 
+        $request->validate([
+            'deletion_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $deletionReason = $request->input('deletion_reason');
+
+        if ($deletionReason) {
+            $product->update(['deletion_reason' => $deletionReason]);
+        }
+
+        $product->load('variants');
         $product->delete();
+
+        if ($store->owner) {
+            Mail::to($store->owner->email)->queue(
+                new ProductDeletedMail($product, $deletionReason, $request->user()->name)
+            );
+        }
 
         return redirect()->route('products.index')
             ->with('success', 'Product deleted successfully.');

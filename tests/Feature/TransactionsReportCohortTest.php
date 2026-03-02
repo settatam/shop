@@ -242,4 +242,412 @@ class TransactionsReportCohortTest extends TestCase
 
         $response->assertRedirect('/login');
     }
+
+    public function test_cohort_drilldown_returns_transactions_for_metric(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 10),
+            'status' => Transaction::STATUS_PENDING_KIT_REQUEST,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 15),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=kits_requested');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'transactions');
+    }
+
+    public function test_cohort_drilldown_filters_by_status_group(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 10),
+            'status' => Transaction::STATUS_KIT_REQUEST_REJECTED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 15),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=kits_declined');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'transactions');
+        $response->assertJsonPath('transactions.0.status', 'kit_request_rejected');
+    }
+
+    public function test_cohort_drilldown_validates_required_params(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown');
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['start_date', 'end_date', 'metric']);
+    }
+
+    public function test_cohort_drilldown_validates_metric_value(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=invalid_metric');
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['metric']);
+    }
+
+    public function test_cohort_drilldown_respects_global_status_filter(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 10),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 15),
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=kits_requested&status=items_received');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'transactions');
+        $response->assertJsonPath('transactions.0.status', 'items_received');
+    }
+
+    public function test_cohort_includes_actionable_lead_counts(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => now()->startOfMonth(),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => now()->startOfMonth(),
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => now()->startOfMonth(),
+            'status' => Transaction::STATUS_KIT_DELIVERED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->has('totals', fn ($totals) => $totals
+                ->where('actionable_received_no_offer', 1)
+                ->where('actionable_offer_no_response', 1)
+                ->where('actionable_delivered_not_received', 1)
+                ->etc()
+            )
+        );
+    }
+
+    public function test_cohort_drilldown_actionable_received_no_offer(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 10),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 12),
+            'status' => Transaction::STATUS_ITEMS_REVIEWED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 15),
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=received_no_offer');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'transactions');
+    }
+
+    public function test_cohort_drilldown_actionable_offer_no_response(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 10),
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 15),
+            'status' => Transaction::STATUS_OFFER_ACCEPTED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=offer_no_response');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'transactions');
+        $response->assertJsonPath('transactions.0.status', 'offer_given');
+    }
+
+    public function test_cohort_drilldown_actionable_delivered_not_received(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 10),
+            'status' => Transaction::STATUS_KIT_DELIVERED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 15),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-01&end_date=2025-03-31&metric=delivered_not_received');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'transactions');
+        $response->assertJsonPath('transactions.0.status', 'kit_delivered');
+    }
+
+    public function test_cohort_daily_granularity_returns_day_rows(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 5, 10, 0, 0),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 7, 14, 0, 0),
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort?start_date=2025-03-05&end_date=2025-03-07&granularity=daily');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->has('cohortData', 3)
+            ->where('granularity', 'daily')
+            ->has('totals', fn ($totals) => $totals
+                ->where('kits_requested', 2)
+                ->etc()
+            )
+        );
+    }
+
+    public function test_cohort_daily_granularity_default_is_current_month(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort?granularity=daily');
+
+        $response->assertStatus(200);
+
+        $expectedDays = (int) now()->format('j');
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->has('cohortData', $expectedDays)
+            ->where('granularity', 'daily')
+        );
+    }
+
+    public function test_cohort_yearly_granularity_returns_year_rows(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2024, 6, 15),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 2, 10),
+            'status' => Transaction::STATUS_OFFER_GIVEN,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort?start_date=2024-01-01&end_date=2025-12-31&granularity=yearly');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->has('cohortData', 2)
+            ->where('granularity', 'yearly')
+            ->has('totals', fn ($totals) => $totals
+                ->where('kits_requested', 2)
+                ->etc()
+            )
+        );
+    }
+
+    public function test_cohort_yearly_granularity_default_is_past_five_years(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort?granularity=yearly');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->has('cohortData', 5)
+            ->where('granularity', 'yearly')
+        );
+    }
+
+    public function test_cohort_daily_granularity_includes_actionable_leads(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 5, 10, 0, 0),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 5, 14, 0, 0),
+            'status' => Transaction::STATUS_KIT_DELIVERED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort?start_date=2025-03-05&end_date=2025-03-05&granularity=daily');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->has('cohortData', 1)
+            ->has('totals', fn ($totals) => $totals
+                ->where('actionable_received_no_offer', 1)
+                ->where('actionable_delivered_not_received', 1)
+                ->etc()
+            )
+        );
+    }
+
+    public function test_cohort_daily_drilldown_works_for_single_day(): void
+    {
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 5, 10, 0, 0),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        Transaction::factory()->mailIn()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'user_id' => $this->user->id,
+            'created_at' => Carbon::create(2025, 3, 6, 10, 0, 0),
+            'status' => Transaction::STATUS_ITEMS_RECEIVED,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->getJson('/reports/transactions/cohort/drilldown?start_date=2025-03-05&end_date=2025-03-05&metric=received_no_offer');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'transactions');
+    }
+
+    public function test_cohort_default_granularity_is_monthly(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->get('/reports/transactions/cohort');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('reports/transactions/Cohort')
+            ->where('granularity', 'monthly')
+            ->has('cohortData', 13)
+        );
+    }
 }

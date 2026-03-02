@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Attachment;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -111,11 +112,26 @@ class DynamicReportMail extends Mailable
         $subject = $this->customSubject ?? "Report: {$this->reportTitle}";
 
         $store = app(StoreContext::class)->getCurrentStore();
-        if ($store?->short_name) {
+
+        if ($store?->short_name && ! str_starts_with($subject, $store->short_name.' - ')) {
             $subject = $store->short_name.' - '.$subject;
         }
 
+        $from = [];
+        if ($store) {
+            $fromAddress = $store->email_from_address ?: config('mail.from.address');
+            $fromName = $store->email_from_name ?: config('mail.from.name', $store->name);
+            $from = [new Address($fromAddress, $fromName)];
+        }
+
+        $replyTo = [];
+        if ($store?->email_reply_to_address) {
+            $replyTo = [new Address($store->email_reply_to_address)];
+        }
+
         return new Envelope(
+            from: $from[0] ?? null,
+            replyTo: $replyTo,
             subject: $subject,
         );
     }
