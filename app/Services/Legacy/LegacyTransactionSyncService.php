@@ -58,18 +58,24 @@ class LegacyTransactionSyncService
             return;
         }
 
+        $legacyId = $this->getLegacyTransactionId($transaction);
+
+        if ($legacyId === null) {
+            return;
+        }
+
         $legacyStoreId = $this->getLegacyStoreId($transaction);
 
         if ($legacyStoreId === null) {
             return;
         }
 
-        if (! LegacyTransaction::where('id', $transaction->id)->exists()) {
+        if (! LegacyTransaction::where('id', $legacyId)->exists()) {
             return;
         }
 
-        $this->syncTransactionStatus($transaction, $legacyStoreId);
-        $this->syncTransactionItems($transaction);
+        $this->syncTransactionStatus($transaction, $legacyStoreId, $legacyId);
+        $this->syncTransactionItems($transaction, $legacyId);
     }
 
     /**
@@ -132,11 +138,19 @@ class LegacyTransactionSyncService
     }
 
     /**
+     * Get the legacy transaction ID from the transaction's legacy_id column.
+     */
+    protected function getLegacyTransactionId(Transaction $transaction): ?int
+    {
+        return $transaction->legacy_id;
+    }
+
+    /**
      * Sync the transaction status and offer fields to legacy.
      */
-    protected function syncTransactionStatus(Transaction $transaction, int $legacyStoreId): void
+    protected function syncTransactionStatus(Transaction $transaction, int $legacyStoreId, int $legacyId): void
     {
-        $legacyTransaction = LegacyTransaction::find($transaction->id);
+        $legacyTransaction = LegacyTransaction::find($legacyId);
 
         if (! $legacyTransaction) {
             return;
@@ -187,10 +201,10 @@ class LegacyTransactionSyncService
     /**
      * Sync transaction items to legacy.
      */
-    protected function syncTransactionItems(Transaction $transaction): void
+    protected function syncTransactionItems(Transaction $transaction, int $legacyId): void
     {
         $transaction->loadMissing('items');
-        $legacyTransaction = LegacyTransaction::find($transaction->id);
+        $legacyTransaction = LegacyTransaction::find($legacyId);
 
         if (! $legacyTransaction) {
             return;
@@ -199,7 +213,11 @@ class LegacyTransactionSyncService
         $systemUserId = $this->getSystemUserId();
 
         foreach ($transaction->items as $item) {
-            $legacyItem = LegacyTransactionItem::find($item->id);
+            if (! $item->legacy_id) {
+                continue;
+            }
+
+            $legacyItem = LegacyTransactionItem::find($item->legacy_id);
 
             if (! $legacyItem) {
                 continue;

@@ -437,6 +437,7 @@ class MigrateLegacyTransactions extends Command
 
         // Create the transaction using DB insert to preserve timestamps exactly
         $transactionData = [
+            'legacy_id' => $legacyTransaction->id,
             'store_id' => $this->newStoreId,
             'customer_id' => $customerId,
             'user_id' => null, // We don't migrate users
@@ -783,6 +784,7 @@ class MigrateLegacyTransactions extends Command
             ];
 
             $itemData = [
+                'legacy_id' => $legacyItem->id,
                 'transaction_id' => $transaction->id,
                 'category_id' => $categoryId,
                 'sku' => $legacyItem->sku,

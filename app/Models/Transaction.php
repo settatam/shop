@@ -105,6 +105,7 @@ class Transaction extends Model
     public const PAYMENT_WIRE_TRANSFER = 'wire_transfer';
 
     protected $fillable = [
+        'legacy_id',
         'store_id',
         'warehouse_id',
         'order_id',

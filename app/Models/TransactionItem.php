@@ -50,6 +50,7 @@ class TransactionItem extends Model
     public const CONDITION_DAMAGED = 'damaged';
 
     protected $fillable = [
+        'legacy_id',
         'transaction_id',
         'category_id',
         'product_id',

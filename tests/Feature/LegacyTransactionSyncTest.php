@@ -214,9 +214,10 @@ class LegacyTransactionSyncTest extends TestCase
     }
 
     /**
-     * Insert a transaction directly in the legacy database.
+     * Insert a transaction directly in the legacy database
+     * and set the new system transaction's transaction_number to point to it.
      */
-    protected function createLegacyTransaction(int $id, int $statusId = 60): void
+    protected function createLegacyTransaction(int $id, int $statusId = 60, ?Transaction $transaction = null): void
     {
         DB::connection('legacy')->table('transactions')->insert([
             'id' => $id,
@@ -225,16 +226,22 @@ class LegacyTransactionSyncTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        if ($transaction) {
+            $transaction->updateQuietly(['legacy_id' => $id]);
+        }
     }
 
     /**
-     * Insert an item directly in the legacy database.
+     * Insert an item directly in the legacy database and set legacy_id on the new item.
      */
-    protected function createLegacyItem(int $id, int $transactionId, array $overrides = []): void
+    protected function createLegacyItem(TransactionItem $item, int $legacyTransactionId, array $overrides = []): void
     {
+        $legacyId = $item->id; // Use same ID for simplicity in tests
+
         DB::connection('legacy')->table('transaction_items')->insert(array_merge([
-            'id' => $id,
-            'transaction_id' => $transactionId,
+            'id' => $legacyId,
+            'transaction_id' => $legacyTransactionId,
             'title' => 'Legacy Item',
             'price' => 100.00,
             'buy_price' => 50.00,
@@ -242,6 +249,8 @@ class LegacyTransactionSyncTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ], $overrides));
+
+        $item->updateQuietly(['legacy_id' => $legacyId]);
     }
 
     // ---------------------------------------------------------------
@@ -258,7 +267,7 @@ class LegacyTransactionSyncTest extends TestCase
             'estimated_value' => 250.00,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -281,7 +290,7 @@ class LegacyTransactionSyncTest extends TestCase
             'store_id' => $this->store->id,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -302,7 +311,7 @@ class LegacyTransactionSyncTest extends TestCase
             'store_id' => $this->store->id,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -323,7 +332,7 @@ class LegacyTransactionSyncTest extends TestCase
             'store_id' => $this->store->id,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -360,8 +369,8 @@ class LegacyTransactionSyncTest extends TestCase
             'quantity' => 2,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
-        $this->createLegacyItem($item->id, $transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
+        $this->createLegacyItem($item, $transaction->id);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -393,7 +402,7 @@ class LegacyTransactionSyncTest extends TestCase
             'title' => 'New Only Item',
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
 
@@ -420,7 +429,7 @@ class LegacyTransactionSyncTest extends TestCase
             'status' => Transaction::STATUS_OFFER_ACCEPTED,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -442,7 +451,7 @@ class LegacyTransactionSyncTest extends TestCase
             'status' => Transaction::STATUS_OFFER_ACCEPTED,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -553,7 +562,7 @@ class LegacyTransactionSyncTest extends TestCase
             'store_id' => $this->store->id,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $job = new SyncTransactionToLegacyJob($transaction);
         $job->handle(app(LegacyTransactionSyncService::class));
@@ -619,7 +628,7 @@ class LegacyTransactionSyncTest extends TestCase
                 'status' => $newStatus,
             ]);
 
-            $this->createLegacyTransaction($transaction->id);
+            $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
             $service->sync($transaction);
 
@@ -653,8 +662,8 @@ class LegacyTransactionSyncTest extends TestCase
             'price' => 300.00,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
-        $this->createLegacyItem($item->id, $transaction->id, [
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
+        $this->createLegacyItem($item, $transaction->id, [
             'buy_price' => 50.00,
             'price' => 100.00,
         ]);
@@ -696,8 +705,8 @@ class LegacyTransactionSyncTest extends TestCase
             'reviewed_by' => 1,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
-        $this->createLegacyItem($item->id, $transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
+        $this->createLegacyItem($item, $transaction->id);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -728,7 +737,7 @@ class LegacyTransactionSyncTest extends TestCase
             'status' => Transaction::STATUS_OFFER_ACCEPTED,
         ]);
 
-        $this->createLegacyTransaction($transaction->id, 60);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -773,9 +782,9 @@ class LegacyTransactionSyncTest extends TestCase
             'buy_price' => 200.75,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
-        $this->createLegacyItem($item1->id, $transaction->id);
-        $this->createLegacyItem($item2->id, $transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
+        $this->createLegacyItem($item1, $transaction->id);
+        $this->createLegacyItem($item2, $transaction->id);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
@@ -803,9 +812,9 @@ class LegacyTransactionSyncTest extends TestCase
             'price' => 100.00,
         ]);
 
-        $this->createLegacyTransaction($transaction->id);
+        $this->createLegacyTransaction($transaction->id, 60, $transaction);
         // Legacy item already has the same buy_price and price
-        $this->createLegacyItem($item->id, $transaction->id, [
+        $this->createLegacyItem($item, $transaction->id, [
             'buy_price' => 50.00,
             'price' => 100.00,
         ]);
@@ -830,7 +839,7 @@ class LegacyTransactionSyncTest extends TestCase
         ]);
 
         // Legacy transaction already at status_id 1 (Pending Offer)
-        $this->createLegacyTransaction($transaction->id, 1);
+        $this->createLegacyTransaction($transaction->id, 1, $transaction);
 
         $service = app(LegacyTransactionSyncService::class);
         $service->sync($transaction);
