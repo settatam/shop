@@ -1417,11 +1417,14 @@ class MigrateLegacyProducts extends Command
     }
 
     /**
-     * Create an inventory record for a variant.
+     * Create an inventory record and initial adjustment for a variant.
      */
     protected function createInventoryRecord(int $storeId, int $variantId, int $quantity, ?float $cost, ?string $createdAt): void
     {
-        DB::table('inventory')->insert([
+        $unitCost = $cost ?? 0;
+        $timestamp = $createdAt ?? now();
+
+        $inventoryId = DB::table('inventory')->insertGetId([
             'store_id' => $storeId,
             'product_variant_id' => $variantId,
             'warehouse_id' => $this->defaultWarehouse->id,
@@ -1429,10 +1432,26 @@ class MigrateLegacyProducts extends Command
             'reserved_quantity' => 0,
             'incoming_quantity' => 0,
             'safety_stock' => 0,
-            'unit_cost' => $cost ?? 0,
-            'created_at' => $createdAt ?? now(),
-            'updated_at' => $createdAt ?? now(),
+            'unit_cost' => $unitCost,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
         ]);
+
+        DB::table('inventory_adjustments')->insert([
+            'store_id' => $storeId,
+            'inventory_id' => $inventoryId,
+            'user_id' => null,
+            'type' => 'initial',
+            'quantity_before' => 0,
+            'quantity_change' => $quantity,
+            'quantity_after' => $quantity,
+            'unit_cost' => $unitCost,
+            'total_cost_impact' => $quantity * $unitCost,
+            'reason' => 'Legacy import',
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
         $this->inventoryCount++;
     }
 
