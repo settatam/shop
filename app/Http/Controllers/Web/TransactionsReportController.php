@@ -513,61 +513,98 @@ class TransactionsReportController extends Controller
             $baseQuery->where('status', $status);
         }
 
-        // Kit Requests (mail-in transactions created in period — the cohort baseline)
+        // Status groups for milestone detection (supports both standard and legacy statuses)
+        $kitDeclinedStatuses = [
+            'kit_request_rejected',
+            'pending_kit_requests_rejected_by_admin',
+            'pending_kit_request_rejected_by_customer',
+        ];
+
+        $kitRejectedReturnedStatuses = [
+            'items_returned', 'return_requested',
+            'returned_by_admin', 'kit_received_rejected_by_admin',
+            'kits_received_refused_by_customer_fedex', 'returned_kit',
+            'offers_declined_send_back',
+        ];
+
+        // Statuses that have NOT yet been received (everything else implies received)
+        $preReceivedStatuses = array_merge($kitDeclinedStatuses, [
+            'pending', 'pending_kit_request', 'pending_kit_request_confirmed',
+            'kit_request_on_hold', 'kit_sent', 'kit_delivered',
+            'pending_kit_request_incomplete',
+            'pending_kit_request_high_value', 'pending_kit_request_high_value_watches',
+        ]);
+
+        $offerGivenStatuses = [
+            'offer_given', 'offer_2_given', 'offer_given_cnotes_picture',
+            'offer_declined', 'offers_declined_send_back',
+            'offer_accepted', 'payment_pending', 'payment_processed',
+            '14_day_on_hold',
+        ];
+
+        $offerDeclinedStatuses = [
+            'offer_declined', 'offers_declined_send_back',
+        ];
+
+        $offerPendingStatuses = [
+            'offer_given', 'offer_2_given', 'offer_given_cnotes_picture',
+            '14_day_on_hold',
+        ];
+
+        $offerAcceptedStatuses = [
+            'offer_accepted', 'payment_pending', 'payment_processed',
+        ];
+
+        // Kit Requests (all transactions created in period — the cohort baseline)
         $kitsRequested = (clone $baseQuery)->count();
 
         // Kit Requests Declined
         $kitsDeclined = (clone $baseQuery)
-            ->where('status', Transaction::STATUS_KIT_REQUEST_REJECTED)
+            ->whereIn('status', $kitDeclinedStatuses)
             ->count();
 
-        // Kits Received (created in period AND items received at any time)
+        // Kits Received (status implies items arrived)
         $kitsReceived = (clone $baseQuery)
-            ->whereNotNull('items_received_at')
+            ->whereNotIn('status', $preReceivedStatuses)
             ->count();
 
-        // Kits Received but Rejected (created in period, received, then returned)
+        // Kits Received but Rejected/Returned
         $kitsRejected = (clone $baseQuery)
-            ->whereNotNull('items_received_at')
-            ->where('status', Transaction::STATUS_ITEMS_RETURNED)
+            ->whereIn('status', $kitRejectedReturnedStatuses)
             ->count();
 
-        // Kits Returned (created in period, return shipped at any time)
-        $kitsReturned = (clone $baseQuery)
-            ->whereNotNull('return_shipped_at')
-            ->count();
+        // Kits Returned (same as rejected — items shipped back)
+        $kitsReturned = $kitsRejected;
 
-        // Offers Given (from the same cohort of kits)
+        // Offers Given
         $offersGiven = (clone $baseQuery)
-            ->whereNotNull('offer_given_at')
+            ->whereIn('status', $offerGivenStatuses)
             ->count();
 
         // Offers Declined
         $offersDeclined = (clone $baseQuery)
-            ->where('status', Transaction::STATUS_OFFER_DECLINED)
-            ->whereNotNull('offer_given_at')
+            ->whereIn('status', $offerDeclinedStatuses)
             ->count();
 
         // Offers Pending
         $offersPending = (clone $baseQuery)
-            ->where('status', Transaction::STATUS_OFFER_GIVEN)
-            ->whereNotNull('offer_given_at')
+            ->whereIn('status', $offerPendingStatuses)
             ->count();
 
-        // Offers Accepted (from the same cohort, payment processed at any time)
+        // Offers Accepted
         $offersAccepted = (clone $baseQuery)
-            ->whereNotNull('payment_processed_at')
+            ->whereIn('status', $offerAcceptedStatuses)
             ->count();
 
         // Financial data for accepted transactions from this cohort
         $financialData = (clone $baseQuery)
-            ->whereNotNull('payment_processed_at')
+            ->whereIn('status', $offerAcceptedStatuses)
             ->selectRaw('COALESCE(SUM(final_offer), 0) as final_offer')
             ->first();
 
-        $estimatedValueData = \App\Models\TransactionItem::whereHas('transaction', function ($query) use ($storeId, $start, $end, $status) {
+        $estimatedValueData = \App\Models\TransactionItem::whereHas('transaction', function ($query) use ($storeId, $start, $end, $status, $offerAcceptedStatuses) {
             $query->where('store_id', $storeId)
-                ->whereNotNull('payment_processed_at')
+                ->whereIn('status', $offerAcceptedStatuses)
                 ->whereBetween('created_at', [$start, $end]);
             if ($status) {
                 $query->where('status', $status);
