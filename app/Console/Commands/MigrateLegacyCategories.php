@@ -16,6 +16,8 @@ class MigrateLegacyCategories extends Command
     protected $signature = 'migrate:legacy-categories
                             {store_id : The legacy store ID to migrate from}
                             {--new-store-id= : The new store ID to migrate to (defaults to same as legacy)}
+                            {--category-store-id= : Pull categories from this legacy store instead (e.g., if store 44 uses store 43 categories)}
+                            {--template-store-id= : Pull templates from this legacy store instead (e.g., if store 44 uses store 43 templates)}
                             {--dry-run : Run without making any changes}
                             {--skip-templates : Skip migrating templates (html_forms)}';
 
@@ -41,10 +43,16 @@ class MigrateLegacyCategories extends Command
 
     protected int $newStoreId;
 
+    protected int $categoryStoreId;
+
+    protected int $templateStoreId;
+
     public function handle(): int
     {
         $this->legacyStoreId = (int) $this->argument('store_id');
         $this->newStoreId = (int) ($this->option('new-store-id') ?? $this->legacyStoreId);
+        $this->categoryStoreId = (int) ($this->option('category-store-id') ?? $this->legacyStoreId);
+        $this->templateStoreId = (int) ($this->option('template-store-id') ?? $this->categoryStoreId);
         $this->dryRun = (bool) $this->option('dry-run');
 
         if ($this->dryRun) {
@@ -52,6 +60,13 @@ class MigrateLegacyCategories extends Command
         }
 
         $this->info("Starting migration for store ID: {$this->legacyStoreId} -> {$this->newStoreId}");
+
+        if ($this->categoryStoreId !== $this->legacyStoreId) {
+            $this->info("Pulling categories from legacy store: {$this->categoryStoreId}");
+        }
+        if ($this->templateStoreId !== $this->legacyStoreId) {
+            $this->info("Pulling templates from legacy store: {$this->templateStoreId}");
+        }
 
         // Test legacy database connection
         try {
@@ -93,7 +108,7 @@ class MigrateLegacyCategories extends Command
 
         $legacyForms = DB::connection('legacy')
             ->table('html_forms')
-            ->where('store_id', $this->legacyStoreId)
+            ->where('store_id', $this->templateStoreId)
             ->whereNull('deleted_at')
             ->get();
 
@@ -236,7 +251,7 @@ class MigrateLegacyCategories extends Command
         // Get legacy categories from store_categories table
         $legacyCategories = DB::connection('legacy')
             ->table('store_categories')
-            ->where('store_id', $this->legacyStoreId)
+            ->where('store_id', $this->categoryStoreId)
             ->whereNull('deleted_at')
             ->orderBy('parent_id')
             ->orderBy('sort_order')
@@ -352,7 +367,7 @@ class MigrateLegacyCategories extends Command
                 'id' => $legacyCategory->id,
                 'store_id' => $this->newStoreId,
                 'name' => $legacyCategory->name,
-                'slug' => Str::slug($legacyCategory->name).'-'.Str::random(4),
+                'slug' => Str::limit(Str::slug($legacyCategory->name), 74, '').'-'.Str::random(4),
                 'description' => null,
                 'type' => 'transaction_item_category',
                 'template_id' => $templateId,
@@ -370,7 +385,7 @@ class MigrateLegacyCategories extends Command
             $newId = DB::table('categories')->insertGetId([
                 'store_id' => $this->newStoreId,
                 'name' => $legacyCategory->name,
-                'slug' => Str::slug($legacyCategory->name).'-'.Str::random(4),
+                'slug' => Str::limit(Str::slug($legacyCategory->name), 74, '').'-'.Str::random(4),
                 'description' => null,
                 'type' => 'transaction_item_category',
                 'template_id' => $templateId,

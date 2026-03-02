@@ -6,7 +6,9 @@ use App\Models\Address;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Image;
+use App\Models\ProductTemplate;
 use App\Models\ProductTemplateField;
+use App\Models\ProductTemplateFieldOption;
 use App\Models\Status;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
@@ -35,86 +37,11 @@ class MigrateLegacyTransactions extends Command
     protected $description = 'Migrate legacy transactions from shopmata-new database for a specific store';
 
     /**
-     * Map legacy status IDs to new status strings.
+     * Cache for resolved statuses (legacy_status_name => Status model).
      *
-     * @var array<int, string>
+     * @var array<string, Status>
      */
-    protected array $statusIdMap = [
-        1 => Transaction::STATUS_KIT_SENT,
-        2 => Transaction::STATUS_ITEMS_RECEIVED,
-        3 => Transaction::STATUS_KIT_REQUEST_REJECTED,
-        4 => Transaction::STATUS_OFFER_GIVEN,
-        5 => Transaction::STATUS_OFFER_ACCEPTED,
-        6 => Transaction::STATUS_OFFER_DECLINED,
-        8 => Transaction::STATUS_PAYMENT_PROCESSED,
-        11 => Transaction::STATUS_ITEMS_RETURNED,
-        12 => Transaction::STATUS_OFFER_DECLINED,
-        13 => Transaction::STATUS_PAYMENT_PROCESSED,
-        18 => Transaction::STATUS_ITEMS_RETURNED,
-        19 => Transaction::STATUS_OFFER_DECLINED,
-        20 => Transaction::STATUS_KIT_REQUEST_REJECTED,
-        21 => Transaction::STATUS_ITEMS_RETURNED,
-        25 => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
-        50 => Transaction::STATUS_ITEMS_REVIEWED,
-        53 => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
-        54 => Transaction::STATUS_KIT_REQUEST_CONFIRMED,
-        55 => Transaction::STATUS_ITEMS_REVIEWED,
-        57 => Transaction::STATUS_PENDING_KIT_REQUEST,
-        58 => Transaction::STATUS_KIT_REQUEST_REJECTED,
-        60 => Transaction::STATUS_PENDING_KIT_REQUEST,
-        61 => Transaction::STATUS_PENDING_KIT_REQUEST,
-        62 => Transaction::STATUS_PENDING_KIT_REQUEST,
-        64 => Transaction::STATUS_PENDING_KIT_REQUEST,
-        65 => Transaction::STATUS_OFFER_GIVEN,
-        66 => Transaction::STATUS_OFFER_ACCEPTED,
-        67 => Transaction::STATUS_PAYMENT_PROCESSED,
-        68 => Transaction::STATUS_ITEMS_RETURNED,
-        69 => Transaction::STATUS_PAYMENT_PROCESSED,
-        70 => Transaction::STATUS_CANCELLED,
-        71 => Transaction::STATUS_ITEMS_REVIEWED,
-        72 => Transaction::STATUS_PAYMENT_PROCESSED,
-    ];
-
-    /**
-     * Map legacy status names (case-insensitive) to new status strings.
-     * Used as a fallback when status_id is not in statusIdMap.
-     *
-     * @var array<string, string>
-     */
-    protected array $statusNameMap = [
-        'pending' => Transaction::STATUS_PENDING,
-        'pending kit request' => Transaction::STATUS_PENDING_KIT_REQUEST,
-        'pending kit requests' => Transaction::STATUS_PENDING_KIT_REQUEST,
-        'kit request confirmed' => Transaction::STATUS_KIT_REQUEST_CONFIRMED,
-        'kit request rejected' => Transaction::STATUS_KIT_REQUEST_REJECTED,
-        'kit request on hold' => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
-        'kit sent' => Transaction::STATUS_KIT_SENT,
-        'kit delivered' => Transaction::STATUS_KIT_DELIVERED,
-        'kits received' => Transaction::STATUS_ITEMS_RECEIVED,
-        'kit received' => Transaction::STATUS_ITEMS_RECEIVED,
-        'items received' => Transaction::STATUS_ITEMS_RECEIVED,
-        'items reviewed' => Transaction::STATUS_ITEMS_REVIEWED,
-        'reviewed' => Transaction::STATUS_ITEMS_REVIEWED,
-        'offer given' => Transaction::STATUS_OFFER_GIVEN,
-        'pending offer' => Transaction::STATUS_OFFER_GIVEN,
-        'offer accepted' => Transaction::STATUS_OFFER_ACCEPTED,
-        'offer declined' => Transaction::STATUS_OFFER_DECLINED,
-        'offers declined' => Transaction::STATUS_OFFER_DECLINED,
-        'payment pending' => Transaction::STATUS_PAYMENT_PENDING,
-        'payment processed' => Transaction::STATUS_PAYMENT_PROCESSED,
-        'paid' => Transaction::STATUS_PAYMENT_PROCESSED,
-        'moved to nwe' => Transaction::STATUS_PAYMENT_PROCESSED,
-        'sold' => Transaction::STATUS_PAYMENT_PROCESSED,
-        'refund payment processed' => Transaction::STATUS_PAYMENT_PROCESSED,
-        'return requested' => Transaction::STATUS_RETURN_REQUESTED,
-        'items returned' => Transaction::STATUS_ITEMS_RETURNED,
-        'returned by admin' => Transaction::STATUS_ITEMS_RETURNED,
-        'return received' => Transaction::STATUS_ITEMS_RETURNED,
-        'cancelled' => Transaction::STATUS_CANCELLED,
-        'archive' => Transaction::STATUS_CANCELLED,
-        'on hold' => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
-        '14 day - on hold' => Transaction::STATUS_KIT_REQUEST_ON_HOLD,
-    ];
+    protected array $statusCache = [];
 
     /**
      * Cache for migrated customers (legacy_id => new_id).
@@ -188,6 +115,10 @@ class MigrateLegacyTransactions extends Command
 
     public function handle(): int
     {
+        // Disable Scout search indexing during import to avoid connection errors
+        Transaction::disableSearchSyncing();
+        Customer::disableSearchSyncing();
+
         $this->legacyStoreId = (int) $this->argument('store_id');
         $this->newStoreId = (int) ($this->option('new-store-id') ?? $this->legacyStoreId);
         $this->dryRun = (bool) $this->option('dry-run');
@@ -287,17 +218,17 @@ class MigrateLegacyTransactions extends Command
             $query->limit((int) $this->option('limit'));
         }
 
-        $legacyTransactions = $query->get();
+        $totalCount = (clone $query)->count();
 
-        $this->info("Found {$legacyTransactions->count()} transactions to migrate");
+        $this->info("Found {$totalCount} transactions to migrate");
 
-        if ($legacyTransactions->isEmpty()) {
+        if ($totalCount === 0) {
             $this->warn('No transactions found for this store');
 
             return self::SUCCESS;
         }
 
-        $bar = $this->output->createProgressBar($legacyTransactions->count());
+        $bar = $this->output->createProgressBar($totalCount);
         $bar->start();
 
         $migrated = 0;
@@ -305,29 +236,31 @@ class MigrateLegacyTransactions extends Command
         $synced = 0;
         $errors = 0;
 
-        foreach ($legacyTransactions as $legacyTransaction) {
-            try {
-                $result = $this->migrateTransaction($legacyTransaction, $syncDeletes);
-                if ($result === 'skipped') {
-                    $skipped++;
-                } elseif ($result === 'synced') {
-                    $synced++;
-                } else {
-                    $migrated++;
+        $query->chunk(200, function ($legacyTransactions) use ($syncDeletes, &$migrated, &$skipped, &$synced, &$errors, $bar) {
+            foreach ($legacyTransactions as $legacyTransaction) {
+                try {
+                    $result = $this->migrateTransaction($legacyTransaction, $syncDeletes);
+                    if ($result === 'skipped') {
+                        $skipped++;
+                    } elseif ($result === 'synced') {
+                        $synced++;
+                    } else {
+                        $migrated++;
+                    }
+                } catch (\Exception $e) {
+                    $errors++;
+                    Log::error('Failed to migrate transaction', [
+                        'legacy_id' => $legacyTransaction->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                    $this->newLine();
+                    $this->error("Failed to migrate transaction #{$legacyTransaction->id}: {$e->getMessage()}");
                 }
-            } catch (\Exception $e) {
-                $errors++;
-                Log::error('Failed to migrate transaction', [
-                    'legacy_id' => $legacyTransaction->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-                $this->newLine();
-                $this->error("Failed to migrate transaction #{$legacyTransaction->id}: {$e->getMessage()}");
-            }
 
-            $bar->advance();
-        }
+                $bar->advance();
+            }
+        });
 
         $bar->finish();
         $this->newLine(2);
@@ -425,8 +358,11 @@ class MigrateLegacyTransactions extends Command
 
     protected function migrateTransaction(object $legacyTransaction, bool $syncDeletes = false): string
     {
-        // Check if already migrated by ID (preserving original IDs)
-        $existing = Transaction::withTrashed()->find($legacyTransaction->id);
+        // Check if already migrated by legacy ID for this store
+        $existing = Transaction::withTrashed()
+            ->where('store_id', $this->newStoreId)
+            ->where('transaction_number', (string) $legacyTransaction->id)
+            ->first();
 
         if ($existing && ! $this->reimport) {
             // Sync soft-delete status if enabled
@@ -447,18 +383,16 @@ class MigrateLegacyTransactions extends Command
             $customerId = $this->migrateCustomer($legacyTransaction->customer_id);
         }
 
-        // Get legacy status and map to new system
+        // Get legacy status name from legacy database
         $legacyStatus = DB::connection('legacy')
             ->table('statuses')
             ->where('store_id', $this->legacyStoreId)
             ->where('status_id', $legacyTransaction->status_id)
             ->first();
 
-        // Map status: first try status_id, then status name, then default to pending
-        $statusName = $this->mapLegacyStatus(
-            $legacyTransaction->status_id,
-            $legacyStatus?->name
-        );
+        // Find or create status in new system using the exact legacy name
+        $status = $this->findOrCreateStatus($legacyStatus?->name);
+        $statusName = $status->slug;
 
         // Determine type based on is_in_house flag
         $type = $legacyTransaction->is_in_house ? Transaction::TYPE_IN_STORE : Transaction::TYPE_MAIL_IN;
@@ -520,7 +454,7 @@ class MigrateLegacyTransactions extends Command
                 'legacy_status_name' => $legacyStatus?->name,
                 'legacy_payment_addresses' => $legacyPaymentAddresses->map(fn ($pa) => (array) $pa)->toArray(),
             ]),
-            'status_id' => $this->getStatusIdForSlug($this->newStoreId, $statusName),
+            'status_id' => $status->id,
             'bin_location' => $legacyTransaction->bin_location,
             'customer_notes' => $legacyTransaction->pub_note ?? null,
             'internal_notes' => $legacyTransaction->private_note ?? null,
@@ -540,19 +474,16 @@ class MigrateLegacyTransactions extends Command
             $transactionData['return_carrier'] = 'fedex';
         }
 
-        // Add ID to preserve original
-        $transactionData['id'] = $legacyTransaction->id;
-
         if ($this->reimport && $existing) {
             // Update existing transaction and restore if soft-deleted
             DB::table('transactions')
-                ->where('id', $legacyTransaction->id)
+                ->where('id', $existing->id)
                 ->update(array_merge($transactionData, ['deleted_at' => null]));
-            $transaction = Transaction::find($legacyTransaction->id);
+            $transaction = Transaction::find($existing->id);
         } else {
-            // Use DB::table to preserve exact timestamps and original ID
-            DB::table('transactions')->insert($transactionData);
-            $transaction = Transaction::find($legacyTransaction->id);
+            // Use auto-increment ID, legacy ID is stored in transaction_number
+            $newId = DB::table('transactions')->insertGetId($transactionData);
+            $transaction = Transaction::find($newId);
         }
 
         // Migrate items
@@ -834,8 +765,10 @@ class MigrateLegacyTransactions extends Command
                 continue;
             }
 
-            // Find category and get template_id from category
-            $legacyProductTypeId = $legacyItem->product_type_id ?? $legacyItem->category_id ?? null;
+            // Find category — prefer category_id (actual store_categories FK), fall back to product_type_id
+            $legacyCategoryId = ! empty($legacyItem->category_id) ? (int) $legacyItem->category_id : null;
+            $legacyProductTypeId = ! empty($legacyItem->product_type_id) ? (int) $legacyItem->product_type_id : null;
+            $legacyProductTypeId = $legacyCategoryId ?? $legacyProductTypeId;
             $categoryResult = $this->findOrCreateCategoryWithTemplate($legacyProductTypeId, $legacyItem->html_form_id ?? null);
             $categoryId = $categoryResult['category_id'];
             $templateId = $categoryResult['template_id'];
@@ -1171,8 +1104,9 @@ class MigrateLegacyTransactions extends Command
                 }
             }
 
-            // Map the legacy status to our new status constants
-            $newStatus = $this->mapLegacyStatusName($legacyActivity->status);
+            // Find or create the status in the new system
+            $newStatusModel = $this->findOrCreateStatus($legacyActivity->status);
+            $newStatus = $newStatusModel->slug;
             $activitySlug = $this->mapStatusToActivitySlug($legacyActivity->status);
 
             // Use DB insert to preserve exact timestamps
@@ -1231,52 +1165,35 @@ class MigrateLegacyTransactions extends Command
     }
 
     /**
-     * Map legacy status name to new status constant.
+     * Find or create a Status record in the new system from a legacy status name.
+     * Caches results to avoid repeated DB queries.
      */
-    protected function mapLegacyStatusName(?string $statusName): string
+    protected function findOrCreateStatus(?string $legacyStatusName): Status
     {
-        if (! $statusName) {
-            return Transaction::STATUS_PENDING;
+        $name = trim($legacyStatusName ?? 'Pending') ?: 'Pending';
+        $slug = Str::slug($name, '_');
+
+        if (isset($this->statusCache[$slug])) {
+            return $this->statusCache[$slug];
         }
 
-        $normalizedName = strtolower(trim($statusName));
+        $status = Status::firstOrCreate(
+            [
+                'store_id' => $this->newStoreId,
+                'entity_type' => 'transaction',
+                'slug' => $slug,
+            ],
+            [
+                'name' => $name,
+                'is_default' => $slug === 'pending',
+                'is_system' => false,
+                'sort_order' => count($this->statusCache),
+            ]
+        );
 
-        // Check the existing statusNameMap first
-        if (isset($this->statusNameMap[$normalizedName])) {
-            return $this->statusNameMap[$normalizedName];
-        }
+        $this->statusCache[$slug] = $status;
 
-        // Fuzzy matching for common patterns
-        foreach ($this->statusNameMap as $key => $value) {
-            if (str_contains($normalizedName, $key)) {
-                return $value;
-            }
-        }
-
-        // Additional mappings for legacy-specific statuses
-        if (str_contains($normalizedName, '14 day') || str_contains($normalizedName, 'on hold')) {
-            return Transaction::STATUS_KIT_REQUEST_ON_HOLD;
-        }
-        if (str_contains($normalizedName, 'ready for melt') || str_contains($normalizedName, 'moved to nwe')) {
-            return Transaction::STATUS_PAYMENT_PROCESSED;
-        }
-        if (str_contains($normalizedName, 'kit received - ready to buy')) {
-            return Transaction::STATUS_ITEMS_REVIEWED;
-        }
-        if (str_contains($normalizedName, 'high value')) {
-            return Transaction::STATUS_KIT_REQUEST_ON_HOLD;
-        }
-        if (str_contains($normalizedName, 'incomplete')) {
-            return Transaction::STATUS_PENDING_KIT_REQUEST;
-        }
-        if (str_contains($normalizedName, 'bulk')) {
-            return Transaction::STATUS_PENDING_KIT_REQUEST;
-        }
-        if (str_contains($normalizedName, 'archive')) {
-            return Transaction::STATUS_CANCELLED;
-        }
-
-        return Transaction::STATUS_PENDING;
+        return $status;
     }
 
     /**
@@ -1317,117 +1234,6 @@ class MigrateLegacyTransactions extends Command
         };
     }
 
-    /**
-     * Map legacy status to new system status constant.
-     *
-     * Priority:
-     * 1. Check statusIdMap for exact status_id match
-     * 2. Check statusNameMap for status name match (case-insensitive, with fuzzy matching)
-     * 3. Default to pending
-     */
-    protected function mapLegacyStatus(?int $statusId, ?string $statusName): string
-    {
-        // First try mapping by status_id
-        if ($statusId !== null && isset($this->statusIdMap[$statusId])) {
-            return $this->statusIdMap[$statusId];
-        }
-
-        // Then try mapping by status name
-        if ($statusName !== null) {
-            $normalizedName = strtolower(trim($statusName));
-
-            // Direct match
-            if (isset($this->statusNameMap[$normalizedName])) {
-                return $this->statusNameMap[$normalizedName];
-            }
-
-            // Fuzzy match - check if any key is contained in the status name
-            foreach ($this->statusNameMap as $key => $value) {
-                if (str_contains($normalizedName, $key)) {
-                    return $value;
-                }
-            }
-
-            // Check for common patterns
-            if (str_contains($normalizedName, 'payment processed') || str_contains($normalizedName, 'paid')) {
-                return Transaction::STATUS_PAYMENT_PROCESSED;
-            }
-            if (str_contains($normalizedName, 'offer accepted')) {
-                return Transaction::STATUS_OFFER_ACCEPTED;
-            }
-            if (str_contains($normalizedName, 'offer declined') || str_contains($normalizedName, 'declined')) {
-                return Transaction::STATUS_OFFER_DECLINED;
-            }
-            if (str_contains($normalizedName, 'offer given') || str_contains($normalizedName, 'pending offer')) {
-                return Transaction::STATUS_OFFER_GIVEN;
-            }
-            if (str_contains($normalizedName, 'kit sent')) {
-                return Transaction::STATUS_KIT_SENT;
-            }
-            if (str_contains($normalizedName, 'received') || str_contains($normalizedName, 'kits received')) {
-                return Transaction::STATUS_ITEMS_RECEIVED;
-            }
-            if (str_contains($normalizedName, 'reviewed') || str_contains($normalizedName, 'ready to buy')) {
-                return Transaction::STATUS_ITEMS_REVIEWED;
-            }
-            if (str_contains($normalizedName, 'returned') || str_contains($normalizedName, 'return')) {
-                return Transaction::STATUS_ITEMS_RETURNED;
-            }
-            if (str_contains($normalizedName, 'pending kit') || str_contains($normalizedName, 'kit request')) {
-                return Transaction::STATUS_PENDING_KIT_REQUEST;
-            }
-            if (str_contains($normalizedName, 'on hold') || str_contains($normalizedName, 'hold')) {
-                return Transaction::STATUS_KIT_REQUEST_ON_HOLD;
-            }
-            if (str_contains($normalizedName, 'rejected')) {
-                return Transaction::STATUS_KIT_REQUEST_REJECTED;
-            }
-            if (str_contains($normalizedName, 'confirmed')) {
-                return Transaction::STATUS_KIT_REQUEST_CONFIRMED;
-            }
-            if (str_contains($normalizedName, 'archive') || str_contains($normalizedName, 'cancelled')) {
-                return Transaction::STATUS_CANCELLED;
-            }
-        }
-
-        // Default to pending
-        return Transaction::STATUS_PENDING;
-    }
-
-    /**
-     * Get the status_id for a given status slug from the new store's statuses table.
-     *
-     * @param  int  $storeId  The new store ID
-     * @param  string  $statusSlug  The status slug (e.g., 'payment_processed')
-     * @return int|null The status ID or null if not found
-     */
-    protected function getStatusIdForSlug(int $storeId, string $statusSlug): ?int
-    {
-        static $statusCache = [];
-
-        $cacheKey = "{$storeId}:{$statusSlug}";
-
-        if (isset($statusCache[$cacheKey])) {
-            return $statusCache[$cacheKey];
-        }
-
-        $statusId = Status::where('store_id', $storeId)
-            ->where('slug', $statusSlug)
-            ->value('id');
-
-        $statusCache[$cacheKey] = $statusId;
-
-        if ($statusId === null) {
-            static $missingStatuses = [];
-            if (! isset($missingStatuses[$cacheKey])) {
-                $this->warn("  Status '{$statusSlug}' not found for store {$storeId}. Transaction will have null status_id.");
-                $missingStatuses[$cacheKey] = true;
-            }
-        }
-
-        return $statusId;
-    }
-
     protected function mapActivitySlug(string $legacyActivity): string
     {
         $mapping = [
@@ -1466,18 +1272,31 @@ class MigrateLegacyTransactions extends Command
      * Queries the legacy store_categories table at runtime to get accurate mapping.
      * Validates that the category has a valid parent chain (leads to parent_id = 0).
      */
-    protected function findOrCreateCategoryByLegacyProductType(?int $productTypeId): ?int
+    /**
+     * Find or create a category (and its template) from a legacy product_type_id.
+     * Looks up the legacy category by ID, then finds or creates in the new system by name.
+     *
+     * @return array{category_id: int|null, template_id: int|null}
+     */
+    protected function findOrCreateCategoryWithTemplate(?int $productTypeId, ?int $legacyHtmlFormId): array
     {
         if (! $productTypeId) {
-            return null;
+            return ['category_id' => null, 'template_id' => null];
         }
 
         // Check cache first
         if (isset($this->categoryMap[$productTypeId])) {
-            return $this->categoryMap[$productTypeId];
+            $categoryId = $this->categoryMap[$productTypeId];
+            $templateId = $this->categoryTemplateMap[$categoryId] ?? null;
+
+            if ($templateId && $legacyHtmlFormId) {
+                $this->ensureTemplateFieldsMapped($legacyHtmlFormId, $templateId);
+            }
+
+            return ['category_id' => $categoryId, 'template_id' => $templateId];
         }
 
-        // Query the legacy store_categories table at runtime
+        // Look up legacy category by ID (could be from any store)
         $legacyCategory = DB::connection('legacy')
             ->table('store_categories')
             ->where('id', $productTypeId)
@@ -1491,116 +1310,142 @@ class MigrateLegacyTransactions extends Command
                 $missingLegacyCategories[$productTypeId] = true;
             }
 
-            return null;
-        }
-
-        // Validate parent chain - must lead to parent_id = 0 or null
-        if (! $this->hasValidLegacyParentChain($legacyCategory)) {
-            static $invalidChainCategories = [];
-            if (! isset($invalidChainCategories[$productTypeId])) {
-                $this->warn("  Legacy category ID {$productTypeId} ('{$legacyCategory->name}') has invalid parent chain - skipping.");
-                $invalidChainCategories[$productTypeId] = true;
-            }
-
-            return null;
-        }
-
-        // Try to find category by legacy ID in the new system (IDs are preserved when possible)
-        $category = Category::withoutGlobalScopes()->find($productTypeId);
-
-        if ($category && $category->store_id == $this->newStoreId) {
-            $this->categoryMap[$productTypeId] = $category->id;
-
-            return $category->id;
-        }
-
-        // Category not found in new system - it should have been pre-migrated
-        static $missingCategories = [];
-        if (! isset($missingCategories[$productTypeId])) {
-            $this->warn("  Category ID {$productTypeId} ('{$legacyCategory->name}') not migrated. Run migrate:legacy-categories for store {$legacyCategory->store_id} first.");
-            $missingCategories[$productTypeId] = true;
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if a legacy category has a valid parent chain leading to parent_id = 0 or null.
-     */
-    protected function hasValidLegacyParentChain(object $legacyCategory): bool
-    {
-        $visited = [];
-        $currentId = $legacyCategory->parent_id;
-
-        // Top-level category (parent_id = 0 or null) is valid
-        if (empty($currentId) || $currentId == 0) {
-            return true;
-        }
-
-        while ($currentId && $currentId != 0) {
-            // Detect circular references
-            if (in_array($currentId, $visited)) {
-                return false;
-            }
-            $visited[] = $currentId;
-
-            // Get parent category
-            $parent = DB::connection('legacy')
-                ->table('store_categories')
-                ->where('id', $currentId)
-                ->whereNull('deleted_at')
-                ->first();
-
-            if (! $parent) {
-                // Parent doesn't exist - orphaned category
-                return false;
-            }
-
-            $currentId = $parent->parent_id;
-        }
-
-        // Reached parent_id = 0 or null - valid chain
-        return true;
-    }
-
-    /**
-     * Find category and get its template_id for template value migration.
-     * Returns array with 'category_id' and 'template_id'.
-     *
-     * @return array{category_id: int|null, template_id: int|null}
-     */
-    protected function findOrCreateCategoryWithTemplate(?int $productTypeId, ?int $legacyHtmlFormId): array
-    {
-        $categoryId = $this->findOrCreateCategoryByLegacyProductType($productTypeId);
-
-        if (! $categoryId) {
             return ['category_id' => null, 'template_id' => null];
         }
 
-        // Check template cache first
-        if (isset($this->categoryTemplateMap[$categoryId])) {
-            $templateId = $this->categoryTemplateMap[$categoryId];
+        // Find or create the template first if the legacy category has one
+        $templateId = null;
+        $legacyFormId = $legacyCategory->html_form_id ?? $legacyHtmlFormId;
 
-            // Ensure template fields are mapped
-            if ($templateId && $legacyHtmlFormId) {
-                $this->ensureTemplateFieldsMapped($legacyHtmlFormId, $templateId);
+        if ($legacyFormId) {
+            $templateId = $this->findOrCreateTemplate($legacyFormId);
+        }
+
+        // Find or create category in the new system by name
+        $category = Category::withoutGlobalScopes()->firstOrCreate(
+            [
+                'store_id' => $this->newStoreId,
+                'name' => $legacyCategory->name,
+                'type' => 'transaction_item_category',
+            ],
+            [
+                'slug' => Str::limit(Str::slug($legacyCategory->name), 74, '').'-'.Str::random(4),
+                'template_id' => $templateId,
+                'sort_order' => $legacyCategory->sort_order ?? 0,
+                'level' => $legacyCategory->level ?? 0,
+            ]
+        );
+
+        $this->categoryMap[$productTypeId] = $category->id;
+        $this->categoryTemplateMap[$category->id] = $category->template_id;
+
+        if ($category->template_id && $legacyFormId) {
+            $this->ensureTemplateFieldsMapped($legacyFormId, $category->template_id);
+        }
+
+        return ['category_id' => $category->id, 'template_id' => $category->template_id];
+    }
+
+    /**
+     * Find or create a ProductTemplate from a legacy html_form_id.
+     * Also creates fields and field options if the template is new.
+     */
+    protected function findOrCreateTemplate(int $legacyFormId): ?int
+    {
+        static $templateCache = [];
+        if (isset($templateCache[$legacyFormId])) {
+            return $templateCache[$legacyFormId];
+        }
+
+        $legacyForm = DB::connection('legacy')
+            ->table('html_forms')
+            ->where('id', $legacyFormId)
+            ->first();
+
+        if (! $legacyForm) {
+            $templateCache[$legacyFormId] = null;
+
+            return null;
+        }
+
+        $template = ProductTemplate::firstOrCreate(
+            [
+                'store_id' => $this->newStoreId,
+                'name' => $legacyForm->title,
+            ],
+            [
+                'description' => null,
+                'is_active' => true,
+                'ai_generated' => false,
+            ]
+        );
+
+        $templateCache[$legacyFormId] = $template->id;
+
+        // If just created, migrate its fields and options
+        if ($template->wasRecentlyCreated) {
+            $this->createTemplateFields($legacyFormId, $template);
+        }
+
+        return $template->id;
+    }
+
+    /**
+     * Create fields and options for a newly created ProductTemplate from a legacy html_form.
+     */
+    protected function createTemplateFields(int $legacyFormId, ProductTemplate $template): void
+    {
+        $legacyFields = DB::connection('legacy')
+            ->table('html_form_fields')
+            ->where('html_form_id', $legacyFormId)
+            ->orderBy('sort_order')
+            ->get();
+
+        $usedFieldNames = [];
+
+        foreach ($legacyFields as $legacyField) {
+            $fieldType = $this->mapFieldType($legacyField->component ?? $legacyField->type ?? 'text');
+
+            $baseName = Str::snake($legacyField->name);
+            $fieldName = $baseName;
+            $counter = 1;
+            while (in_array($fieldName, $usedFieldNames)) {
+                $counter++;
+                $fieldName = "{$baseName}_{$counter}";
             }
+            $usedFieldNames[] = $fieldName;
 
-            return ['category_id' => $categoryId, 'template_id' => $templateId];
+            $field = ProductTemplateField::create([
+                'product_template_id' => $template->id,
+                'name' => $fieldName,
+                'canonical_name' => $baseName,
+                'label' => $legacyField->label.($counter > 1 ? " ({$counter})" : ''),
+                'type' => $fieldType,
+                'is_required' => false,
+                'is_searchable' => (bool) ($legacyField->is_searchable ?? false),
+                'is_filterable' => false,
+                'show_in_listing' => true,
+                'sort_order' => $legacyField->sort_order ?? 0,
+                'width_class' => 'w-full',
+                'ai_generated' => false,
+            ]);
+
+            // Migrate field options for select/radio/checkbox
+            $legacyOptions = DB::connection('legacy')
+                ->table('html_form_field_values')
+                ->where('html_form_field_id', $legacyField->id)
+                ->orderBy('sort_order')
+                ->get();
+
+            foreach ($legacyOptions as $index => $legacyOption) {
+                ProductTemplateFieldOption::create([
+                    'product_template_field_id' => $field->id,
+                    'label' => $legacyOption->value,
+                    'value' => Str::slug($legacyOption->value, '_'),
+                    'sort_order' => $legacyOption->sort_order ?? $index,
+                ]);
+            }
         }
-
-        // Get template_id from category
-        $category = Category::withoutGlobalScopes()->find($categoryId);
-        $templateId = $category?->template_id;
-
-        $this->categoryTemplateMap[$categoryId] = $templateId;
-
-        // Ensure template fields are mapped
-        if ($templateId && $legacyHtmlFormId) {
-            $this->ensureTemplateFieldsMapped($legacyHtmlFormId, $templateId);
-        }
-
-        return ['category_id' => $categoryId, 'template_id' => $templateId];
     }
 
     /**
