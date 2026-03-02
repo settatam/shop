@@ -308,7 +308,7 @@ class MigrateLegacyData extends Command
                 'city' => $legacyStore->city,
                 'state' => $legacyStore->state,
                 'zip' => $legacyStore->zip,
-                'url' => $legacyStore->url,
+                'short_name' => $legacyStore->url,
                 'store_domain' => $legacyStore->store_domain,
                 'step' => 2, // Mark onboarding complete
             ]);

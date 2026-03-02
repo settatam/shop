@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Services\StoreContext;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Attachment;
@@ -107,8 +108,15 @@ class DynamicReportMail extends Mailable
      */
     public function envelope(): Envelope
     {
+        $subject = $this->customSubject ?? "Report: {$this->reportTitle}";
+
+        $store = app(StoreContext::class)->getCurrentStore();
+        if ($store?->short_name) {
+            $subject = $store->short_name.' - '.$subject;
+        }
+
         return new Envelope(
-            subject: $this->customSubject ?? "Report: {$this->reportTitle}",
+            subject: $subject,
         );
     }
 

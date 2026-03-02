@@ -35,7 +35,7 @@ class Store extends Model
     protected $fillable = [
         'user_id',
         'slug',
-        'url',
+        'short_name',
         'name',
         'logo',
         'account_email',
