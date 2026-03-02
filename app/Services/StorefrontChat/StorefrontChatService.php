@@ -2,6 +2,7 @@
 
 namespace App\Services\StorefrontChat;
 
+use App\Enums\ConversationStatus;
 use App\Models\Store;
 use App\Models\StorefrontChatMessage;
 use App\Models\StorefrontChatSession;
@@ -51,6 +52,17 @@ class StorefrontChatService
 
         $session->touchLastMessage();
         $session->generateTitle();
+
+        // If an agent is assigned or requested, skip AI processing entirely
+        if (in_array($session->status, [ConversationStatus::Assigned, ConversationStatus::WaitingForAgent])) {
+            yield [
+                'type' => 'done',
+                'session_id' => $session->id,
+                'tokens_used' => 0,
+            ];
+
+            return;
+        }
 
         // Build conversation history
         $messages = $this->buildMessages($session);
@@ -122,7 +134,7 @@ class StorefrontChatService
 
             foreach ($turnToolCalls as $toolCall) {
                 $toolInput = $toolCall['input'];
-                if ($toolCall['name'] === 'capture_lead') {
+                if (in_array($toolCall['name'], ['capture_lead', 'escalate_to_agent'])) {
                     $toolInput['session_id'] = $session->id;
                 }
 
@@ -224,6 +236,12 @@ class StorefrontChatService
         17. Never pressure for contact info. If they decline, move on.
         18. If a customer proactively volunteers their name and contact info, capture it right away.
         19. You do not need to ask for the session_id — it will be provided automatically.
+
+        ESCALATION TO HUMAN AGENT:
+        20. If a customer explicitly asks to speak to a real person, human, agent, or manager, use the escalate_to_agent tool.
+        21. Before escalating, briefly let them know you're connecting them with a team member.
+        22. If a customer is frustrated or the issue is beyond your capabilities (complaints, order disputes, complex returns), offer to connect them with someone.
+        23. Do not escalate unless the customer wants it or the situation clearly requires it.
 
         WHAT YOU MUST NEVER DO:
         - Never reveal product costs, wholesale prices, or profit margins

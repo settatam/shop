@@ -65,6 +65,8 @@ class Store extends Model
         'order_id_prefix',
         'buy_id_prefix',
         'buy_id_suffix',
+        'lead_id_prefix',
+        'lead_id_suffix',
         'repair_id_prefix',
         'repair_id_suffix',
         'appraisal_id_prefix',
@@ -215,6 +217,11 @@ class Store extends Model
         return $this->hasMany(LabelTemplate::class);
     }
 
+    public function channelConfigurations(): HasMany
+    {
+        return $this->hasMany(ChannelConfiguration::class);
+    }
+
     public function hasJewelryModule(): bool
     {
         return $this->jewelry_module_enabled;
@@ -265,6 +272,11 @@ class Store extends Model
     public function payoutExports(): HasMany
     {
         return $this->hasMany(PayoutExport::class);
+    }
+
+    public function leads(): HasMany
+    {
+        return $this->hasMany(Lead::class);
     }
 
     public function buckets(): HasMany

@@ -168,6 +168,7 @@ class StatusService
             StatusableType::Order => $this->getOrderStatusDefinitions(),
             StatusableType::Repair => $this->getRepairStatusDefinitions(),
             StatusableType::Memo => $this->getMemoStatusDefinitions(),
+            StatusableType::Lead => $this->getLeadStatusDefinitions(),
         };
     }
 
@@ -329,6 +330,64 @@ class StatusService
                 ['from' => 'vendor_received', 'to' => 'payment_received', 'name' => 'Record Payment'],
                 ['from' => 'vendor_returned', 'to' => 'archived', 'name' => 'Archive'],
                 ['from' => 'payment_received', 'to' => 'archived', 'name' => 'Archive'],
+            ],
+        ];
+    }
+
+    /**
+     * Get lead status definitions.
+     */
+    protected function getLeadStatusDefinitions(): array
+    {
+        return [
+            'statuses' => [
+                // Kit Request Phase
+                ['name' => 'Pending Kit Request', 'slug' => 'pending_kit_request', 'color' => '#f59e0b', 'is_default' => true, 'behavior' => ['allows_cancellation' => true]],
+                ['name' => 'Kit Request Confirmed', 'slug' => 'kit_request_confirmed', 'color' => '#22c55e', 'behavior' => ['allows_cancellation' => true]],
+                ['name' => 'Kit Request On Hold', 'slug' => 'kit_request_on_hold', 'color' => '#6b7280', 'behavior' => ['allows_cancellation' => true]],
+                ['name' => 'Kit Request Rejected', 'slug' => 'kit_request_rejected', 'color' => '#ef4444', 'is_final' => true],
+                // Kit Shipping Phase
+                ['name' => 'Kit Sent', 'slug' => 'kit_sent', 'color' => '#3b82f6', 'behavior' => ['allows_cancellation' => true]],
+                ['name' => 'Kit Delivered', 'slug' => 'kit_delivered', 'color' => '#6366f1'],
+                // Items Phase
+                ['name' => 'Items Received', 'slug' => 'items_received', 'color' => '#3b82f6'],
+                ['name' => 'Items Reviewed', 'slug' => 'items_reviewed', 'color' => '#6366f1'],
+                // Offer Phase
+                ['name' => 'Offer Given', 'slug' => 'offer_given', 'color' => '#8b5cf6', 'behavior' => ['allows_offer' => true, 'allows_cancellation' => true]],
+                ['name' => 'Offer Accepted', 'slug' => 'offer_accepted', 'color' => '#10b981', 'behavior' => ['allows_payment' => true]],
+                ['name' => 'Customer Declined Offer', 'slug' => 'customer_declined_offer', 'color' => '#ef4444', 'behavior' => ['allows_offer' => true, 'allows_cancellation' => true]],
+                // Payment Phase
+                ['name' => 'Payment Processed', 'slug' => 'payment_processed', 'color' => '#22c55e', 'is_final' => true],
+                // Return/Cancellation
+                ['name' => 'Items Returned', 'slug' => 'items_returned', 'color' => '#6b7280', 'is_final' => true],
+                ['name' => 'Cancelled', 'slug' => 'cancelled', 'color' => '#6b7280', 'is_final' => true],
+            ],
+            'transitions' => [
+                // Kit Request flow
+                ['from' => 'pending_kit_request', 'to' => 'kit_request_confirmed', 'name' => 'Confirm Kit Request'],
+                ['from' => 'pending_kit_request', 'to' => 'kit_request_rejected', 'name' => 'Reject Kit Request'],
+                ['from' => 'pending_kit_request', 'to' => 'kit_request_on_hold', 'name' => 'Put On Hold'],
+                ['from' => 'pending_kit_request', 'to' => 'cancelled', 'name' => 'Cancel'],
+                ['from' => 'kit_request_on_hold', 'to' => 'kit_request_confirmed', 'name' => 'Confirm Kit Request'],
+                ['from' => 'kit_request_on_hold', 'to' => 'kit_request_rejected', 'name' => 'Reject Kit Request'],
+                ['from' => 'kit_request_confirmed', 'to' => 'kit_sent', 'name' => 'Mark Kit Sent'],
+                ['from' => 'kit_sent', 'to' => 'kit_delivered', 'name' => 'Mark Kit Delivered'],
+                ['from' => 'kit_delivered', 'to' => 'items_received', 'name' => 'Mark Items Received'],
+                // Items flow
+                ['from' => 'items_received', 'to' => 'items_reviewed', 'name' => 'Mark Items Reviewed'],
+                ['from' => 'items_received', 'to' => 'offer_given', 'name' => 'Submit Offer'],
+                ['from' => 'items_reviewed', 'to' => 'offer_given', 'name' => 'Submit Offer'],
+                // Offer flow
+                ['from' => 'offer_given', 'to' => 'offer_accepted', 'name' => 'Accept Offer'],
+                ['from' => 'offer_given', 'to' => 'customer_declined_offer', 'name' => 'Customer Declined'],
+                ['from' => 'offer_given', 'to' => 'cancelled', 'name' => 'Cancel'],
+                ['from' => 'customer_declined_offer', 'to' => 'offer_given', 'name' => 'Submit Counter Offer'],
+                ['from' => 'customer_declined_offer', 'to' => 'items_returned', 'name' => 'Return Items'],
+                ['from' => 'customer_declined_offer', 'to' => 'cancelled', 'name' => 'Cancel'],
+                // Payment flow
+                ['from' => 'offer_accepted', 'to' => 'payment_processed', 'name' => 'Process Payment'],
+                // Return flow
+                ['from' => 'offer_accepted', 'to' => 'items_returned', 'name' => 'Return Items'],
             ],
         ];
     }

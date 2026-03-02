@@ -327,7 +327,7 @@ class StorefrontToolsTest extends TestCase
         $executor = new StorefrontChatToolExecutor;
         $definitions = $executor->getDefinitions();
 
-        $this->assertCount(7, $definitions);
+        $this->assertCount(9, $definitions);
 
         $toolNames = array_column($definitions, 'name');
         $this->assertContains('search_products', $toolNames);
@@ -336,7 +336,9 @@ class StorefrontToolsTest extends TestCase
         $this->assertContains('get_store_info', $toolNames);
         $this->assertContains('compare_products', $toolNames);
         $this->assertContains('capture_lead', $toolNames);
+        $this->assertContains('escalate_to_agent', $toolNames);
         $this->assertContains('add_to_cart', $toolNames);
+        $this->assertContains('knowledge_search', $toolNames);
     }
 
     public function test_executor_returns_error_for_unknown_tool(): void

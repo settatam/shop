@@ -68,6 +68,10 @@ const sidebarNavItems: NavItem[] = [
         href: '/settings/notifications',
     },
     {
+        title: 'Integrations',
+        href: '/settings/integrations',
+    },
+    {
         title: 'Maintenance',
         href: '/settings/maintenance',
     },

@@ -34,4 +34,11 @@ class StorefrontChatMessageFactory extends Factory
             'role' => 'user',
         ]);
     }
+
+    public function agent(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'agent',
+        ]);
+    }
 }

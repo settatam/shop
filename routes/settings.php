@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\ChannelIntegrationController;
 use App\Http\Controllers\Settings\EbayAccountController;
 use App\Http\Controllers\Settings\EmailSettingsController;
 use App\Http\Controllers\Settings\JobLogsController;
@@ -216,6 +217,14 @@ Route::middleware(['auth', 'store'])->group(function () {
             Route::post('/programs/opt-in', [EbayAccountController::class, 'optInToProgram'])->name('programs.opt-in');
             Route::post('/programs/opt-out', [EbayAccountController::class, 'optOutOfProgram'])->name('programs.opt-out');
         });
+    });
+
+    // Channel Integrations (WhatsApp, Slack)
+    Route::middleware(['store', 'onboarding'])->prefix('settings/integrations')->name('settings.integrations.')->group(function () {
+        Route::get('/', [ChannelIntegrationController::class, 'index'])->name('index');
+        Route::post('/', [ChannelIntegrationController::class, 'save'])->name('save');
+        Route::post('/toggle', [ChannelIntegrationController::class, 'toggle'])->name('toggle');
+        Route::delete('/{channelConfiguration}', [ChannelIntegrationController::class, 'destroy'])->name('destroy');
     });
 
     // Knowledge Base (AI Assistant)

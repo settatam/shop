@@ -8,6 +8,7 @@ enum StatusableType: string
     case Order = 'order';
     case Repair = 'repair';
     case Memo = 'memo';
+    case Lead = 'lead';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum StatusableType: string
             self::Order => 'Order',
             self::Repair => 'Repair',
             self::Memo => 'Memo',
+            self::Lead => 'Lead',
         };
     }
 
@@ -26,6 +28,7 @@ enum StatusableType: string
             self::Order => 'Orders',
             self::Repair => 'Repairs',
             self::Memo => 'Memos',
+            self::Lead => 'Leads',
         };
     }
 
@@ -36,6 +39,7 @@ enum StatusableType: string
             self::Order => \App\Models\Order::class,
             self::Repair => \App\Models\Repair::class,
             self::Memo => \App\Models\Memo::class,
+            self::Lead => \App\Models\Lead::class,
         };
     }
 
@@ -49,6 +53,7 @@ enum StatusableType: string
             \App\Models\Order::class, 'Order' => self::Order,
             \App\Models\Repair::class, 'Repair' => self::Repair,
             \App\Models\Memo::class, 'Memo' => self::Memo,
+            \App\Models\Lead::class, 'Lead' => self::Lead,
             default => null,
         };
     }

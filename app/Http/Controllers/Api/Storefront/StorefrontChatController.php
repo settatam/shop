@@ -160,6 +160,43 @@ class StorefrontChatController extends Controller
     }
 
     /**
+     * Poll for new messages (used by storefront widget when agent is assigned).
+     */
+    public function pollMessages(Request $request, string $sessionId): JsonResponse
+    {
+        $validated = $request->validate([
+            'visitor_id' => ['required', 'string', 'max:64'],
+            'after' => ['nullable', 'date'],
+        ]);
+
+        /** @var StoreMarketplace $marketplace */
+        $marketplace = $request->attributes->get('marketplace');
+
+        $session = \App\Models\StorefrontChatSession::where('id', $sessionId)
+            ->where('store_id', $marketplace->store_id)
+            ->where('visitor_id', $validated['visitor_id'])
+            ->firstOrFail();
+
+        $query = $session->messages()->orderBy('created_at');
+
+        if (! empty($validated['after'])) {
+            $query->where('created_at', '>', $validated['after']);
+        }
+
+        $messages = $query->get()->map(fn ($msg) => [
+            'id' => $msg->id,
+            'role' => $msg->role,
+            'content' => $msg->content,
+            'created_at' => $msg->created_at->toISOString(),
+        ]);
+
+        return response()->json([
+            'messages' => $messages,
+            'status' => $session->status->value,
+        ]);
+    }
+
+    /**
      * Build knowledge base context string for a store.
      */
     protected function buildKnowledgeBaseContext(int $storeId): string

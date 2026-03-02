@@ -21,6 +21,7 @@ import {
     PrinterIcon,
     ShoppingBagIcon,
     BuildingStorefrontIcon,
+    ChatBubbleLeftRightIcon,
 } from '@heroicons/vue/24/outline';
 import { ChevronRightIcon } from '@heroicons/vue/20/solid';
 import type { NavGroup, NavChild } from '@/types';
@@ -40,7 +41,6 @@ const allNavigation: NavGroup[] = [
         feature: 'customers',
         children: [
             { name: 'All Customers', href: '/customers' },
-            { name: 'Leads', href: '/leads', feature: 'leads' },
         ],
     },
     {
@@ -71,6 +71,7 @@ const allNavigation: NavGroup[] = [
         icon: ShoppingBagIcon,
         feature: 'transactions',
         children: [
+            { name: 'Leads', href: '/leads', feature: 'leads' },
             { name: 'All Transactions', href: '/transactions', feature: 'all_transactions' },
             { name: 'Buys', href: '/buys', feature: 'buys' },
             { name: 'Purchased Items', href: '/buys/items', feature: 'buys' },
@@ -114,6 +115,7 @@ const allNavigation: NavGroup[] = [
             { name: 'Inventory Report', href: '/reports/inventory' },
         ],
     },
+    { name: 'Conversations', href: '/conversations', icon: ChatBubbleLeftRightIcon },
     { name: 'Tags', href: '/tags', icon: TagIcon, feature: 'tags' },
     { name: 'Integrations', href: '/integrations', icon: PuzzlePieceIcon, feature: 'integrations' },
 ];

@@ -14,6 +14,7 @@ class StorefrontChatMessage extends Model
     protected $fillable = [
         'storefront_chat_session_id',
         'role',
+        'agent_id',
         'content',
         'tool_calls',
         'tool_results',
@@ -34,6 +35,11 @@ class StorefrontChatMessage extends Model
         return $this->belongsTo(StorefrontChatSession::class, 'storefront_chat_session_id');
     }
 
+    public function agent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'agent_id');
+    }
+
     public function isFromUser(): bool
     {
         return $this->role === 'user';
@@ -42,5 +48,10 @@ class StorefrontChatMessage extends Model
     public function isFromAssistant(): bool
     {
         return $this->role === 'assistant';
+    }
+
+    public function isFromAgent(): bool
+    {
+        return $this->role === 'agent';
     }
 }

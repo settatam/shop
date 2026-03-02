@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Route;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
         using: function () {
             // Portal routes must be registered before web routes so domain matching takes priority
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'shopify/app/*',
             'shopify/embedded/*',
             'api/storefront/*',
+            'api/webhooks/*',
         ]);
 
         $middleware->web(append: [

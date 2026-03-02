@@ -7,8 +7,10 @@ use App\Http\Controllers\Webhooks\EbayWebhookController;
 use App\Http\Controllers\Webhooks\EtsyWebhookController;
 use App\Http\Controllers\Webhooks\PaperformWebhookController;
 use App\Http\Controllers\Webhooks\ShopifyWebhookController;
+use App\Http\Controllers\Webhooks\SlackWebhookController;
 use App\Http\Controllers\Webhooks\TwilioWebhookController;
 use App\Http\Controllers\Webhooks\WalmartWebhookController;
+use App\Http\Controllers\Webhooks\WhatsAppWebhookController;
 use App\Http\Controllers\Webhooks\WooCommerceWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -82,6 +84,16 @@ Route::prefix('webhooks')->withoutMiddleware(['web', 'csrf'])->group(function ()
         ->name('webhooks.twilio.sms');
     Route::post('twilio/status', [TwilioWebhookController::class, 'handleStatusCallback'])
         ->name('webhooks.twilio.status');
+
+    // WhatsApp webhooks
+    Route::get('whatsapp', [WhatsAppWebhookController::class, 'verify'])
+        ->name('webhooks.whatsapp.verify');
+    Route::post('whatsapp', [WhatsAppWebhookController::class, 'handle'])
+        ->name('webhooks.whatsapp');
+
+    // Slack webhooks
+    Route::post('slack', [SlackWebhookController::class, 'handle'])
+        ->name('webhooks.slack');
 
     // Shopify GDPR mandatory webhooks
     Route::post('shopify/gdpr/customers-data-request', [ShopifyAppController::class, 'customerDataRequest'])

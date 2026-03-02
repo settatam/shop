@@ -64,6 +64,16 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     Route::get('store', [StoreController::class, 'show']);
     Route::patch('store', [StoreController::class, 'update']);
 
+    // Conversations (Live Agent Takeover)
+    Route::prefix('conversations/{session}')->name('conversations.')->group(function () {
+        Route::post('assign', [\App\Http\Controllers\Api\ConversationApiController::class, 'assign'])->name('assign');
+        Route::post('release', [\App\Http\Controllers\Api\ConversationApiController::class, 'release'])->name('release');
+        Route::post('close', [\App\Http\Controllers\Api\ConversationApiController::class, 'close'])->name('close');
+        Route::post('messages', [\App\Http\Controllers\Api\ConversationApiController::class, 'sendMessage'])->name('send-message');
+        Route::get('messages', [\App\Http\Controllers\Api\ConversationApiController::class, 'messages'])->name('messages');
+        Route::post('escalate-zoom', [\App\Http\Controllers\Api\ConversationApiController::class, 'escalateToZoom'])->name('escalate-zoom');
+    });
+
     // Products
     Route::get('products/{product}/preview', [ProductController::class, 'preview']);
     Route::apiResource('products', ProductController::class);

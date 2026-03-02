@@ -60,6 +60,7 @@ Route::prefix('shopify/proxy')
     ->group(function () {
         Route::post('chat', [StorefrontChatController::class, 'chat'])->name('storefront.chat');
         Route::post('chat/session', [StorefrontChatController::class, 'session'])->name('storefront.chat.session');
+        Route::get('chat/{session}/poll', [StorefrontChatController::class, 'pollMessages'])->name('storefront.chat.poll');
     });
 
 /*
@@ -73,6 +74,7 @@ Route::prefix('api/storefront/widget')
     ->group(function () {
         Route::post('chat', [StorefrontChatController::class, 'chat'])->name('storefront.widget.chat');
         Route::post('chat/session', [StorefrontChatController::class, 'session'])->name('storefront.widget.session');
+        Route::get('chat/{session}/poll', [StorefrontChatController::class, 'pollMessages'])->name('storefront.widget.poll');
     });
 
 /*
@@ -484,12 +486,43 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('buys/items', [BuysController::class, 'items'])->name('buys.items');
     });
 
-    // Leads Dashboard - Tracks transactions until payment is processed, then they become "buys"
-    Route::middleware('permission:transactions.view')->group(function () {
-        Route::get('leads', [\App\Http\Controllers\Web\LeadsDashboardController::class, 'index'])->name('leads.index');
-        Route::get('leads/status/{status}', [\App\Http\Controllers\Web\LeadsDashboardController::class, 'byStatus'])->name('leads.by-status');
-        Route::get('leads/{transaction}', [\App\Http\Controllers\Web\LeadsDashboardController::class, 'show'])->name('leads.show');
+    // Leads - Kit request lifecycle tracking
+    Route::middleware('permission:transactions.create')->group(function () {
+        Route::get('leads/create', [\App\Http\Controllers\Web\LeadController::class, 'create'])->name('web.leads.create');
     });
+    Route::middleware('permission:transactions.view')->group(function () {
+        Route::get('leads', [\App\Http\Controllers\Web\LeadController::class, 'index'])->name('web.leads.index');
+        Route::get('leads/{lead}', [\App\Http\Controllers\Web\LeadController::class, 'show'])->name('web.leads.show');
+    });
+    Route::middleware('permission:transactions.update')->group(function () {
+        Route::put('leads/{lead}', [\App\Http\Controllers\Web\LeadController::class, 'update'])->name('web.leads.update');
+        Route::post('leads/{lead}/change-status', [\App\Http\Controllers\Web\LeadController::class, 'changeStatus'])->name('web.leads.change-status');
+        Route::post('leads/{lead}/assign', [\App\Http\Controllers\Web\LeadController::class, 'assignLead'])->name('web.leads.assign');
+        Route::post('leads/bulk-action', [\App\Http\Controllers\Web\LeadController::class, 'bulkAction'])->name('web.leads.bulk-action');
+    });
+    Route::middleware('permission:transactions.submit_offer')->group(function () {
+        Route::post('leads/{lead}/offer', [\App\Http\Controllers\Web\LeadController::class, 'submitOffer'])->name('web.leads.offer');
+    });
+    Route::middleware('permission:transactions.accept_offer')->group(function () {
+        Route::post('leads/{lead}/accept', [\App\Http\Controllers\Web\LeadController::class, 'acceptOffer'])->name('web.leads.accept');
+    });
+    Route::middleware('permission:transactions.decline_offer')->group(function () {
+        Route::post('leads/{lead}/decline', [\App\Http\Controllers\Web\LeadController::class, 'declineOffer'])->name('web.leads.decline');
+    });
+    Route::middleware('permission:transactions.process_payment')->group(function () {
+        Route::post('leads/{lead}/process-payment', [\App\Http\Controllers\Web\LeadController::class, 'processPayment'])->name('web.leads.process-payment');
+    });
+    Route::middleware('permission:transactions.status_change')->group(function () {
+        Route::post('leads/{lead}/confirm-kit-request', [\App\Http\Controllers\Web\LeadController::class, 'confirmKitRequest'])->name('web.leads.confirm-kit-request');
+        Route::post('leads/{lead}/reject-kit-request', [\App\Http\Controllers\Web\LeadController::class, 'rejectKitRequest'])->name('web.leads.reject-kit-request');
+        Route::post('leads/{lead}/hold-kit-request', [\App\Http\Controllers\Web\LeadController::class, 'holdKitRequest'])->name('web.leads.hold-kit-request');
+        Route::post('leads/{lead}/mark-kit-sent', [\App\Http\Controllers\Web\LeadController::class, 'markKitSent'])->name('web.leads.mark-kit-sent');
+        Route::post('leads/{lead}/mark-kit-delivered', [\App\Http\Controllers\Web\LeadController::class, 'markKitDelivered'])->name('web.leads.mark-kit-delivered');
+        Route::post('leads/{lead}/mark-items-received', [\App\Http\Controllers\Web\LeadController::class, 'markItemsReceived'])->name('web.leads.mark-items-received');
+        Route::post('leads/{lead}/mark-items-reviewed', [\App\Http\Controllers\Web\LeadController::class, 'markItemsReviewed'])->name('web.leads.mark-items-reviewed');
+        Route::post('leads/{lead}/mark-items-returned', [\App\Http\Controllers\Web\LeadController::class, 'markItemsReturned'])->name('web.leads.mark-items-returned');
+    });
+    Route::delete('leads/{lead}', [\App\Http\Controllers\Web\LeadController::class, 'destroy'])->name('web.leads.destroy')->middleware('permission:transactions.delete');
 
     // Buckets (Junk items without SKUs)
     Route::middleware('permission:buckets.view')->group(function () {
@@ -968,6 +1001,12 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('monthly/export', [TransactionsReportController::class, 'exportMonthly'])->name('monthly.export');
         Route::get('yearly', [TransactionsReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [TransactionsReportController::class, 'exportYearly'])->name('yearly.export');
+    });
+
+    // Conversations (Live Agent Takeover)
+    Route::prefix('conversations')->name('conversations.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Web\ConversationController::class, 'index'])->name('index');
+        Route::get('/{session}', [\App\Http\Controllers\Web\ConversationController::class, 'show'])->name('show');
     });
 
     // Agent Management

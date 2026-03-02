@@ -1,241 +1,209 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import Pagination from '@/components/widgets/Pagination.vue';
-import { type BreadcrumbItem, type PaginatedResponse } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link } from '@inertiajs/vue3';
+import { useWidget, type WidgetFilter } from '@/composables/useWidget';
+import DataTable from '@/components/widgets/DataTable.vue';
+import { DatePicker } from '@/components/ui/date-picker';
+import { computed, onMounted, ref, watch } from 'vue';
+import { PlusIcon, XMarkIcon } from '@heroicons/vue/20/solid';
 
-interface Customer {
-    id: number;
-    name: string;
-    email: string | null;
+interface FilterOption {
+    value: string;
+    label: string;
+    color?: string;
+    icon?: string;
 }
-
-interface Lead {
-    id: number;
-    transaction_number: string;
-    customer: Customer | null;
-    status: string;
-    status_label: string;
-    final_offer: number | null;
-    estimated_value: number | null;
-    payment_method: string | null;
-    created_at: string;
-    created_at_formatted: string;
-}
-
-interface StatusCount {
-    id: number | null;
-    name: string;
-    slug: string;
-    color: string | null;
-    is_final: boolean;
-    count: number;
-}
-
-interface CurrentStatus {
-    id?: number;
-    name: string;
-    slug: string;
-    color?: string | null;
-}
-
-const props = defineProps<{
-    leads: PaginatedResponse<Lead>;
-    currentStatus: CurrentStatus;
-    statusCounts: StatusCount[];
-}>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Leads', href: '/leads' },
-    { title: props.currentStatus.name, href: `/leads/status/${props.currentStatus.slug}` },
 ];
 
-function formatCurrency(value: number | null): string {
-    if (value === null) return '-';
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-    }).format(value);
+function getUrlParams(): WidgetFilter {
+    const params = new URLSearchParams(window.location.search);
+    const filter: WidgetFilter = {};
+    if (params.get('status')) filter.status = params.get('status') || undefined;
+    if (params.get('date_from')) filter.date_from = params.get('date_from') || undefined;
+    if (params.get('date_to')) filter.date_to = params.get('date_to') || undefined;
+    return filter;
 }
 
-function getStatusColor(slug: string): string {
-    const colorMap: Record<string, string> = {
-        pending_kit_request: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-        kit_request_confirmed: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
-        kit_sent: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-        kit_delivered: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
-        items_received: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
-        items_reviewed: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
-        offer_given: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-        offer_accepted: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-        offer_declined: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-        payment_pending: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-        payment_processed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-        cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-        items_returned: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-        kit_request_rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-        kit_request_on_hold: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-    };
-    return colorMap[slug] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+const initialParams = getUrlParams();
+
+const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Leads\\LeadsTable', initialParams);
+
+const selectedStatus = ref<string>(initialParams.status || '');
+const dateFrom = ref<string>(initialParams.date_from as string || '');
+const dateTo = ref<string>(initialParams.date_to as string || '');
+
+const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null);
+
+const availableStatuses = computed<FilterOption[]>(() => data.value?.filters?.available?.statuses || []);
+
+const selectedStatusDetails = computed(() => {
+    if (!selectedStatus.value) return null;
+    return availableStatuses.value.find(s => s.value === selectedStatus.value);
+});
+
+onMounted(() => {
+    loadWidget();
+});
+
+watch([selectedStatus, dateFrom, dateTo], () => {
+    updateFilter({
+        status: selectedStatus.value || undefined,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
+        page: 1,
+    });
+});
+
+function handlePageChange(page: number) {
+    setPage(page);
 }
 
-// Filter statuses to show only those with counts > 0
-const activeStatuses = props.statusCounts.filter((s) => s.count > 0);
+function handleSortChange(field: string, desc: boolean) {
+    setSort(field, desc);
+}
+
+function handleSearch(term: string) {
+    setSearch(term);
+}
+
+function handlePerPageChange(perPage: number) {
+    setPerPage(perPage);
+}
+
+function handleBulkActionSuccess() {
+    dataTableRef.value?.clearSelection();
+    loadWidget();
+}
+
+function clearFilters() {
+    selectedStatus.value = '';
+    dateFrom.value = '';
+    dateTo.value = '';
+}
+
+const hasActiveFilters = computed(() => {
+    return selectedStatus.value || dateFrom.value || dateTo.value;
+});
 </script>
 
 <template>
-    <Head :title="`Leads - ${currentStatus.name}`" />
+    <Head title="Leads" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex h-full flex-1 flex-col gap-6 p-4 lg:flex-row">
-            <!-- Sidebar: Status Navigation -->
-            <div class="w-full shrink-0 lg:w-64">
-                <div class="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
-                    <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-                        <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
-                            Filter by Status
-                        </h2>
-                    </div>
-                    <nav class="max-h-96 overflow-y-auto lg:max-h-none">
-                        <Link
-                            v-for="status in activeStatuses"
-                            :key="status.slug"
-                            :href="`/leads/status/${status.slug}`"
-                            class="flex items-center justify-between px-4 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
-                            :class="{
-                                'bg-gray-100 dark:bg-gray-700': status.slug === currentStatus.slug,
-                            }"
-                        >
-                            <span class="truncate text-gray-700 dark:text-gray-300">
-                                {{ status.name }}
-                            </span>
-                            <span
-                                class="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300"
-                            >
-                                {{ status.count }}
-                            </span>
-                        </Link>
-                    </nav>
+        <div class="flex h-full flex-1 flex-col gap-4 p-4">
+            <!-- Header -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Leads</h1>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Track kit requests and offers through the lead lifecycle
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <Link
+                        href="/leads/create"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    >
+                        <PlusIcon class="-ml-0.5 size-5" aria-hidden="true" />
+                        New Lead
+                    </Link>
                 </div>
             </div>
 
-            <!-- Main Content -->
-            <div class="flex-1">
-                <!-- Header -->
-                <div class="mb-4 flex items-center justify-between">
-                    <div>
-                        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
-                            {{ currentStatus.name }}
-                        </h1>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                            {{ leads.meta.total }} lead{{ leads.meta.total === 1 ? '' : 's' }}
-                        </p>
-                    </div>
-                    <Link
-                        href="/leads"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+            <!-- Filters -->
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <select
+                        v-model="selectedStatus"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                     >
-                        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                        </svg>
-                        Back to Dashboard
-                    </Link>
+                        <option value="">All Statuses</option>
+                        <option v-for="status in availableStatuses" :key="status.value" :value="status.value">
+                            {{ status.label }}
+                        </option>
+                    </select>
                 </div>
 
-                <!-- Leads Table -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From Date</label>
+                    <DatePicker
+                        v-model="dateFrom"
+                        placeholder="From date"
+                        class="w-[160px]"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To Date</label>
+                    <DatePicker
+                        v-model="dateTo"
+                        placeholder="To date"
+                        class="w-[160px]"
+                    />
+                </div>
+
+                <!-- Clear filters -->
+                <button
+                    v-if="hasActiveFilters"
+                    type="button"
+                    class="inline-flex items-center gap-x-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    @click="clearFilters"
+                >
+                    <XMarkIcon class="size-4" />
+                    Clear filters
+                </button>
+            </div>
+
+            <!-- Active status indicator -->
+            <div v-if="selectedStatusDetails" class="flex items-center gap-2 rounded-lg bg-gray-50 px-4 py-2 dark:bg-gray-800">
+                <span
+                    class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+                    :style="selectedStatusDetails.color ? { backgroundColor: `${selectedStatusDetails.color}15`, color: selectedStatusDetails.color, border: `1px solid ${selectedStatusDetails.color}30` } : {}"
+                >
+                    {{ selectedStatusDetails.label }}
+                </span>
+                <span class="text-sm text-gray-600 dark:text-gray-400">
+                    Showing {{ data?.data?.total || 0 }} leads in this status
+                </span>
+            </div>
+
+            <!-- Data Table -->
+            <DataTable
+                v-if="data"
+                ref="dataTableRef"
+                :data="data"
+                :loading="loading"
+                bulk-action-url="/leads/bulk-action"
+                :show-totals="true"
+                :total-columns="[{ key: 'total_value', format: 'currency', currency: 'USD' }]"
+                @page-change="handlePageChange"
+                @sort-change="handleSortChange"
+                @search="handleSearch"
+                @per-page-change="handlePerPageChange"
+                @bulk-action-success="handleBulkActionSuccess"
+            />
+
+            <!-- Loading skeleton -->
+            <div v-else class="animate-pulse">
                 <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Lead #
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Customer
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Status
-                                    </th>
-                                    <th class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Est. Value
-                                    </th>
-                                    <th class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Offer
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Created
-                                    </th>
-                                    <th class="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-300">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                                <tr
-                                    v-for="lead in leads.data"
-                                    :key="lead.id"
-                                    class="hover:bg-gray-50 dark:hover:bg-gray-700"
-                                >
-                                    <td class="px-4 py-4 text-sm font-medium whitespace-nowrap">
-                                        <Link
-                                            :href="`/leads/${lead.id}`"
-                                            class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                        >
-                                            {{ lead.transaction_number }}
-                                        </Link>
-                                    </td>
-                                    <td class="px-4 py-4 text-sm whitespace-nowrap">
-                                        <div v-if="lead.customer">
-                                            <div class="font-medium text-gray-900 dark:text-white">
-                                                {{ lead.customer.name }}
-                                            </div>
-                                            <div v-if="lead.customer.email" class="text-gray-500 dark:text-gray-400">
-                                                {{ lead.customer.email }}
-                                            </div>
-                                        </div>
-                                        <span v-else class="text-gray-400">-</span>
-                                    </td>
-                                    <td class="px-4 py-4 text-sm whitespace-nowrap">
-                                        <span
-                                            class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-                                            :class="getStatusColor(lead.status)"
-                                        >
-                                            {{ lead.status_label }}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                                        {{ formatCurrency(lead.estimated_value) }}
-                                    </td>
-                                    <td class="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                                        {{ formatCurrency(lead.final_offer) }}
-                                    </td>
-                                    <td class="px-4 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                                        {{ lead.created_at_formatted }}
-                                    </td>
-                                    <td class="px-4 py-4 text-right text-sm whitespace-nowrap">
-                                        <Link
-                                            :href="`/leads/${lead.id}`"
-                                            class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
-                                        >
-                                            View
-                                        </Link>
-                                    </td>
-                                </tr>
-
-                                <!-- Empty state -->
-                                <tr v-if="leads.data.length === 0">
-                                    <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                                        No leads found with this status.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="border-b border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                        <div class="h-6 w-32 rounded bg-gray-200 dark:bg-gray-700" />
                     </div>
-
-                    <!-- Pagination -->
-                    <div v-if="leads.meta.last_page > 1" class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
-                        <Pagination :meta="leads.meta" :links="leads.links" />
+                    <div class="p-4">
+                        <div class="space-y-3">
+                            <div v-for="i in 5" :key="i" class="flex gap-4">
+                                <div class="h-10 w-10 rounded bg-gray-200 dark:bg-gray-700" />
+                                <div class="flex-1 space-y-2">
+                                    <div class="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+                                    <div class="h-3 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

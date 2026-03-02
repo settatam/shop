@@ -240,7 +240,7 @@ class OnboardingTest extends TestCase
 
         // Verify lead sources were created
         $leadSources = \App\Models\LeadSource::where('store_id', $this->store->id)->get();
-        $this->assertCount(7, $leadSources);
+        $this->assertCount(8, $leadSources);
         $this->assertTrue($leadSources->pluck('slug')->contains('walk-in'));
         $this->assertTrue($leadSources->pluck('slug')->contains('referral'));
         $this->assertTrue($leadSources->pluck('slug')->contains('social-media'));
