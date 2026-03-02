@@ -167,8 +167,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:products.update')->group(function () {
         Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
-        Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
-        Route::patch('products/{product}', [ProductController::class, 'update']);
+        Route::match(['put', 'patch'], 'products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::post('products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
         Route::post('products/bulk-inline-update', [ProductController::class, 'bulkInlineUpdate'])->name('products.bulk-inline-update');
         Route::post('products/get-for-inline-edit', [ProductController::class, 'getForInlineEdit'])->name('products.get-for-inline-edit');
@@ -223,8 +222,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:templates.update')->group(function () {
         Route::get('templates/{template}/edit', [TemplateController::class, 'edit'])->name('templates.edit');
-        Route::put('templates/{template}', [TemplateController::class, 'update'])->name('templates.update');
-        Route::patch('templates/{template}', [TemplateController::class, 'update']);
+        Route::match(['put', 'patch'], 'templates/{template}', [TemplateController::class, 'update'])->name('templates.update');
     });
     Route::delete('templates/{template}', [TemplateController::class, 'destroy'])->name('templates.destroy')->middleware('permission:templates.delete');
 
@@ -358,8 +356,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:transactions.update')->group(function () {
         Route::get('transactions/{transaction}/edit', [\App\Http\Controllers\Web\TransactionController::class, 'edit'])->name('web.transactions.edit');
-        Route::put('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'update'])->name('web.transactions.update');
-        Route::patch('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'update']);
+        Route::match(['put', 'patch'], 'transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'update'])->name('web.transactions.update');
         Route::post('transactions/{transaction}/change-status', [\App\Http\Controllers\Web\TransactionController::class, 'changeStatus'])->name('web.transactions.change-status');
         Route::post('transactions/bulk-action', [\App\Http\Controllers\Web\TransactionController::class, 'bulkAction'])->name('web.transactions.bulk-action');
     });
@@ -709,8 +706,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     });
     Route::middleware('permission:warehouses.update')->group(function () {
         Route::get('warehouses/{warehouse}/edit', [WarehouseController::class, 'edit'])->name('warehouses.edit');
-        Route::put('warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
-        Route::patch('warehouses/{warehouse}', [WarehouseController::class, 'update']);
+        Route::match(['put', 'patch'], 'warehouses/{warehouse}', [WarehouseController::class, 'update'])->name('warehouses.update');
         Route::post('warehouses/{warehouse}/make-default', [WarehouseController::class, 'makeDefault'])->name('warehouses.make-default');
     });
     Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])->name('warehouses.destroy')->middleware('permission:warehouses.delete');
