@@ -370,8 +370,18 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Check Mailing Address -->
+                    <!-- Check Number & Mailing Address -->
                     <div v-if="needsCheckAddress(payment.method)" class="space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Check Number <span class="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                :value="payment.details.check_number || ''"
+                                @input="updatePaymentDetails(payment.id, { check_number: ($event.target as HTMLInputElement).value })"
+                                class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                placeholder="Check #"
+                            />
+                        </div>
                         <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Mailing Address</p>
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div class="sm:col-span-2">

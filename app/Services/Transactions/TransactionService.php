@@ -96,6 +96,11 @@ class TransactionService
                     'country_id' => $data['customer']['country_id'] ?? null,
                 ]);
                 $customerId = $customer->id;
+
+                // Save customer ID photos if uploaded
+                if (! empty($data['id_photos'])) {
+                    $this->saveCustomerIdPhotos($customer, $storeId, $data['id_photos']);
+                }
             }
 
             // Get the user ID from store_user
@@ -216,6 +221,34 @@ class TransactionService
                 'payout_results' => $payoutResults,
             ];
         });
+    }
+
+    /**
+     * Save customer ID photos to the images table.
+     *
+     * @param  array<\Illuminate\Http\UploadedFile>  $photos
+     */
+    protected function saveCustomerIdPhotos(Customer $customer, int $storeId, array $photos): void
+    {
+        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+
+        foreach ($photos as $photo) {
+            $path = $photo->store("customers/{$customer->id}/identity", $disk);
+            $url = $disk === 's3'
+                ? \Illuminate\Support\Facades\Storage::disk('s3')->url($path)
+                : \Illuminate\Support\Facades\Storage::disk('public')->url($path);
+
+            $customer->images()->create([
+                'store_id' => $storeId,
+                'path' => $path,
+                'url' => $url,
+                'disk' => $disk,
+                'alt_text' => 'identity',
+                'mime_type' => $photo->getMimeType(),
+                'size' => $photo->getSize(),
+                'is_internal' => true,
+            ]);
+        }
     }
 
     public function addItem(Transaction $transaction, array $data): TransactionItem

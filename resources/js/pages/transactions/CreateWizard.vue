@@ -138,6 +138,9 @@ const formData = ref({
     internal_notes: '',
 });
 
+// Customer ID photo files (tracked outside formData since File objects don't serialize)
+const idPhotos = ref<File[]>([]);
+
 const selectedWarehouse = computed(() => {
     return props.warehouses.find(w => w.value === formData.value.warehouse_id);
 });
@@ -304,13 +307,22 @@ function submitTransaction() {
         details: p.details,
     }));
 
+    // Include ID photos if present
+    if (idPhotos.value.length > 0) {
+        payload.id_photos = idPhotos.value;
+    }
+
     router.post('/transactions/buy', payload, {
-        preserveState: false,
-        preserveScroll: false,
-        onFinish: () => {
+        preserveState: true,
+        preserveScroll: true,
+        onError: (errors) => {
             isSubmitting.value = false;
+            const messages = Object.values(errors).flat().join('\n');
+            if (messages) {
+                alert('Validation errors:\n' + messages);
+            }
         },
-        onError: () => {
+        onFinish: () => {
             isSubmitting.value = false;
         },
     });
@@ -546,6 +558,7 @@ function submitTransaction() {
                                     :customer-id="formData.customer_id"
                                     :customer="formData.customer"
                                     @update="handleCustomerSelect"
+                                    @update:id-photos="(files: File[]) => idPhotos = files"
                                 />
 
                                 <!-- Step 3: Items -->

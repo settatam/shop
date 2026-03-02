@@ -81,6 +81,7 @@ class CreateBuyTransactionRequest extends FormRequest
             'payments.*.details' => ['nullable', 'array'],
             'payments.*.details.paypal_email' => ['nullable', 'email', 'max:255'],
             'payments.*.details.venmo_handle' => ['nullable', 'string', 'max:100'],
+            'payments.*.details.check_number' => ['nullable', 'string', 'max:50'],
             'payments.*.details.check_mailing_address' => ['nullable', 'array'],
             'payments.*.details.check_mailing_address.address' => ['nullable', 'string', 'max:255'],
             'payments.*.details.check_mailing_address.city' => ['nullable', 'string', 'max:100'],
@@ -94,6 +95,10 @@ class CreateBuyTransactionRequest extends FormRequest
             // Notes
             'customer_notes' => ['nullable', 'string', 'max:2000'],
             'internal_notes' => ['nullable', 'string', 'max:2000'],
+
+            // Customer ID photos
+            'id_photos' => ['nullable', 'array', 'max:5'],
+            'id_photos.*' => ['image', 'max:10240'],
         ];
     }
 
@@ -130,6 +135,9 @@ class CreateBuyTransactionRequest extends FormRequest
                     break;
 
                 case Transaction::PAYMENT_CHECK:
+                    if (empty($details['check_number'])) {
+                        $validator->errors()->add("payments.{$index}.details.check_number", 'Check number is required for check payments.');
+                    }
                     $address = $details['check_mailing_address'] ?? [];
                     if (empty($address['address'])) {
                         $validator->errors()->add("payments.{$index}.details.check_mailing_address.address", 'Mailing address is required for check payments.');

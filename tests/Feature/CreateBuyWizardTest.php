@@ -149,6 +149,7 @@ class CreateBuyWizardTest extends TestCase
                     'method' => Transaction::PAYMENT_CHECK,
                     'amount' => 150,
                     'details' => [
+                        'check_number' => '1234',
                         'check_mailing_address' => [
                             'address' => '123 Main St',
                             'city' => 'Los Angeles',

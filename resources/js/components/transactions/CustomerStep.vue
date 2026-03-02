@@ -15,7 +15,7 @@ import {
     PlusIcon,
     XMarkIcon,
 } from '@heroicons/vue/20/solid';
-import { UserIcon } from '@heroicons/vue/24/outline';
+import { UserIcon, CameraIcon } from '@heroicons/vue/24/outline';
 import axios from 'axios';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 
@@ -46,6 +46,7 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
     update: [customer: Customer | null, customerId: number | null];
+    'update:idPhotos': [files: File[]];
 }>();
 
 // State
@@ -71,6 +72,27 @@ const newCustomer = ref<Customer>({
     country_id: undefined,
     lead_source_id: null,
 });
+
+// ID photo files
+const idPhotos = ref<{ file: File; preview: string }[]>([]);
+
+function handleIdPhotos(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (!target.files) return;
+
+    for (const file of Array.from(target.files)) {
+        idPhotos.value.push({ file, preview: URL.createObjectURL(file) });
+    }
+
+    emit('update:idPhotos', idPhotos.value.map(p => p.file));
+    target.value = '';
+}
+
+function removeIdPhoto(index: number) {
+    URL.revokeObjectURL(idPhotos.value[index].preview);
+    idPhotos.value.splice(index, 1);
+    emit('update:idPhotos', idPhotos.value.map(p => p.file));
+}
 
 // Initialize from props
 if (props.customerId && !props.customer) {
@@ -469,6 +491,28 @@ const filteredOptions = computed(() => {
                             @input="updateNewCustomer"
                             class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                         />
+                    </div>
+                </div>
+
+                <!-- ID Photo Upload -->
+                <div class="sm:col-span-2">
+                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Customer ID (optional)</p>
+                    <div class="flex flex-wrap gap-3">
+                        <div v-for="(photo, index) in idPhotos" :key="index" class="relative">
+                            <img :src="photo.preview" alt="Customer ID" class="h-28 w-36 rounded-lg border border-gray-200 object-cover dark:border-gray-600" />
+                            <button
+                                type="button"
+                                class="absolute -right-1.5 -top-1.5 rounded-full bg-red-600 p-1 text-white shadow hover:bg-red-700"
+                                @click="removeIdPhoto(index)"
+                            >
+                                <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <label class="flex h-28 w-36 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-indigo-500 dark:hover:bg-gray-600">
+                            <CameraIcon class="size-7 text-gray-400" />
+                            <span class="mt-1 text-xs text-gray-500 dark:text-gray-400">Take photo or upload</span>
+                            <input type="file" accept="image/*" capture="environment" multiple class="hidden" @change="handleIdPhotos" />
+                        </label>
                     </div>
                 </div>
             </div>
