@@ -24,7 +24,7 @@ function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
     if (params.get('status')) filter.status = params.get('status') || undefined;
-    if (params.get('type')) filter.type = params.get('type') || undefined;
+    if (params.get('transaction_type')) filter.transaction_type = params.get('transaction_type') || undefined;
     if (params.get('tags')) filter.tags = params.get('tags') || undefined;
     if (params.get('date_from')) filter.date_from = params.get('date_from') || undefined;
     if (params.get('date_to')) filter.date_to = params.get('date_to') || undefined;
@@ -38,7 +38,7 @@ const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, upda
 
 // Filters - initialize from URL params
 const selectedStatus = ref<string>(initialParams.status || '');
-const selectedType = ref<string>((initialParams.type as string) || '');
+const selectedType = ref<string>((initialParams.transaction_type as string) || '');
 const selectedTags = ref<string[]>(initialParams.tags ? String(initialParams.tags).split(',') : []);
 const dateFrom = ref<string>(initialParams.date_from as string || '');
 const dateTo = ref<string>(initialParams.date_to as string || '');
@@ -66,7 +66,7 @@ onMounted(() => {
 watch([selectedStatus, selectedType, selectedTags, dateFrom, dateTo], () => {
     updateFilter({
         status: selectedStatus.value || undefined,
-        type: selectedType.value || undefined,
+        transaction_type: selectedType.value || undefined,
         tags: selectedTags.value.length > 0 ? selectedTags.value.join(',') : undefined,
         date_from: dateFrom.value || undefined,
         date_to: dateTo.value || undefined,

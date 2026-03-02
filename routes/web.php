@@ -1001,6 +1001,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('monthly/export', [TransactionsReportController::class, 'exportMonthly'])->name('monthly.export');
         Route::get('yearly', [TransactionsReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [TransactionsReportController::class, 'exportYearly'])->name('yearly.export');
+        Route::get('cohort', [TransactionsReportController::class, 'cohort'])->name('cohort');
+        Route::get('cohort/export', [TransactionsReportController::class, 'exportCohort'])->name('cohort.export');
+        Route::post('cohort/email', [TransactionsReportController::class, 'emailCohort'])->name('cohort.email');
     });
 
     // Conversations (Live Agent Takeover)

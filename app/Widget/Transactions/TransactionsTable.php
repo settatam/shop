@@ -132,10 +132,11 @@ class TransactionsTable extends Table
             }
         }
 
-        // Apply type filter
-        //        if ($type = data_get($filter, 'type')) {
-        //            $query->where('type', $type);
-        //        }
+        // Note: 'type' param is reserved by the widget system for the widget class name.
+        // Use 'transaction_type' to filter by transaction type.
+        if ($transactionType = data_get($filter, 'transaction_type')) {
+            $query->where('type', $transactionType);
+        }
         //
         //        // Apply tag filter
         //        if ($tags = data_get($filter, 'tags')) {

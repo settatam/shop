@@ -357,6 +357,254 @@ class TransactionsReportController extends Controller
     }
 
     /**
+     * Cohort transactions report (groups by creation month, tracks milestone completion).
+     */
+    public function cohort(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $status = $request->query('status');
+
+        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status);
+        $totals = $this->calculateTotals($cohortData);
+
+        return Inertia::render('reports/transactions/Cohort', [
+            'cohortData' => $cohortData,
+            'totals' => $totals,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'statuses' => Transaction::getAvailableStatuses(),
+            'filters' => [
+                'status' => $status,
+            ],
+        ]);
+    }
+
+    /**
+     * Export cohort report to CSV.
+     */
+    public function exportCohort(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $status = $request->query('status');
+
+        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status);
+
+        return $this->exportToCsv($cohortData, 'transactions-cohort-'.now()->format('Y-m-d').'.csv', 'Cohort');
+    }
+
+    /**
+     * Email cohort report.
+     */
+    public function emailCohort(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $status = $request->query('status');
+
+        $cohortData = $this->getCohortData($store->id, null, $startDate, $endDate, $status);
+        $totals = $this->calculateTotals($cohortData);
+
+        $headers = [
+            'Cohort', 'Kits Req.', 'Kit Req Declined', 'Kit Req Declined %',
+            'Kits Rec.', 'Kits Rec %', 'Kits Rec.: Rejected', 'Kits Returned',
+            'Offers Given', 'Offers Declined', 'Offers Pending', 'Offers Accepted',
+            'Est. Value', 'Profit', 'Profit %',
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['period'] ?? 'TOTALS',
+            $row['kits_requested'],
+            $row['kits_declined'],
+            $row['kits_declined_percent'].'%',
+            $row['kits_received'],
+            $row['kits_received_percent'].'%',
+            $row['kits_rejected'],
+            $row['kits_returned'],
+            $row['offers_given'],
+            $row['offers_declined'],
+            $row['offers_pending'],
+            $row['offers_accepted'],
+            '$'.number_format($row['estimated_value'], 2),
+            '$'.number_format($row['profit'], 2),
+            $row['profit_percent'].'%',
+        ];
+
+        $description = 'Cohort Analysis';
+        if ($startDate && $endDate) {
+            $description .= " ({$startDate} to {$endDate})";
+        }
+
+        return $this->sendReportEmail(
+            $request,
+            'Transactions Cohort Report',
+            $description,
+            $headers,
+            $cohortData,
+            $totals,
+            $formatRow,
+            'transactions-cohort-'.now()->format('Y-m-d').'.csv',
+            $store,
+        );
+    }
+
+    /**
+     * Get cohort data grouped by creation month.
+     *
+     * Unlike getPeriodData which filters each metric by its own timestamp,
+     * cohort data groups all transactions by created_at month and tracks
+     * what percentage reached each milestone over their lifetime.
+     */
+    protected function getCohortData(int $storeId, ?string $year = null, ?string $startDate = null, ?string $endDate = null, ?string $status = null)
+    {
+        $months = collect();
+
+        if ($startDate && $endDate) {
+            $rangeStart = Carbon::parse($startDate)->startOfMonth();
+            $rangeEnd = Carbon::parse($endDate)->endOfMonth();
+            $current = $rangeStart->copy();
+
+            while ($current->lte($rangeEnd)) {
+                $monthStart = $current->copy()->startOfMonth()->startOfDay();
+                $monthEnd = $current->copy()->endOfMonth();
+                $months->push($this->getCohortPeriodData($storeId, $monthStart, $monthEnd, $monthStart->format('M Y'), $status));
+                $current->addMonth();
+            }
+        } elseif ($year) {
+            for ($m = 1; $m <= 12; $m++) {
+                $monthStart = Carbon::createFromDate((int) $year, $m, 1)->startOfDay();
+                $monthEnd = $monthStart->copy()->endOfMonth();
+                $months->push($this->getCohortPeriodData($storeId, $monthStart, $monthEnd, $monthStart->format('M Y'), $status));
+            }
+        } else {
+            $current = now()->startOfMonth();
+
+            for ($i = 12; $i >= 0; $i--) {
+                $monthStart = $current->copy()->subMonths($i);
+                $monthEnd = $monthStart->copy()->endOfMonth();
+                $months->push($this->getCohortPeriodData($storeId, $monthStart, $monthEnd, $monthStart->format('M Y'), $status));
+            }
+        }
+
+        return $months->reverse()->values();
+    }
+
+    /**
+     * Get cohort data for transactions created in a specific period.
+     *
+     * All metrics are based on transactions created in the period,
+     * regardless of when each milestone was reached.
+     *
+     * @return array<string, mixed>
+     */
+    protected function getCohortPeriodData(int $storeId, Carbon $start, Carbon $end, string $periodLabel, ?string $status = null): array
+    {
+        $startDate = $start->format('Y-m-d');
+        $endDate = $end->format('Y-m-d');
+
+        $baseQuery = Transaction::where('store_id', $storeId)
+            ->whereBetween('created_at', [$start, $end]);
+
+        if ($status) {
+            $baseQuery->where('status', $status);
+        }
+
+        // Kit Requests (mail-in transactions created in period — the cohort baseline)
+        $kitsRequested = (clone $baseQuery)->count();
+
+        // Kit Requests Declined
+        $kitsDeclined = (clone $baseQuery)
+            ->where('status', Transaction::STATUS_KIT_REQUEST_REJECTED)
+            ->count();
+
+        // Kits Received (created in period AND items received at any time)
+        $kitsReceived = (clone $baseQuery)
+            ->whereNotNull('items_received_at')
+            ->count();
+
+        // Kits Received but Rejected (created in period, received, then returned)
+        $kitsRejected = (clone $baseQuery)
+            ->whereNotNull('items_received_at')
+            ->where('status', Transaction::STATUS_ITEMS_RETURNED)
+            ->count();
+
+        // Kits Returned (created in period, return shipped at any time)
+        $kitsReturned = (clone $baseQuery)
+            ->whereNotNull('return_shipped_at')
+            ->count();
+
+        // Offers Given (from the same cohort of kits)
+        $offersGiven = (clone $baseQuery)
+            ->whereNotNull('offer_given_at')
+            ->count();
+
+        // Offers Declined
+        $offersDeclined = (clone $baseQuery)
+            ->where('status', Transaction::STATUS_OFFER_DECLINED)
+            ->whereNotNull('offer_given_at')
+            ->count();
+
+        // Offers Pending
+        $offersPending = (clone $baseQuery)
+            ->where('status', Transaction::STATUS_OFFER_GIVEN)
+            ->whereNotNull('offer_given_at')
+            ->count();
+
+        // Offers Accepted (from the same cohort, payment processed at any time)
+        $offersAccepted = (clone $baseQuery)
+            ->whereNotNull('payment_processed_at')
+            ->count();
+
+        // Financial data for accepted transactions from this cohort
+        $financialData = (clone $baseQuery)
+            ->whereNotNull('payment_processed_at')
+            ->selectRaw('COALESCE(SUM(final_offer), 0) as final_offer')
+            ->first();
+
+        $estimatedValueData = \App\Models\TransactionItem::whereHas('transaction', function ($query) use ($storeId, $start, $end, $status) {
+            $query->where('store_id', $storeId)
+                ->whereNotNull('payment_processed_at')
+                ->whereBetween('created_at', [$start, $end]);
+            if ($status) {
+                $query->where('status', $status);
+            }
+        })->selectRaw('COALESCE(SUM(price * quantity), 0) as estimated_value')->first();
+
+        $estimatedValue = (float) ($estimatedValueData->estimated_value ?? 0);
+        $finalOffer = (float) ($financialData->final_offer ?? 0);
+        $profit = $estimatedValue - $finalOffer;
+        $profitPercent = $finalOffer > 0 ? ($profit / $finalOffer) * 100 : 0;
+
+        // Calculate percentages relative to the cohort's total count
+        $kitDeclinedPercent = $kitsRequested > 0 ? ($kitsDeclined / $kitsRequested) * 100 : 0;
+        $kitsReceivedPercent = $kitsRequested > 0 ? ($kitsReceived / $kitsRequested) * 100 : 0;
+
+        return [
+            'period' => $periodLabel,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'kits_requested' => $kitsRequested,
+            'kits_declined' => $kitsDeclined,
+            'kits_declined_percent' => round($kitDeclinedPercent, 1),
+            'kits_received' => $kitsReceived,
+            'kits_received_percent' => round($kitsReceivedPercent, 1),
+            'kits_rejected' => $kitsRejected,
+            'kits_returned' => $kitsReturned,
+            'offers_given' => $offersGiven,
+            'offers_declined' => $offersDeclined,
+            'offers_pending' => $offersPending,
+            'offers_accepted' => $offersAccepted,
+            'estimated_value' => $estimatedValue,
+            'profit' => $profit,
+            'profit_percent' => round($profitPercent, 1),
+        ];
+    }
+
+    /**
      * Export daily report to CSV.
      */
     public function exportDaily(Request $request): StreamedResponse
