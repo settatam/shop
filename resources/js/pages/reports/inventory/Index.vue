@@ -129,13 +129,18 @@ const netData = computed(() => props.weeklyTrend.map(row => row.net));
 const valueByCategory = computed(() => props.categoryData.map(row => row.total_value));
 const stockByCategory = computed(() => props.categoryData.map(row => row.total_stock));
 
-// Week over week trend for additions
+// Week over week trend for additions (data is newest-first)
 const addedTrend = computed(() => {
     if (props.weeklyTrend.length < 2) return 0;
-    const current = props.weeklyTrend[props.weeklyTrend.length - 1]?.added || 0;
-    const previous = props.weeklyTrend[props.weeklyTrend.length - 2]?.added || 0;
+    const current = props.weeklyTrend[0]?.added || 0;
+    const previous = props.weeklyTrend[1]?.added || 0;
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+const trendLabel = computed(() => {
+    if (props.weeklyTrend.length < 2) return '';
+    return `${props.weeklyTrend[0]?.week} vs ${props.weeklyTrend[1]?.week}`;
 });
 
 // Profit margin calculation

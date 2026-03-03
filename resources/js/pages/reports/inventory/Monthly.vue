@@ -91,7 +91,7 @@ const netData = computed(() => props.monthlyData.map(row => row.net_cost));
 const itemsAddedData = computed(() => props.monthlyData.map(row => row.items_added));
 const itemsRemovedData = computed(() => props.monthlyData.map(row => row.items_removed));
 
-// Trends (compare last month vs previous month)
+// Trends (compare last two periods in the dataset)
 const addedTrend = computed(() => {
     if (props.monthlyData.length < 2) return 0;
     const current = props.monthlyData[props.monthlyData.length - 1]?.cost_added || 0;
@@ -106,6 +106,13 @@ const netTrend = computed(() => {
     const previous = props.monthlyData[props.monthlyData.length - 2]?.net_cost || 0;
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+const trendLabel = computed(() => {
+    if (props.monthlyData.length < 2) return '';
+    const current = props.monthlyData[props.monthlyData.length - 1]?.period;
+    const previous = props.monthlyData[props.monthlyData.length - 2]?.period;
+    return `${current} vs ${previous}`;
 });
 
 // Average monthly cost added
@@ -147,7 +154,7 @@ const emailUrl = '/reports/inventory/monthly/email';
                     title="Total Added"
                     :value="formatCurrency(totals.cost_added)"
                     :trend="addedTrend"
-                    trend-label="vs last month"
+                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <StatCard
@@ -159,7 +166,7 @@ const emailUrl = '/reports/inventory/monthly/email';
                     title="Net Change"
                     :value="formatCurrency(totals.net_cost)"
                     :trend="netTrend"
-                    trend-label="vs last month"
+                    :trend-label="trendLabel"
                     :sparkline-data="netData"
                 />
                 <StatCard
