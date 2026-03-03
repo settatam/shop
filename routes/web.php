@@ -122,16 +122,27 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-// TEMPORARY: Debug route to see post-login errors — no middleware
-Route::get('/debug-auth', function () {
-    return response()->json([
-        'user' => auth()->user()?->email,
-        'store' => auth()->user()?->current_store_id,
-        'memory' => memory_get_usage(true) / 1024 / 1024 . ' MB',
-        'peak' => memory_get_peak_usage(true) / 1024 / 1024 . ' MB',
-        'status' => 'ok',
-    ]);
-})->middleware('auth');
+// TEMPORARY: Debug — bypass all middleware
+Route::withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->post('/debug-login', function (\Illuminate\Http\Request $request) {
+        try {
+            $credentials = $request->only('email', 'password');
+            if (auth()->attempt($credentials)) {
+                return response()->json([
+                    'status' => 'login_ok',
+                    'user' => auth()->user()->email,
+                    'memory' => memory_get_usage(true) / 1024 / 1024 . ' MB',
+                ]);
+            }
+            return response()->json(['status' => 'invalid_credentials']);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => array_slice($e->getTrace(), 0, 5),
+            ], 500);
+        }
+    });
 
 Route::get('/terms', fn () => Inertia::render('Legal/Terms'))->name('terms');
 Route::get('/privacy', fn () => Inertia::render('Legal/Privacy'))->name('privacy');

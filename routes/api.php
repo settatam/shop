@@ -1,5 +1,27 @@
 <?php
 
+// TEMPORARY: Debug login — remove after fixing
+Route::post('/debug-login', function (\Illuminate\Http\Request $request) {
+    try {
+        $credentials = $request->only('email', 'password');
+        if (auth()->attempt($credentials)) {
+            return response()->json([
+                'status' => 'login_ok',
+                'user' => auth()->user()->email,
+                'memory' => memory_get_usage(true) / 1024 / 1024 . ' MB',
+            ]);
+        }
+
+        return response()->json(['status' => 'invalid_credentials']);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'file' => $e->getFile() . ':' . $e->getLine(),
+            'trace' => array_slice($e->getTrace(), 0, 5),
+        ], 500);
+    }
+});
+
 use App\Http\Controllers\Api\BugReportController;
 use App\Http\Controllers\Api\NotificationTemplateGeneratorController;
 use App\Http\Controllers\Api\V1\BrandController;
