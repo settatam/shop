@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import ReportTable from '@/components/widgets/ReportTable.vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
@@ -28,37 +28,70 @@ interface Totals {
     net_cost: number;
 }
 
-interface FilterInfo {
-    type: string;
-    value: string;
-    label: string;
-}
-
 const props = defineProps<{
     weeklyData: WeekRow[];
     totals: Totals;
-    filter?: FilterInfo;
+    startMonth: number;
+    startYear: number;
+    endMonth: number;
+    endYear: number;
+    dateRangeLabel: string;
 }>();
 
-const breadcrumbs = computed<BreadcrumbItem[]>(() => {
-    const items: BreadcrumbItem[] = [
-        { title: 'Reports', href: '#' },
-        { title: 'Inventory', href: '/reports/inventory' },
-        { title: 'Week over Week', href: '/reports/inventory/weekly' },
-    ];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Reports', href: '#' },
+    { title: 'Inventory', href: '/reports/inventory' },
+    { title: 'Week over Week', href: '/reports/inventory/weekly' },
+];
 
-    if (props.filter) {
-        items.push({ title: props.filter.label, href: '#' });
-    }
+// Date range filters
+const startMonth = ref(props.startMonth);
+const startYear = ref(props.startYear);
+const endMonth = ref(props.endMonth);
+const endYear = ref(props.endYear);
 
-    return items;
-});
+const months = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' },
+];
 
-const subtitle = computed(() => {
-    if (props.filter) {
-        return `Weekly Breakdown for ${props.filter.label}`;
-    }
-    return 'Week over Week - Past 13 Weeks';
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
+
+function applyFilters() {
+    router.get('/reports/inventory/weekly', {
+        start_month: startMonth.value,
+        start_year: startYear.value,
+        end_month: endMonth.value,
+        end_year: endYear.value,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+function resetToLast3Months() {
+    const now = new Date();
+    const past = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    startMonth.value = past.getMonth() + 1;
+    startYear.value = past.getFullYear();
+    endMonth.value = now.getMonth() + 1;
+    endYear.value = now.getFullYear();
+    applyFilters();
+}
+
+const queryParams = computed(() => {
+    return `start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
 });
 
 function formatCurrency(value: number): string {
@@ -90,32 +123,8 @@ const netData = computed(() => props.weeklyData.map(row => row.net_cost));
 const itemsAddedData = computed(() => props.weeklyData.map(row => row.items_added));
 const itemsRemovedData = computed(() => props.weeklyData.map(row => row.items_removed));
 
-// Trends (compare most recent two periods — data is newest-first)
-const addedTrend = computed(() => {
-    if (props.weeklyData.length < 2) return 0;
-    const current = props.weeklyData[0]?.cost_added || 0;
-    const previous = props.weeklyData[1]?.cost_added || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const netTrend = computed(() => {
-    if (props.weeklyData.length < 2) return 0;
-    const current = props.weeklyData[0]?.net_cost || 0;
-    const previous = props.weeklyData[1]?.net_cost || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const trendLabel = computed(() => {
-    if (props.weeklyData.length < 2) return '';
-    const current = props.weeklyData[0]?.period?.split(',')[0];
-    const previous = props.weeklyData[1]?.period?.split(',')[0];
-    return `${current} vs ${previous}`;
-});
-
-const exportUrl = '/reports/inventory/weekly/export';
-const emailUrl = '/reports/inventory/weekly/email';
+const exportUrl = computed(() => `/reports/inventory/weekly/export?${queryParams.value}`);
+const emailUrl = computed(() => `/reports/inventory/weekly/email?${queryParams.value}`);
 </script>
 
 <template>
@@ -128,7 +137,7 @@ const emailUrl = '/reports/inventory/weekly/email';
                 <div>
                     <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Inventory Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        {{ subtitle }}
+                        Week over Week - {{ dateRangeLabel }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
@@ -141,13 +150,68 @@ const emailUrl = '/reports/inventory/weekly/email';
                 </div>
             </div>
 
+            <!-- Filters -->
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Month</label>
+                    <div class="flex items-center gap-1">
+                        <select
+                            v-model="startMonth"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyFilters"
+                        >
+                            <option v-for="month in months" :key="month.value" :value="month.value">
+                                {{ month.label }}
+                            </option>
+                        </select>
+                        <select
+                            v-model="startYear"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyFilters"
+                        >
+                            <option v-for="year in years" :key="year" :value="year">
+                                {{ year }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Month</label>
+                    <div class="flex items-center gap-1">
+                        <select
+                            v-model="endMonth"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyFilters"
+                        >
+                            <option v-for="month in months" :key="month.value" :value="month.value">
+                                {{ month.label }}
+                            </option>
+                        </select>
+                        <select
+                            v-model="endYear"
+                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            @change="applyFilters"
+                        >
+                            <option v-for="year in years" :key="year" :value="year">
+                                {{ year }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    @click="resetToLast3Months"
+                >
+                    Last 3 Months
+                </button>
+            </div>
+
             <!-- Stat Cards -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Total Added"
                     :value="formatCurrency(totals.cost_added)"
-                    :trend="addedTrend"
-                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <StatCard
@@ -158,8 +222,6 @@ const emailUrl = '/reports/inventory/weekly/email';
                 <StatCard
                     title="Net Change"
                     :value="formatCurrency(totals.net_cost)"
-                    :trend="netTrend"
-                    :trend-label="trendLabel"
                     :sparkline-data="netData"
                 />
                 <StatCard

@@ -73,23 +73,6 @@ const purchaseAmtData = computed(() => props.dailyData.map(row => row.purchase_a
 const estimatedValueData = computed(() => props.dailyData.map(row => row.estimated_value));
 const profitData = computed(() => props.dailyData.map(row => row.profit));
 
-// Week over week trend
-const purchaseTrend = computed(() => {
-    if (props.dailyData.length < 14) return 0;
-    const last7 = props.dailyData.slice(-7).reduce((sum, row) => sum + row.purchase_amt, 0);
-    const prev7 = props.dailyData.slice(-14, -7).reduce((sum, row) => sum + row.purchase_amt, 0);
-    if (prev7 === 0) return last7 > 0 ? 100 : 0;
-    return ((last7 - prev7) / Math.abs(prev7)) * 100;
-});
-
-const profitTrend = computed(() => {
-    if (props.dailyData.length < 14) return 0;
-    const last7 = props.dailyData.slice(-7).reduce((sum, row) => sum + row.profit, 0);
-    const prev7 = props.dailyData.slice(-14, -7).reduce((sum, row) => sum + row.profit, 0);
-    if (prev7 === 0) return last7 > 0 ? 100 : 0;
-    return ((last7 - prev7) / Math.abs(prev7)) * 100;
-});
-
 function viewBuys(row: DayRow): void {
     router.visit(`/transactions?date_from=${row.date_key}&date_to=${row.date_key}&status=payment_processed`);
 }
@@ -126,8 +109,6 @@ const emailUrl = '/reports/buys/online/email';
                 <StatCard
                     title="Total Purchased"
                     :value="formatCurrency(totals.purchase_amt)"
-                    :trend="purchaseTrend"
-                    trend-label="vs prev week"
                     :sparkline-data="purchaseAmtData"
                 />
                 <StatCard
@@ -138,8 +119,6 @@ const emailUrl = '/reports/buys/online/email';
                 <StatCard
                     title="Expected Profit"
                     :value="formatCurrency(totals.profit)"
-                    :trend="profitTrend"
-                    trend-label="vs prev week"
                     :sparkline-data="profitData"
                 />
                 <StatCard

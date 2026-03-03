@@ -91,27 +91,6 @@ const offersAcceptedData = computed(() =>
 );
 const profitData = computed(() => props.yearlyData.map((row) => row.profit));
 
-// Trends
-const requestedTrend = computed(() => {
-    if (props.yearlyData.length < 2) return 0;
-    const current =
-        props.yearlyData[props.yearlyData.length - 1]?.kits_requested || 0;
-    const previous =
-        props.yearlyData[props.yearlyData.length - 2]?.kits_requested || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const profitTrend = computed(() => {
-    if (props.yearlyData.length < 2) return 0;
-    const current =
-        props.yearlyData[props.yearlyData.length - 1]?.profit || 0;
-    const previous =
-        props.yearlyData[props.yearlyData.length - 2]?.profit || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
 function viewYear(row: YearRow): void {
     router.visit(
         `/transactions?date_from=${row.start_date}&date_to=${row.end_date}&type=mail_in`,
@@ -160,8 +139,6 @@ const emailUrl = '/reports/leads/yearly/email';
                 <StatCard
                     title="Total Kits Requested"
                     :value="totals.kits_requested.toLocaleString()"
-                    :trend="requestedTrend"
-                    trend-label="vs last year"
                     :sparkline-data="kitsRequestedData"
                 />
                 <StatCard
@@ -178,8 +155,6 @@ const emailUrl = '/reports/leads/yearly/email';
                 <StatCard
                     title="Total Profit"
                     :value="formatCurrency(totals.profit)"
-                    :trend="profitTrend"
-                    trend-label="vs last year"
                     :sparkline-data="profitData"
                 />
             </div>

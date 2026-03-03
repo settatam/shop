@@ -943,6 +943,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('yearly', [InventoryReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [InventoryReportController::class, 'exportYearly'])->name('yearly.export');
         Route::post('yearly/email', [InventoryReportController::class, 'emailYearly'])->name('yearly.email');
+        Route::get('daily', [InventoryReportController::class, 'daily'])->name('daily');
+        Route::get('daily/export', [InventoryReportController::class, 'exportDaily'])->name('daily.export');
+        Route::post('daily/email', [InventoryReportController::class, 'emailDaily'])->name('daily.email');
         Route::post('email', [InventoryReportController::class, 'email'])->name('email');
     });
 

@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import ReportTable from '@/components/widgets/ReportTable.vue';
 import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
@@ -31,6 +31,8 @@ interface Totals {
 const props = defineProps<{
     yearlyData: YearRow[];
     totals: Totals;
+    startYear: number;
+    endYear: number;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,6 +40,33 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Inventory', href: '/reports/inventory' },
     { title: 'Year over Year', href: '/reports/inventory/yearly' },
 ];
+
+// Date range filters
+const startYear = ref(props.startYear);
+const endYear = ref(props.endYear);
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 15 }, (_, i) => currentYear - i);
+
+function applyFilters() {
+    router.get('/reports/inventory/yearly', {
+        start_year: startYear.value,
+        end_year: endYear.value,
+    }, {
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+function resetToLast5Years() {
+    startYear.value = currentYear - 4;
+    endYear.value = currentYear;
+    applyFilters();
+}
+
+const queryParams = computed(() => {
+    return `start_year=${startYear.value}&end_year=${endYear.value}`;
+});
 
 function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', {
@@ -68,36 +97,14 @@ const netData = computed(() => props.yearlyData.map(row => row.net_cost));
 const itemsAddedData = computed(() => props.yearlyData.map(row => row.items_added));
 const itemsRemovedData = computed(() => props.yearlyData.map(row => row.items_removed));
 
-// Trends (compare most recent two periods — data is newest-first)
-const addedTrend = computed(() => {
-    if (props.yearlyData.length < 2) return 0;
-    const current = props.yearlyData[0]?.cost_added || 0;
-    const previous = props.yearlyData[1]?.cost_added || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const netTrend = computed(() => {
-    if (props.yearlyData.length < 2) return 0;
-    const current = props.yearlyData[0]?.net_cost || 0;
-    const previous = props.yearlyData[1]?.net_cost || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const trendLabel = computed(() => {
-    if (props.yearlyData.length < 2) return '';
-    return `${props.yearlyData[0]?.period} vs ${props.yearlyData[1]?.period}`;
-});
-
 // Average yearly cost added
 const avgYearlyAdded = computed(() => {
     if (props.yearlyData.length === 0) return 0;
     return props.totals.cost_added / props.yearlyData.length;
 });
 
-const exportUrl = '/reports/inventory/yearly/export';
-const emailUrl = '/reports/inventory/yearly/email';
+const exportUrl = computed(() => `/reports/inventory/yearly/export?${queryParams.value}`);
+const emailUrl = computed(() => `/reports/inventory/yearly/email?${queryParams.value}`);
 </script>
 
 <template>
@@ -110,7 +117,7 @@ const emailUrl = '/reports/inventory/yearly/email';
                 <div>
                     <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Inventory Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Year over Year - Past 5 Years
+                        Year over Year - {{ startYear }} to {{ endYear }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
@@ -123,25 +130,56 @@ const emailUrl = '/reports/inventory/yearly/email';
                 </div>
             </div>
 
+            <!-- Filters -->
+            <div class="flex flex-wrap items-end gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Year</label>
+                    <select
+                        v-model="startYear"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @change="applyFilters"
+                    >
+                        <option v-for="year in years" :key="year" :value="year">
+                            {{ year }}
+                        </option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Year</label>
+                    <select
+                        v-model="endYear"
+                        class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @change="applyFilters"
+                    >
+                        <option v-for="year in years" :key="year" :value="year">
+                            {{ year }}
+                        </option>
+                    </select>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    @click="resetToLast5Years"
+                >
+                    Last 5 Years
+                </button>
+            </div>
+
             <!-- Stat Cards -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                    title="Total Added (5yr)"
+                    title="Total Added"
                     :value="formatCurrency(totals.cost_added)"
-                    :trend="addedTrend"
-                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <StatCard
-                    title="Total Removed (5yr)"
+                    title="Total Removed"
                     :value="formatCurrency(totals.cost_removed)"
                     :sparkline-data="removedData"
                 />
                 <StatCard
-                    title="Net Change (5yr)"
+                    title="Net Change"
                     :value="formatCurrency(totals.net_cost)"
-                    :trend="netTrend"
-                    :trend-label="trendLabel"
                     :sparkline-data="netData"
                 />
                 <StatCard
@@ -217,7 +255,7 @@ const emailUrl = '/reports/inventory/yearly/email';
                                 v-for="row in yearlyData"
                                 :key="row.year"
                                 class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
-                                @click="router.visit(`/reports/inventory/monthly?year=${row.year}`)"
+                                @click="router.visit(`/reports/inventory/monthly?start_month=1&start_year=${row.year}&end_month=12&end_year=${row.year}`)"
                             >
                                 <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
                                     {{ row.period }}

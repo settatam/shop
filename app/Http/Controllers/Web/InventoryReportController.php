@@ -350,17 +350,22 @@ class InventoryReportController extends Controller
 
     /**
      * Week over week inventory report.
-     * Supports filtering by month (e.g., ?month=2024-01).
+     * Supports filtering by start/end month+year range.
      */
     public function weekly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $month = $request->query('month'); // Format: YYYY-MM
 
-        // Get weekly data (filtered by month if provided)
-        $weeklyData = $this->getWeekOverWeekData($store->id, $month);
+        $startMonth = (int) $request->query('start_month', now()->subMonths(3)->month);
+        $startYear = (int) $request->query('start_year', now()->subMonths(3)->year);
+        $endMonth = (int) $request->query('end_month', now()->month);
+        $endYear = (int) $request->query('end_year', now()->year);
 
-        // Calculate totals
+        $rangeStart = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $rangeEnd = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        $weeklyData = $this->getWeekOverWeekData($store->id, $rangeStart, $rangeEnd);
+
         $totals = [
             'items_added' => $weeklyData->sum('items_added'),
             'cost_added' => $weeklyData->sum('cost_added'),
@@ -370,36 +375,37 @@ class InventoryReportController extends Controller
             'net_cost' => $weeklyData->sum('net_cost'),
         ];
 
-        // Build filter info for display
-        $filterInfo = null;
-        if ($month) {
-            $filterInfo = [
-                'type' => 'month',
-                'value' => $month,
-                'label' => Carbon::parse($month.'-01')->format('F Y'),
-            ];
-        }
+        $dateRangeLabel = $rangeStart->format('M Y').' - '.$rangeEnd->format('M Y');
 
         return Inertia::render('reports/inventory/Weekly', [
             'weeklyData' => $weeklyData,
             'totals' => $totals,
-            'filter' => $filterInfo,
+            'startMonth' => $startMonth,
+            'startYear' => $startYear,
+            'endMonth' => $endMonth,
+            'endYear' => $endYear,
+            'dateRangeLabel' => $dateRangeLabel,
         ]);
     }
 
     /**
      * Month over month inventory report.
-     * Supports filtering by year (e.g., ?year=2024).
+     * Supports filtering by start/end month+year range.
      */
     public function monthly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
-        $year = $request->query('year'); // Format: YYYY
 
-        // Get monthly data (filtered by year if provided)
-        $monthlyData = $this->getMonthOverMonthData($store->id, $year);
+        $startMonth = (int) $request->query('start_month', now()->subMonths(12)->month);
+        $startYear = (int) $request->query('start_year', now()->subMonths(12)->year);
+        $endMonth = (int) $request->query('end_month', now()->month);
+        $endYear = (int) $request->query('end_year', now()->year);
 
-        // Calculate totals
+        $rangeStart = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $rangeEnd = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        $monthlyData = $this->getMonthOverMonthData($store->id, $rangeStart, $rangeEnd);
+
         $totals = [
             'items_added' => $monthlyData->sum('items_added'),
             'cost_added' => $monthlyData->sum('cost_added'),
@@ -409,34 +415,32 @@ class InventoryReportController extends Controller
             'net_cost' => $monthlyData->sum('net_cost'),
         ];
 
-        // Build filter info for display
-        $filterInfo = null;
-        if ($year) {
-            $filterInfo = [
-                'type' => 'year',
-                'value' => $year,
-                'label' => $year,
-            ];
-        }
+        $dateRangeLabel = $rangeStart->format('M Y').' - '.$rangeEnd->format('M Y');
 
         return Inertia::render('reports/inventory/Monthly', [
             'monthlyData' => $monthlyData,
             'totals' => $totals,
-            'filter' => $filterInfo,
+            'startMonth' => $startMonth,
+            'startYear' => $startYear,
+            'endMonth' => $endMonth,
+            'endYear' => $endYear,
+            'dateRangeLabel' => $dateRangeLabel,
         ]);
     }
 
     /**
      * Year over year inventory report.
+     * Supports filtering by start/end year range.
      */
     public function yearly(Request $request): Response
     {
         $store = $this->storeContext->getCurrentStore();
 
-        // Get past 5 years of data
-        $yearlyData = $this->getYearOverYearData($store->id);
+        $startYear = (int) $request->query('start_year', now()->year - 4);
+        $endYear = (int) $request->query('end_year', now()->year);
 
-        // Calculate totals
+        $yearlyData = $this->getYearOverYearData($store->id, $startYear, $endYear);
+
         $totals = [
             'items_added' => $yearlyData->sum('items_added'),
             'cost_added' => $yearlyData->sum('cost_added'),
@@ -449,6 +453,44 @@ class InventoryReportController extends Controller
         return Inertia::render('reports/inventory/Yearly', [
             'yearlyData' => $yearlyData,
             'totals' => $totals,
+            'startYear' => $startYear,
+            'endYear' => $endYear,
+        ]);
+    }
+
+    /**
+     * Daily inventory report.
+     * Supports filtering by start/end date range.
+     */
+    public function daily(Request $request): Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->query('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->query('end_date', now()->format('Y-m-d'));
+
+        $rangeStart = Carbon::parse($startDate)->startOfDay();
+        $rangeEnd = Carbon::parse($endDate)->endOfDay();
+
+        $dailyData = $this->getDailyInventoryData($store->id, $rangeStart, $rangeEnd);
+
+        $totals = [
+            'items_added' => $dailyData->sum('items_added'),
+            'cost_added' => $dailyData->sum('cost_added'),
+            'items_removed' => $dailyData->sum('items_removed'),
+            'cost_removed' => $dailyData->sum('cost_removed'),
+            'net_items' => $dailyData->sum('net_items'),
+            'net_cost' => $dailyData->sum('net_cost'),
+        ];
+
+        $dateRangeLabel = $rangeStart->format('M d, Y').' - '.$rangeEnd->format('M d, Y');
+
+        return Inertia::render('reports/inventory/Daily', [
+            'dailyData' => $dailyData,
+            'totals' => $totals,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'dateRangeLabel' => $dateRangeLabel,
         ]);
     }
 
@@ -524,7 +566,16 @@ class InventoryReportController extends Controller
     public function exportWeekly(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $weeklyData = $this->getWeekOverWeekData($store->id);
+
+        $startMonth = (int) $request->query('start_month', now()->subMonths(3)->month);
+        $startYear = (int) $request->query('start_year', now()->subMonths(3)->year);
+        $endMonth = (int) $request->query('end_month', now()->month);
+        $endYear = (int) $request->query('end_year', now()->year);
+
+        $rangeStart = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $rangeEnd = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        $weeklyData = $this->getWeekOverWeekData($store->id, $rangeStart, $rangeEnd);
 
         return $this->exportPeriodData($weeklyData, 'inventory-weekly-'.now()->format('Y-m-d').'.csv', 'Week');
     }
@@ -535,7 +586,16 @@ class InventoryReportController extends Controller
     public function exportMonthly(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $monthlyData = $this->getMonthOverMonthData($store->id);
+
+        $startMonth = (int) $request->query('start_month', now()->subMonths(12)->month);
+        $startYear = (int) $request->query('start_year', now()->subMonths(12)->year);
+        $endMonth = (int) $request->query('end_month', now()->month);
+        $endYear = (int) $request->query('end_year', now()->year);
+
+        $rangeStart = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $rangeEnd = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        $monthlyData = $this->getMonthOverMonthData($store->id, $rangeStart, $rangeEnd);
 
         return $this->exportPeriodData($monthlyData, 'inventory-monthly-'.now()->format('Y-m-d').'.csv', 'Month');
     }
@@ -546,9 +606,31 @@ class InventoryReportController extends Controller
     public function exportYearly(Request $request): StreamedResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $yearlyData = $this->getYearOverYearData($store->id);
+
+        $startYear = (int) $request->query('start_year', now()->year - 4);
+        $endYear = (int) $request->query('end_year', now()->year);
+
+        $yearlyData = $this->getYearOverYearData($store->id, $startYear, $endYear);
 
         return $this->exportPeriodData($yearlyData, 'inventory-yearly-'.now()->format('Y-m-d').'.csv', 'Year');
+    }
+
+    /**
+     * Export daily report to CSV.
+     */
+    public function exportDaily(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->query('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->query('end_date', now()->format('Y-m-d'));
+
+        $rangeStart = Carbon::parse($startDate)->startOfDay();
+        $rangeEnd = Carbon::parse($endDate)->endOfDay();
+
+        $dailyData = $this->getDailyInventoryData($store->id, $rangeStart, $rangeEnd);
+
+        return $this->exportPeriodData($dailyData, 'inventory-daily-'.now()->format('Y-m-d').'.csv', 'Date');
     }
 
     /**
@@ -648,7 +730,16 @@ class InventoryReportController extends Controller
     public function emailWeekly(Request $request): JsonResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $weeklyData = $this->getWeekOverWeekData($store->id);
+
+        $startMonth = (int) $request->query('start_month', now()->subMonths(3)->month);
+        $startYear = (int) $request->query('start_year', now()->subMonths(3)->year);
+        $endMonth = (int) $request->query('end_month', now()->month);
+        $endYear = (int) $request->query('end_year', now()->year);
+
+        $rangeStart = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $rangeEnd = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        $weeklyData = $this->getWeekOverWeekData($store->id, $rangeStart, $rangeEnd);
 
         return $this->emailPeriodData($request, $weeklyData, 'Weekly Inventory Report', 'Week', $store);
     }
@@ -659,7 +750,16 @@ class InventoryReportController extends Controller
     public function emailMonthly(Request $request): JsonResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $monthlyData = $this->getMonthOverMonthData($store->id);
+
+        $startMonth = (int) $request->query('start_month', now()->subMonths(12)->month);
+        $startYear = (int) $request->query('start_year', now()->subMonths(12)->year);
+        $endMonth = (int) $request->query('end_month', now()->month);
+        $endYear = (int) $request->query('end_year', now()->year);
+
+        $rangeStart = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $rangeEnd = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        $monthlyData = $this->getMonthOverMonthData($store->id, $rangeStart, $rangeEnd);
 
         return $this->emailPeriodData($request, $monthlyData, 'Monthly Inventory Report', 'Month', $store);
     }
@@ -670,9 +770,31 @@ class InventoryReportController extends Controller
     public function emailYearly(Request $request): JsonResponse
     {
         $store = $this->storeContext->getCurrentStore();
-        $yearlyData = $this->getYearOverYearData($store->id);
+
+        $startYear = (int) $request->query('start_year', now()->year - 4);
+        $endYear = (int) $request->query('end_year', now()->year);
+
+        $yearlyData = $this->getYearOverYearData($store->id, $startYear, $endYear);
 
         return $this->emailPeriodData($request, $yearlyData, 'Yearly Inventory Report', 'Year', $store);
+    }
+
+    /**
+     * Email daily inventory report.
+     */
+    public function emailDaily(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->query('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->query('end_date', now()->format('Y-m-d'));
+
+        $rangeStart = Carbon::parse($startDate)->startOfDay();
+        $rangeEnd = Carbon::parse($endDate)->endOfDay();
+
+        $dailyData = $this->getDailyInventoryData($store->id, $rangeStart, $rangeEnd);
+
+        return $this->emailPeriodData($request, $dailyData, 'Daily Inventory Report', 'Date', $store);
     }
 
     /**
@@ -896,41 +1018,22 @@ class InventoryReportController extends Controller
     }
 
     /**
-     * Get week over week inventory data.
-     * If month is provided (YYYY-MM), shows weeks within that month.
-     * Otherwise shows past 13 weeks.
+     * Get week over week inventory data for a date range.
      */
-    protected function getWeekOverWeekData(int $storeId, ?string $month = null)
+    protected function getWeekOverWeekData(int $storeId, Carbon $rangeStart, Carbon $rangeEnd)
     {
         $weeks = collect();
 
-        if ($month) {
-            // Get all weeks within the specified month
-            $monthStart = Carbon::parse($month.'-01')->startOfMonth();
-            $monthEnd = $monthStart->copy()->endOfMonth();
+        $weekStart = $rangeStart->copy()->startOfWeek();
 
-            // Start from the first week that contains days from this month
-            $weekStart = $monthStart->copy()->startOfWeek();
+        while ($weekStart->lte($rangeEnd)) {
+            $weekEnd = $weekStart->copy()->endOfWeek();
 
-            while ($weekStart->lte($monthEnd)) {
-                $weekEnd = $weekStart->copy()->endOfWeek();
-
-                // Only include weeks that overlap with the month
-                if ($weekEnd->gte($monthStart) && $weekStart->lte($monthEnd)) {
-                    $weeks->push($this->getWeekData($storeId, $weekStart, $weekEnd));
-                }
-
-                $weekStart->addWeek();
-            }
-        } else {
-            // Default: past 13 weeks
-            $current = now()->startOfWeek();
-
-            for ($i = 12; $i >= 0; $i--) {
-                $weekStart = $current->copy()->subWeeks($i);
-                $weekEnd = $weekStart->copy()->endOfWeek();
+            if ($weekEnd->gte($rangeStart) && $weekStart->lte($rangeEnd)) {
                 $weeks->push($this->getWeekData($storeId, $weekStart, $weekEnd));
             }
+
+            $weekStart->addWeek();
         }
 
         return $weeks->reverse()->values();
@@ -973,30 +1076,18 @@ class InventoryReportController extends Controller
     }
 
     /**
-     * Get month over month inventory data.
-     * If year is provided, shows all 12 months of that year.
-     * Otherwise shows past 13 months.
+     * Get month over month inventory data for a date range.
      */
-    protected function getMonthOverMonthData(int $storeId, ?string $year = null)
+    protected function getMonthOverMonthData(int $storeId, Carbon $rangeStart, Carbon $rangeEnd)
     {
         $months = collect();
+        $current = $rangeStart->copy()->startOfMonth();
 
-        if ($year) {
-            // Get all 12 months of the specified year
-            for ($m = 1; $m <= 12; $m++) {
-                $monthStart = Carbon::createFromDate((int) $year, $m, 1)->startOfDay();
-                $monthEnd = $monthStart->copy()->endOfMonth();
-                $months->push($this->getMonthData($storeId, $monthStart, $monthEnd));
-            }
-        } else {
-            // Default: past 13 months
-            $current = now()->startOfMonth();
-
-            for ($i = 12; $i >= 0; $i--) {
-                $monthStart = $current->copy()->subMonths($i);
-                $monthEnd = $monthStart->copy()->endOfMonth();
-                $months->push($this->getMonthData($storeId, $monthStart, $monthEnd));
-            }
+        while ($current->lte($rangeEnd)) {
+            $monthStart = $current->copy();
+            $monthEnd = $current->copy()->endOfMonth();
+            $months->push($this->getMonthData($storeId, $monthStart, $monthEnd));
+            $current->addMonth();
         }
 
         return $months->reverse()->values();
@@ -1040,15 +1131,20 @@ class InventoryReportController extends Controller
     }
 
     /**
-     * Get year over year inventory data (past 5 years).
+     * Get year over year inventory data for a year range.
      */
-    protected function getYearOverYearData(int $storeId)
+    protected function getYearOverYearData(int $storeId, int $startYear = 0, int $endYear = 0)
     {
-        $years = collect();
-        $currentYear = now()->year;
+        if ($startYear === 0) {
+            $startYear = now()->year - 4;
+        }
+        if ($endYear === 0) {
+            $endYear = now()->year;
+        }
 
-        for ($i = 4; $i >= 0; $i--) {
-            $year = $currentYear - $i;
+        $years = collect();
+
+        for ($year = $startYear; $year <= $endYear; $year++) {
             $yearStart = Carbon::createFromDate($year, 1, 1)->startOfDay();
             $yearEnd = Carbon::createFromDate($year, 12, 31)->endOfDay();
 
@@ -1084,5 +1180,59 @@ class InventoryReportController extends Controller
         }
 
         return $years->reverse()->values();
+    }
+
+    /**
+     * Get daily inventory data for a date range.
+     */
+    protected function getDailyInventoryData(int $storeId, Carbon $rangeStart, Carbon $rangeEnd)
+    {
+        $days = collect();
+        $current = $rangeStart->copy()->startOfDay();
+
+        while ($current->lte($rangeEnd)) {
+            $dayStart = $current->copy()->startOfDay();
+            $dayEnd = $current->copy()->endOfDay();
+            $days->push($this->getDayData($storeId, $dayStart, $dayEnd));
+            $current->addDay();
+        }
+
+        return $days->reverse()->values();
+    }
+
+    /**
+     * Get inventory data for a specific day.
+     */
+    protected function getDayData(int $storeId, Carbon $dayStart, Carbon $dayEnd): array
+    {
+        $additions = DB::table('inventory_adjustments')
+            ->where('store_id', $storeId)
+            ->whereBetween('created_at', [$dayStart, $dayEnd])
+            ->where('quantity_change', '>', 0)
+            ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+            ->first();
+
+        $deletions = DB::table('inventory_adjustments')
+            ->where('store_id', $storeId)
+            ->whereBetween('created_at', [$dayStart, $dayEnd])
+            ->where('quantity_change', '<', 0)
+            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+            ->first();
+
+        $itemsAdded = (int) ($additions->items_added ?? 0);
+        $costAdded = (float) ($additions->cost_added ?? 0);
+        $itemsRemoved = (int) ($deletions->items_removed ?? 0);
+        $costRemoved = (float) ($deletions->cost_removed ?? 0);
+
+        return [
+            'period' => $dayStart->format('M d, Y'),
+            'date' => $dayStart->format('Y-m-d'),
+            'items_added' => $itemsAdded,
+            'cost_added' => $costAdded,
+            'items_removed' => $itemsRemoved,
+            'cost_removed' => $costRemoved,
+            'net_items' => $itemsAdded - $itemsRemoved,
+            'net_cost' => $costAdded - $costRemoved,
+        ];
     }
 }

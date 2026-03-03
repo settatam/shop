@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { DatePicker } from '@/components/ui/date-picker';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -8,10 +9,9 @@ import StatCard from '@/components/charts/StatCard.vue';
 import AreaChart from '@/components/charts/AreaChart.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 
-interface MonthRow {
+interface DayRow {
     period: string;
-    month_start: string;
-    month_key: string;
+    date: string;
     items_added: number;
     cost_added: number;
     items_removed: number;
@@ -30,69 +30,41 @@ interface Totals {
 }
 
 const props = defineProps<{
-    monthlyData: MonthRow[];
+    dailyData: DayRow[];
     totals: Totals;
-    startMonth: number;
-    startYear: number;
-    endMonth: number;
-    endYear: number;
+    startDate: string;
+    endDate: string;
     dateRangeLabel: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Reports', href: '#' },
     { title: 'Inventory', href: '/reports/inventory' },
-    { title: 'Month over Month', href: '/reports/inventory/monthly' },
+    { title: 'Daily', href: '/reports/inventory/daily' },
 ];
 
-// Date range filters
-const startMonth = ref(props.startMonth);
-const startYear = ref(props.startYear);
-const endMonth = ref(props.endMonth);
-const endYear = ref(props.endYear);
-
-const months = [
-    { value: 1, label: 'January' },
-    { value: 2, label: 'February' },
-    { value: 3, label: 'March' },
-    { value: 4, label: 'April' },
-    { value: 5, label: 'May' },
-    { value: 6, label: 'June' },
-    { value: 7, label: 'July' },
-    { value: 8, label: 'August' },
-    { value: 9, label: 'September' },
-    { value: 10, label: 'October' },
-    { value: 11, label: 'November' },
-    { value: 12, label: 'December' },
-];
-
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
+const startDate = ref(props.startDate);
+const endDate = ref(props.endDate);
 
 function applyFilters() {
-    router.get('/reports/inventory/monthly', {
-        start_month: startMonth.value,
-        start_year: startYear.value,
-        end_month: endMonth.value,
-        end_year: endYear.value,
+    router.get('/reports/inventory/daily', {
+        start_date: startDate.value,
+        end_date: endDate.value,
     }, {
         preserveState: true,
         preserveScroll: true,
     });
 }
 
-function resetToLast12Months() {
+function resetToCurrentMonth() {
     const now = new Date();
-    const past = new Date(now.getFullYear(), now.getMonth() - 12, 1);
-    startMonth.value = past.getMonth() + 1;
-    startYear.value = past.getFullYear();
-    endMonth.value = now.getMonth() + 1;
-    endYear.value = now.getFullYear();
+    startDate.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    endDate.value = now.toISOString().split('T')[0];
     applyFilters();
 }
 
 const queryParams = computed(() => {
-    return `start_month=${startMonth.value}&start_year=${startYear.value}&end_month=${endMonth.value}&end_year=${endYear.value}`;
+    return `start_date=${startDate.value}&end_date=${endDate.value}`;
 });
 
 function formatCurrency(value: number): string {
@@ -117,25 +89,28 @@ function formatNumber(value: number): string {
 }
 
 // Chart data
-const chartLabels = computed(() => props.monthlyData.map(row => row.period));
-const addedData = computed(() => props.monthlyData.map(row => row.cost_added));
-const removedData = computed(() => props.monthlyData.map(row => row.cost_removed));
-const netData = computed(() => props.monthlyData.map(row => row.net_cost));
-const itemsAddedData = computed(() => props.monthlyData.map(row => row.items_added));
-const itemsRemovedData = computed(() => props.monthlyData.map(row => row.items_removed));
+const chartLabels = computed(() => props.dailyData.map(row => {
+    const d = new Date(row.date + 'T00:00:00');
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+}));
+const addedData = computed(() => props.dailyData.map(row => row.cost_added));
+const removedData = computed(() => props.dailyData.map(row => row.cost_removed));
+const netData = computed(() => props.dailyData.map(row => row.net_cost));
+const itemsAddedData = computed(() => props.dailyData.map(row => row.items_added));
+const itemsRemovedData = computed(() => props.dailyData.map(row => row.items_removed));
 
-// Average monthly cost added
-const avgMonthlyAdded = computed(() => {
-    if (props.monthlyData.length === 0) return 0;
-    return props.totals.cost_added / props.monthlyData.length;
+// Average daily cost added
+const avgDailyAdded = computed(() => {
+    if (props.dailyData.length === 0) return 0;
+    return props.totals.cost_added / props.dailyData.length;
 });
 
-const exportUrl = computed(() => `/reports/inventory/monthly/export?${queryParams.value}`);
-const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.value}`);
+const exportUrl = computed(() => `/reports/inventory/daily/export?${queryParams.value}`);
+const emailUrl = computed(() => `/reports/inventory/daily/email?${queryParams.value}`);
 </script>
 
 <template>
-    <Head title="Inventory Report - Month over Month" />
+    <Head title="Inventory Report - Daily" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4">
@@ -144,7 +119,7 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
                 <div>
                     <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Inventory Report</h1>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Month over Month - {{ dateRangeLabel }}
+                        Daily - {{ dateRangeLabel }}
                     </p>
                 </div>
                 <div class="flex items-center gap-4">
@@ -160,57 +135,19 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
             <!-- Filters -->
             <div class="flex flex-wrap items-end gap-4">
                 <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Month</label>
-                    <div class="flex items-center gap-1">
-                        <select
-                            v-model="startMonth"
-                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyFilters"
-                        >
-                            <option v-for="month in months" :key="month.value" :value="month.value">
-                                {{ month.label }}
-                            </option>
-                        </select>
-                        <select
-                            v-model="startYear"
-                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyFilters"
-                        >
-                            <option v-for="year in years" :key="year" :value="year">
-                                {{ year }}
-                            </option>
-                        </select>
-                    </div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                    <DatePicker v-model="startDate" @update:model-value="applyFilters" />
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Month</label>
-                    <div class="flex items-center gap-1">
-                        <select
-                            v-model="endMonth"
-                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyFilters"
-                        >
-                            <option v-for="month in months" :key="month.value" :value="month.value">
-                                {{ month.label }}
-                            </option>
-                        </select>
-                        <select
-                            v-model="endYear"
-                            class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            @change="applyFilters"
-                        >
-                            <option v-for="year in years" :key="year" :value="year">
-                                {{ year }}
-                            </option>
-                        </select>
-                    </div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                    <DatePicker v-model="endDate" @update:model-value="applyFilters" />
                 </div>
                 <button
                     type="button"
                     class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
-                    @click="resetToLast12Months"
+                    @click="resetToCurrentMonth"
                 >
-                    Last 12 Months
+                    This Month
                 </button>
             </div>
 
@@ -232,8 +169,8 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
                     :sparkline-data="netData"
                 />
                 <StatCard
-                    title="Avg Monthly Added"
-                    :value="formatCurrency(avgMonthlyAdded)"
+                    title="Avg Daily Added"
+                    :value="formatCurrency(avgDailyAdded)"
                 />
             </div>
 
@@ -242,11 +179,11 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
                 <!-- Cost Activity Chart -->
                 <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                     <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Monthly Cost Activity</h3>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Daily Cost Activity</h3>
                     </div>
                     <div class="p-4">
                         <AreaChart
-                            v-if="monthlyData.length > 0"
+                            v-if="dailyData.length > 0"
                             :labels="chartLabels"
                             :datasets="[
                                 { label: 'Added', data: addedData, color: '#22c55e' },
@@ -264,11 +201,11 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
                 <!-- Items Volume Chart -->
                 <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                     <div class="border-b border-gray-200 px-4 py-4 dark:border-gray-700">
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Monthly Items Volume</h3>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Daily Items Volume</h3>
                     </div>
                     <div class="p-4">
                         <BarChart
-                            v-if="monthlyData.length > 0"
+                            v-if="dailyData.length > 0"
                             :labels="chartLabels"
                             :datasets="[
                                 { label: 'Added', data: itemsAddedData, color: '#22c55e' },
@@ -284,13 +221,13 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
             </div>
 
             <!-- Data Table -->
-            <ReportTable title="Monthly Inventory Data" :export-url="exportUrl" :email-url="emailUrl">
+            <ReportTable title="Daily Inventory Data" :export-url="exportUrl" :email-url="emailUrl">
             <div class="overflow-hidden bg-white shadow ring-1 ring-black/5 sm:rounded-lg dark:bg-gray-800 dark:ring-white/10">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Month</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Date</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Items Added</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Cost Added ($)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Items Removed</th>
@@ -300,15 +237,8 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                            <tr
-                                v-for="row in monthlyData"
-                                :key="row.month_start"
-                                class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
-                                @click="router.visit(`/reports/inventory/weekly?start_month=${new Date(row.month_start).getMonth() + 1}&start_year=${new Date(row.month_start).getFullYear()}&end_month=${new Date(row.month_start).getMonth() + 1}&end_year=${new Date(row.month_start).getFullYear()}`)"
-                            >
-                                <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                    {{ row.period }}
-                                </td>
+                            <tr v-for="row in dailyData" :key="row.date" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{{ row.period }}</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
                                     <span v-if="row.items_added > 0">+{{ formatNumber(row.items_added) }}</span>
                                     <span v-else class="text-gray-400">-</span>
@@ -334,14 +264,14 @@ const emailUrl = computed(() => `/reports/inventory/monthly/email?${queryParams.
                             </tr>
 
                             <!-- Empty state -->
-                            <tr v-if="monthlyData.length === 0">
+                            <tr v-if="dailyData.length === 0">
                                 <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                     No inventory activity found.
                                 </td>
                             </tr>
                         </tbody>
                         <!-- Totals row -->
-                        <tfoot v-if="monthlyData.length > 0" class="bg-gray-100 dark:bg-gray-700">
+                        <tfoot v-if="dailyData.length > 0" class="bg-gray-100 dark:bg-gray-700">
                             <tr class="font-semibold">
                                 <td class="px-4 py-4 text-sm text-gray-900 dark:text-white">TOTALS</td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">

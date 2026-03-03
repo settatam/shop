@@ -224,19 +224,6 @@ const avgDailyProfit = computed(() => {
     return props.totals.gross_profit / props.dailyData.length;
 });
 
-// Week over week trend (compare last 7 days vs previous 7 days)
-const revenueTrend = computed(() => {
-    if (props.dailyData.length < 14) return 0;
-    const last7 = props.dailyData
-        .slice(-7)
-        .reduce((sum, row) => sum + row.total_paid, 0);
-    const prev7 = props.dailyData
-        .slice(-14, -7)
-        .reduce((sum, row) => sum + row.total_paid, 0);
-    if (prev7 === 0) return last7 > 0 ? 100 : 0;
-    return ((last7 - prev7) / Math.abs(prev7)) * 100;
-});
-
 // Average profit margin
 const avgProfitMargin = computed(() => {
     if (props.totals.total_paid === 0) return 0;
@@ -370,8 +357,6 @@ function viewSales(row: DayRow): void {
                 <StatCard
                     title="Total Revenue"
                     :value="formatCurrency(totals.total_paid)"
-                    :trend="revenueTrend"
-                    trend-label="vs prev week"
                     :sparkline-data="revenueData"
                 />
                 <StatCard

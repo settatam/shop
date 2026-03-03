@@ -215,37 +215,6 @@ const salesCountData = computed(() =>
     props.monthlyData.map((row) => row.sales_count),
 );
 
-// Calculate trend (comparing last month to previous)
-const revenueTrend = computed(() => {
-    if (props.monthlyData.length < 2) return 0;
-    const current =
-        props.monthlyData[props.monthlyData.length - 1]?.total_paid || 0;
-    const previous =
-        props.monthlyData[props.monthlyData.length - 2]?.total_paid || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const profitTrend = computed(() => {
-    if (props.monthlyData.length < 2) return 0;
-    const current =
-        props.monthlyData[props.monthlyData.length - 1]?.gross_profit || 0;
-    const previous =
-        props.monthlyData[props.monthlyData.length - 2]?.gross_profit || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const salesTrend = computed(() => {
-    if (props.monthlyData.length < 2) return 0;
-    const current =
-        props.monthlyData[props.monthlyData.length - 1]?.sales_count || 0;
-    const previous =
-        props.monthlyData[props.monthlyData.length - 2]?.sales_count || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
 // Average profit margin
 const avgProfitMargin = computed(() => {
     if (props.totals.total_paid === 0) return 0;
@@ -407,28 +376,21 @@ function viewSales(row: MonthRow): void {
                 <StatCard
                     title="Total Revenue"
                     :value="formatCurrency(totals.total_paid)"
-                    :trend="revenueTrend"
-                    trend-label="vs last month"
                     :sparkline-data="revenueData"
                 />
                 <StatCard
                     title="Gross Profit"
                     :value="formatCurrency(totals.gross_profit)"
-                    :trend="profitTrend"
-                    trend-label="vs last month"
                     :sparkline-data="profitData"
                 />
                 <StatCard
                     title="Total Sales"
                     :value="totals.sales_count.toLocaleString()"
-                    :trend="salesTrend"
-                    trend-label="vs last month"
                     :sparkline-data="salesCountData"
                 />
                 <StatCard
                     title="Avg Profit Margin"
                     :value="formatPercent(avgProfitMargin)"
-                    :trend="0"
                 />
             </div>
 

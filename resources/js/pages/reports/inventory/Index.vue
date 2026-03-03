@@ -129,20 +129,6 @@ const netData = computed(() => props.weeklyTrend.map(row => row.net));
 const valueByCategory = computed(() => props.categoryData.map(row => row.total_value));
 const stockByCategory = computed(() => props.categoryData.map(row => row.total_stock));
 
-// Week over week trend for additions (data is newest-first)
-const addedTrend = computed(() => {
-    if (props.weeklyTrend.length < 2) return 0;
-    const current = props.weeklyTrend[0]?.added || 0;
-    const previous = props.weeklyTrend[1]?.added || 0;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return ((current - previous) / Math.abs(previous)) * 100;
-});
-
-const trendLabel = computed(() => {
-    if (props.weeklyTrend.length < 2) return '';
-    return `${props.weeklyTrend[0]?.week} vs ${props.weeklyTrend[1]?.week}`;
-});
-
 // Profit margin calculation
 const profitMargin = computed(() => {
     if (props.totals.total_value === 0) return 0;
@@ -195,6 +181,12 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                 </div>
                 <div class="flex items-center gap-4">
                     <Link
+                        href="/reports/inventory/daily"
+                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                    >
+                        Daily
+                    </Link>
+                    <Link
                         href="/reports/inventory/weekly"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
@@ -230,8 +222,6 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                 <StatCard
                     title="Added This Week"
                     :value="formatCurrency(totals.cost_added)"
-                    :trend="addedTrend"
-                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <!-- Projected Profit - temporarily hidden
