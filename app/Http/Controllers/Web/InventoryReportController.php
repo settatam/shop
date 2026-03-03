@@ -58,6 +58,12 @@ class InventoryReportController extends Controller
         // Calculate totals (always show overall totals)
         $overallTotals = $this->getOverallTotals($store->id, $weekStart);
 
+        // Root category IDs for determining hierarchy level in frontend
+        $rootCategoryIds = Category::where('store_id', $store->id)
+            ->roots()
+            ->pluck('id')
+            ->toArray();
+
         return Inertia::render('reports/inventory/Index', [
             'categoryData' => $categoryData,
             'totals' => $overallTotals,
@@ -68,6 +74,7 @@ class InventoryReportController extends Controller
             ] : null,
             'breadcrumb' => $breadcrumb,
             'viewAll' => $viewAll,
+            'rootCategoryIds' => $rootCategoryIds,
         ]);
     }
 
@@ -177,6 +184,7 @@ class InventoryReportController extends Controller
 
                 $result->push([
                     'category_id' => $category->id,
+                    'parent_id' => $category->parent_id,
                     'category' => $category->name,
                     'total_stock' => $inventoryData['total_stock'],
                     'total_value' => $inventoryData['total_value'],
@@ -198,6 +206,7 @@ class InventoryReportController extends Controller
                 $uncategorized['deleted_this_week'] > 0) {
                 $result->push([
                     'category_id' => null,
+                    'parent_id' => null,
                     'category' => 'Uncategorized',
                     'total_stock' => $uncategorized['total_stock'],
                     'total_value' => $uncategorized['total_value'],
@@ -914,6 +923,7 @@ class InventoryReportController extends Controller
             if ($totalStock > 0 || $additions || $deletions) {
                 $result->push([
                     'category_id' => $category->id,
+                    'parent_id' => $category->parent_id,
                     'category' => $category->name,
                     'total_stock' => $totalStock,
                     'total_value' => $totalValue,
@@ -979,6 +989,7 @@ class InventoryReportController extends Controller
 
             $result->push([
                 'category_id' => null,
+                'parent_id' => null,
                 'category' => 'Uncategorized',
                 'total_stock' => $uncategorizedStock,
                 'total_value' => $uncategorizedValue,

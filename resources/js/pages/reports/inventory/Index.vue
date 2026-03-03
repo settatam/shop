@@ -11,6 +11,7 @@ import BarChart from '@/components/charts/BarChart.vue';
 
 interface CategoryRow {
     category_id: number | null;
+    parent_id: number | null;
     category: string;
     total_stock: number;
     total_value: number;
@@ -56,6 +57,7 @@ const props = defineProps<{
     currentCategory?: CurrentCategory | null;
     breadcrumb?: CategoryBreadcrumb[];
     viewAll?: boolean;
+    rootCategoryIds?: number[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -102,14 +104,33 @@ function toggleViewAll() {
     router.get('/reports/inventory', params, { preserveState: true });
 }
 
-function viewCategoryItems(categoryId: number | null, event: Event) {
+function viewCategoryItems(row: CategoryRow, event: Event) {
     event.stopPropagation();
-    if (categoryId === null) {
-        // For uncategorized, link to products without category
-        router.get('/products', { stock: 'in_stock', uncategorized: '1' });
+    const params: Record<string, string | number> = { stock: 'in_stock', status: 'active' };
+
+    if (row.category_id === null) {
+        params.uncategorized = '1';
     } else {
-        router.get('/products', { category_id: categoryId, stock: 'in_stock' });
+        const rootIds = props.rootCategoryIds || [];
+        if (rootIds.includes(row.category_id)) {
+            // Level 1 (root) — use category_id which includes all descendants
+            params.category_id = row.category_id;
+        } else if (row.parent_id && rootIds.includes(row.parent_id)) {
+            // Level 2 — set level2 filter
+            params.category_level2_id = row.category_id;
+        } else if (row.parent_id) {
+            // Level 3 — find the level 2 parent from the breadcrumb or current context
+            const l2Parent = props.breadcrumb?.find(b => rootIds.includes(b.id))
+                ? row.parent_id
+                : row.parent_id;
+            params.category_level2_id = l2Parent;
+            params.category_level3_id = row.category_id;
+        } else {
+            params.category_id = row.category_id;
+        }
     }
+
+    router.get('/products', params);
 }
 
 // Get display title based on current state
@@ -387,7 +408,7 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right">
                                     <button
                                         v-if="row.total_stock > 0"
-                                        @click="viewCategoryItems(row.category_id, $event)"
+                                        @click="viewCategoryItems(row, $event)"
                                         class="font-medium text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                                     >
                                         {{ formatNumber(row.total_stock) }}
