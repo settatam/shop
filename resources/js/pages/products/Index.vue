@@ -102,9 +102,14 @@ function getUrlParams(): WidgetFilter {
     const params = new URLSearchParams(window.location.search);
     const filter: WidgetFilter = {};
     if (params.get('search')) filter.term = params.get('search') || undefined;
-    if (params.get('category_id')) filter.category_id = params.get('category_id') || undefined;
-    if (params.get('category_level2_id')) filter.category_level2_id = params.get('category_level2_id') || undefined;
-    if (params.get('category_level3_id')) filter.category_level3_id = params.get('category_level3_id') || undefined;
+    // Convert level2/level3 params to category_id for the widget
+    if (params.get('category_level3_id')) {
+        filter.category_id = params.get('category_level3_id') || undefined;
+    } else if (params.get('category_level2_id')) {
+        filter.category_id = params.get('category_level2_id') || undefined;
+    } else if (params.get('category_id')) {
+        filter.category_id = params.get('category_id') || undefined;
+    }
     if (params.get('brand')) filter.brand = params.get('brand') || undefined;
     if (params.get('status')) filter.status = params.get('status') || undefined;
     if (params.get('stock')) filter.stock = params.get('stock') || undefined;

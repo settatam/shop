@@ -104,6 +104,13 @@ function toggleViewAll() {
     router.get('/reports/inventory', params, { preserveState: true });
 }
 
+function getCategoryLevel(categoryId: number, parentId: number | null): number {
+    const rootIds = props.rootCategoryIds || [];
+    if (rootIds.includes(categoryId)) return 1;
+    if (parentId && rootIds.includes(parentId)) return 2;
+    return 3;
+}
+
 function viewCategoryItems(row: CategoryRow, event: Event) {
     event.stopPropagation();
     const params: Record<string, string | number> = { stock: 'in_stock', status: 'active' };
@@ -111,22 +118,19 @@ function viewCategoryItems(row: CategoryRow, event: Event) {
     if (row.category_id === null) {
         params.uncategorized = '1';
     } else {
-        const rootIds = props.rootCategoryIds || [];
-        if (rootIds.includes(row.category_id)) {
-            // Level 1 (root) — use category_id which includes all descendants
+        const level = getCategoryLevel(row.category_id, row.parent_id);
+
+        if (level === 1) {
+            // Root category — use category_id which includes all descendants
             params.category_id = row.category_id;
-        } else if (row.parent_id && rootIds.includes(row.parent_id)) {
-            // Level 2 — set level2 filter
+        } else if (level === 2) {
+            // Level 2 — pre-select the L2 dropdown
             params.category_level2_id = row.category_id;
-        } else if (row.parent_id) {
-            // Level 3 — find the level 2 parent from the breadcrumb or current context
-            const l2Parent = props.breadcrumb?.find(b => rootIds.includes(b.id))
-                ? row.parent_id
-                : row.parent_id;
-            params.category_level2_id = l2Parent;
-            params.category_level3_id = row.category_id;
         } else {
-            params.category_id = row.category_id;
+            // Level 3+ — pre-select both L2 and L3 dropdowns
+            // parent_id is the L2 category
+            params.category_level2_id = row.parent_id!;
+            params.category_level3_id = row.category_id;
         }
     }
 
