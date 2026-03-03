@@ -77,6 +77,7 @@ interface Vendor {
     id: number;
     name: string;
     code: string;
+    company_name?: string;
 }
 
 interface Tag {
@@ -1877,7 +1878,7 @@ function formatDate(date: string): string {
                                     >
                                         <option value="">Select a vendor...</option>
                                         <option v-for="vendor in vendors" :key="vendor.id" :value="vendor.id">
-                                            {{ vendor.name }}
+                                            {{ vendor.company_name || vendor.name }}
                                         </option>
                                     </select>
                                     <p v-if="form.errors.vendor_id" class="mt-1 text-sm text-red-600">{{ form.errors.vendor_id }}</p>

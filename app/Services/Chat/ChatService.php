@@ -4,6 +4,7 @@ namespace App\Services\Chat;
 
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
+use App\Models\HelpArticle;
 use App\Models\Store;
 use Generator;
 use Illuminate\Support\Facades\Http;
@@ -175,7 +176,32 @@ AVAILABLE DATA:
 - Product performance data
 
 When users ask about performance, sales, or "how we're doing", use the get_sales_summary tool to get actual data.
+
+{$this->getHelpArticleContext()}
 PROMPT;
+    }
+
+    /**
+     * Build help article context for the system prompt.
+     */
+    protected function getHelpArticleContext(): string
+    {
+        $articles = HelpArticle::query()->published()->get();
+
+        if ($articles->isEmpty()) {
+            return '';
+        }
+
+        $lines = $articles->map(function (HelpArticle $article) {
+            $text = "- {$article->title}";
+            if ($article->excerpt) {
+                $text .= ": {$article->excerpt}";
+            }
+
+            return $text;
+        })->implode("\n");
+
+        return "APP HELP KNOWLEDGE:\n{$lines}\n\nWhen users ask how to do something in the app, use this knowledge to guide them.";
     }
 
     /**

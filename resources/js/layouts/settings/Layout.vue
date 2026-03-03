@@ -75,6 +75,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Maintenance',
         href: '/settings/maintenance',
     },
+    {
+        title: 'Help Articles',
+        href: '/settings/help-articles',
+    },
 ];
 
 const currentPath = typeof window !== undefined ? window.location.pathname : '';

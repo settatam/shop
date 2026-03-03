@@ -340,7 +340,7 @@ class ProductController extends Controller
 
         $vendors = Vendor::where('store_id', $store->id)
             ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+            ->get(['id', 'name', 'code', 'company_name']);
 
         return Inertia::render('products/Create', [
             'categories' => $categories,
@@ -677,6 +677,13 @@ class ProductController extends Controller
                 'vendor' => $product->vendor ? [
                     'id' => $product->vendor->id,
                     'name' => $product->vendor->name,
+                    'company_name' => $product->vendor->company_name,
+                    'phone' => $product->vendor->phone,
+                    'email' => $product->vendor->email,
+                    'address' => $product->vendor->address,
+                    'city' => $product->vendor->city,
+                    'state' => $product->vendor->state,
+                    'zip' => $product->vendor->zip,
                 ] : null,
                 'tags' => $product->tags->map(fn (Tag $tag) => [
                     'id' => $tag->id,
@@ -828,7 +835,7 @@ class ProductController extends Controller
 
         $vendors = Vendor::where('store_id', $store->id)
             ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+            ->get(['id', 'name', 'code', 'company_name']);
 
         // Get inventory by variant
         $variantInventory = [];

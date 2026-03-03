@@ -43,11 +43,78 @@ const currentUserEmail = computed(() => {
 
 const hasActions = computed(() => props.exportUrl || props.emailUrl);
 
+const tableContainer = ref<HTMLElement | null>(null);
+
 function handleExport() {
+    // Try client-side CSV from the visible table first
+    if (tableContainer.value) {
+        const table = tableContainer.value.querySelector('table');
+        if (table) {
+            exportTableToCsv(table);
+            return;
+        }
+    }
+
+    // Fallback to server-side export
     if (props.exportUrl) {
         window.location.href = props.exportUrl;
     }
     emit('export');
+}
+
+function exportTableToCsv(table: HTMLTableElement) {
+    const rows: string[][] = [];
+
+    // Extract headers
+    const thead = table.querySelector('thead');
+    if (thead) {
+        for (const tr of thead.querySelectorAll('tr')) {
+            const cells: string[] = [];
+            for (const th of tr.querySelectorAll('th')) {
+                cells.push(cleanCellText(th.textContent || ''));
+            }
+            rows.push(cells);
+        }
+    }
+
+    // Extract body rows
+    const tbody = table.querySelector('tbody');
+    if (tbody) {
+        for (const tr of tbody.querySelectorAll('tr')) {
+            const cells: string[] = [];
+            for (const td of tr.querySelectorAll('td')) {
+                cells.push(cleanCellText(td.textContent || ''));
+            }
+            if (cells.length > 0) {
+                rows.push(cells);
+            }
+        }
+    }
+
+    // Extract footer rows
+    const tfoot = table.querySelector('tfoot');
+    if (tfoot) {
+        for (const tr of tfoot.querySelectorAll('tr')) {
+            const cells: string[] = [];
+            for (const td of tr.querySelectorAll('td')) {
+                cells.push(cleanCellText(td.textContent || ''));
+            }
+            rows.push(cells);
+        }
+    }
+
+    const csv = rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${props.title.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function cleanCellText(text: string): string {
+    return text.replace(/\s+/g, ' ').trim();
 }
 
 function openEmailModal() {
@@ -165,7 +232,7 @@ function closeEmailModal() {
         </div>
 
         <!-- Table content slot -->
-        <div class="overflow-x-auto">
+        <div ref="tableContainer" class="overflow-x-auto">
             <slot />
         </div>
 

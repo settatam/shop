@@ -14,6 +14,7 @@ use App\Http\Controllers\Web\CategoryMappingController;
 use App\Http\Controllers\Web\CustomProductController;
 use App\Http\Controllers\Web\GiaCardScannerController;
 use App\Http\Controllers\Web\GiaController;
+use App\Http\Controllers\Web\HelpArticleController;
 use App\Http\Controllers\Web\IntegrationsController;
 use App\Http\Controllers\Web\InventoryAllocationController;
 use App\Http\Controllers\Web\InventoryController;
@@ -148,6 +149,10 @@ Route::middleware(['auth', 'verified', 'store'])->group(function () {
 Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function () {
     Route::get('dashboard', [\App\Http\Controllers\Web\DashboardController::class, 'index'])->name('dashboard');
     Route::get('dashboard/data', [\App\Http\Controllers\Web\DashboardController::class, 'getData'])->name('dashboard.data');
+
+    // Help Center
+    Route::get('help', [HelpArticleController::class, 'index'])->name('help.index');
+    Route::get('help/{slug}', [HelpArticleController::class, 'show'])->name('help.show');
 
     // Product routes - static routes must come before dynamic routes
     Route::middleware('permission:products.create')->group(function () {
@@ -928,10 +933,14 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('export', [InventoryReportController::class, 'export'])->name('export');
         Route::get('weekly', [InventoryReportController::class, 'weekly'])->name('weekly');
         Route::get('weekly/export', [InventoryReportController::class, 'exportWeekly'])->name('weekly.export');
+        Route::post('weekly/email', [InventoryReportController::class, 'emailWeekly'])->name('weekly.email');
         Route::get('monthly', [InventoryReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [InventoryReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::post('monthly/email', [InventoryReportController::class, 'emailMonthly'])->name('monthly.email');
         Route::get('yearly', [InventoryReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [InventoryReportController::class, 'exportYearly'])->name('yearly.export');
+        Route::post('yearly/email', [InventoryReportController::class, 'emailYearly'])->name('yearly.email');
+        Route::post('email', [InventoryReportController::class, 'email'])->name('email');
     });
 
     // Buys Reports - Unified (all sources)

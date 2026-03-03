@@ -17,6 +17,7 @@ use App\Http\Controllers\Settings\StoreSettingsController;
 use App\Http\Controllers\Settings\TeamController;
 use App\Http\Controllers\Settings\TwoFactorAuthenticationController;
 use App\Http\Controllers\Settings\WarehouseController;
+use App\Http\Controllers\Web\HelpArticleController;
 use App\Http\Controllers\Web\LeadSourceController;
 use App\Http\Controllers\Web\NotificationSettingsController;
 use App\Http\Controllers\Web\PrinterSettingsController;
@@ -225,6 +226,14 @@ Route::middleware(['auth', 'store'])->group(function () {
         Route::post('/', [ChannelIntegrationController::class, 'save'])->name('save');
         Route::post('/toggle', [ChannelIntegrationController::class, 'toggle'])->name('toggle');
         Route::delete('/{channelConfiguration}', [ChannelIntegrationController::class, 'destroy'])->name('destroy');
+    });
+
+    // Help Articles (Staff Help Center)
+    Route::middleware(['store', 'onboarding'])->prefix('settings/help-articles')->name('settings.help-articles.')->group(function () {
+        Route::get('/', [HelpArticleController::class, 'admin'])->name('index');
+        Route::post('/', [HelpArticleController::class, 'store'])->name('store');
+        Route::put('/{article}', [HelpArticleController::class, 'update'])->name('update');
+        Route::delete('/{article}', [HelpArticleController::class, 'destroy'])->name('destroy');
     });
 
     // Knowledge Base (AI Assistant)

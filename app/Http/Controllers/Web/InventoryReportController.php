@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Services\StoreContext;
+use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -14,6 +16,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InventoryReportController extends Controller
 {
+    use SendsReportEmails;
+
     public function __construct(
         protected StoreContext $storeContext,
     ) {}
@@ -600,6 +604,105 @@ class InventoryReportController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv',
         ]);
+    }
+
+    /**
+     * Email inventory by category report.
+     */
+    public function email(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $weekStart = now()->subWeek()->startOfDay();
+
+        $categoryData = $this->getCategoryInventoryData($store->id, $weekStart);
+        $totals = [
+            'category' => '',
+            'total_stock' => $categoryData->sum('total_stock'),
+            'total_value' => $categoryData->sum('total_value'),
+            'added_this_week' => $categoryData->sum('added_this_week'),
+            'cost_added' => $categoryData->sum('cost_added'),
+            'deleted_this_week' => $categoryData->sum('deleted_this_week'),
+            'deleted_cost' => $categoryData->sum('deleted_cost'),
+            'projected_profit' => $categoryData->sum('projected_profit'),
+        ];
+
+        $headers = ['Category', 'Total Stock', 'Total Value ($)', 'Added This Week', 'Cost Added ($)', 'Deleted This Week', 'Deleted Cost ($)', 'Projected Profit ($)'];
+
+        $formatRow = fn ($row) => [
+            $row['category'] ?? 'TOTALS',
+            $row['total_stock'],
+            '$'.number_format($row['total_value'], 2),
+            $row['added_this_week'],
+            '$'.number_format($row['cost_added'], 2),
+            $row['deleted_this_week'],
+            '$'.number_format($row['deleted_cost'], 2),
+            '$'.number_format($row['projected_profit'], 2),
+        ];
+
+        return $this->sendReportEmail($request, 'Inventory by Category Report', 'Inventory by Category', $headers, $categoryData, $totals, $formatRow, 'inventory-report-'.now()->format('Y-m-d').'.csv', $store);
+    }
+
+    /**
+     * Email weekly inventory report.
+     */
+    public function emailWeekly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $weeklyData = $this->getWeekOverWeekData($store->id);
+
+        return $this->emailPeriodData($request, $weeklyData, 'Weekly Inventory Report', 'Week', $store);
+    }
+
+    /**
+     * Email monthly inventory report.
+     */
+    public function emailMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $monthlyData = $this->getMonthOverMonthData($store->id);
+
+        return $this->emailPeriodData($request, $monthlyData, 'Monthly Inventory Report', 'Month', $store);
+    }
+
+    /**
+     * Email yearly inventory report.
+     */
+    public function emailYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getYearOverYearData($store->id);
+
+        return $this->emailPeriodData($request, $yearlyData, 'Yearly Inventory Report', 'Year', $store);
+    }
+
+    /**
+     * Email period-based inventory data.
+     */
+    protected function emailPeriodData(Request $request, $data, string $title, string $periodLabel, $store): JsonResponse
+    {
+        $totals = [
+            'period' => '',
+            'items_added' => $data->sum('items_added'),
+            'cost_added' => $data->sum('cost_added'),
+            'items_removed' => $data->sum('items_removed'),
+            'cost_removed' => $data->sum('cost_removed'),
+            'net_items' => $data->sum('net_items'),
+            'net_cost' => $data->sum('net_cost'),
+        ];
+
+        $headers = [$periodLabel, 'Items Added', 'Cost Added ($)', 'Items Removed', 'Cost Removed ($)', 'Net Items', 'Net Cost ($)'];
+
+        $formatRow = fn ($row) => [
+            $row['period'] ?? 'TOTALS',
+            $row['items_added'],
+            '$'.number_format($row['cost_added'], 2),
+            $row['items_removed'],
+            '$'.number_format($row['cost_removed'], 2),
+            $row['net_items'],
+            '$'.number_format($row['net_cost'], 2),
+        ];
+
+        return $this->sendReportEmail($request, $title, $title, $headers, $data, $totals, $formatRow, strtolower(str_replace(' ', '-', $title)).'-'.now()->format('Y-m-d').'.csv', $store);
     }
 
     /**

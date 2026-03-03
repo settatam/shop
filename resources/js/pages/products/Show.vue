@@ -119,7 +119,7 @@ interface Product {
     updated_at: string;
     category: { id: number; name: string } | null;
     brand: { id: number; name: string } | null;
-    vendor: { id: number; name: string } | null;
+    vendor: { id: number; name: string; company_name?: string; phone?: string; email?: string; address?: string; city?: string; state?: string; zip?: string } | null;
     tags: Tag[];
     variants: Variant[];
     images: Image[];
@@ -705,12 +705,26 @@ function submitTransfer(asDraft: boolean) {
                     </div>
 
                     <!-- Vendor -->
-                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                    <div v-if="product.vendor" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Vendor</h3>
-                            <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                {{ product.vendor?.name || '-' }}
-                            </p>
+                            <div class="space-y-1">
+                                <Link :href="`/vendors/${product.vendor.id}`" class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                                    {{ product.vendor.company_name || product.vendor.name }}
+                                </Link>
+                                <p v-if="product.vendor.company_name" class="text-xs text-gray-500 dark:text-gray-400">
+                                    {{ product.vendor.name }}
+                                </p>
+                                <p v-if="product.vendor.phone" class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ product.vendor.phone }}
+                                </p>
+                                <p v-if="product.vendor.email" class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ product.vendor.email }}
+                                </p>
+                                <p v-if="product.vendor.address" class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ [product.vendor.address, product.vendor.city, product.vendor.state, product.vendor.zip].filter(Boolean).join(', ') }}
+                                </p>
+                            </div>
                         </div>
                     </div>
 
