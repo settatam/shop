@@ -1333,6 +1333,8 @@ class MigrateLegacyProducts extends Command
 
                 ->get();
 
+            $productStatus = $legacyProduct->status ?? 'draft';
+
             if ($legacyVariants->isEmpty()) {
                 // Create default variant from product data - use DB::table to preserve timestamps
                 $quantity = $legacyProduct->quantity ?? $legacyProduct->total_quantity ?? 0;
@@ -1353,8 +1355,8 @@ class MigrateLegacyProducts extends Command
                 ]);
                 $variantCount++;
 
-                // Create inventory record if quantity > 0
-                if ($quantity > 0 && $this->defaultWarehouse) {
+                // Create inventory record if quantity > 0 and product is active
+                if ($quantity > 0 && $this->defaultWarehouse && $productStatus === Product::STATUS_ACTIVE) {
                     $this->createInventoryRecord($newStore->id, $newVariantId, $quantity, $cost, $legacyProduct->created_at);
                 }
             } else {
@@ -1385,8 +1387,8 @@ class MigrateLegacyProducts extends Command
                     $this->variantMap[$legacyVariant->id] = $legacyVariant->id;
                     $variantCount++;
 
-                    // Create inventory record if quantity > 0
-                    if ($quantity > 0 && $this->defaultWarehouse) {
+                    // Create inventory record if quantity > 0 and product is active
+                    if ($quantity > 0 && $this->defaultWarehouse && $productStatus === Product::STATUS_ACTIVE) {
                         $this->createInventoryRecord($newStore->id, $legacyVariant->id, $quantity, $cost, $legacyVariant->created_at);
                     }
                 }

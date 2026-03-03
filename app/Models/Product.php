@@ -160,18 +160,91 @@ class Product extends Model
             $product->createListingsForAllActiveChannels();
         });
 
-        // When product status changes, manage listings accordingly
+        // When product status changes, manage listings and inventory accordingly
         static::updated(function (Product $product) {
             if ($product->wasChanged('status')) {
+                $previousStatus = $product->getOriginal('status');
+
                 if ($product->status === self::STATUS_ACTIVE) {
                     // When product becomes active, ensure all listings exist and list local channels
                     $product->createListingsForAllActiveChannels();
+
+                    // Restore inventory from variant quantities
+                    $product->restoreInventory();
                 } else {
                     // When product moves away from active, end all listed items
                     $product->endAllListings();
+
+                    // Remove inventory when leaving active status
+                    if ($previousStatus === self::STATUS_ACTIVE) {
+                        $product->removeInventory();
+                    }
                 }
             }
         });
+    }
+
+    /**
+     * Remove all inventory for this product's variants, creating adjustment records.
+     */
+    public function removeInventory(): void
+    {
+        foreach ($this->variants as $variant) {
+            $inventoryRecords = Inventory::where('product_variant_id', $variant->id)
+                ->where('quantity', '>', 0)
+                ->get();
+
+            foreach ($inventoryRecords as $inventory) {
+                $inventory->adjustQuantity(
+                    -$inventory->quantity,
+                    InventoryAdjustment::TYPE_CORRECTION,
+                    null,
+                    "Product status changed to {$this->status}",
+                );
+            }
+        }
+    }
+
+    /**
+     * Restore inventory for this product's variants from their stored quantities.
+     * Creates inventory records if they don't exist.
+     */
+    public function restoreInventory(): void
+    {
+        $defaultWarehouse = Warehouse::where('store_id', $this->store_id)
+            ->where('is_default', true)
+            ->first();
+
+        if (! $defaultWarehouse) {
+            return;
+        }
+
+        foreach ($this->variants as $variant) {
+            if ($variant->quantity <= 0) {
+                continue;
+            }
+
+            $inventory = Inventory::where('product_variant_id', $variant->id)
+                ->where('warehouse_id', $defaultWarehouse->id)
+                ->first();
+
+            if ($inventory && $inventory->quantity > 0) {
+                continue;
+            }
+
+            if (! $inventory) {
+                $inventory = Inventory::getOrCreate($this->store_id, $variant->id, $defaultWarehouse->id);
+                $inventory->unit_cost = $variant->cost ?? 0;
+                $inventory->save();
+            }
+
+            $inventory->adjustQuantity(
+                $variant->quantity,
+                InventoryAdjustment::TYPE_CORRECTION,
+                null,
+                'Product status changed to active',
+            );
+        }
     }
 
     // ──────────────────────────────────────────────────────────────
