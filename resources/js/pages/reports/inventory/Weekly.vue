@@ -90,21 +90,28 @@ const netData = computed(() => props.weeklyData.map(row => row.net_cost));
 const itemsAddedData = computed(() => props.weeklyData.map(row => row.items_added));
 const itemsRemovedData = computed(() => props.weeklyData.map(row => row.items_removed));
 
-// Trends (compare last week vs previous week)
+// Trends (compare most recent two periods — data is newest-first)
 const addedTrend = computed(() => {
     if (props.weeklyData.length < 2) return 0;
-    const current = props.weeklyData[props.weeklyData.length - 1]?.cost_added || 0;
-    const previous = props.weeklyData[props.weeklyData.length - 2]?.cost_added || 0;
+    const current = props.weeklyData[0]?.cost_added || 0;
+    const previous = props.weeklyData[1]?.cost_added || 0;
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / Math.abs(previous)) * 100;
 });
 
 const netTrend = computed(() => {
     if (props.weeklyData.length < 2) return 0;
-    const current = props.weeklyData[props.weeklyData.length - 1]?.net_cost || 0;
-    const previous = props.weeklyData[props.weeklyData.length - 2]?.net_cost || 0;
+    const current = props.weeklyData[0]?.net_cost || 0;
+    const previous = props.weeklyData[1]?.net_cost || 0;
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+const trendLabel = computed(() => {
+    if (props.weeklyData.length < 2) return '';
+    const current = props.weeklyData[0]?.period?.split(',')[0];
+    const previous = props.weeklyData[1]?.period?.split(',')[0];
+    return `${current} vs ${previous}`;
 });
 
 const exportUrl = '/reports/inventory/weekly/export';
@@ -140,7 +147,7 @@ const emailUrl = '/reports/inventory/weekly/email';
                     title="Total Added"
                     :value="formatCurrency(totals.cost_added)"
                     :trend="addedTrend"
-                    trend-label="vs last week"
+                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <StatCard
@@ -152,7 +159,7 @@ const emailUrl = '/reports/inventory/weekly/email';
                     title="Net Change"
                     :value="formatCurrency(totals.net_cost)"
                     :trend="netTrend"
-                    trend-label="vs last week"
+                    :trend-label="trendLabel"
                     :sparkline-data="netData"
                 />
                 <StatCard

@@ -231,7 +231,7 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                     title="Added This Week"
                     :value="formatCurrency(totals.cost_added)"
                     :trend="addedTrend"
-                    trend-label="vs last week"
+                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <!-- Projected Profit - temporarily hidden

@@ -68,21 +68,26 @@ const netData = computed(() => props.yearlyData.map(row => row.net_cost));
 const itemsAddedData = computed(() => props.yearlyData.map(row => row.items_added));
 const itemsRemovedData = computed(() => props.yearlyData.map(row => row.items_removed));
 
-// Trends (compare last year vs previous year)
+// Trends (compare most recent two periods — data is newest-first)
 const addedTrend = computed(() => {
     if (props.yearlyData.length < 2) return 0;
-    const current = props.yearlyData[props.yearlyData.length - 1]?.cost_added || 0;
-    const previous = props.yearlyData[props.yearlyData.length - 2]?.cost_added || 0;
+    const current = props.yearlyData[0]?.cost_added || 0;
+    const previous = props.yearlyData[1]?.cost_added || 0;
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / Math.abs(previous)) * 100;
 });
 
 const netTrend = computed(() => {
     if (props.yearlyData.length < 2) return 0;
-    const current = props.yearlyData[props.yearlyData.length - 1]?.net_cost || 0;
-    const previous = props.yearlyData[props.yearlyData.length - 2]?.net_cost || 0;
+    const current = props.yearlyData[0]?.net_cost || 0;
+    const previous = props.yearlyData[1]?.net_cost || 0;
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / Math.abs(previous)) * 100;
+});
+
+const trendLabel = computed(() => {
+    if (props.yearlyData.length < 2) return '';
+    return `${props.yearlyData[0]?.period} vs ${props.yearlyData[1]?.period}`;
 });
 
 // Average yearly cost added
@@ -124,7 +129,7 @@ const emailUrl = '/reports/inventory/yearly/email';
                     title="Total Added (5yr)"
                     :value="formatCurrency(totals.cost_added)"
                     :trend="addedTrend"
-                    trend-label="vs last year"
+                    :trend-label="trendLabel"
                     :sparkline-data="addedData"
                 />
                 <StatCard
@@ -136,7 +141,7 @@ const emailUrl = '/reports/inventory/yearly/email';
                     title="Net Change (5yr)"
                     :value="formatCurrency(totals.net_cost)"
                     :trend="netTrend"
-                    trend-label="vs last year"
+                    :trend-label="trendLabel"
                     :sparkline-data="netData"
                 />
                 <StatCard
