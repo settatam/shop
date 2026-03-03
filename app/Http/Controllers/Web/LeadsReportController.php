@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Services\StoreContext;
+use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,6 +15,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeadsReportController extends Controller
 {
+    use SendsReportEmails;
+
     public function __construct(
         protected StoreContext $storeContext,
     ) {}
@@ -513,6 +517,120 @@ class LeadsReportController extends Controller
             'profit' => $profit,
             'profit_pct' => $estimatedValue > 0 ? round(($profit / $estimatedValue) * 100, 1) : 0,
         ];
+    }
+
+    /**
+     * Email Leads MTD report.
+     */
+    public function email(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $dailyData = $this->getDailyLeadsData($store->id, now()->startOfMonth(), now());
+
+        return $this->emailLeadsData($request, $dailyData, 'Leads Report', 'Leads data for '.now()->format('F Y'), $store);
+    }
+
+    /**
+     * Email Leads Monthly report.
+     */
+    public function emailMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $monthlyData = $this->getMonthlyLeadsData($store->id, now()->subMonths(12)->startOfMonth(), now()->endOfMonth());
+
+        return $this->emailLeadsData($request, $monthlyData, 'Monthly Leads Report', 'Leads data month over month', $store);
+    }
+
+    /**
+     * Email Leads Yearly report.
+     */
+    public function emailYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getYearlyLeadsData($store->id);
+
+        return $this->emailLeadsData($request, $yearlyData, 'Yearly Leads Report', 'Leads data year over year', $store);
+    }
+
+    /**
+     * Email Daily Kits report.
+     */
+    public function emailDailyKits(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $daysBack = $request->input('days', 7);
+        $startDate = now()->subDays($daysBack)->startOfDay();
+
+        $kits = $this->getPendingReturnKits($store->id, $startDate);
+
+        $headers = ['Transaction ID', 'Date Kit Delivered', 'Customer Name', 'Status', 'Outbound Tracking', 'Days Since Delivered'];
+
+        $formatRow = fn ($row) => [
+            $row['transaction_number'],
+            $row['kit_delivered_at'],
+            $row['customer_name'],
+            $row['status'],
+            $row['outbound_tracking'],
+            $row['days_since_delivered'],
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            'Daily Kits Report',
+            "Kits delivered in the last {$daysBack} days pending return",
+            $headers,
+            $kits,
+            [],
+            $formatRow,
+            'daily-kits-'.now()->format('Y-m-d').'.csv',
+            $store,
+        );
+    }
+
+    /**
+     * Send a leads report email using the shared trait.
+     */
+    protected function emailLeadsData(Request $request, array $data, string $title, string $description, $store): JsonResponse
+    {
+        $totals = $this->calculateTotals($data);
+
+        $headers = [
+            'Date', 'Kits Req.', 'Kit Req Declined', 'Kit Req Declined %',
+            'Kits Rec.', 'Kits Rec %', 'Kits Rec.: Rejected', 'Kits Returned',
+            'Offers Declined', 'Offers Given', 'Offers Pending', 'Offers Accepted',
+            'Est. Value', 'Final Offer', 'Profit', 'Profit %',
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['date'] ?? 'TOTALS',
+            $row['kits_requested'],
+            $row['kit_req_declined'],
+            $row['kit_req_declined_pct'].'%',
+            $row['kits_received'],
+            $row['kits_received_pct'].'%',
+            $row['kits_rec_rejected'],
+            $row['kits_returned'],
+            $row['offers_declined'],
+            $row['offers_given'],
+            $row['offers_pending'],
+            $row['offers_accepted'],
+            '$'.number_format($row['estimated_value'], 2),
+            '$'.number_format($row['final_offer'], 2),
+            '$'.number_format($row['profit'], 2),
+            $row['profit_pct'].'%',
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            $title,
+            $description,
+            $headers,
+            $data,
+            $totals,
+            $formatRow,
+            null,
+            $store,
+        );
     }
 
     /**

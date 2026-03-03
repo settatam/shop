@@ -891,6 +891,97 @@ class TransactionsReportController extends Controller
     }
 
     /**
+     * Email daily transactions report.
+     */
+    public function emailDaily(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $dailyData = $this->getDailyData($store->id, now()->startOfMonth(), now());
+        $totals = $this->calculateTotals($dailyData);
+
+        return $this->emailTransactionsData($request, $dailyData, $totals, 'Daily Transactions Report', 'Transactions for '.now()->format('F Y'), 'Date', $store);
+    }
+
+    /**
+     * Email weekly transactions report.
+     */
+    public function emailWeekly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $weeklyData = $this->getWeeklyData($store->id);
+        $totals = $this->calculateTotals($weeklyData);
+
+        return $this->emailTransactionsData($request, $weeklyData, $totals, 'Weekly Transactions Report', 'Transactions week over week', 'Week', $store);
+    }
+
+    /**
+     * Email monthly transactions report.
+     */
+    public function emailMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $monthlyData = $this->getMonthlyData($store->id);
+        $totals = $this->calculateTotals($monthlyData);
+
+        return $this->emailTransactionsData($request, $monthlyData, $totals, 'Monthly Transactions Report', 'Transactions month over month', 'Month', $store);
+    }
+
+    /**
+     * Email yearly transactions report.
+     */
+    public function emailYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getYearlyData($store->id);
+        $totals = $this->calculateTotals($yearlyData);
+
+        return $this->emailTransactionsData($request, $yearlyData, $totals, 'Yearly Transactions Report', 'Transactions year over year', 'Year', $store);
+    }
+
+    /**
+     * Send a transactions report email using the shared trait.
+     */
+    protected function emailTransactionsData(Request $request, $data, array $totals, string $title, string $description, string $periodLabel, $store): JsonResponse
+    {
+        $headers = [
+            $periodLabel, 'Kits Req.', 'Kit Req Declined', 'Kit Req Declined %',
+            'Kits Rec.', 'Kits Rec %', 'Kits Rec.: Rejected', 'Kits Returned',
+            'Offers Given', 'Offers Declined', 'Offers Pending', 'Offers Accepted',
+            'Est. Value', 'Profit', 'Profit %',
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['period'] ?? 'TOTALS',
+            $row['kits_requested'],
+            $row['kits_declined'],
+            $row['kits_declined_percent'].'%',
+            $row['kits_received'],
+            $row['kits_received_percent'].'%',
+            $row['kits_rejected'],
+            $row['kits_returned'],
+            $row['offers_given'],
+            $row['offers_declined'],
+            $row['offers_pending'],
+            $row['offers_accepted'],
+            '$'.number_format($row['estimated_value'], 2),
+            '$'.number_format($row['profit'], 2),
+            $row['profit_percent'].'%',
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            $title,
+            $description,
+            $headers,
+            $data,
+            $totals,
+            $formatRow,
+            null,
+            $store,
+        );
+    }
+
+    /**
      * Export data to CSV.
      */
     protected function exportToCsv($data, string $filename, string $periodLabel): StreamedResponse

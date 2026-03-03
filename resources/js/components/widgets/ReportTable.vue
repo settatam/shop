@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import { Cog6ToothIcon, ArrowDownTrayIcon, EnvelopeIcon } from '@heroicons/vue/20/solid';
 import {
     DropdownMenu,
@@ -151,23 +152,10 @@ async function sendEmail() {
     emailError.value = '';
 
     try {
-        const response = await fetch(props.emailUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify({
-                emails: emails,
-                subject: emailSubject.value,
-            }),
+        await axios.post(props.emailUrl, {
+            emails: emails,
+            subject: emailSubject.value,
         });
-
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.message || 'Failed to send email');
-        }
 
         emailSent.value = true;
         setTimeout(() => {
@@ -175,8 +163,8 @@ async function sendEmail() {
             emailAddresses.value = '';
             emailSent.value = false;
         }, 2000);
-    } catch (error) {
-        emailError.value = error instanceof Error ? error.message : 'Failed to send email';
+    } catch (error: any) {
+        emailError.value = error.response?.data?.message || error.message || 'Failed to send email';
     } finally {
         isSending.value = false;
     }

@@ -7,7 +7,9 @@ use App\Models\Category;
 use App\Models\Status;
 use App\Models\Transaction;
 use App\Services\StoreContext;
+use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -16,6 +18,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BuysReportController extends Controller
 {
+    use SendsReportEmails;
+
     public function __construct(
         protected StoreContext $storeContext,
     ) {}
@@ -654,16 +658,116 @@ class BuysReportController extends Controller
     }
 
     /**
+     * Email the unified buys daily data (Index page).
+     */
+    public function emailIndex(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $dailyData = $this->getAllBuysDailyData($store->id, $startDate, $endDate, $categoryIds);
+
+        return $this->emailBuysData(
+            $request,
+            collect($dailyData),
+            'Buys Report',
+            "Buys data from {$startDate->format('M j, Y')} to {$endDate->format('M j, Y')}",
+            $store,
+        );
+    }
+
+    /**
+     * Email the category breakdown (Index page).
+     */
+    public function emailIndexCategories(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactionsQuery = Transaction::with('items')
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate]);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
+
+        $headers = ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit'];
+
+        $totals = [
+            'category_name' => 'TOTALS',
+            'transactions_count' => collect($categoryBreakdown)->sum('transactions_count'),
+            'items_count' => collect($categoryBreakdown)->sum('items_count'),
+            'total_purchase' => collect($categoryBreakdown)->sum('total_purchase'),
+            'total_estimated_value' => collect($categoryBreakdown)->sum('total_estimated_value'),
+            'total_profit' => collect($categoryBreakdown)->sum('total_profit'),
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['category_name'],
+            $row['transactions_count'],
+            $row['items_count'],
+            '$'.number_format($row['total_purchase'], 2),
+            '$'.number_format($row['total_estimated_value'], 2),
+            '$'.number_format($row['total_profit'], 2),
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            'Buys by Category Report',
+            "Category breakdown from {$startDate->format('M j, Y')} to {$endDate->format('M j, Y')}",
+            $headers,
+            $categoryBreakdown,
+            $totals,
+            $formatRow,
+            'buys-by-category-report.csv',
+            $store,
+        );
+    }
+
+    /**
      * Email Monthly Report.
      */
-    public function emailMonthly(Request $request): \Illuminate\Http\JsonResponse
+    public function emailMonthly(Request $request): JsonResponse
     {
-        $request->validate([
-            'emails' => 'required|array|min:1',
-            'emails.*' => 'required|email',
-            'subject' => 'nullable|string|max:255',
-        ]);
-
         $store = $this->storeContext->getCurrentStore();
 
         $startMonth = $request->input('start_month', now()->subMonths(12)->month);
@@ -679,76 +783,21 @@ class BuysReportController extends Controller
         }
 
         $monthlyData = $this->getAllBuysMonthlyData($store->id, $startDate, $endDate);
-        $monthlyCollection = collect($monthlyData);
 
-        $headers = ['Month', '# of Buys', 'Purchase Amt', 'Estimated Value', 'Profit', 'Profit %', 'Avg Buy Price'];
-        $rows = $monthlyCollection->map(fn ($row) => [
-            $row['date'],
-            $row['buys_count'],
-            '$'.number_format($row['purchase_amt'], 2),
-            '$'.number_format($row['estimated_value'], 2),
-            '$'.number_format($row['profit'], 2),
-            number_format($row['profit_percent'], 1).'%',
-            '$'.number_format($row['avg_buy_price'], 2),
-        ])->toArray();
-
-        // Calculate totals
-        $totalBuys = $monthlyCollection->sum('buys_count');
-        $totalPurchase = $monthlyCollection->sum('purchase_amt');
-        $totalEstimated = $monthlyCollection->sum('estimated_value');
-        $totalProfit = $monthlyCollection->sum('profit');
-        $avgProfitPercent = $totalEstimated > 0 ? ($totalProfit / $totalEstimated) * 100 : 0;
-        $avgBuyPrice = $totalBuys > 0 ? $totalPurchase / $totalBuys : 0;
-
-        // Add totals row
-        $rows[] = [
-            'TOTALS',
-            $totalBuys,
-            '$'.number_format($totalPurchase, 2),
-            '$'.number_format($totalEstimated, 2),
-            '$'.number_format($totalProfit, 2),
-            number_format($avgProfitPercent, 1).'%',
-            '$'.number_format($avgBuyPrice, 2),
-        ];
-
-        $subject = $request->input('subject', 'Monthly Buys Report');
-        $description = "Buys data from {$startDate->format('M Y')} to {$endDate->format('M Y')}";
-
-        $mailable = new \App\Mail\DynamicReportMail(
-            $subject,
-            $description,
-            ['headers' => $headers, 'rows' => $rows],
-            count($rows) - 1, // Exclude totals row from count
-            now()
+        return $this->emailBuysData(
+            $request,
+            collect($monthlyData),
+            'Monthly Buys Report',
+            "Buys data from {$startDate->format('M Y')} to {$endDate->format('M Y')}",
+            $store,
         );
-
-        // Attach CSV
-        $mailable->attachCsv($headers, $rows, 'monthly-buys-report.csv');
-
-        // Send to all recipients
-        foreach ($request->input('emails') as $email) {
-            \Illuminate\Support\Facades\Mail::to($email)->send(clone $mailable);
-        }
-
-        $count = count($request->input('emails'));
-
-        return response()->json([
-            'success' => true,
-            'message' => $count === 1 ? 'Report sent successfully' : "Report sent to {$count} recipients",
-        ]);
     }
 
     /**
      * Email Monthly Category Breakdown Report.
      */
-    public function emailMonthlyCategories(Request $request): \Illuminate\Http\JsonResponse
+    public function emailMonthlyCategories(Request $request): JsonResponse
     {
-        $request->validate([
-            'emails' => 'required|array|min:1',
-            'emails.*' => 'required|email',
-            'subject' => 'nullable|string|max:255',
-        ]);
-
         $store = $this->storeContext->getCurrentStore();
 
         $startMonth = $request->input('start_month', now()->subMonths(12)->month);
@@ -780,60 +829,169 @@ class BuysReportController extends Controller
         }
 
         $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
-        $categoryCollection = collect($categoryBreakdown);
 
         $headers = ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit'];
-        $rows = $categoryCollection->map(fn ($row) => [
+
+        $totals = [
+            'category_name' => 'TOTALS',
+            'transactions_count' => collect($categoryBreakdown)->sum('transactions_count'),
+            'items_count' => collect($categoryBreakdown)->sum('items_count'),
+            'total_purchase' => collect($categoryBreakdown)->sum('total_purchase'),
+            'total_estimated_value' => collect($categoryBreakdown)->sum('total_estimated_value'),
+            'total_profit' => collect($categoryBreakdown)->sum('total_profit'),
+        ];
+
+        $formatRow = fn ($row) => [
             $row['category_name'],
             $row['transactions_count'],
             $row['items_count'],
             '$'.number_format($row['total_purchase'], 2),
             '$'.number_format($row['total_estimated_value'], 2),
             '$'.number_format($row['total_profit'], 2),
-        ])->toArray();
-
-        // Calculate totals
-        $totalTransactions = $categoryCollection->sum('transactions_count');
-        $totalItems = $categoryCollection->sum('items_count');
-        $totalPurchase = $categoryCollection->sum('total_purchase');
-        $totalEstimated = $categoryCollection->sum('total_estimated_value');
-        $totalProfit = $categoryCollection->sum('total_profit');
-
-        // Add totals row
-        $rows[] = [
-            'TOTALS',
-            $totalTransactions,
-            $totalItems,
-            '$'.number_format($totalPurchase, 2),
-            '$'.number_format($totalEstimated, 2),
-            '$'.number_format($totalProfit, 2),
         ];
 
-        $subject = $request->input('subject', 'Buys by Category Report');
-        $description = "Category breakdown from {$startDate->format('M Y')} to {$endDate->format('M Y')}";
-
-        $mailable = new \App\Mail\DynamicReportMail(
-            $subject,
-            $description,
-            ['headers' => $headers, 'rows' => $rows],
-            count($rows) - 1, // Exclude totals row from count
-            now()
+        return $this->sendReportEmail(
+            $request,
+            'Buys by Category Report',
+            "Category breakdown from {$startDate->format('M Y')} to {$endDate->format('M Y')}",
+            $headers,
+            $categoryBreakdown,
+            $totals,
+            $formatRow,
+            'buys-by-category-report.csv',
+            $store,
         );
+    }
 
-        // Attach CSV
-        $mailable->attachCsv($headers, $rows, 'buys-by-category-report.csv');
+    /**
+     * Email In-Store MTD report.
+     */
+    public function emailInStore(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $dailyData = $this->getInStoreDailyData($store->id, now()->startOfMonth(), now());
 
-        // Send to all recipients
-        foreach ($request->input('emails') as $email) {
-            \Illuminate\Support\Facades\Mail::to($email)->send(clone $mailable);
-        }
+        return $this->emailBuysData($request, collect($dailyData), 'In-Store Buys Report', 'In-store buys for '.now()->format('F Y'), $store);
+    }
 
-        $count = count($request->input('emails'));
+    /**
+     * Email In-Store Monthly report.
+     */
+    public function emailInStoreMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $monthlyData = $this->getInStoreMonthlyData($store->id, now()->subMonths(12)->startOfMonth(), now()->endOfMonth());
 
-        return response()->json([
-            'success' => true,
-            'message' => $count === 1 ? 'Report sent successfully' : "Report sent to {$count} recipients",
-        ]);
+        return $this->emailBuysData($request, collect($monthlyData), 'Monthly In-Store Buys Report', 'In-store buys month over month', $store);
+    }
+
+    /**
+     * Email In-Store Yearly report.
+     */
+    public function emailInStoreYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getInStoreYearlyData($store->id);
+
+        return $this->emailBuysData($request, collect($yearlyData), 'Yearly In-Store Buys Report', 'In-store buys year over year', $store);
+    }
+
+    /**
+     * Email Online MTD report.
+     */
+    public function emailOnline(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $dailyData = $this->getOnlineDailyData($store->id, now()->startOfMonth(), now());
+
+        return $this->emailBuysData($request, collect($dailyData), 'Online Buys Report', 'Online buys for '.now()->format('F Y'), $store);
+    }
+
+    /**
+     * Email Online Monthly report.
+     */
+    public function emailOnlineMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $monthlyData = $this->getOnlineMonthlyData($store->id, now()->subMonths(12)->startOfMonth(), now()->endOfMonth());
+
+        return $this->emailBuysData($request, collect($monthlyData), 'Monthly Online Buys Report', 'Online buys month over month', $store);
+    }
+
+    /**
+     * Email Online Yearly report.
+     */
+    public function emailOnlineYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getOnlineYearlyData($store->id);
+
+        return $this->emailBuysData($request, collect($yearlyData), 'Yearly Online Buys Report', 'Online buys year over year', $store);
+    }
+
+    /**
+     * Email Trade-In MTD report.
+     */
+    public function emailTradeIn(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $dailyData = $this->getTradeInDailyData($store->id, now()->startOfMonth(), now());
+
+        return $this->emailBuysData($request, collect($dailyData), 'Trade-In Buys Report', 'Trade-in buys for '.now()->format('F Y'), $store);
+    }
+
+    /**
+     * Email Trade-In Monthly report.
+     */
+    public function emailTradeInMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $monthlyData = $this->getTradeInMonthlyData($store->id, now()->subMonths(12)->startOfMonth(), now()->endOfMonth());
+
+        return $this->emailBuysData($request, collect($monthlyData), 'Monthly Trade-In Buys Report', 'Trade-in buys month over month', $store);
+    }
+
+    /**
+     * Email Trade-In Yearly report.
+     */
+    public function emailTradeInYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+        $yearlyData = $this->getTradeInYearlyData($store->id);
+
+        return $this->emailBuysData($request, collect($yearlyData), 'Yearly Trade-In Buys Report', 'Trade-in buys year over year', $store);
+    }
+
+    /**
+     * Send a buys report email using the shared trait.
+     */
+    protected function emailBuysData(Request $request, Collection $data, string $title, string $description, $store): JsonResponse
+    {
+        $totals = $this->calculateTotals($data);
+
+        $headers = ['Date', '# of Buys', 'Purchase Amt', 'Estimated Value', 'Profit', 'Profit %', 'Avg Buy Price'];
+
+        $formatRow = fn ($row) => [
+            $row['date'] ?? 'TOTALS',
+            $row['buys_count'],
+            '$'.number_format($row['purchase_amt'], 2),
+            '$'.number_format($row['estimated_value'], 2),
+            '$'.number_format($row['profit'], 2),
+            number_format($row['profit_percent'], 1).'%',
+            '$'.number_format($row['avg_buy_price'], 2),
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            $title,
+            $description,
+            $headers,
+            $data,
+            $totals,
+            $formatRow,
+            null,
+            $store,
+        );
     }
 
     /**

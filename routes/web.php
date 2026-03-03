@@ -921,10 +921,13 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('daily/export', [SalesReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('daily-items', [SalesReportController::class, 'dailyItems'])->name('daily-items');
         Route::get('daily-items/export', [SalesReportController::class, 'exportDailyItems'])->name('daily-items.export');
+        Route::post('daily-items/email', [SalesReportController::class, 'emailDailyItems'])->name('daily-items.email');
         Route::get('monthly', [SalesReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [SalesReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::post('monthly/email', [SalesReportController::class, 'emailMonthly'])->name('monthly.email');
         Route::get('mtd', [SalesReportController::class, 'monthToDate'])->name('mtd');
         Route::get('mtd/export', [SalesReportController::class, 'exportMonthToDate'])->name('mtd.export');
+        Route::post('mtd/email', [SalesReportController::class, 'emailMonthToDate'])->name('mtd.email');
     });
 
     // Inventory Reports
@@ -948,6 +951,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         // Unified Buys Report (all sources)
         Route::get('/', [BuysReportController::class, 'index'])->name('index');
         Route::get('export', [BuysReportController::class, 'exportIndex'])->name('export');
+        Route::post('email', [BuysReportController::class, 'emailIndex'])->name('email');
+        Route::post('email/categories', [BuysReportController::class, 'emailIndexCategories'])->name('email.categories');
         Route::get('daily', [BuysReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [BuysReportController::class, 'exportDaily'])->name('daily.export');
         Route::get('monthly', [BuysReportController::class, 'monthly'])->name('monthly');
@@ -958,54 +963,70 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('yearly', [BuysReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [BuysReportController::class, 'exportYearly'])->name('yearly.export');
 
-        // Legacy routes (kept for backwards compatibility)
         // In-Store
         Route::get('in-store', [BuysReportController::class, 'inStore'])->name('in-store');
         Route::get('in-store/export', [BuysReportController::class, 'exportInStore'])->name('in-store.export');
+        Route::post('in-store/email', [BuysReportController::class, 'emailInStore'])->name('in-store.email');
         Route::get('in-store/monthly', [BuysReportController::class, 'inStoreMonthly'])->name('in-store.monthly');
         Route::get('in-store/monthly/export', [BuysReportController::class, 'exportInStoreMonthly'])->name('in-store.monthly.export');
+        Route::post('in-store/monthly/email', [BuysReportController::class, 'emailInStoreMonthly'])->name('in-store.monthly.email');
         Route::get('in-store/yearly', [BuysReportController::class, 'inStoreYearly'])->name('in-store.yearly');
         Route::get('in-store/yearly/export', [BuysReportController::class, 'exportInStoreYearly'])->name('in-store.yearly.export');
+        Route::post('in-store/yearly/email', [BuysReportController::class, 'emailInStoreYearly'])->name('in-store.yearly.email');
 
         // Online
         Route::get('online', [BuysReportController::class, 'online'])->name('online');
         Route::get('online/export', [BuysReportController::class, 'exportOnline'])->name('online.export');
+        Route::post('online/email', [BuysReportController::class, 'emailOnline'])->name('online.email');
         Route::get('online/monthly', [BuysReportController::class, 'onlineMonthly'])->name('onlineMonthly');
         Route::get('online/monthly/export', [BuysReportController::class, 'exportOnlineMonthly'])->name('online.monthly.export');
+        Route::post('online/monthly/email', [BuysReportController::class, 'emailOnlineMonthly'])->name('online.monthly.email');
         Route::get('online/yearly', [BuysReportController::class, 'onlineYearly'])->name('online.yearly');
         Route::get('online/yearly/export', [BuysReportController::class, 'exportOnlineYearly'])->name('online.yearly.export');
+        Route::post('online/yearly/email', [BuysReportController::class, 'emailOnlineYearly'])->name('online.yearly.email');
 
         // Trade-In
         Route::get('trade-in', [BuysReportController::class, 'tradeIn'])->name('trade-in');
         Route::get('trade-in/export', [BuysReportController::class, 'exportTradeIn'])->name('trade-in.export');
+        Route::post('trade-in/email', [BuysReportController::class, 'emailTradeIn'])->name('trade-in.email');
         Route::get('trade-in/monthly', [BuysReportController::class, 'tradeInMonthly'])->name('trade-in.monthly');
         Route::get('trade-in/monthly/export', [BuysReportController::class, 'exportTradeInMonthly'])->name('trade-in.monthly.export');
+        Route::post('trade-in/monthly/email', [BuysReportController::class, 'emailTradeInMonthly'])->name('trade-in.monthly.email');
         Route::get('trade-in/yearly', [BuysReportController::class, 'tradeInYearly'])->name('trade-in.yearly');
         Route::get('trade-in/yearly/export', [BuysReportController::class, 'exportTradeInYearly'])->name('trade-in.yearly.export');
+        Route::post('trade-in/yearly/email', [BuysReportController::class, 'emailTradeInYearly'])->name('trade-in.yearly.email');
     });
 
     // Leads Reports (online transactions)
     Route::prefix('reports/leads')->name('reports.leads.')->middleware('permission:reports.view')->group(function () {
         Route::get('/', [LeadsReportController::class, 'index'])->name('index');
         Route::get('export', [LeadsReportController::class, 'exportIndex'])->name('export');
+        Route::post('email', [LeadsReportController::class, 'email'])->name('email');
         Route::get('monthly', [LeadsReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [LeadsReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::post('monthly/email', [LeadsReportController::class, 'emailMonthly'])->name('monthly.email');
         Route::get('yearly', [LeadsReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [LeadsReportController::class, 'exportYearly'])->name('yearly.export');
+        Route::post('yearly/email', [LeadsReportController::class, 'emailYearly'])->name('yearly.email');
         Route::get('daily-kits', [LeadsReportController::class, 'dailyKits'])->name('daily-kits');
         Route::get('daily-kits/export', [LeadsReportController::class, 'exportDailyKits'])->name('daily-kits.export');
+        Route::post('daily-kits/email', [LeadsReportController::class, 'emailDailyKits'])->name('daily-kits.email');
     });
 
     // Transactions Reports
     Route::prefix('reports/transactions')->name('reports.transactions.')->middleware('permission:reports.view')->group(function () {
         Route::get('daily', [TransactionsReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [TransactionsReportController::class, 'exportDaily'])->name('daily.export');
+        Route::post('daily/email', [TransactionsReportController::class, 'emailDaily'])->name('daily.email');
         Route::get('weekly', [TransactionsReportController::class, 'weekly'])->name('weekly');
         Route::get('weekly/export', [TransactionsReportController::class, 'exportWeekly'])->name('weekly.export');
+        Route::post('weekly/email', [TransactionsReportController::class, 'emailWeekly'])->name('weekly.email');
         Route::get('monthly', [TransactionsReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [TransactionsReportController::class, 'exportMonthly'])->name('monthly.export');
+        Route::post('monthly/email', [TransactionsReportController::class, 'emailMonthly'])->name('monthly.email');
         Route::get('yearly', [TransactionsReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [TransactionsReportController::class, 'exportYearly'])->name('yearly.export');
+        Route::post('yearly/email', [TransactionsReportController::class, 'emailYearly'])->name('yearly.email');
         Route::get('cohort', [TransactionsReportController::class, 'cohort'])->name('cohort');
         Route::get('cohort/drilldown', [TransactionsReportController::class, 'cohortDrilldown'])->name('cohort.drilldown');
         Route::get('cohort/export', [TransactionsReportController::class, 'exportCohort'])->name('cohort.export');

@@ -8,7 +8,9 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\SalesChannel;
 use App\Services\StoreContext;
+use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -17,6 +19,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SalesReportController extends Controller
 {
+    use SendsReportEmails;
+
     /**
      * Payment method labels for display.
      */
@@ -1073,6 +1077,257 @@ class SalesReportController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv',
         ]);
+    }
+
+    /**
+     * Email daily items report.
+     */
+    public function emailDailyItems(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            $startDate = $request->filled('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : now()->startOfDay();
+            $endDate = $request->filled('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : now()->endOfDay();
+        } else {
+            $date = $request->get('date', now()->format('Y-m-d'));
+            $startDate = Carbon::parse($date)->startOfDay();
+            $endDate = Carbon::parse($date)->endOfDay();
+        }
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $orders = Order::query()
+            ->where('store_id', $store->id)
+            ->whereIn('status', Order::PAID_STATUSES)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->with([
+                'customer.leadSource',
+                'items.product.category',
+                'items.variant',
+                'salesChannel',
+                'platformOrder',
+                'payments' => fn ($q) => $q->where('status', Payment::STATUS_COMPLETED),
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $rows = collect();
+        $totalQty = 0;
+        $totalWholesale = 0;
+        $totalCost = 0;
+        $totalTotal = 0;
+        $totalProfit = 0;
+
+        foreach ($orders as $order) {
+            $channelName = $order->salesChannel?->name ?? $order->source_platform ?? 'In Store';
+            $paymentMethods = $this->formatPaymentMethods($order->payments);
+
+            foreach ($order->items as $item) {
+                $wholesalePrice = $item->wholesale_value ?? $item->variant?->wholesale_price ?? 0;
+                $costOfItem = $item->cost ?? $item->variant?->cost ?? 0;
+                $effectiveCost = $wholesalePrice > 0 ? $wholesalePrice : $costOfItem;
+                $itemTotal = $item->unit_price * $item->quantity;
+                $itemCost = $effectiveCost * $item->quantity;
+                $itemProfit = $itemTotal - $itemCost;
+
+                $rows->push([
+                    'date' => $order->created_at->format('Y-m-d H:i'),
+                    'order_number' => $order->invoice_number ?? "#{$order->id}",
+                    'customer' => $order->customer?->full_name ?? 'Walk-in',
+                    'lead' => $order->customer?->leadSource?->name ?? '-',
+                    'sku' => $item->variant?->sku ?? $item->product?->sku ?? '-',
+                    'product_name' => $item->variant?->title ?? $item->product?->title ?? $item->name ?? '-',
+                    'category' => $item->product?->category?->name ?? '-',
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'wholesale' => $wholesalePrice * $item->quantity,
+                    'cost' => $itemCost,
+                    'total' => $itemTotal,
+                    'profit' => $itemProfit,
+                    'channel' => $channelName,
+                    'payment_type' => $paymentMethods,
+                ]);
+
+                $totalQty += $item->quantity;
+                $totalWholesale += $wholesalePrice * $item->quantity;
+                $totalCost += $itemCost;
+                $totalTotal += $itemTotal;
+                $totalProfit += $itemProfit;
+            }
+        }
+
+        $headers = ['Date', 'Order #', 'Customer', 'Lead', 'SKU', 'Product Name', 'Category', 'Qty', 'Unit Price', 'Wholesale', 'Cost', 'Total', 'Profit', 'Channel', 'Payment Type'];
+
+        $totals = [
+            'date' => 'TOTALS', 'order_number' => '', 'customer' => '', 'lead' => '', 'sku' => '', 'product_name' => '', 'category' => '',
+            'quantity' => $totalQty, 'unit_price' => 0, 'wholesale' => $totalWholesale,
+            'cost' => $totalCost, 'total' => $totalTotal, 'profit' => $totalProfit,
+            'channel' => '', 'payment_type' => '',
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['date'],
+            $row['order_number'],
+            $row['customer'],
+            $row['lead'],
+            $row['sku'],
+            $row['product_name'],
+            $row['category'],
+            $row['quantity'],
+            '$'.number_format($row['unit_price'], 2),
+            '$'.number_format($row['wholesale'], 2),
+            '$'.number_format($row['cost'], 2),
+            '$'.number_format($row['total'], 2),
+            '$'.number_format($row['profit'], 2),
+            $row['channel'],
+            $row['payment_type'],
+        ];
+
+        $dateLabel = $this->getDateRangeLabel($startDate, $endDate);
+
+        return $this->sendReportEmail(
+            $request,
+            'Daily Sales Items Report',
+            "Sales items for {$dateLabel}",
+            $headers,
+            $rows,
+            $totals,
+            $formatRow,
+            'sales-daily-items-'.now()->format('Y-m-d').'.csv',
+            $store,
+        );
+    }
+
+    /**
+     * Email month-to-date sales report.
+     */
+    public function emailMonthToDate(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $channels = $this->getSalesChannels($store->id);
+        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels);
+
+        return $this->emailSalesAggregatedData($request, $dailyData, $channels, 'Daily Sales Report', $this->getDateRangeLabel($startDate, $endDate), $store);
+    }
+
+    /**
+     * Email monthly sales report.
+     */
+    public function emailMonthly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $channels = $this->getSalesChannels($store->id);
+        $monthlyData = $this->getMonthlyAggregatedData($store->id, $startDate, $endDate, $channels);
+
+        return $this->emailSalesAggregatedData($request, $monthlyData, $channels, 'Monthly Sales Report', "{$startDate->format('M Y')} to {$endDate->format('M Y')}", $store);
+    }
+
+    /**
+     * Send a sales aggregated report email (used by MTD and monthly).
+     */
+    protected function emailSalesAggregatedData(Request $request, Collection $data, Collection $channels, string $title, string $description, $store): JsonResponse
+    {
+        $headers = ['Date', 'Sales #', 'Items Sold', 'Total Cost', 'Total Wholesale Value', 'Total Sales Price', 'Service Fee', 'Tax', 'Shipping'];
+        foreach ($channels as $channel) {
+            $headers[] = $channel['name'];
+        }
+        $headers[] = 'Total Paid';
+        $headers[] = 'Gross Profit';
+        $headers[] = 'Profit %';
+
+        $formatRow = function ($row) use ($channels) {
+            $formatted = [
+                $row['date'] ?? 'TOTALS',
+                $row['sales_count'],
+                $row['items_sold'],
+                '$'.number_format($row['total_cost'], 2),
+                '$'.number_format($row['total_wholesale_value'], 2),
+                '$'.number_format($row['total_sales_price'], 2),
+                '$'.number_format($row['total_service_fee'] ?? 0, 2),
+                '$'.number_format($row['total_tax'] ?? 0, 2),
+                '$'.number_format($row['total_shipping'] ?? 0, 2),
+            ];
+
+            foreach ($channels as $channel) {
+                $key = 'total_'.$channel['code'];
+                $formatted[] = '$'.number_format($row[$key] ?? 0, 2);
+            }
+
+            $formatted[] = '$'.number_format($row['total_paid'], 2);
+            $formatted[] = '$'.number_format($row['gross_profit'], 2);
+            $formatted[] = number_format($row['profit_percent'] ?? 0, 2).'%';
+
+            return $formatted;
+        };
+
+        $profitPercent = $data->sum('total_sales_price') > 0
+            ? ($data->sum('gross_profit') / $data->sum('total_sales_price')) * 100
+            : 0;
+
+        $totals = [
+            'date' => 'TOTALS',
+            'sales_count' => $data->sum('sales_count'),
+            'items_sold' => $data->sum('items_sold'),
+            'total_cost' => $data->sum('total_cost'),
+            'total_wholesale_value' => $data->sum('total_wholesale_value'),
+            'total_sales_price' => $data->sum('total_sales_price'),
+            'total_service_fee' => $data->sum('total_service_fee'),
+            'total_tax' => $data->sum('total_tax'),
+            'total_shipping' => $data->sum('total_shipping'),
+            'total_paid' => $data->sum('total_paid'),
+            'gross_profit' => $data->sum('gross_profit'),
+            'profit_percent' => $profitPercent,
+        ];
+
+        foreach ($channels as $channel) {
+            $key = 'total_'.$channel['code'];
+            $totals[$key] = $data->sum($key);
+        }
+
+        return $this->sendReportEmail(
+            $request,
+            $title,
+            $description,
+            $headers,
+            $data,
+            $totals,
+            $formatRow,
+            null,
+            $store,
+        );
     }
 
     /**
