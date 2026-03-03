@@ -8,7 +8,7 @@ import MassEditSheet from '@/components/products/MassEditSheet.vue';
 import GiaScannerModal from '@/components/products/GiaScannerModal.vue';
 import AdvancedSearchModal from '@/components/products/AdvancedSearchModal.vue';
 import { onMounted, ref, watch, computed } from 'vue';
-import { PlusIcon, CameraIcon, FunnelIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, CameraIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/vue/20/solid';
 import axios from 'axios';
 
 interface Category {
@@ -119,8 +119,38 @@ const initialParams = getUrlParams();
 // Widget setup with initial filter from URL (sync filters to URL)
 const { data, loading, loadWidget, setPage, setSort, setSearch, setPerPage, updateFilter } = useWidget('Products\\ProductsTable', initialParams, { syncToUrl: true });
 
-// Show/hide advanced filters
-const showAdvancedFilters = ref(false);
+// Tag dropdown search
+const tagSearch = ref('');
+const showTagDropdown = ref(false);
+
+const sortedTags = computed(() => {
+    return [...props.tags].sort((a, b) => a.name.localeCompare(b.name));
+});
+
+const filteredTags = computed(() => {
+    if (!tagSearch.value) return sortedTags.value;
+    const search = tagSearch.value.toLowerCase();
+    return sortedTags.value.filter(tag => tag.name.toLowerCase().includes(search));
+});
+
+const selectedTagNames = computed(() => {
+    if (filters.value.tag_ids.length === 0) return '';
+    const names = props.tags
+        .filter(t => filters.value.tag_ids.includes(String(t.id)))
+        .map(t => t.name);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.length} tags selected`;
+});
+
+function handleTagDropdownBlur(e: FocusEvent) {
+    const target = e.relatedTarget as HTMLElement | null;
+    if (target?.closest('.tag-dropdown-container')) return;
+    showTagDropdown.value = false;
+}
+
+function clearTags() {
+    filters.value.tag_ids = [];
+}
 
 // Initialize filters from URL params
 function getFilterParams() {
@@ -386,7 +416,7 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
                 </div>
             </div>
 
-            <!-- Primary Filters Row -->
+            <!-- Filters Row 1 -->
             <div class="flex flex-wrap items-center gap-3">
                 <!-- Date Range -->
                 <div class="flex items-center gap-2">
@@ -475,21 +505,17 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
                     <option value="out_of_stock">Out of Stock</option>
                 </select>
 
-                <!-- Toggle Advanced Filters -->
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium ring-1 ring-inset"
-                    :class="showAdvancedFilters
-                        ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-700'
-                        : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-600'"
-                    @click="showAdvancedFilters = !showAdvancedFilters"
+                <!-- Listed In (Marketplace) -->
+                <select
+                    v-if="marketplaces.length > 0"
+                    v-model="filters.marketplace_id"
+                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                 >
-                    <FunnelIcon class="-ml-0.5 size-4" aria-hidden="true" />
-                    More Filters
-                    <span v-if="activeFilterCount > 0" class="ml-1 rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">
-                        {{ activeFilterCount }}
-                    </span>
-                </button>
+                    <option value="">All Marketplaces</option>
+                    <option v-for="marketplace in marketplaces" :key="marketplace.id" :value="marketplace.id">
+                        {{ marketplace.name }}
+                    </option>
+                </select>
 
                 <!-- Clear Filters -->
                 <button
@@ -503,147 +529,163 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
                 </button>
             </div>
 
-            <!-- Advanced Filters Panel -->
-            <div v-if="showAdvancedFilters" class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <!-- Listed In (Marketplace) -->
-                    <div v-if="marketplaces.length > 0">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Listed In</label>
-                        <select
-                            v-model="filters.marketplace_id"
-                            class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+            <!-- Filters Row 2 -->
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Tags Dropdown -->
+                <div v-if="tags.length > 0" class="tag-dropdown-container relative" @focusout="handleTagDropdownBlur">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-x-2 rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                        @click="showTagDropdown = !showTagDropdown"
+                    >
+                        <span :class="filters.tag_ids.length > 0 ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'">
+                            {{ filters.tag_ids.length > 0 ? selectedTagNames : 'All Tags' }}
+                        </span>
+                        <svg class="size-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+                        </svg>
+                        <button
+                            v-if="filters.tag_ids.length > 0"
+                            type="button"
+                            class="-mr-1 ml-1 rounded-full p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+                            @click.stop="clearTags"
                         >
-                            <option value="">All Marketplaces</option>
-                            <option v-for="marketplace in marketplaces" :key="marketplace.id" :value="marketplace.id">
-                                {{ marketplace.name }}
-                            </option>
-                        </select>
-                    </div>
+                            <XMarkIcon class="size-3.5" />
+                        </button>
+                    </button>
 
-                    <!-- Tags -->
-                    <div v-if="tags.length > 0" class="sm:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Tags</label>
-                        <div class="mt-1 flex flex-wrap gap-2">
-                            <button
-                                v-for="tag in tags"
+                    <div
+                        v-if="showTagDropdown"
+                        class="absolute left-0 z-20 mt-1 w-64 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+                    >
+                        <!-- Search -->
+                        <div class="border-b border-gray-200 p-2 dark:border-gray-700">
+                            <input
+                                v-model="tagSearch"
+                                type="text"
+                                placeholder="Search tags..."
+                                class="w-full rounded-md border-0 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                            />
+                        </div>
+
+                        <!-- Tag List -->
+                        <ul class="max-h-60 overflow-y-auto py-1">
+                            <li v-if="filteredTags.length === 0" class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                No tags found
+                            </li>
+                            <li
+                                v-for="tag in filteredTags"
                                 :key="tag.id"
-                                type="button"
-                                class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-colors"
-                                :class="filters.tag_ids.includes(String(tag.id))
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+                                class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
                                 @click="toggleTag(String(tag.id))"
                             >
                                 <span
+                                    class="flex size-4 shrink-0 items-center justify-center rounded border"
+                                    :class="filters.tag_ids.includes(String(tag.id))
+                                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                                        : 'border-gray-300 dark:border-gray-500'"
+                                >
+                                    <svg v-if="filters.tag_ids.includes(String(tag.id))" class="size-3" viewBox="0 0 12 12" fill="none">
+                                        <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </span>
+                                <span
                                     v-if="tag.color"
-                                    class="mr-1.5 size-2 rounded-full"
+                                    class="size-2.5 shrink-0 rounded-full"
                                     :style="{ backgroundColor: tag.color }"
                                 />
-                                {{ tag.name }}
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Price Range -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Price Range</label>
-                        <div class="mt-1 flex items-center gap-2">
-                            <input
-                                v-model="filters.min_price"
-                                type="number"
-                                placeholder="Min"
-                                min="0"
-                                step="0.01"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                            <span class="text-gray-500">-</span>
-                            <input
-                                v-model="filters.max_price"
-                                type="number"
-                                placeholder="Max"
-                                min="0"
-                                step="0.01"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Cost Range -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Cost Range</label>
-                        <div class="mt-1 flex items-center gap-2">
-                            <input
-                                v-model="filters.min_cost"
-                                type="number"
-                                placeholder="Min"
-                                min="0"
-                                step="0.01"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                            <span class="text-gray-500">-</span>
-                            <input
-                                v-model="filters.max_cost"
-                                type="number"
-                                placeholder="Max"
-                                min="0"
-                                step="0.01"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Stone Shape -->
-                    <div v-if="stoneShapes.length > 0">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Stone Shape</label>
-                        <select
-                            v-model="filters.stone_shape"
-                            class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                        >
-                            <option value="">All Shapes</option>
-                            <option v-for="shape in stoneShapes" :key="shape.value" :value="shape.value">
-                                {{ shape.label }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <!-- Stone Weight -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Stone Weight (ct)</label>
-                        <div class="mt-1 flex items-center gap-2">
-                            <input
-                                v-model="filters.min_stone_weight"
-                                type="number"
-                                placeholder="Min"
-                                min="0"
-                                step="0.01"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                            <span class="text-gray-500">-</span>
-                            <input
-                                v-model="filters.max_stone_weight"
-                                type="number"
-                                placeholder="Max"
-                                min="0"
-                                step="0.01"
-                                class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Ring Size -->
-                    <div v-if="ringSizes.length > 0">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Ring Size</label>
-                        <select
-                            v-model="filters.ring_size"
-                            class="mt-1 block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                        >
-                            <option value="">All Sizes</option>
-                            <option v-for="size in ringSizes" :key="size.value" :value="size.value">
-                                {{ size.label }}
-                            </option>
-                        </select>
+                                <span class="text-gray-900 dark:text-gray-200">{{ tag.name }}</span>
+                            </li>
+                        </ul>
                     </div>
                 </div>
+
+                <!-- Price Range -->
+                <div class="flex items-center gap-1">
+                    <input
+                        v-model="filters.min_price"
+                        type="number"
+                        placeholder="Min Price"
+                        min="0"
+                        step="0.01"
+                        class="w-24 rounded-md border-0 bg-white py-1.5 pl-3 pr-1 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                    <span class="text-gray-400">-</span>
+                    <input
+                        v-model="filters.max_price"
+                        type="number"
+                        placeholder="Max Price"
+                        min="0"
+                        step="0.01"
+                        class="w-24 rounded-md border-0 bg-white py-1.5 pl-3 pr-1 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <!-- Cost Range -->
+                <div class="flex items-center gap-1">
+                    <input
+                        v-model="filters.min_cost"
+                        type="number"
+                        placeholder="Min Cost"
+                        min="0"
+                        step="0.01"
+                        class="w-24 rounded-md border-0 bg-white py-1.5 pl-3 pr-1 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                    <span class="text-gray-400">-</span>
+                    <input
+                        v-model="filters.max_cost"
+                        type="number"
+                        placeholder="Max Cost"
+                        min="0"
+                        step="0.01"
+                        class="w-24 rounded-md border-0 bg-white py-1.5 pl-3 pr-1 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <!-- Stone Shape -->
+                <select
+                    v-if="stoneShapes.length > 0"
+                    v-model="filters.stone_shape"
+                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                >
+                    <option value="">All Shapes</option>
+                    <option v-for="shape in stoneShapes" :key="shape.value" :value="shape.value">
+                        {{ shape.label }}
+                    </option>
+                </select>
+
+                <!-- Stone Weight -->
+                <div class="flex items-center gap-1">
+                    <input
+                        v-model="filters.min_stone_weight"
+                        type="number"
+                        placeholder="Min ct"
+                        min="0"
+                        step="0.01"
+                        class="w-20 rounded-md border-0 bg-white py-1.5 pl-3 pr-1 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                    <span class="text-gray-400">-</span>
+                    <input
+                        v-model="filters.max_stone_weight"
+                        type="number"
+                        placeholder="Max ct"
+                        min="0"
+                        step="0.01"
+                        class="w-20 rounded-md border-0 bg-white py-1.5 pl-3 pr-1 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                    />
+                </div>
+
+                <!-- Ring Size -->
+                <select
+                    v-if="ringSizes.length > 0"
+                    v-model="filters.ring_size"
+                    class="rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                >
+                    <option value="">All Sizes</option>
+                    <option v-for="size in ringSizes" :key="size.value" :value="size.value">
+                        {{ size.label }}
+                    </option>
+                </select>
             </div>
 
             <!-- Data Table -->

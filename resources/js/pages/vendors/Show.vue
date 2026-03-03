@@ -294,7 +294,7 @@ const formatRepairStatus = (status: string) => {
 </script>
 
 <template>
-    <Head :title="vendor.name" />
+    <Head :title="vendor.company_name || vendor.name" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4">
@@ -310,7 +310,7 @@ const formatRepairStatus = (status: string) => {
                     <div>
                         <div class="flex items-center gap-3">
                             <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
-                                {{ vendor.name }}
+                                {{ vendor.company_name || vendor.name }}
                             </h1>
                             <span
                                 :class="[
@@ -325,10 +325,10 @@ const formatRepairStatus = (status: string) => {
                                 {{ vendor.is_active ? 'Active' : 'Inactive' }}
                             </span>
                         </div>
-                        <p v-if="vendor.code || vendor.company_name" class="text-sm text-gray-500 dark:text-gray-400">
+                        <p v-if="vendor.code || (vendor.company_name && vendor.name)" class="text-sm text-gray-500 dark:text-gray-400">
                             <span v-if="vendor.code">{{ vendor.code }}</span>
-                            <span v-if="vendor.code && vendor.company_name"> - </span>
-                            <span v-if="vendor.company_name">{{ vendor.company_name }}</span>
+                            <span v-if="vendor.code && vendor.company_name && vendor.name"> - </span>
+                            <span v-if="vendor.company_name && vendor.name !== vendor.company_name">{{ vendor.name }}</span>
                         </p>
                     </div>
                 </div>

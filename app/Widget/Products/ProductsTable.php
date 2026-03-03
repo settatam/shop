@@ -389,7 +389,7 @@ class ProductsTable extends Table
                 'data' => $product->category?->name ?? '-',
             ],
             'vendor' => [
-                'data' => $product->vendor?->name ?? '-',
+                'data' => $product->vendor?->company_name ?? $product->vendor?->name ?? '-',
             ],
             'date_of_purchase' => [
                 'data' => $product->date_of_purchase ? Carbon::parse($product->date_of_purchase)->format('M d, Y') : '-',

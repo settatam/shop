@@ -385,7 +385,10 @@ function submitTransfer(asDraft: boolean) {
                         <ArrowLeftIcon class="size-5" />
                     </Link>
                     <div>
-                        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ product.title }}</h1>
+                        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
+                            {{ product.title }}
+                            <span v-if="!product.has_variants && product.variants.length > 0 && product.variants[0].sku" class="ml-2 text-lg font-normal text-gray-400 dark:text-gray-500">{{ product.variants[0].sku }}</span>
+                        </h1>
                         <p class="text-sm text-gray-500 dark:text-gray-400">
                             {{ product.handle }}
                         </p>
