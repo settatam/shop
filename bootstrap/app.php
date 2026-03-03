@@ -83,7 +83,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return route('portal.transactions.index', ['storeSlug' => $storeSlug]);
             }
 
-            return '/dashboard';
+            return '/debug-auth';
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
