@@ -243,6 +243,7 @@ class InventoryReportController extends Controller
             ->where('inventory.store_id', $storeId)
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereIn('products.category_id', $categoryIds)
             ->selectRaw('
                 COALESCE(SUM(inventory.quantity), 0) as total_stock,
@@ -260,6 +261,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereIn('products.category_id', $categoryIds)
             ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added')
             ->first();
@@ -272,6 +274,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereIn('products.category_id', $categoryIds)
             ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted')
             ->first();
@@ -302,6 +305,7 @@ class InventoryReportController extends Controller
             ->where('inventory.store_id', $storeId)
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
             ->selectRaw('
                 COALESCE(SUM(inventory.quantity), 0) as total_stock,
@@ -318,6 +322,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
             ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added')
             ->first();
@@ -329,6 +334,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
             ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted')
             ->first();
@@ -842,6 +848,7 @@ class InventoryReportController extends Controller
             ->where('inventory.store_id', $storeId)
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->select(
                 'products.category_id',
                 DB::raw('SUM(inventory.quantity) as total_stock'),
@@ -861,6 +868,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->select(
                 'products.category_id',
                 DB::raw('SUM(inventory_adjustments.quantity_change) as added_count'),
@@ -878,6 +886,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->select(
                 'products.category_id',
                 DB::raw('SUM(ABS(inventory_adjustments.quantity_change)) as deleted_count'),
@@ -922,6 +931,7 @@ class InventoryReportController extends Controller
             ->where('inventory.store_id', $storeId)
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
             ->select(
                 DB::raw('SUM(inventory.quantity) as total_stock'),
@@ -938,6 +948,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
             ->select(
                 DB::raw('SUM(inventory_adjustments.quantity_change) as added_count'),
@@ -952,6 +963,7 @@ class InventoryReportController extends Controller
             ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
             ->select(
                 DB::raw('SUM(ABS(inventory_adjustments.quantity_change)) as deleted_count'),
