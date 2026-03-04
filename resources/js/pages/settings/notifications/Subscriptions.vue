@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import axios from 'axios';
 import { Menu, MenuButton, MenuItem, MenuItems, Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 import {
     BellIcon,
@@ -176,7 +177,7 @@ function removeCondition(index: number) {
     form.value.conditions.splice(index, 1);
 }
 
-function submitForm() {
+async function submitForm() {
     if (isSaving.value) return;
 
     isSaving.value = true;
@@ -191,65 +192,61 @@ function submitForm() {
     // Clean up empty conditions
     const cleanedConditions = form.value.conditions.filter(c => c.field && c.operator);
 
-    router[method](url, {
-        ...form.value,
-        conditions: cleanedConditions,
-        recipients: form.value.recipients.map(r => ({
-            type: r.type,
-            ...(r.type === 'custom' && r.value ? { value: r.value } : {}),
-        })),
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            closeModals();
-        },
-        onError: (errors) => {
-            formErrors.value = errors;
-        },
-        onFinish: () => {
-            isSaving.value = false;
-        },
-    });
+    try {
+        await axios[method](url, {
+            ...form.value,
+            conditions: cleanedConditions,
+            recipients: form.value.recipients.map(r => ({
+                type: r.type,
+                ...(r.type === 'custom' && r.value ? { value: r.value } : {}),
+            })),
+        });
+        closeModals();
+        router.reload({ preserveScroll: true });
+    } catch (error: any) {
+        if (error.response?.status === 422) {
+            formErrors.value = error.response.data.errors;
+        }
+    } finally {
+        isSaving.value = false;
+    }
 }
 
-function deleteSubscription() {
+async function deleteSubscription() {
     if (!selectedSubscription.value || isDeleting.value) return;
 
     isDeleting.value = true;
 
-    router.delete(`/api/v1/notifications/${selectedSubscription.value.id}`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            closeModals();
-        },
-        onFinish: () => {
-            isDeleting.value = false;
-        },
-    });
+    try {
+        await axios.delete(`/api/v1/notifications/${selectedSubscription.value.id}`);
+        closeModals();
+        router.reload({ preserveScroll: true });
+    } finally {
+        isDeleting.value = false;
+    }
 }
 
-function toggleEnabled(subscription: NotificationSubscription) {
-    router.put(`/api/v1/notifications/${subscription.id}`, {
-        is_enabled: !subscription.is_enabled,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            subscription.is_enabled = !subscription.is_enabled;
-        },
-    });
+async function toggleEnabled(subscription: NotificationSubscription) {
+    try {
+        await axios.put(`/api/v1/notifications/${subscription.id}`, {
+            is_enabled: !subscription.is_enabled,
+        });
+        subscription.is_enabled = !subscription.is_enabled;
+    } catch {
+        // silently fail
+    }
 }
 
-function testSubscription(subscription: NotificationSubscription) {
+async function testSubscription(subscription: NotificationSubscription) {
     if (isTesting.value) return;
 
     isTesting.value = true;
 
-    router.post(`/api/v1/notifications/${subscription.id}/test`, {}, {
-        preserveScroll: true,
-        onFinish: () => {
-            isTesting.value = false;
-        },
-    });
+    try {
+        await axios.post(`/api/v1/notifications/${subscription.id}/test`);
+    } finally {
+        isTesting.value = false;
+    }
 }
 
 function getActivityName(slug: string): string {

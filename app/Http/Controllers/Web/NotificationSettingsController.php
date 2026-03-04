@@ -431,7 +431,7 @@ class NotificationSettingsController extends Controller
             ->get(['id', 'name', 'channel', 'category']);
 
         $activities = Activity::getDefinitions();
-        $groupedActivities = collect($activities)->groupBy('category');
+        $groupedActivities = collect($activities)->groupBy('category', true);
 
         return Inertia::render('settings/notifications/Subscriptions', [
             'subscriptions' => $subscriptions,
