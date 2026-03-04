@@ -362,6 +362,11 @@ class Layaway extends Model implements Payable
         return (int) $this->store_id;
     }
 
+    public function getCustomerId(): ?int
+    {
+        return $this->customer_id;
+    }
+
     public function getSubtotal(): float
     {
         return (float) $this->subtotal;

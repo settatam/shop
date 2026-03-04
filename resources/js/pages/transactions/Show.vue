@@ -94,6 +94,7 @@ interface Customer {
     zip?: string | null;
     lead_source_id?: number | null;
     lead_source?: { id: number; name: string } | null;
+    id_photos?: Array<{ id: number; url: string; thumbnail_url: string | null }>;
     has_addresses?: boolean;
     addresses?: Array<{ id: number; formatted_address?: string; is_default?: boolean; one_line_address?: string; [key: string]: any }>;
     primary_address?: { address: string | null; address2: string | null; city: string | null; state_id: number | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
@@ -184,6 +185,8 @@ interface Transaction {
     estimated_value: number | null;
     payment_method: string | null;
     payment_details: {
+        // Multiple payments array
+        payments?: Array<{ method: string; amount: number; details?: Record<string, any> }>;
         // Check payment details
         check_name?: string;
         check_address?: string;
@@ -804,6 +807,18 @@ function initializePayout() {
     }
     payoutForm.amount = props.transaction.final_offer || 0;
 }
+
+// Resolve payment methods display text
+const paymentMethodsDisplay = computed(() => {
+    const details = props.transaction.payment_details;
+    if (details?.payments && details.payments.length > 0) {
+        return details.payments
+            .map(p => p.method.replace(/_/g, ' '))
+            .filter((v, i, a) => a.indexOf(v) === i) // unique
+            .join(', ');
+    }
+    return props.transaction.payment_method?.replace(/_/g, ' ') || null;
+});
 
 // Formatting helpers
 const formatCurrency = (value: number | null) => {
@@ -2033,7 +2048,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                 <div v-if="transaction.payment_method" class="pt-2 border-t border-gray-100 dark:border-gray-700">
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Payment Method</dt>
                                     <dd class="text-sm text-gray-900 dark:text-white">
-                                        <span class="font-medium capitalize">{{ transaction.payment_method.replace('_', ' ') }}</span>
+                                        <span class="font-medium capitalize">{{ paymentMethodsDisplay }}</span>
 
                                         <!-- Check payment details -->
                                         <div v-if="transaction.payment_method === 'check' && transaction.payment_details" class="mt-2 text-xs text-gray-600 dark:text-gray-400">
@@ -2070,6 +2085,28 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     </dd>
                                 </div>
                             </dl>
+                        </div>
+                    </div>
+
+                    <!-- Customer ID Photos -->
+                    <div v-if="transaction.customer?.id_photos && transaction.customer.id_photos.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Customer ID</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <a
+                                    v-for="photo in transaction.customer.id_photos"
+                                    :key="photo.id"
+                                    :href="photo.url"
+                                    target="_blank"
+                                    class="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700"
+                                >
+                                    <img
+                                        :src="photo.thumbnail_url || photo.url"
+                                        alt="Customer ID"
+                                        class="h-32 w-full object-cover transition-transform group-hover:scale-105"
+                                    />
+                                </a>
+                            </div>
                         </div>
                     </div>
 

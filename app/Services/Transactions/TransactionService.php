@@ -5,6 +5,7 @@ namespace App\Services\Transactions;
 use App\Models\Activity;
 use App\Models\ActivityLog;
 use App\Models\Customer;
+use App\Models\CustomerDocument;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StoreCredit;
@@ -13,6 +14,7 @@ use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\TransactionOffer;
 use App\Services\Credits\StoreCreditService;
+use App\Services\Image\ImageService;
 use App\Services\Notifications\NotificationManager;
 use App\Services\Payments\PayoutResult;
 use App\Services\Payments\PayPalPayoutsService;
@@ -26,6 +28,7 @@ class TransactionService
         protected StoreContext $storeContext,
         protected PayPalPayoutsService $payPalPayoutsService,
         protected StoreCreditService $storeCreditService,
+        protected ImageService $imageService,
     ) {}
 
     public function create(array $data): Transaction
@@ -96,9 +99,12 @@ class TransactionService
                     'country_id' => $data['customer']['country_id'] ?? null,
                 ]);
                 $customerId = $customer->id;
+            }
 
-                // Save customer ID photos if uploaded
-                if (! empty($data['id_photos'])) {
+            // Save customer ID photos if uploaded (for both new and existing customers)
+            if (! empty($data['id_photos']) && $customerId) {
+                $customer = $customer ?? Customer::find($customerId);
+                if ($customer) {
                     $this->saveCustomerIdPhotos($customer, $storeId, $data['id_photos']);
                 }
             }
@@ -131,7 +137,6 @@ class TransactionService
                 'customer_id' => $customerId,
                 'user_id' => $userId,
                 'type' => Transaction::TYPE_IN_STORE,
-                'status' => Transaction::STATUS_PAYMENT_PROCESSED,
                 'preliminary_offer' => $totalBuyPrice,
                 'final_offer' => $totalBuyPrice,
                 'estimated_value' => $totalEstimatedValue ?: null,
@@ -144,9 +149,24 @@ class TransactionService
                 'payment_processed_at' => $now,
             ]);
 
-            // Add items
+            // Update status to payment_processed after creation so
+            // TracksStatusChanges records the proper transition from default -> payment_processed
+            $transaction->update(['status' => Transaction::STATUS_PAYMENT_PROCESSED]);
+
+            // Add items and save any attached images
+            $store = $this->storeContext->getCurrentStore();
             foreach ($data['items'] as $itemData) {
-                $this->addItem($transaction, $itemData);
+                $item = $this->addItem($transaction, $itemData);
+
+                if (! empty($itemData['images']) && $store) {
+                    $this->imageService->uploadMultiple(
+                        files: $itemData['images'],
+                        imageable: $item,
+                        store: $store,
+                        folder: 'transaction-items',
+                        setFirstAsPrimary: true,
+                    );
+                }
             }
 
             // Handle PayPal payouts for any PayPal payments
@@ -231,22 +251,19 @@ class TransactionService
     protected function saveCustomerIdPhotos(Customer $customer, int $storeId, array $photos): void
     {
         $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $types = [CustomerDocument::TYPE_ID_FRONT, CustomerDocument::TYPE_ID_BACK];
 
-        foreach ($photos as $photo) {
+        foreach ($photos as $index => $photo) {
+            $type = $types[$index] ?? CustomerDocument::TYPE_OTHER;
             $path = $photo->store("customers/{$customer->id}/identity", $disk);
-            $url = $disk === 's3'
-                ? \Illuminate\Support\Facades\Storage::disk('s3')->url($path)
-                : \Illuminate\Support\Facades\Storage::disk('public')->url($path);
 
-            $customer->images()->create([
-                'store_id' => $storeId,
+            $customer->documents()->create([
+                'type' => $type,
                 'path' => $path,
-                'url' => $url,
-                'disk' => $disk,
-                'alt_text' => 'identity',
+                'original_filename' => $photo->getClientOriginalName(),
                 'mime_type' => $photo->getMimeType(),
                 'size' => $photo->getSize(),
-                'is_internal' => true,
+                'uploaded_by' => auth()->id(),
             ]);
         }
     }

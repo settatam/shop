@@ -66,6 +66,7 @@ interface TransactionItem {
     condition?: string;
     price?: number;
     buy_price: number;
+    images?: File[];
 }
 
 interface Payment {
@@ -294,6 +295,7 @@ function submitTransaction() {
             condition: item.condition,
             price: item.price,
             buy_price: item.buy_price,
+            images: item.images || [],
         })),
         warehouse_id: formData.value.warehouse_id,
         customer_notes: formData.value.customer_notes,

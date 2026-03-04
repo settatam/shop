@@ -968,6 +968,7 @@ function onVendorPaymentSaved() {
             :model="repairForPayment"
             :title="repair.repair_number"
             :subtitle="repair.customer?.full_name || ''"
+            :customer-store-credit-balance="repair.customer?.store_credit_balance ?? 0"
             @close="closePaymentModal"
             @success="onPaymentSuccess"
         />

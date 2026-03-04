@@ -62,6 +62,8 @@ class CreateBuyTransactionRequest extends FormRequest
             ])],
             'items.*.price' => ['nullable', 'numeric', 'min:0'],
             'items.*.buy_price' => ['required', 'numeric', 'min:0'],
+            'items.*.images' => ['nullable', 'array', 'max:10'],
+            'items.*.images.*' => ['image', 'max:10240'],
 
             // Transaction location
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],

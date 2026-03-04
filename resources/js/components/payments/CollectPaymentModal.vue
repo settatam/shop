@@ -83,12 +83,15 @@ interface Props {
     subtitle?: string;
     /** Whether to show adjustments panel (discount, service fee, etc.) */
     showAdjustments?: boolean;
+    /** Customer's available store credit balance */
+    customerStoreCreditBalance?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     title: 'Collect Payment',
     subtitle: '',
     showAdjustments: true,
+    customerStoreCreditBalance: 0,
 });
 
 const emit = defineEmits<{
@@ -175,7 +178,7 @@ function removePaymentLine(lineId: number) {
     }
 }
 
-const paymentMethods = [
+const allPaymentMethods = [
     { value: 'cash', label: 'Cash', icon: BanknotesIcon },
     { value: 'terminal', label: 'Card Terminal', icon: ComputerDesktopIcon, requiresTerminal: true },
     { value: 'card', label: 'Card (Offline)', icon: CreditCardIcon },
@@ -184,6 +187,15 @@ const paymentMethods = [
     { value: 'bank_transfer', label: 'Bank Transfer', icon: BanknotesIcon },
     { value: 'external', label: 'External/Other', icon: BanknotesIcon },
 ];
+
+const paymentMethods = computed(() => {
+    return allPaymentMethods.filter(method => {
+        if (method.value === 'store_credit') {
+            return props.customerStoreCreditBalance > 0;
+        }
+        return true;
+    });
+});
 
 // Computed for split payments
 const totalPaymentAmount = computed(() => {
@@ -581,6 +593,21 @@ watch(() => props.show, (newVal) => {
         fetchTerminals();
     }
 });
+
+// Cap store credit amounts to available balance
+watch(
+    () => paymentLines.value.map(l => l.payment_method),
+    (newMethods, oldMethods) => {
+        newMethods.forEach((method, i) => {
+            if (method === 'store_credit' && oldMethods?.[i] !== 'store_credit') {
+                const line = paymentLines.value[i];
+                if (line && line.amount > props.customerStoreCreditBalance) {
+                    line.amount = Math.min(line.amount, props.customerStoreCreditBalance);
+                }
+            }
+        });
+    }
+);
 </script>
 
 <template>
@@ -880,6 +907,11 @@ watch(() => props.show, (newVal) => {
                                                         <component :is="method.icon" class="size-3.5" />
                                                         {{ method.label }}
                                                     </button>
+                                                </div>
+
+                                                <!-- Store Credit Balance Notice -->
+                                                <div v-if="line.payment_method === 'store_credit'" class="mt-2 rounded bg-blue-50 px-3 py-1.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                    Available store credit: ${{ customerStoreCreditBalance.toFixed(2) }}
                                                 </div>
 
                                                 <!-- Terminal Selection (when terminal payment selected) -->

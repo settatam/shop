@@ -200,6 +200,11 @@ class Memo extends Model implements Payable
         return (int) $this->store_id;
     }
 
+    public function getCustomerId(): ?int
+    {
+        return null;
+    }
+
     public function getSubtotal(): float
     {
         return (float) $this->total;

@@ -23,6 +23,7 @@ interface TransactionItem {
     condition?: string;
     price?: number;
     buy_price: number;
+    images?: File[];
 }
 
 interface Props {

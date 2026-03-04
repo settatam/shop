@@ -2,9 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Customer;
+use App\Models\Layaway;
+use App\Models\Memo;
+use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Repair;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class ProcessPaymentRequest extends FormRequest
 {
@@ -84,5 +90,86 @@ class ProcessPaymentRequest extends FormRequest
             'payments.*.amount.required' => 'Please enter an amount for each payment.',
             'payments.*.amount.min' => 'Each payment amount must be at least $0.01.',
         ];
+    }
+
+    /**
+     * Configure the validator instance to check store credit balance.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $payments = $this->has('payments')
+                ? ($this->input('payments') ?? [])
+                : [$this->only(['payment_method', 'amount'])];
+
+            $storeCreditTotal = 0;
+            foreach ($payments as $payment) {
+                if (($payment['payment_method'] ?? '') === Payment::METHOD_STORE_CREDIT) {
+                    $storeCreditTotal += (float) ($payment['amount'] ?? 0);
+                }
+            }
+
+            if ($storeCreditTotal <= 0) {
+                return;
+            }
+
+            $customerId = $this->resolveCustomerId();
+
+            if (! $customerId) {
+                $validator->errors()->add('payment_method', 'Store credit is not available for this payable type.');
+
+                return;
+            }
+
+            $customer = Customer::find($customerId);
+
+            if (! $customer) {
+                $validator->errors()->add('payment_method', 'Customer not found.');
+
+                return;
+            }
+
+            $balance = (float) $customer->store_credit_balance;
+
+            if ($storeCreditTotal > $balance) {
+                $formatted = number_format($balance, 2);
+                $validator->errors()->add(
+                    'payment_method',
+                    "Insufficient store credit balance. Available: \${$formatted}"
+                );
+            }
+        });
+    }
+
+    /**
+     * Resolve the customer ID from the payable.
+     */
+    protected function resolveCustomerId(): ?int
+    {
+        $type = strtolower($this->route('type') ?? '');
+        $id = $this->route('id');
+
+        $modelMap = [
+            'order' => Order::class,
+            'orders' => Order::class,
+            'repair' => Repair::class,
+            'repairs' => Repair::class,
+            'appraisal' => Repair::class,
+            'appraisals' => Repair::class,
+            'layaway' => Layaway::class,
+            'layaways' => Layaway::class,
+            'memo' => Memo::class,
+            'memos' => Memo::class,
+        ];
+
+        $modelClass = $modelMap[$type] ?? null;
+
+        if (! $modelClass || ! $id) {
+            return null;
+        }
+
+        $payable = $modelClass::find($id);
+
+        return $payable?->getCustomerId();
     }
 }

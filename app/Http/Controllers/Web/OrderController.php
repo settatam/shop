@@ -1788,6 +1788,7 @@ class OrderController extends Controller
                 'city' => $order->customer->city,
                 'state' => $order->customer->state,
                 'zip' => $order->customer->zip,
+                'store_credit_balance' => (float) $order->customer->store_credit_balance,
                 'lead_source' => $order->customer->leadSource ? [
                     'id' => $order->customer->leadSource->id,
                     'name' => $order->customer->leadSource->name,

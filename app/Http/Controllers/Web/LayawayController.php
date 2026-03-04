@@ -483,6 +483,7 @@ class LayawayController extends Controller
                 'full_name' => $layaway->customer->full_name,
                 'email' => $layaway->customer->email,
                 'phone' => $layaway->customer->phone,
+                'store_credit_balance' => (float) $layaway->customer->store_credit_balance,
             ] : null,
             'user' => $layaway->user ? [
                 'id' => $layaway->user->id,

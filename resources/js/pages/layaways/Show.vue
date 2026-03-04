@@ -679,6 +679,7 @@ const paymentModel = computed(() => ({
             :model="paymentModel"
             :title="`Layaway ${layaway.layaway_number}`"
             :subtitle="layaway.customer?.full_name || ''"
+            :customer-store-credit-balance="layaway.customer?.store_credit_balance ?? 0"
             :show-adjustments="false"
             @close="showPaymentModal = false"
             @success="handlePaymentSuccess"

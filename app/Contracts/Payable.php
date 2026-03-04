@@ -12,6 +12,11 @@ interface Payable
     public function getStoreId(): int;
 
     /**
+     * Get the customer ID associated with this payable.
+     */
+    public function getCustomerId(): ?int;
+
+    /**
      * Get the subtotal/base amount for the payable.
      */
     public function getSubtotal(): float;

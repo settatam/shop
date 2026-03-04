@@ -1582,6 +1582,7 @@ function processReturn() {
             :model="order"
             :title="order.invoice_number || `Order #${order.id}`"
             :subtitle="order.customer?.full_name || ''"
+            :customer-store-credit-balance="order.customer?.store_credit_balance ?? 0"
             @close="closePaymentModal"
             @success="onPaymentSuccess"
         />

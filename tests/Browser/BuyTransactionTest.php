@@ -156,8 +156,10 @@ class BuyTransactionTest extends DuskTestCase
      */
     private function submitAndVerify(Browser $browser): void
     {
-        $browser->press('Create Transaction')
-            ->waitForText('Payment Processed', 15);
+        $browser->pause($this->stepPause)
+            ->press('Create Transaction')
+            ->waitForText('Payment Processed', 15)
+            ->pause($this->stepPause);
     }
 
     /**

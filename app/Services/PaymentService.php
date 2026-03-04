@@ -3,11 +3,18 @@
 namespace App\Services;
 
 use App\Contracts\Payable;
+use App\Models\Customer;
 use App\Models\Payment;
+use App\Models\StoreCredit;
+use App\Services\Credits\StoreCreditService;
 use Illuminate\Support\Facades\DB;
 
 class PaymentService
 {
+    public function __construct(
+        protected StoreCreditService $storeCreditService,
+    ) {}
+
     /**
      * Calculate the payment summary for a payable with given adjustments.
      *
@@ -132,6 +139,12 @@ class PaymentService
 
                 $payment = $this->createPayment($payable, $paymentData, $userId);
                 $payments[] = $payment;
+
+                // Redeem store credit if this payment uses store credit
+                if ($paymentData['payment_method'] === Payment::METHOD_STORE_CREDIT) {
+                    $this->redeemStoreCredit($payable, $payment, $userId);
+                }
+
                 // Include both the payment amount and service fee in total paid
                 $totalAmount += $paymentData['amount'] + ($payment->service_fee_amount ?? 0);
                 $totalServiceFee += ($payment->service_fee_amount ?? 0);
@@ -270,5 +283,32 @@ class PaymentService
 
             return $payment->fresh();
         });
+    }
+
+    /**
+     * Redeem store credit for a payment.
+     */
+    protected function redeemStoreCredit(Payable $payable, Payment $payment, int $userId): void
+    {
+        $customerId = $payable->getCustomerId();
+
+        if (! $customerId) {
+            return;
+        }
+
+        $customer = Customer::find($customerId);
+
+        if (! $customer) {
+            return;
+        }
+
+        $this->storeCreditService->redeem(
+            customer: $customer,
+            amount: (float) $payment->amount,
+            source: StoreCredit::SOURCE_ORDER_PAYMENT,
+            reference: $payment,
+            description: "Payment for {$payable->getDisplayIdentifier()}",
+            userId: $userId,
+        );
     }
 }

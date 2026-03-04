@@ -119,6 +119,7 @@ class TransactionController extends Controller
         $transaction->load([
             'customer.addresses',
             'customer.leadSource',
+            'customer.documents',
             'shippingAddress',
             'user',
             'assignedUser',
@@ -1727,6 +1728,13 @@ class TransactionController extends Controller
                         'id' => $customer->leadSource->id,
                         'name' => $customer->leadSource->name,
                     ] : null,
+                    'id_photos' => $customer->documents
+                        ->whereIn('type', ['id_front', 'id_back'])
+                        ->map(fn ($doc) => [
+                            'id' => $doc->id,
+                            'url' => $doc->url,
+                            'thumbnail_url' => $doc->url,
+                        ])->values(),
                     'has_addresses' => $customer->addresses->isNotEmpty(),
                     'addresses' => $customer->addresses->map(fn ($addr) => [
                         'id' => $addr->id,

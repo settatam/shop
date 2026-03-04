@@ -554,6 +554,7 @@ class RepairController extends Controller
                 'email' => $repair->customer->email,
                 'phone_number' => $repair->customer->phone_number,
                 'company_name' => $repair->customer->company_name,
+                'store_credit_balance' => (float) $repair->customer->store_credit_balance,
             ] : null,
             'vendor' => $repair->vendor ? [
                 'id' => $repair->vendor->id,
