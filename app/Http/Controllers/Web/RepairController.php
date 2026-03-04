@@ -107,13 +107,18 @@ class RepairController extends Controller
         // Get the current user's store user ID
         $currentStoreUserId = auth()->user()?->currentStoreUser()?->id;
 
-        // Get categories for items
+        // Get categories for items (tree format for AddItemModal)
         $categories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
             ->map(fn ($category) => [
-                'value' => $category->id,
-                'label' => $category->name,
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
             ]);
 
         // Get warehouses for the warehouse dropdown

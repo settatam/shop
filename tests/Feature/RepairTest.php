@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Services\Repairs\RepairService;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
 
@@ -460,5 +462,79 @@ class RepairTest extends TestCase
         $product->refresh();
 
         $this->assertEquals(Product::STATUS_ACTIVE, $product->status);
+    }
+
+    public function test_repair_create_page_passes_categories_in_tree_format(): void
+    {
+        $this->store->update(['step' => 2]);
+        $this->user->update(['current_store_id' => $this->store->id]);
+
+        $category = Category::factory()->create([
+            'store_id' => $this->store->id,
+            'name' => 'Rings',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/repairs/create');
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('repairs/CreateWizard')
+            ->has('categories', 1)
+            ->where('categories.0.id', $category->id)
+            ->where('categories.0.name', 'Rings')
+            ->has('categories.0.full_path')
+            ->has('categories.0.parent_id')
+            ->has('categories.0.level')
+        );
+    }
+
+    public function test_can_create_repair_from_wizard(): void
+    {
+        $this->store->update(['step' => 2]);
+        $this->user->update(['current_store_id' => $this->store->id]);
+
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        $storeUser = StoreUser::where('store_id', $this->store->id)->first();
+        $category = Category::factory()->create([
+            'store_id' => $this->store->id,
+            'name' => 'Watches',
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/repairs', [
+            'store_user_id' => $storeUser->id,
+            'customer_id' => $customer->id,
+            'items' => [
+                [
+                    'title' => 'Watch Battery Replacement',
+                    'description' => 'Replace dead battery',
+                    'category_id' => $category->id,
+                    'vendor_cost' => 10.00,
+                    'customer_cost' => 35.00,
+                    'precious_metal' => 'gold_14k',
+                    'dwt' => 5.5,
+                ],
+            ],
+            'service_fee' => 15.00,
+            'tax_rate' => 0.08,
+            'shipping_cost' => 0,
+            'discount' => 0,
+            'description' => 'Watch repair from wizard',
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('repairs', [
+            'store_id' => $this->store->id,
+            'customer_id' => $customer->id,
+            'service_fee' => '15.00',
+            'description' => 'Watch repair from wizard',
+        ]);
+
+        $this->assertDatabaseHas('repair_items', [
+            'title' => 'Watch Battery Replacement',
+            'vendor_cost' => '10.00',
+            'customer_cost' => '35.00',
+            'precious_metal' => 'gold_14k',
+        ]);
     }
 }

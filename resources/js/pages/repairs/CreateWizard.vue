@@ -19,6 +19,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import debounce from 'lodash/debounce';
 import CustomerStep from '@/components/customers/CustomerStep.vue';
+import AddItemModal from '@/components/transactions/AddItemModal.vue';
 
 interface StoreUser {
     id: number;
@@ -26,8 +27,12 @@ interface StoreUser {
 }
 
 interface Category {
-    value: number;
-    label: string;
+    id: number;
+    name: string;
+    full_path: string;
+    parent_id: number | null;
+    level: number;
+    template_id: number | null;
 }
 
 interface Warehouse {
@@ -181,15 +186,36 @@ const newVendor = ref({
     phone: '',
 });
 
-// Current item being added
-const newItem = ref<RepairItem>({
-    id: '',
-    title: '',
-    description: '',
-    category_id: undefined,
-    vendor_cost: 0,
-    customer_cost: 0,
-});
+// Modal state for adding/editing items
+const showItemModal = ref(false);
+const editingItem = ref<any>(null);
+
+function openAddItemModal() {
+    editingItem.value = null;
+    showItemModal.value = true;
+}
+
+function openEditItemModal(item: RepairItem) {
+    // Map RepairItem back to TransactionItem format for the modal
+    editingItem.value = {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        category_id: item.category_id,
+        buy_price: item.vendor_cost,
+        price: item.customer_cost,
+        precious_metal: item.precious_metal,
+        dwt: item.dwt,
+        attributes: {},
+        images: [],
+    };
+    showItemModal.value = true;
+}
+
+function closeItemModal() {
+    showItemModal.value = false;
+    editingItem.value = null;
+}
 
 // Computed
 const selectedWarehouse = computed(() => {
@@ -289,23 +315,25 @@ function confirmNewVendor() {
     showNewVendorForm.value = false;
 }
 
-// Item management
-function addItem() {
-    if (!newItem.value.title) return;
-
-    formData.value.items.push({
-        ...newItem.value,
-        id: crypto.randomUUID(),
-    });
-
-    newItem.value = {
-        id: '',
-        title: '',
-        description: '',
-        category_id: undefined,
-        vendor_cost: 0,
-        customer_cost: 0,
+// Item management - save from AddItemModal
+function handleSaveItem(item: any) {
+    const repairItem: RepairItem = {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        category_id: item.category_id,
+        vendor_cost: item.buy_price || 0,
+        customer_cost: item.price || 0,
+        precious_metal: item.precious_metal,
+        dwt: item.dwt,
     };
+
+    const existingIndex = formData.value.items.findIndex(i => i.id === repairItem.id);
+    if (existingIndex >= 0) {
+        formData.value.items[existingIndex] = repairItem;
+    } else {
+        formData.value.items.push(repairItem);
+    }
 }
 
 function removeItem(id: string) {
@@ -351,8 +379,8 @@ function formatCurrency(amount: number): string {
 
 function getCategoryLabel(categoryId?: number): string {
     if (!categoryId) return '';
-    const category = props.categories.find(c => c.value === categoryId);
-    return category?.label || '';
+    const category = props.categories.find(c => c.id === categoryId);
+    return category?.name || '';
 }
 
 // Submit
@@ -588,77 +616,126 @@ async function submit() {
 
                                 <!-- Step 3: Items -->
                                 <div v-else-if="currentStep === 3" class="space-y-6">
-                                    <div>
-                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Repair Items</h2>
-                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add items to be repaired.</p>
-                                    </div>
-
-                                    <!-- Items List -->
-                                    <div v-if="formData.items.length > 0" class="space-y-3">
-                                        <div
-                                            v-for="item in formData.items"
-                                            :key="item.id"
-                                            class="flex items-center justify-between rounded-lg border border-gray-200 p-4 dark:border-gray-700"
-                                        >
-                                            <div class="flex items-center gap-3">
-                                                <div class="flex size-10 items-center justify-center rounded bg-gray-100 dark:bg-gray-700">
-                                                    <CubeIcon class="size-5 text-gray-400" />
-                                                </div>
-                                                <div>
-                                                    <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
-                                                    <p v-if="item.category_id" class="text-sm text-gray-500 dark:text-gray-400">{{ getCategoryLabel(item.category_id) }}</p>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center gap-4">
-                                                <div class="text-right">
-                                                    <p class="text-sm text-gray-500 dark:text-gray-400">Vendor: {{ formatCurrency(item.vendor_cost) }}</p>
-                                                    <p class="font-medium text-gray-900 dark:text-white">Customer: {{ formatCurrency(item.customer_cost) }}</p>
-                                                </div>
-                                                <button type="button" @click="removeItem(item.id)" class="rounded p-1 text-red-400 hover:text-red-500">
-                                                    <TrashIcon class="size-5" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Add Item Form -->
-                                    <div class="space-y-4 rounded-lg border border-dashed border-gray-300 p-4 dark:border-gray-600">
-                                        <h3 class="font-medium text-gray-900 dark:text-white">Add Item</h3>
-                                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                            <div class="md:col-span-2">
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Item Title *</label>
-                                                <input v-model="newItem.title" type="text" placeholder="e.g., Ring Repair, Watch Battery Replacement" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-                                                <select v-model="newItem.category_id" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600">
-                                                    <option :value="undefined">Select category...</option>
-                                                    <option v-for="cat in categories" :key="cat.value" :value="cat.value">{{ cat.label }}</option>
-                                                </select>
-                                            </div>
-                                            <div class="md:col-span-2">
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                                                <textarea v-model="newItem.description" rows="2" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Vendor Cost ($)</label>
-                                                <input v-model.number="newItem.vendor_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Customer Cost ($)</label>
-                                                <input v-model.number="newItem.customer_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-0 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
-                                            </div>
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Repair Items</h2>
+                                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add items to be repaired.</p>
                                         </div>
                                         <button
                                             type="button"
-                                            @click="addItem"
-                                            :disabled="!newItem.title"
-                                            class="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                                            @click="openAddItemModal"
+                                            class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                                         >
-                                            <PlusIcon class="size-4" />
+                                            <PlusIcon class="-ml-0.5 size-5" aria-hidden="true" />
                                             Add Item
                                         </button>
                                     </div>
+
+                                    <!-- Empty state -->
+                                    <div
+                                        v-if="formData.items.length === 0"
+                                        class="rounded-lg border-2 border-dashed border-gray-300 p-12 text-center dark:border-gray-600"
+                                    >
+                                        <CubeIcon class="mx-auto size-12 text-gray-400" />
+                                        <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No items</h3>
+                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                            Add items that need to be repaired.
+                                        </p>
+                                        <div class="mt-6">
+                                            <button
+                                                type="button"
+                                                @click="openAddItemModal"
+                                                class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                                            >
+                                                <PlusIcon class="-ml-0.5 mr-1.5 size-5" aria-hidden="true" />
+                                                Add Item
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Items table -->
+                                    <div v-if="formData.items.length > 0" class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                                <tr>
+                                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">Item</th>
+                                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Category</th>
+                                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Metal</th>
+                                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
+                                                    <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Vendor Cost</th>
+                                                    <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Customer Cost</th>
+                                                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Actions</span></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                                                <tr v-for="item in formData.items" :key="item.id">
+                                                    <td class="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
+                                                        <div class="font-medium text-gray-900 dark:text-white">{{ item.title }}</div>
+                                                        <div v-if="item.description" class="text-sm text-gray-500 dark:text-gray-400 truncate max-w-48">{{ item.description }}</div>
+                                                    </td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ getCategoryLabel(item.category_id) || '-' }}
+                                                    </td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ item.precious_metal || '-' }}
+                                                    </td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ item.dwt ? item.dwt.toFixed(2) : '-' }}
+                                                    </td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ formatCurrency(item.vendor_cost) }}
+                                                    </td>
+                                                    <td class="whitespace-nowrap px-3 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
+                                                        {{ formatCurrency(item.customer_cost) }}
+                                                    </td>
+                                                    <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                                        <div class="flex items-center justify-end gap-2">
+                                                            <button
+                                                                type="button"
+                                                                @click="openEditItemModal(item)"
+                                                                class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-700"
+                                                                title="Edit"
+                                                            >
+                                                                <PencilIcon class="size-4" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                @click="removeItem(item.id)"
+                                                                class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700"
+                                                                title="Remove"
+                                                            >
+                                                                <TrashIcon class="size-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot class="bg-gray-50 dark:bg-gray-800">
+                                                <tr>
+                                                    <td colspan="4" class="py-3 pl-4 pr-3 text-right text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
+                                                        Totals
+                                                    </td>
+                                                    <td class="py-3 px-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                                        {{ formatCurrency(totalVendorCost) }}
+                                                    </td>
+                                                    <td class="py-3 px-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                                        {{ formatCurrency(totalCustomerCost) }}
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+
+                                    <!-- Add/Edit Item Modal -->
+                                    <AddItemModal
+                                        :open="showItemModal"
+                                        :categories="categories"
+                                        :editing-item="editingItem"
+                                        mode="repair"
+                                        @close="closeItemModal"
+                                        @save="handleSaveItem"
+                                    />
                                 </div>
 
                                 <!-- Step 4: Vendor (Optional) -->

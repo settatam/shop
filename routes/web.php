@@ -958,6 +958,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('email/categories', [BuysReportController::class, 'emailIndexCategories'])->name('email.categories');
         Route::get('daily', [BuysReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [BuysReportController::class, 'exportDaily'])->name('daily.export');
+        Route::post('daily/email', [BuysReportController::class, 'emailDaily'])->name('daily.email');
+        Route::post('daily/email/categories', [BuysReportController::class, 'emailDailyCategories'])->name('daily.email.categories');
         Route::get('monthly', [BuysReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [BuysReportController::class, 'exportMonthly'])->name('monthly.export');
         Route::get('monthly/export/categories', [BuysReportController::class, 'exportMonthlyCategories'])->name('monthly.export.categories');
@@ -965,6 +967,8 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('monthly/email/categories', [BuysReportController::class, 'emailMonthlyCategories'])->name('monthly.email.categories');
         Route::get('yearly', [BuysReportController::class, 'yearly'])->name('yearly');
         Route::get('yearly/export', [BuysReportController::class, 'exportYearly'])->name('yearly.export');
+        Route::post('yearly/email', [BuysReportController::class, 'emailYearly'])->name('yearly.email');
+        Route::post('yearly/email/categories', [BuysReportController::class, 'emailYearlyCategories'])->name('yearly.email.categories');
 
         // In-Store
         Route::get('in-store', [BuysReportController::class, 'inStore'])->name('in-store');

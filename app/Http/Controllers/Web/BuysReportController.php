@@ -963,6 +963,259 @@ class BuysReportController extends Controller
     }
 
     /**
+     * Email Daily Report.
+     */
+    public function emailDaily(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfDay();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactionsQuery = Transaction::query()
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate])
+            ->with(['items.category', 'customer', 'user']);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $transactions = $transactionsQuery->orderBy('payment_processed_at', 'desc')->get();
+
+        $data = $transactions->map(function ($transaction) {
+            $estimatedValue = $transaction->items->sum('price');
+            $purchaseAmt = $transaction->final_offer ?? 0;
+            $profit = $estimatedValue - $purchaseAmt;
+
+            return [
+                'date' => Carbon::parse($transaction->payment_processed_at)->format('Y-m-d H:i'),
+                'transaction_number' => $transaction->transaction_number ?? "#{$transaction->id}",
+                'customer' => $transaction->customer?->full_name ?? 'Walk-in',
+                'num_items' => $transaction->items->count(),
+                'purchase_amt' => $purchaseAmt,
+                'estimated_value' => $estimatedValue,
+                'profit' => $profit,
+                'profit_percent' => $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0,
+                'user' => $transaction->user?->name ?? '-',
+            ];
+        });
+
+        $headers = ['Date', 'Transaction #', 'Customer', '# Items', 'Purchase Amt', 'Est. Value', 'Profit', 'Profit %', 'User'];
+
+        $totals = [
+            'date' => 'TOTALS',
+            'transaction_number' => '',
+            'customer' => '',
+            'num_items' => $data->sum('num_items'),
+            'purchase_amt' => $data->sum('purchase_amt'),
+            'estimated_value' => $data->sum('estimated_value'),
+            'profit' => $data->sum('profit'),
+            'profit_percent' => $data->sum('purchase_amt') > 0
+                ? ($data->sum('profit') / $data->sum('purchase_amt')) * 100
+                : 0,
+            'user' => '',
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['date'],
+            $row['transaction_number'] ?? '',
+            $row['customer'] ?? '',
+            $row['num_items'],
+            '$'.number_format($row['purchase_amt'], 2),
+            '$'.number_format($row['estimated_value'], 2),
+            '$'.number_format($row['profit'], 2),
+            number_format($row['profit_percent'], 1).'%',
+            $row['user'] ?? '',
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            'Daily Buys Report',
+            "Buys from {$startDate->format('M j, Y')} to {$endDate->format('M j, Y')}",
+            $headers,
+            $data,
+            $totals,
+            $formatRow,
+            'daily-buys-report.csv',
+            $store,
+        );
+    }
+
+    /**
+     * Email Daily Category Breakdown Report.
+     */
+    public function emailDailyCategories(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfDay();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+
+        $transactionsQuery = Transaction::with('items')
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate]);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
+
+        $headers = ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit'];
+
+        $totals = [
+            'category_name' => 'TOTALS',
+            'transactions_count' => collect($categoryBreakdown)->sum('transactions_count'),
+            'items_count' => collect($categoryBreakdown)->sum('items_count'),
+            'total_purchase' => collect($categoryBreakdown)->sum('total_purchase'),
+            'total_estimated_value' => collect($categoryBreakdown)->sum('total_estimated_value'),
+            'total_profit' => collect($categoryBreakdown)->sum('total_profit'),
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['category_name'],
+            $row['transactions_count'],
+            $row['items_count'],
+            '$'.number_format($row['total_purchase'], 2),
+            '$'.number_format($row['total_estimated_value'], 2),
+            '$'.number_format($row['total_profit'], 2),
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            'Daily Buys by Category Report',
+            "Category breakdown from {$startDate->format('M j, Y')} to {$endDate->format('M j, Y')}",
+            $headers,
+            $categoryBreakdown,
+            $totals,
+            $formatRow,
+            'daily-buys-by-category-report.csv',
+            $store,
+        );
+    }
+
+    /**
+     * Email Yearly Report.
+     */
+    public function emailYearly(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $yearlyData = $this->getAllBuysYearlyData($store->id, $categoryIds);
+
+        return $this->emailBuysData(
+            $request,
+            collect($yearlyData),
+            'Yearly Buys Report',
+            'Buys data year over year',
+            $store,
+        );
+    }
+
+    /**
+     * Email Yearly Category Breakdown Report.
+     */
+    public function emailYearlyCategories(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $paymentProcessedStatusId = $this->getPaymentProcessedStatusId($store->id);
+        $startDate = now()->subYears(4)->startOfYear();
+        $endDate = now()->endOfYear();
+
+        $transactionsQuery = Transaction::with('items')
+            ->where('store_id', $store->id)
+            ->where('status_id', $paymentProcessedStatusId)
+            ->whereNotNull('payment_processed_at')
+            ->whereBetween('payment_processed_at', [$startDate, $endDate]);
+
+        if ($categoryIds) {
+            $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($transactionsQuery->get(), $store->id);
+
+        $headers = ['Category', 'Transactions', 'Items', 'Purchase Amt', 'Est. Value', 'Profit'];
+
+        $totals = [
+            'category_name' => 'TOTALS',
+            'transactions_count' => collect($categoryBreakdown)->sum('transactions_count'),
+            'items_count' => collect($categoryBreakdown)->sum('items_count'),
+            'total_purchase' => collect($categoryBreakdown)->sum('total_purchase'),
+            'total_estimated_value' => collect($categoryBreakdown)->sum('total_estimated_value'),
+            'total_profit' => collect($categoryBreakdown)->sum('total_profit'),
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['category_name'],
+            $row['transactions_count'],
+            $row['items_count'],
+            '$'.number_format($row['total_purchase'], 2),
+            '$'.number_format($row['total_estimated_value'], 2),
+            '$'.number_format($row['total_profit'], 2),
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            'Yearly Buys by Category Report',
+            'Category breakdown year over year',
+            $headers,
+            $categoryBreakdown,
+            $totals,
+            $formatRow,
+            'yearly-buys-by-category-report.csv',
+            $store,
+        );
+    }
+
+    /**
      * Send a buys report email using the shared trait.
      */
     protected function emailBuysData(Request $request, Collection $data, string $title, string $description, $store): JsonResponse

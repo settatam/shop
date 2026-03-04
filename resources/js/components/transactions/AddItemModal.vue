@@ -67,9 +67,17 @@ interface Props {
     categories: Category[];
     editingItem?: TransactionItem | null;
     existingImages?: ExistingImage[];
+    mode?: 'buy' | 'repair';
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    mode: 'buy',
+});
+
+// Dynamic labels based on mode
+const buyPriceLabel = computed(() => props.mode === 'repair' ? 'Vendor Cost' : 'Buy Price');
+const buyPriceHelp = computed(() => props.mode === 'repair' ? 'What the vendor charges for this repair' : 'The amount you\'re paying for this item');
+const estimatedValueLabel = computed(() => props.mode === 'repair' ? 'Customer Cost' : 'Estimated Value');
 
 const emit = defineEmits<{
     close: [];
@@ -958,7 +966,7 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                         <div>
                                             <label for="buy_price" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Buy Price <span class="text-red-500">*</span>
+                                                {{ buyPriceLabel }} <span class="text-red-500">*</span>
                                             </label>
                                             <div class="relative mt-1">
                                                 <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -976,13 +984,13 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                                 />
                                             </div>
                                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                The amount you're paying for this item
+                                                {{ buyPriceHelp }}
                                             </p>
                                         </div>
 
                                         <div>
                                             <label for="price" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Estimated Value
+                                                {{ estimatedValueLabel }}
                                             </label>
                                             <div class="relative mt-1">
                                                 <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
