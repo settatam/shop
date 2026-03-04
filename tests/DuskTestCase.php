@@ -12,6 +12,11 @@ use PHPUnit\Framework\Attributes\BeforeClass;
 abstract class DuskTestCase extends BaseTestCase
 {
     /**
+     * Pause duration (ms) between actions for visual clarity.
+     */
+    protected int $stepPause = 800;
+
+    /**
      * Prepare for Dusk test execution.
      */
     #[BeforeClass]

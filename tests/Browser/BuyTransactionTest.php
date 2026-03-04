@@ -27,6 +27,7 @@ class BuyTransactionTest extends DuskTestCase
     private function completeEmployeeStep(Browser $browser): void
     {
         $browser->waitForText('Select Employee')
+            ->pause($this->stepPause)
             ->assertSee($this->ownerStoreUser->first_name)
             ->press('Continue');
     }
@@ -37,8 +38,10 @@ class BuyTransactionTest extends DuskTestCase
     private function createCustomer(Browser $browser, array $fields): void
     {
         $browser->waitForText('Customer Information')
+            ->pause($this->stepPause)
             ->press('Create New')
             ->waitFor('#first_name')
+            ->pause($this->stepPause)
             ->type('#first_name', $fields['first_name'])
             ->type('#last_name', $fields['last_name']);
 
@@ -64,7 +67,8 @@ class BuyTransactionTest extends DuskTestCase
             $browser->type('#zip', $fields['zip']);
         }
 
-        $browser->press('Continue');
+        $browser->pause($this->stepPause)
+            ->press('Continue');
     }
 
     /**
@@ -73,8 +77,10 @@ class BuyTransactionTest extends DuskTestCase
     private function addItemAndContinue(Browser $browser, array $item): void
     {
         $browser->waitForText('Add Items')
+            ->pause($this->stepPause)
             ->press('Add Item')
             ->waitFor('[role="dialog"] #title')
+            ->pause($this->stepPause)
             ->type('#title', $item['title'])
             ->type('#buy_price', $item['buy_price']);
 
@@ -91,6 +97,8 @@ class BuyTransactionTest extends DuskTestCase
             $browser->type('#price', $item['price']);
         }
 
+        $browser->pause($this->stepPause);
+
         // Click the modal's save button (within the dialog)
         $browser->within('[role="dialog"]', function (Browser $modal) {
             $modal->press('Add Item');
@@ -103,6 +111,7 @@ class BuyTransactionTest extends DuskTestCase
         $offerAmount = $item['offer_amount'] ?? $item['buy_price'];
         $browser->clear('#offer_amount')
             ->type('#offer_amount', $offerAmount)
+            ->pause($this->stepPause)
             ->press('Continue');
     }
 
@@ -111,6 +120,7 @@ class BuyTransactionTest extends DuskTestCase
      */
     private function selectPaymentMethod(Browser $browser, string $label): void
     {
+        $browser->pause($this->stepPause);
         $escapedLabel = addslashes($label);
         $browser->script("
             document.querySelectorAll('[role=\"radio\"]').forEach(function(el) {
@@ -119,7 +129,7 @@ class BuyTransactionTest extends DuskTestCase
                 }
             });
         ");
-        $browser->pause(300);
+        $browser->pause($this->stepPause);
     }
 
     /**
