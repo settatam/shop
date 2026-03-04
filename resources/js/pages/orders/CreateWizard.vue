@@ -461,6 +461,7 @@ const newProduct = ref({
     sku: '',
     price: 0,
     cost: 0,
+    quantity: 1,
     category_id: null as number | null,
 });
 
@@ -529,15 +530,32 @@ function startCreatingProduct() {
 
 function cancelCreatingProduct() {
     isCreatingNewProduct.value = false;
-    newProduct.value = { title: '', sku: '', price: 0, cost: 0, category_id: null };
+    newProduct.value = { title: '', sku: '', price: 0, cost: 0, quantity: 1, category_id: null };
 }
 
 async function createNewProduct() {
     if (!newProduct.value.title || newProduct.value.price < 0) return;
 
     try {
-        const response = await window.axios.post('/orders/create-product', newProduct.value);
-        addProductToOrder(response.data.product);
+        const response = await window.axios.post('/orders/create-product', {
+            ...newProduct.value,
+            warehouse_id: form.warehouse_id,
+        });
+        const product = response.data.product;
+        const qty = newProduct.value.quantity || 1;
+
+        // Add to order with the specified quantity
+        form.items.push({
+            product_id: product.id,
+            variant_id: product.variant_id,
+            title: product.title,
+            sku: product.sku,
+            quantity: qty,
+            price: product.price,
+            cost: product.cost,
+            discount: 0,
+            image: product.image,
+        });
         cancelCreatingProduct();
     } catch (error) {
         console.error('Error creating product:', error);
