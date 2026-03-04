@@ -30,6 +30,16 @@ trait HasCustomStatuses
                 }
             }
         });
+
+        static::updating(function ($model) {
+            // Auto-sync status_id when status string changes
+            if ($model->isDirty('status') && ! $model->isDirty('status_id') && ! empty($model->store_id)) {
+                $status = Status::findBySlug($model->store_id, $model->getStatusableType(), $model->status);
+                if ($status) {
+                    $model->status_id = $status->id;
+                }
+            }
+        });
     }
 
     /**

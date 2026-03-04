@@ -43,13 +43,24 @@ class LayawayService
             // Get or create customer
             $customerId = $data['customer_id'] ?? null;
             if (! $customerId && ! empty($data['customer'])) {
-                $customer = Customer::create([
-                    'store_id' => $storeId,
-                    'first_name' => $data['customer']['first_name'],
-                    'last_name' => $data['customer']['last_name'] ?? null,
-                    'email' => $data['customer']['email'] ?? null,
-                    'phone' => $data['customer']['phone'] ?? null,
-                ]);
+                $email = $data['customer']['email'] ?? null;
+                if ($email) {
+                    $customer = Customer::firstOrCreate(
+                        ['store_id' => $storeId, 'email' => $email],
+                        [
+                            'first_name' => $data['customer']['first_name'],
+                            'last_name' => $data['customer']['last_name'] ?? null,
+                            'phone' => $data['customer']['phone'] ?? null,
+                        ]
+                    );
+                } else {
+                    $customer = Customer::create([
+                        'store_id' => $storeId,
+                        'first_name' => $data['customer']['first_name'],
+                        'last_name' => $data['customer']['last_name'] ?? null,
+                        'phone' => $data['customer']['phone'] ?? null,
+                    ]);
+                }
                 $customerId = $customer->id;
             }
 

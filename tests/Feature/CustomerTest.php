@@ -332,4 +332,66 @@ class CustomerTest extends TestCase
             ->has('customers.data', 2)
         );
     }
+
+    public function test_cannot_update_customer_email_to_duplicate_in_same_store(): void
+    {
+        $this->actingAs($this->user);
+
+        Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'email' => 'existing@example.com',
+        ]);
+
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'email' => 'other@example.com',
+        ]);
+
+        $response = $this->withStore()->put("/customers/{$customer->id}", [
+            'email' => 'existing@example.com',
+        ]);
+
+        $response->assertSessionHasErrors('email');
+    }
+
+    public function test_can_update_customer_keeping_same_email(): void
+    {
+        $this->actingAs($this->user);
+
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'email' => 'same@example.com',
+        ]);
+
+        $response = $this->withStore()->put("/customers/{$customer->id}", [
+            'first_name' => 'Updated',
+            'email' => 'same@example.com',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+    }
+
+    public function test_same_email_allowed_in_different_stores(): void
+    {
+        $this->actingAs($this->user);
+
+        $otherStore = Store::factory()->create();
+        Customer::factory()->create([
+            'store_id' => $otherStore->id,
+            'email' => 'shared@example.com',
+        ]);
+
+        $customer = Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'email' => 'old@example.com',
+        ]);
+
+        $response = $this->withStore()->put("/customers/{$customer->id}", [
+            'email' => 'shared@example.com',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+    }
 }

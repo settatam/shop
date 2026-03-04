@@ -85,12 +85,13 @@ class TransactionService
             // Get or create customer
             $customerId = $data['customer_id'] ?? null;
             if (! $customerId && ! empty($data['customer'])) {
-                $customer = Customer::create([
+                $email = $data['customer']['email'] ?? null;
+                $customerAttributes = [
                     'store_id' => $storeId,
                     'first_name' => $data['customer']['first_name'],
                     'last_name' => $data['customer']['last_name'],
                     'company_name' => $data['customer']['company_name'] ?? null,
-                    'email' => $data['customer']['email'] ?? null,
+                    'email' => $email,
                     'phone_number' => $data['customer']['phone_number'] ?? null,
                     'address' => $data['customer']['address'] ?? null,
                     'address2' => $data['customer']['address2'] ?? null,
@@ -98,7 +99,16 @@ class TransactionService
                     'state_id' => $data['customer']['state_id'] ?? null,
                     'zip' => $data['customer']['zip'] ?? null,
                     'country_id' => $data['customer']['country_id'] ?? null,
-                ]);
+                ];
+
+                if ($email) {
+                    $customer = Customer::firstOrCreate(
+                        ['store_id' => $storeId, 'email' => $email],
+                        $customerAttributes
+                    );
+                } else {
+                    $customer = Customer::create($customerAttributes);
+                }
                 $customerId = $customer->id;
             }
 

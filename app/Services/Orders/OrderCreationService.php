@@ -65,13 +65,24 @@ class OrderCreationService
             if (! empty($data['customer_id'])) {
                 $customerId = $data['customer_id'];
             } elseif (! empty($data['customer'])) {
-                $customer = Customer::create([
-                    'store_id' => $store->id,
-                    'first_name' => $data['customer']['first_name'],
-                    'last_name' => $data['customer']['last_name'],
-                    'email' => $data['customer']['email'] ?? null,
-                    'phone_number' => $data['customer']['phone'] ?? null,
-                ]);
+                $email = $data['customer']['email'] ?? null;
+                if ($email) {
+                    $customer = Customer::firstOrCreate(
+                        ['store_id' => $store->id, 'email' => $email],
+                        [
+                            'first_name' => $data['customer']['first_name'],
+                            'last_name' => $data['customer']['last_name'],
+                            'phone_number' => $data['customer']['phone'] ?? null,
+                        ]
+                    );
+                } else {
+                    $customer = Customer::create([
+                        'store_id' => $store->id,
+                        'first_name' => $data['customer']['first_name'],
+                        'last_name' => $data['customer']['last_name'],
+                        'phone_number' => $data['customer']['phone'] ?? null,
+                    ]);
+                }
                 $customerId = $customer->id;
             }
 

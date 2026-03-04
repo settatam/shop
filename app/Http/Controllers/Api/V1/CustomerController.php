@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Services\StoreContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
@@ -70,7 +71,10 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
+            'email' => [
+                'nullable', 'email', 'max:255',
+                Rule::unique('customers')->where('store_id', $storeId),
+            ],
             'phone_number' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:255',
             'address2' => 'nullable|string|max:255',
@@ -136,7 +140,10 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
+            'email' => [
+                'nullable', 'email', 'max:255',
+                Rule::unique('customers')->where('store_id', $storeId)->ignore($customer->id),
+            ],
             'phone_number' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:255',
             'address2' => 'nullable|string|max:255',

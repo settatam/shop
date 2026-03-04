@@ -76,14 +76,26 @@ class RepairService
             // Get or create customer
             $customerId = $data['customer_id'] ?? null;
             if (! $customerId && ! empty($data['customer'])) {
-                $customer = Customer::create([
-                    'store_id' => $storeId,
-                    'first_name' => $data['customer']['first_name'],
-                    'last_name' => $data['customer']['last_name'],
-                    'company_name' => $data['customer']['company_name'] ?? null,
-                    'email' => $data['customer']['email'] ?? null,
-                    'phone_number' => $data['customer']['phone_number'] ?? null,
-                ]);
+                $email = $data['customer']['email'] ?? null;
+                if ($email) {
+                    $customer = Customer::firstOrCreate(
+                        ['store_id' => $storeId, 'email' => $email],
+                        [
+                            'first_name' => $data['customer']['first_name'],
+                            'last_name' => $data['customer']['last_name'],
+                            'company_name' => $data['customer']['company_name'] ?? null,
+                            'phone_number' => $data['customer']['phone_number'] ?? null,
+                        ]
+                    );
+                } else {
+                    $customer = Customer::create([
+                        'store_id' => $storeId,
+                        'first_name' => $data['customer']['first_name'],
+                        'last_name' => $data['customer']['last_name'],
+                        'company_name' => $data['customer']['company_name'] ?? null,
+                        'phone_number' => $data['customer']['phone_number'] ?? null,
+                    ]);
+                }
                 $customerId = $customer->id;
             }
 
