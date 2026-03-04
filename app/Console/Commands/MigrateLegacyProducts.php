@@ -2,9 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Image;
 use App\Models\Inventory;
+use App\Models\Note;
 use App\Models\PlatformListing;
 use App\Models\PlatformListingVariant;
 use App\Models\Product;
@@ -13,7 +15,9 @@ use App\Models\ProductTemplate;
 use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\Store;
+use App\Models\StoreUser;
 use App\Models\Tag;
+use App\Models\User;
 use App\Models\Vendor;
 use App\Models\Warehouse;
 use Illuminate\Console\Command;
@@ -33,6 +37,7 @@ class MigrateLegacyProducts extends Command
                             {--skip-categories : Skip building category mappings}
                             {--skip-templates : Skip building template mappings}
                             {--skip-listings : Skip migrating platform listings}
+                            {--skip-notes : Skip migrating product notes and activity logs}
                             {--sync-deletes : Soft-delete new records if legacy record is soft-deleted}';
 
     protected $description = 'Migrate products and variants from the legacy database';
@@ -109,6 +114,10 @@ class MigrateLegacyProducts extends Command
     protected int $listingCount = 0;
 
     protected int $tagCount = 0;
+
+    protected int $noteCount = 0;
+
+    protected int $activityLogCount = 0;
 
     /**
      * Maps legacy store_market_place_id => new store_marketplace_id
@@ -1408,6 +1417,12 @@ class MigrateLegacyProducts extends Command
                 $this->migrateProductListings($legacyProduct, $newProduct);
             }
 
+            // Migrate product notes and activity logs
+            if (! $this->option('skip-notes')) {
+                $this->migrateProductNotes($legacyProduct, $newProduct, $newStore);
+                $this->migrateProductActivityLogs($legacyProduct, $newProduct, $newStore);
+            }
+
             if ($productCount % 100 === 0) {
                 $this->line("  Processed {$productCount} products...");
             }
@@ -1416,6 +1431,7 @@ class MigrateLegacyProducts extends Command
         $this->line("  Created {$productCount} products with {$variantCount} variants, skipped {$skipped} existing");
         $this->line("  Migrated {$this->attributeValueCount} attribute values, {$this->imageCount} images, {$this->tagCount} tags, {$this->listingCount} platform listings");
         $this->line("  Created {$this->inventoryCount} inventory records");
+        $this->line("  Migrated {$this->noteCount} notes, {$this->activityLogCount} activity logs");
     }
 
     /**
@@ -2064,6 +2080,137 @@ class MigrateLegacyProducts extends Command
         $this->line('  Cleanup complete');
     }
 
+    /**
+     * Migrate notes for a product from the legacy notes table.
+     */
+    protected function migrateProductNotes(object $legacyProduct, Product $newProduct, Store $newStore): void
+    {
+        $legacyNotes = DB::connection('legacy')
+            ->table('notes')
+            ->where('notable_type', 'App\\Models\\Product')
+            ->where('notable_id', $legacyProduct->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($legacyNotes->isEmpty()) {
+            return;
+        }
+
+        // Get the default user for notes without a valid user
+        $defaultUserId = $this->getDefaultUserId($newStore);
+
+        foreach ($legacyNotes as $legacyNote) {
+            if (empty($legacyNote->note)) {
+                continue;
+            }
+
+            // Skip if note already exists for this product
+            $exists = Note::where('notable_type', Product::class)
+                ->where('notable_id', $newProduct->id)
+                ->where('content', $legacyNote->note)
+                ->where('created_at', $legacyNote->created_at)
+                ->exists();
+
+            if ($exists) {
+                continue;
+            }
+
+            // Map user ID - check if user exists in new system
+            $userId = $defaultUserId;
+            if ($legacyNote->user_id && User::find($legacyNote->user_id)) {
+                $userId = $legacyNote->user_id;
+            }
+
+            Note::create([
+                'store_id' => $newStore->id,
+                'notable_type' => Product::class,
+                'notable_id' => $newProduct->id,
+                'user_id' => $userId,
+                'content' => $legacyNote->note,
+                'created_at' => $legacyNote->created_at,
+                'updated_at' => $legacyNote->updated_at,
+            ]);
+
+            $this->noteCount++;
+        }
+    }
+
+    /**
+     * Migrate activity logs for a product from the legacy store_activities table.
+     */
+    protected function migrateProductActivityLogs(object $legacyProduct, Product $newProduct, Store $newStore): void
+    {
+        $legacyActivities = DB::connection('legacy')
+            ->table('store_activities')
+            ->where('store_id', $newStore->id)
+            ->where(function ($query) use ($legacyProduct) {
+                $query->where(function ($q) use ($legacyProduct) {
+                    $q->where('activityable_type', 'App\\Models\\Product')
+                        ->where('activityable_id', $legacyProduct->id);
+                })->orWhere(function ($q) use ($legacyProduct) {
+                    $q->where('model', 'App\\Models\\Product')
+                        ->where('activity_id', $legacyProduct->id);
+                });
+            })
+            ->orderBy('created_at')
+            ->get();
+
+        if ($legacyActivities->isEmpty()) {
+            return;
+        }
+
+        $defaultUserId = $this->getDefaultUserId($newStore);
+
+        foreach ($legacyActivities as $legacyActivity) {
+            // Map user ID
+            $userId = $defaultUserId;
+            if ($legacyActivity->user_id && User::find($legacyActivity->user_id)) {
+                $userId = $legacyActivity->user_id;
+            }
+
+            ActivityLog::create([
+                'store_id' => $newStore->id,
+                'user_id' => $userId,
+                'activity_slug' => 'products.updated',
+                'subject_type' => Product::class,
+                'subject_id' => $newProduct->id,
+                'causer_type' => $userId ? User::class : null,
+                'causer_id' => $userId,
+                'properties' => array_filter([
+                    'activity' => $legacyActivity->activity ?? null,
+                    'description' => $legacyActivity->description ?? null,
+                    'meta' => $legacyActivity->meta ? json_decode($legacyActivity->meta, true) : null,
+                ]),
+                'description' => $legacyActivity->description ?? $legacyActivity->activity ?? 'Product activity',
+                'created_at' => $legacyActivity->created_at,
+                'updated_at' => $legacyActivity->updated_at,
+            ]);
+
+            $this->activityLogCount++;
+        }
+    }
+
+    /**
+     * Get the default user ID for the store (owner or first user).
+     */
+    protected function getDefaultUserId(Store $newStore): ?int
+    {
+        static $cache = [];
+
+        if (isset($cache[$newStore->id])) {
+            return $cache[$newStore->id];
+        }
+
+        $storeOwner = StoreUser::where('store_id', $newStore->id)
+            ->where('is_owner', true)
+            ->first();
+
+        $cache[$newStore->id] = $storeOwner?->user_id
+            ?? StoreUser::where('store_id', $newStore->id)->first()?->user_id;
+
+        return $cache[$newStore->id];
+    }
+
     protected function displaySummary(Store $newStore): void
     {
         $this->newLine();
@@ -2106,6 +2253,15 @@ class MigrateLegacyProducts extends Command
         $inventoryCount = Inventory::where('store_id', $newStore->id)->count();
         $totalQuantity = Inventory::where('store_id', $newStore->id)->sum('quantity');
         $this->line("Total inventory records: {$inventoryCount} ({$totalQuantity} items)");
+
+        $noteCount = Note::where('store_id', $newStore->id)
+            ->where('notable_type', Product::class)
+            ->count();
+        $activityLogCount = ActivityLog::where('store_id', $newStore->id)
+            ->where('subject_type', Product::class)
+            ->count();
+        $this->line("Total product notes: {$noteCount}");
+        $this->line("Total product activity logs: {$activityLogCount}");
 
         // Report unmapped vendors (only if legacy vendor record doesn't exist)
         if (! empty($this->unmappedVendors)) {

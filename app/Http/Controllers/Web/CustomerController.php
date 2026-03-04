@@ -194,16 +194,14 @@ class CustomerController extends Controller
 
         $file = $request->file('document');
 
-        // Determine storage disk
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
-
-        // Store the file
-        $path = $file->store("customers/{$customer->id}/documents", $disk);
+        // Store the file on DO Spaces and save the full URL
+        $relativePath = $file->store("customers/{$customer->id}/documents", 'do_spaces');
+        $fullUrl = Storage::disk('do_spaces')->url($relativePath);
 
         // Create document record
         $customer->documents()->create([
             'type' => $request->type,
-            'path' => $path,
+            'path' => $fullUrl,
             'original_filename' => $file->getClientOriginalName(),
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),

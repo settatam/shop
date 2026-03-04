@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\BelongsToStore;
 use App\Traits\HasImages;
+use App\Traits\HasNotes;
 use App\Traits\HasTags;
 use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -60,7 +61,7 @@ use Laravel\Scout\Searchable;
  */
 class Product extends Model
 {
-    use BelongsToStore, HasFactory, HasImages, HasTags, LogsActivity, Searchable, SoftDeletes;
+    use BelongsToStore, HasFactory, HasImages, HasNotes, HasTags, LogsActivity, Searchable, SoftDeletes;
 
     public const STATUS_DRAFT = 'draft';
 

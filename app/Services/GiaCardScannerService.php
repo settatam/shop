@@ -45,9 +45,9 @@ class GiaCardScannerService
      */
     public function storeScannedImage(UploadedFile $file, int $storeId): string
     {
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $relativePath = $file->store("gia-scans/{$storeId}", 'do_spaces');
 
-        return $file->store("gia-scans/{$storeId}", $disk);
+        return Storage::disk('do_spaces')->url($relativePath);
     }
 
     /**

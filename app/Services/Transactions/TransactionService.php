@@ -20,6 +20,7 @@ use App\Services\Payments\PayoutResult;
 use App\Services\Payments\PayPalPayoutsService;
 use App\Services\StoreContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class TransactionService
@@ -250,16 +251,16 @@ class TransactionService
      */
     protected function saveCustomerIdPhotos(Customer $customer, int $storeId, array $photos): void
     {
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
         $types = [CustomerDocument::TYPE_ID_FRONT, CustomerDocument::TYPE_ID_BACK];
 
         foreach ($photos as $index => $photo) {
             $type = $types[$index] ?? CustomerDocument::TYPE_OTHER;
-            $path = $photo->store("customers/{$customer->id}/identity", $disk);
+            $relativePath = $photo->store("customers/{$customer->id}/identity", 'do_spaces');
+            $fullUrl = Storage::disk('do_spaces')->url($relativePath);
 
             $customer->documents()->create([
                 'type' => $type,
-                'path' => $path,
+                'path' => $fullUrl,
                 'original_filename' => $photo->getClientOriginalName(),
                 'mime_type' => $photo->getMimeType(),
                 'size' => $photo->getSize(),

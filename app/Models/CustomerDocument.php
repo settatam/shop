@@ -58,14 +58,7 @@ class CustomerDocument extends Model
      */
     public function getUrlAttribute(): string
     {
-        if (str_starts_with($this->path, 'http')) {
-            return $this->path;
-        }
-
-        // Try s3 disk first (DO Spaces), fallback to public disk
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
-
-        return Storage::disk($disk)->url($this->path);
+        return $this->path;
     }
 
     /**
@@ -118,9 +111,16 @@ class CustomerDocument extends Model
      */
     public function deleteFile(): bool
     {
-        $disk = config('filesystems.default') === 's3' ? 's3' : 'public';
+        $url = $this->path;
+        $cdnBase = rtrim(config('filesystems.disks.do_spaces.url'), '/').'/';
 
-        return Storage::disk($disk)->delete($this->path);
+        if (str_starts_with($url, $cdnBase)) {
+            $relativePath = substr($url, strlen($cdnBase));
+
+            return Storage::disk('do_spaces')->delete($relativePath);
+        }
+
+        return false;
     }
 
     protected static function booted(): void

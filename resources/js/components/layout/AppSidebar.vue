@@ -71,7 +71,6 @@ const allNavigation: NavGroup[] = [
         icon: ShoppingBagIcon,
         feature: 'transactions',
         children: [
-            { name: 'Leads', href: '/leads', feature: 'leads' },
             { name: 'All Transactions', href: '/transactions', feature: 'all_transactions' },
             { name: 'Buys', href: '/buys', feature: 'buys' },
             { name: 'Purchased Items', href: '/buys/items', feature: 'buys' },
