@@ -9,6 +9,7 @@ use App\Models\Address;
 use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\Inventory;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
@@ -1623,8 +1624,12 @@ class OrderController extends Controller
             'sku' => 'nullable|string|max:255',
             'price' => 'required|numeric|min:0',
             'cost' => 'nullable|numeric|min:0',
+            'quantity' => 'nullable|integer|min:1',
             'category_id' => 'nullable|exists:categories,id',
+            'warehouse_id' => 'nullable|exists:warehouses,id',
         ]);
+
+        $quantity = $validated['quantity'] ?? 1;
 
         // Get the category to inherit charge_taxes setting
         $category = isset($validated['category_id']) && $validated['category_id']
@@ -1639,7 +1644,7 @@ class OrderController extends Controller
             'title' => $validated['title'],
             'handle' => $this->generateUniqueHandle($store->id, $validated['title']),
             'category_id' => $validated['category_id'] ?? null,
-            'quantity' => 1,
+            'quantity' => $quantity,
             'is_published' => true,
             'is_draft' => false,
             'has_variants' => false,
@@ -1651,8 +1656,23 @@ class OrderController extends Controller
             'sku' => ! empty($validated['sku']) ? $validated['sku'] : $this->generateSku(),
             'price' => $validated['price'],
             'cost' => $validated['cost'] ?? null,
-            'quantity' => 1,
+            'quantity' => $quantity,
         ]);
+
+        // Create inventory record for the selected warehouse
+        $warehouseId = $validated['warehouse_id'] ?? null;
+        if (! $warehouseId) {
+            $warehouseId = Warehouse::where('store_id', $store->id)->value('id');
+        }
+
+        if ($warehouseId) {
+            Inventory::create([
+                'store_id' => $store->id,
+                'product_variant_id' => $variant->id,
+                'warehouse_id' => $warehouseId,
+                'quantity' => $quantity,
+            ]);
+        }
 
         return response()->json([
             'product' => [
@@ -1662,7 +1682,7 @@ class OrderController extends Controller
                 'sku' => $variant->sku,
                 'price' => $variant->price,
                 'cost' => $variant->cost,
-                'quantity' => $product->quantity,
+                'quantity' => $quantity,
                 'category' => $product->category?->name,
                 'image' => null,
             ],

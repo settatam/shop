@@ -7,6 +7,7 @@ use App\Jobs\SyncProductInventoryJob;
 use App\Models\BucketItem;
 use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryAdjustment;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
@@ -493,6 +494,8 @@ class OrderCreationService
             $reduceBy = min($available, $remaining);
 
             if ($reduceBy > 0) {
+                $quantityBefore = $inventory->quantity;
+
                 // Use atomic conditional update to ensure we don't go negative
                 $updated = Inventory::where('id', $inventory->id)
                     ->where('quantity', '>=', $reduceBy)
@@ -503,6 +506,20 @@ class OrderCreationService
 
                 if ($updated) {
                     $remaining -= $reduceBy;
+
+                    // Record the sale in inventory adjustments
+                    InventoryAdjustment::create([
+                        'store_id' => $inventory->store_id,
+                        'inventory_id' => $inventory->id,
+                        'user_id' => auth()->id(),
+                        'type' => InventoryAdjustment::TYPE_SOLD,
+                        'quantity_before' => $quantityBefore,
+                        'quantity_change' => -$reduceBy,
+                        'quantity_after' => $quantityBefore - $reduceBy,
+                        'unit_cost' => $inventory->unit_cost,
+                        'total_cost_impact' => -$reduceBy * ($inventory->unit_cost ?? 0),
+                        'reason' => 'Sold via order',
+                    ]);
                 }
             }
         }

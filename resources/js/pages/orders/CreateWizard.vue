@@ -1417,6 +1417,15 @@ const steps = [
                                     </div>
                                 </div>
                                 <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantity</label>
+                                    <input
+                                        v-model.number="newProduct.quantity"
+                                        type="number"
+                                        min="1"
+                                        class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    />
+                                </div>
+                                <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Cost</label>
                                     <div class="relative mt-1">
                                         <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">$</span>
