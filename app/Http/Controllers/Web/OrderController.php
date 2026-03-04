@@ -270,7 +270,7 @@ class OrderController extends Controller
             'tradeInCategories' => $tradeInCategories,
             'warehouses' => $warehouses,
             'defaultWarehouseId' => $defaultWarehouseId,
-            'defaultTaxRate' => $store->default_tax_rate ?? 0,
+            'defaultTaxRate' => (float) ($store->default_tax_rate ?? 0),
             'preciousMetals' => $this->getPreciousMetals(),
             'itemConditions' => $this->getItemConditions(),
             'preSelectedProduct' => $preSelectedProduct,
@@ -1424,35 +1424,35 @@ class OrderController extends Controller
         $query = $request->get('query', '');
         $categoryId = $request->get('category_id');
 
-        // Use Scout/MeiliSearch for better search results
+        $inStockFilter = function ($q) {
+            $q->where('sell_out_of_stock', true)
+                ->orWhereHas('variants', fn ($vq) => $vq->where('quantity', '>', 0));
+        };
+
         if ($query) {
             $searchQuery = Product::search($query)
-                ->where('store_id', $store->id);
+                ->where('store_id', $store->id)
+                ->where('status', Product::STATUS_ACTIVE);
 
             if ($categoryId) {
                 $searchQuery->where('category_id', $categoryId);
             }
 
             $products = $searchQuery
-                ->take(50)
-                ->get()
-                ->load(['category', 'images', 'variants']);
+                ->query(fn ($q) => $q->where($inStockFilter)->with(['category', 'images', 'variants']))
+                ->take(20)
+                ->get();
         } else {
-            // No query - just list products with optional category filter
             $products = Product::where('store_id', $store->id)
+                ->active()
+                ->where($inStockFilter)
                 ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
                 ->with(['category', 'images', 'variants'])
-                ->limit(50)
+                ->limit(20)
                 ->get();
         }
 
         $products = $products
-            ->filter(function ($product) {
-                // Only include active products that have stock OR allow selling out of stock
-                return $product->status === Product::STATUS_ACTIVE
-                    && ($product->sell_out_of_stock || $product->total_quantity > 0);
-            })
-            ->take(20)
             ->map(function ($product) {
                 $variant = $product->variants->first();
                 $totalQuantity = $product->total_quantity;

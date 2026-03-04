@@ -14,51 +14,13 @@ window.axios = axios;
 // ---- Axios + CSRF setup (Passport + CreateFreshApiToken) ----
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
-// Tell Axios which cookie/header to use for XSRF.
-// Axios will automatically read the XSRF-TOKEN cookie and send X-XSRF-TOKEN
+// Axios automatically reads the XSRF-TOKEN cookie and sends X-XSRF-TOKEN
 // on same-origin requests (exactly what Laravel expects).
+// Do NOT set X-CSRF-TOKEN from the meta tag — it goes stale and prevents
+// the fresh cookie-based token from being used (Inertia v2 docs recommend
+// omitting the csrf-token meta tag entirely for this reason).
 axios.defaults.xsrfCookieName = 'XSRF-TOKEN';
 axios.defaults.xsrfHeaderName = 'X-XSRF-TOKEN';
-
-// Fallback: if you prefer sending X-CSRF-TOKEN (unencrypted), pull from <meta>
-const metaCsrf = document
-    .querySelector('meta[name="csrf-token"]')
-    ?.getAttribute('content');
-if (metaCsrf) {
-    axios.defaults.headers.common['X-CSRF-TOKEN'] = metaCsrf;
-}
-
-// Safety net: if neither header is present for some reason, add the meta token.
-axios.interceptors.request.use((config) => {
-    const hasXsrf = (config.headers as any)?.['X-XSRF-TOKEN'];
-    const hasCsrf = (config.headers as any)?.['X-CSRF-TOKEN'];
-    if (!hasXsrf && !hasCsrf) {
-        // Always get the fresh token from meta (in case it was refreshed)
-        const freshToken = document
-            .querySelector('meta[name="csrf-token"]')
-            ?.getAttribute('content');
-        if (freshToken) {
-            (config.headers as any)['X-CSRF-TOKEN'] = freshToken;
-        }
-    }
-    return config;
-});
-
-// Handle 419 (CSRF token mismatch) errors by refreshing the page
-// This can happen when the session expires while the user is on the page
-axios.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        if (error.response?.status === 419) {
-            // Session expired or CSRF token mismatch - refresh the page
-            // This will get a fresh token and restore the session
-            window.location.reload();
-            // Return a pending promise to prevent further error handling
-            return new Promise(() => {});
-        }
-        return Promise.reject(error);
-    }
-);
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),

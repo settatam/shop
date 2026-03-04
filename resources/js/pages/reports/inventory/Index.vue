@@ -17,8 +17,10 @@ interface CategoryRow {
     total_value: number;
     added_this_week: number;
     cost_added: number;
+    wholesale_added: number;
     deleted_this_week: number;
     deleted_cost: number;
+    wholesale_deleted: number;
     projected_profit: number;
     has_children?: boolean;
 }
@@ -28,8 +30,10 @@ interface Totals {
     total_value: number;
     added_this_week: number;
     cost_added: number;
+    wholesale_added: number;
     deleted_this_week: number;
     deleted_cost: number;
+    wholesale_deleted: number;
     projected_profit: number;
 }
 
@@ -170,8 +174,10 @@ const currentViewTotals = computed(() => ({
     total_value: props.categoryData.reduce((sum, row) => sum + row.total_value, 0),
     added_this_week: props.categoryData.reduce((sum, row) => sum + row.added_this_week, 0),
     cost_added: props.categoryData.reduce((sum, row) => sum + row.cost_added, 0),
+    wholesale_added: props.categoryData.reduce((sum, row) => sum + row.wholesale_added, 0),
     deleted_this_week: props.categoryData.reduce((sum, row) => sum + row.deleted_this_week, 0),
     deleted_cost: props.categoryData.reduce((sum, row) => sum + row.deleted_cost, 0),
+    wholesale_deleted: props.categoryData.reduce((sum, row) => sum + row.wholesale_deleted, 0),
     projected_profit: props.categoryData.reduce((sum, row) => sum + row.projected_profit, 0),
 }));
 
@@ -383,8 +389,10 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Total Value ($)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Added This Week</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Cost Added ($)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Wholesale Added ($)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Deleted This Week</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Deleted Cost ($)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Wholesale Deleted ($)</th>
                                 <!-- <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Projected Profit ($)</th> -->
                             </tr>
                         </thead>
@@ -430,12 +438,20 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                                     <span v-if="row.cost_added > 0">+{{ formatCurrency(row.cost_added) }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
+                                    <span v-if="row.wholesale_added > 0">+{{ formatCurrency(row.wholesale_added) }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     <span v-if="row.deleted_this_week > 0">-{{ formatNumber(row.deleted_this_week) }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     <span v-if="row.deleted_cost > 0">-{{ formatCurrency(row.deleted_cost) }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
+                                    <span v-if="row.wholesale_deleted > 0">-{{ formatCurrency(row.wholesale_deleted) }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
                                 <!-- <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="row.projected_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
@@ -445,7 +461,7 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
 
                             <!-- Empty state -->
                             <tr v-if="categoryData.length === 0">
-                                <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                     <template v-if="currentCategory">
                                         No subcategories with inventory found in "{{ currentCategory.name }}".
                                     </template>
@@ -475,12 +491,20 @@ const inventoryEmailUrl = computed(() => queryParams.value ? `/reports/inventory
                                     <span v-if="currentViewTotals.cost_added > 0">+{{ formatCurrency(currentViewTotals.cost_added) }}</span>
                                     <span v-else>-</span>
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
+                                    <span v-if="currentViewTotals.wholesale_added > 0">+{{ formatCurrency(currentViewTotals.wholesale_added) }}</span>
+                                    <span v-else>-</span>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     <span v-if="currentViewTotals.deleted_this_week > 0">-{{ formatNumber(currentViewTotals.deleted_this_week) }}</span>
                                     <span v-else>-</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     <span v-if="currentViewTotals.deleted_cost > 0">-{{ formatCurrency(currentViewTotals.deleted_cost) }}</span>
+                                    <span v-else>-</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
+                                    <span v-if="currentViewTotals.wholesale_deleted > 0">-{{ formatCurrency(currentViewTotals.wholesale_deleted) }}</span>
                                     <span v-else>-</span>
                                 </td>
                                 <!-- <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="currentViewTotals.projected_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">

@@ -906,6 +906,7 @@ class Product extends Model
             'category' => $this->category?->name,
             'store_id' => $this->store_id,
             'category_id' => $this->category_id,
+            'status' => $this->status,
             'is_published' => $this->is_published,
             'created_at' => $this->created_at?->timestamp,
         ];

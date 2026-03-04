@@ -13,19 +13,25 @@ interface WeekRow {
     week_start: string;
     items_added: number;
     cost_added: number;
+    wholesale_added: number;
     items_removed: number;
     cost_removed: number;
+    wholesale_removed: number;
     net_items: number;
     net_cost: number;
+    net_wholesale: number;
 }
 
 interface Totals {
     items_added: number;
     cost_added: number;
+    wholesale_added: number;
     items_removed: number;
     cost_removed: number;
+    wholesale_removed: number;
     net_items: number;
     net_cost: number;
+    net_wholesale: number;
 }
 
 const props = defineProps<{
@@ -207,26 +213,42 @@ const emailUrl = computed(() => `/reports/inventory/weekly/email?${queryParams.v
                 </button>
             </div>
 
-            <!-- Stat Cards -->
+            <!-- Cost Stat Cards -->
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                    title="Total Added"
+                    title="Cost Added"
                     :value="formatCurrency(totals.cost_added)"
                     :sparkline-data="addedData"
                 />
                 <StatCard
-                    title="Total Removed"
+                    title="Cost Removed"
                     :value="formatCurrency(totals.cost_removed)"
                     :sparkline-data="removedData"
                 />
                 <StatCard
-                    title="Net Change"
+                    title="Net Cost"
                     :value="formatCurrency(totals.net_cost)"
                     :sparkline-data="netData"
                 />
                 <StatCard
                     title="Net Items"
                     :value="formatNumber(totals.net_items)"
+                />
+            </div>
+
+            <!-- Wholesale Stat Cards -->
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <StatCard
+                    title="Wholesale Added"
+                    :value="formatCurrency(totals.wholesale_added)"
+                />
+                <StatCard
+                    title="Wholesale Removed"
+                    :value="formatCurrency(totals.wholesale_removed)"
+                />
+                <StatCard
+                    title="Net Wholesale"
+                    :value="formatCurrency(totals.net_wholesale)"
                 />
             </div>
 
@@ -286,10 +308,13 @@ const emailUrl = computed(() => `/reports/inventory/weekly/email?${queryParams.v
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Week</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Items Added</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Cost Added ($)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Wholesale Added ($)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Items Removed</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Cost Removed ($)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Wholesale Removed ($)</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Net Items</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Net Cost ($)</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Net Wholesale ($)</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -303,6 +328,10 @@ const emailUrl = computed(() => `/reports/inventory/weekly/email?${queryParams.v
                                     <span v-if="row.cost_added > 0">+{{ formatCurrency(row.cost_added) }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
+                                    <span v-if="row.wholesale_added > 0">+{{ formatCurrency(row.wholesale_added) }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     <span v-if="row.items_removed > 0">-{{ formatNumber(row.items_removed) }}</span>
                                     <span v-else class="text-gray-400">-</span>
@@ -311,17 +340,24 @@ const emailUrl = computed(() => `/reports/inventory/weekly/email?${queryParams.v
                                     <span v-if="row.cost_removed > 0">-{{ formatCurrency(row.cost_removed) }}</span>
                                     <span v-else class="text-gray-400">-</span>
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
+                                    <span v-if="row.wholesale_removed > 0">-{{ formatCurrency(row.wholesale_removed) }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="row.net_items >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ row.net_items >= 0 ? '+' : '' }}{{ formatNumber(row.net_items) }}
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="row.net_cost >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ row.net_cost >= 0 ? '+' : '' }}{{ formatCurrency(row.net_cost) }}
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="row.net_wholesale >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                    {{ row.net_wholesale >= 0 ? '+' : '' }}{{ formatCurrency(row.net_wholesale) }}
+                                </td>
                             </tr>
 
                             <!-- Empty state -->
                             <tr v-if="weeklyData.length === 0">
-                                <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
                                     No inventory activity found.
                                 </td>
                             </tr>
@@ -336,17 +372,26 @@ const emailUrl = computed(() => `/reports/inventory/weekly/email?${queryParams.v
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
                                     +{{ formatCurrency(totals.cost_added) }}
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-green-600 dark:text-green-400">
+                                    +{{ formatCurrency(totals.wholesale_added) }}
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     -{{ formatNumber(totals.items_removed) }}
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
                                     -{{ formatCurrency(totals.cost_removed) }}
                                 </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right text-red-600 dark:text-red-400">
+                                    -{{ formatCurrency(totals.wholesale_removed) }}
+                                </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="totals.net_items >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ totals.net_items >= 0 ? '+' : '' }}{{ formatNumber(totals.net_items) }}
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="totals.net_cost >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                     {{ totals.net_cost >= 0 ? '+' : '' }}{{ formatCurrency(totals.net_cost) }}
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-4 text-sm text-right" :class="totals.net_wholesale >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                    {{ totals.net_wholesale >= 0 ? '+' : '' }}{{ formatCurrency(totals.net_wholesale) }}
                                 </td>
                             </tr>
                         </tfoot>

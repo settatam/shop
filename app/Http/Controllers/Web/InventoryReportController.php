@@ -129,7 +129,7 @@ class InventoryReportController extends Controller
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
-            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added')
+            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added, COALESCE(SUM(inventory_adjustments.quantity_change * COALESCE(product_variants.wholesale_price, 0)), 0) as wholesale_added')
             ->first();
 
         // Weekly deletions (exclude soft-deleted products)
@@ -141,7 +141,7 @@ class InventoryReportController extends Controller
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
-            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted')
+            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted, COALESCE(SUM(ABS(inventory_adjustments.quantity_change) * COALESCE(product_variants.wholesale_price, 0)), 0) as wholesale_deleted')
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
@@ -153,8 +153,10 @@ class InventoryReportController extends Controller
             'total_value' => $totalValue,
             'added_this_week' => (int) ($additions->added ?? 0),
             'cost_added' => (float) ($additions->cost_added ?? 0),
+            'wholesale_added' => (float) ($additions->wholesale_added ?? 0),
             'deleted_this_week' => (int) ($deletions->deleted ?? 0),
             'deleted_cost' => (float) ($deletions->cost_deleted ?? 0),
+            'wholesale_deleted' => (float) ($deletions->wholesale_deleted ?? 0),
             'projected_profit' => $totalRetailValue - $totalCostBasis,
         ];
     }
@@ -200,8 +202,10 @@ class InventoryReportController extends Controller
                     'total_value' => $inventoryData['total_value'],
                     'added_this_week' => $inventoryData['added_this_week'],
                     'cost_added' => $inventoryData['cost_added'],
+                    'wholesale_added' => $inventoryData['wholesale_added'],
                     'deleted_this_week' => $inventoryData['deleted_this_week'],
                     'deleted_cost' => $inventoryData['deleted_cost'],
+                    'wholesale_deleted' => $inventoryData['wholesale_deleted'],
                     'projected_profit' => $inventoryData['projected_profit'],
                     'has_children' => $hasChildren,
                 ]);
@@ -222,8 +226,10 @@ class InventoryReportController extends Controller
                     'total_value' => $uncategorized['total_value'],
                     'added_this_week' => $uncategorized['added_this_week'],
                     'cost_added' => $uncategorized['cost_added'],
+                    'wholesale_added' => $uncategorized['wholesale_added'],
                     'deleted_this_week' => $uncategorized['deleted_this_week'],
                     'deleted_cost' => $uncategorized['deleted_cost'],
+                    'wholesale_deleted' => $uncategorized['wholesale_deleted'],
                     'projected_profit' => $uncategorized['projected_profit'],
                     'has_children' => false,
                 ]);
@@ -282,7 +288,7 @@ class InventoryReportController extends Controller
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
             ->whereIn('products.category_id', $categoryIds)
-            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added')
+            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added, COALESCE(SUM(inventory_adjustments.quantity_change * COALESCE(product_variants.wholesale_price, 0)), 0) as wholesale_added')
             ->first();
 
         // Get weekly deletions
@@ -295,7 +301,7 @@ class InventoryReportController extends Controller
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
             ->whereIn('products.category_id', $categoryIds)
-            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted')
+            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted, COALESCE(SUM(ABS(inventory_adjustments.quantity_change) * COALESCE(product_variants.wholesale_price, 0)), 0) as wholesale_deleted')
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
@@ -307,8 +313,10 @@ class InventoryReportController extends Controller
             'total_value' => $totalValue,
             'added_this_week' => (int) ($additions->added ?? 0),
             'cost_added' => (float) ($additions->cost_added ?? 0),
+            'wholesale_added' => (float) ($additions->wholesale_added ?? 0),
             'deleted_this_week' => (int) ($deletions->deleted ?? 0),
             'deleted_cost' => (float) ($deletions->cost_deleted ?? 0),
+            'wholesale_deleted' => (float) ($deletions->wholesale_deleted ?? 0),
             'projected_profit' => $totalRetailValue - $totalCostBasis,
         ];
     }
@@ -343,7 +351,7 @@ class InventoryReportController extends Controller
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
-            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added')
+            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added, COALESCE(SUM(inventory_adjustments.quantity_change * COALESCE(product_variants.wholesale_price, 0)), 0) as wholesale_added')
             ->first();
 
         $deletions = DB::table('inventory_adjustments')
@@ -355,7 +363,7 @@ class InventoryReportController extends Controller
             ->join('products', 'product_variants.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
             ->whereNull('products.category_id')
-            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted')
+            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted, COALESCE(SUM(ABS(inventory_adjustments.quantity_change) * COALESCE(product_variants.wholesale_price, 0)), 0) as wholesale_deleted')
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
@@ -367,8 +375,10 @@ class InventoryReportController extends Controller
             'total_value' => $totalValue,
             'added_this_week' => (int) ($additions->added ?? 0),
             'cost_added' => (float) ($additions->cost_added ?? 0),
+            'wholesale_added' => (float) ($additions->wholesale_added ?? 0),
             'deleted_this_week' => (int) ($deletions->deleted ?? 0),
             'deleted_cost' => (float) ($deletions->cost_deleted ?? 0),
+            'wholesale_deleted' => (float) ($deletions->wholesale_deleted ?? 0),
             'projected_profit' => $totalRetailValue - $totalCostBasis,
         ];
     }
@@ -394,10 +404,13 @@ class InventoryReportController extends Controller
         $totals = [
             'items_added' => $weeklyData->sum('items_added'),
             'cost_added' => $weeklyData->sum('cost_added'),
+            'wholesale_added' => $weeklyData->sum('wholesale_added'),
             'items_removed' => $weeklyData->sum('items_removed'),
             'cost_removed' => $weeklyData->sum('cost_removed'),
+            'wholesale_removed' => $weeklyData->sum('wholesale_removed'),
             'net_items' => $weeklyData->sum('net_items'),
             'net_cost' => $weeklyData->sum('net_cost'),
+            'net_wholesale' => $weeklyData->sum('net_wholesale'),
         ];
 
         $dateRangeLabel = $rangeStart->format('M Y').' - '.$rangeEnd->format('M Y');
@@ -434,10 +447,13 @@ class InventoryReportController extends Controller
         $totals = [
             'items_added' => $monthlyData->sum('items_added'),
             'cost_added' => $monthlyData->sum('cost_added'),
+            'wholesale_added' => $monthlyData->sum('wholesale_added'),
             'items_removed' => $monthlyData->sum('items_removed'),
             'cost_removed' => $monthlyData->sum('cost_removed'),
+            'wholesale_removed' => $monthlyData->sum('wholesale_removed'),
             'net_items' => $monthlyData->sum('net_items'),
             'net_cost' => $monthlyData->sum('net_cost'),
+            'net_wholesale' => $monthlyData->sum('net_wholesale'),
         ];
 
         $dateRangeLabel = $rangeStart->format('M Y').' - '.$rangeEnd->format('M Y');
@@ -469,10 +485,13 @@ class InventoryReportController extends Controller
         $totals = [
             'items_added' => $yearlyData->sum('items_added'),
             'cost_added' => $yearlyData->sum('cost_added'),
+            'wholesale_added' => $yearlyData->sum('wholesale_added'),
             'items_removed' => $yearlyData->sum('items_removed'),
             'cost_removed' => $yearlyData->sum('cost_removed'),
+            'wholesale_removed' => $yearlyData->sum('wholesale_removed'),
             'net_items' => $yearlyData->sum('net_items'),
             'net_cost' => $yearlyData->sum('net_cost'),
+            'net_wholesale' => $yearlyData->sum('net_wholesale'),
         ];
 
         return Inertia::render('reports/inventory/Yearly', [
@@ -502,10 +521,13 @@ class InventoryReportController extends Controller
         $totals = [
             'items_added' => $dailyData->sum('items_added'),
             'cost_added' => $dailyData->sum('cost_added'),
+            'wholesale_added' => $dailyData->sum('wholesale_added'),
             'items_removed' => $dailyData->sum('items_removed'),
             'cost_removed' => $dailyData->sum('cost_removed'),
+            'wholesale_removed' => $dailyData->sum('wholesale_removed'),
             'net_items' => $dailyData->sum('net_items'),
             'net_cost' => $dailyData->sum('net_cost'),
+            'net_wholesale' => $dailyData->sum('net_wholesale'),
         ];
 
         $dateRangeLabel = $rangeStart->format('M d, Y').' - '.$rangeEnd->format('M d, Y');
@@ -891,7 +913,8 @@ class InventoryReportController extends Controller
             ->select(
                 'products.category_id',
                 DB::raw('SUM(inventory_adjustments.quantity_change) as added_count'),
-                DB::raw('SUM(inventory_adjustments.total_cost_impact) as cost_added')
+                DB::raw('SUM(inventory_adjustments.total_cost_impact) as cost_added'),
+                DB::raw('SUM(inventory_adjustments.quantity_change * COALESCE(product_variants.wholesale_price, 0)) as wholesale_added')
             )
             ->groupBy('products.category_id')
             ->get()
@@ -909,7 +932,8 @@ class InventoryReportController extends Controller
             ->select(
                 'products.category_id',
                 DB::raw('SUM(ABS(inventory_adjustments.quantity_change)) as deleted_count'),
-                DB::raw('SUM(ABS(inventory_adjustments.total_cost_impact)) as deleted_cost')
+                DB::raw('SUM(ABS(inventory_adjustments.total_cost_impact)) as deleted_cost'),
+                DB::raw('SUM(ABS(inventory_adjustments.quantity_change) * COALESCE(product_variants.wholesale_price, 0)) as wholesale_deleted')
             )
             ->groupBy('products.category_id')
             ->get()
@@ -939,8 +963,10 @@ class InventoryReportController extends Controller
                     'total_value' => $totalValue,
                     'added_this_week' => (int) ($additions->added_count ?? 0),
                     'cost_added' => (float) ($additions->cost_added ?? 0),
+                    'wholesale_added' => (float) ($additions->wholesale_added ?? 0),
                     'deleted_this_week' => (int) ($deletions->deleted_count ?? 0),
                     'deleted_cost' => (float) ($deletions->deleted_cost ?? 0),
+                    'wholesale_deleted' => (float) ($deletions->wholesale_deleted ?? 0),
                     'projected_profit' => $projectedProfit,
                 ]);
             }
@@ -972,7 +998,8 @@ class InventoryReportController extends Controller
             ->whereNull('products.category_id')
             ->select(
                 DB::raw('SUM(inventory_adjustments.quantity_change) as added_count'),
-                DB::raw('SUM(inventory_adjustments.total_cost_impact) as cost_added')
+                DB::raw('SUM(inventory_adjustments.total_cost_impact) as cost_added'),
+                DB::raw('SUM(inventory_adjustments.quantity_change * COALESCE(product_variants.wholesale_price, 0)) as wholesale_added')
             )
             ->first();
 
@@ -987,7 +1014,8 @@ class InventoryReportController extends Controller
             ->whereNull('products.category_id')
             ->select(
                 DB::raw('SUM(ABS(inventory_adjustments.quantity_change)) as deleted_count'),
-                DB::raw('SUM(ABS(inventory_adjustments.total_cost_impact)) as deleted_cost')
+                DB::raw('SUM(ABS(inventory_adjustments.total_cost_impact)) as deleted_cost'),
+                DB::raw('SUM(ABS(inventory_adjustments.quantity_change) * COALESCE(product_variants.wholesale_price, 0)) as wholesale_deleted')
             )
             ->first();
 
@@ -1005,8 +1033,10 @@ class InventoryReportController extends Controller
                 'total_value' => $uncategorizedValue,
                 'added_this_week' => (int) ($uncategorizedAdditions->added_count ?? 0),
                 'cost_added' => (float) ($uncategorizedAdditions->cost_added ?? 0),
+                'wholesale_added' => (float) ($uncategorizedAdditions->wholesale_added ?? 0),
                 'deleted_this_week' => (int) ($uncategorizedDeletions->deleted_count ?? 0),
                 'deleted_cost' => (float) ($uncategorizedDeletions->deleted_cost ?? 0),
+                'wholesale_deleted' => (float) ($uncategorizedDeletions->wholesale_deleted ?? 0),
                 'projected_profit' => $uncategorizedRetail - $uncategorizedCostBasis,
             ]);
         }
@@ -1077,34 +1107,43 @@ class InventoryReportController extends Controller
      */
     protected function getWeekData(int $storeId, Carbon $weekStart, Carbon $weekEnd): array
     {
-        $additions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->whereBetween('created_at', [$weekStart, $weekEnd])
-            ->where('quantity_change', '>', 0)
-            ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+        $additions = DB::table('inventory_adjustments as ia')
+            ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+            ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+            ->where('ia.store_id', $storeId)
+            ->whereBetween('ia.created_at', [$weekStart, $weekEnd])
+            ->where('ia.quantity_change', '>', 0)
+            ->selectRaw('COALESCE(SUM(ia.quantity_change), 0) as items_added, COALESCE(SUM(ia.total_cost_impact), 0) as cost_added, COALESCE(SUM(ia.quantity_change * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_added')
             ->first();
 
-        $deletions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->whereBetween('created_at', [$weekStart, $weekEnd])
-            ->where('quantity_change', '<', 0)
-            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+        $deletions = DB::table('inventory_adjustments as ia')
+            ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+            ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+            ->where('ia.store_id', $storeId)
+            ->whereBetween('ia.created_at', [$weekStart, $weekEnd])
+            ->where('ia.quantity_change', '<', 0)
+            ->selectRaw('COALESCE(SUM(ABS(ia.quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(ia.total_cost_impact)), 0) as cost_removed, COALESCE(SUM(ABS(ia.quantity_change) * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_removed')
             ->first();
 
         $itemsAdded = (int) ($additions->items_added ?? 0);
         $costAdded = (float) ($additions->cost_added ?? 0);
+        $wholesaleAdded = (float) ($additions->wholesale_added ?? 0);
         $itemsRemoved = (int) ($deletions->items_removed ?? 0);
         $costRemoved = (float) ($deletions->cost_removed ?? 0);
+        $wholesaleRemoved = (float) ($deletions->wholesale_removed ?? 0);
 
         return [
             'period' => $weekStart->format('M d').' - '.$weekEnd->format('M d, Y'),
             'week_start' => $weekStart->format('Y-m-d'),
             'items_added' => $itemsAdded,
             'cost_added' => $costAdded,
+            'wholesale_added' => $wholesaleAdded,
             'items_removed' => $itemsRemoved,
             'cost_removed' => $costRemoved,
+            'wholesale_removed' => $wholesaleRemoved,
             'net_items' => $itemsAdded - $itemsRemoved,
             'net_cost' => $costAdded - $costRemoved,
+            'net_wholesale' => $wholesaleAdded - $wholesaleRemoved,
         ];
     }
 
@@ -1131,24 +1170,30 @@ class InventoryReportController extends Controller
      */
     protected function getMonthData(int $storeId, Carbon $monthStart, Carbon $monthEnd): array
     {
-        $additions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
-            ->where('quantity_change', '>', 0)
-            ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+        $additions = DB::table('inventory_adjustments as ia')
+            ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+            ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+            ->where('ia.store_id', $storeId)
+            ->whereBetween('ia.created_at', [$monthStart, $monthEnd])
+            ->where('ia.quantity_change', '>', 0)
+            ->selectRaw('COALESCE(SUM(ia.quantity_change), 0) as items_added, COALESCE(SUM(ia.total_cost_impact), 0) as cost_added, COALESCE(SUM(ia.quantity_change * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_added')
             ->first();
 
-        $deletions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
-            ->where('quantity_change', '<', 0)
-            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+        $deletions = DB::table('inventory_adjustments as ia')
+            ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+            ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+            ->where('ia.store_id', $storeId)
+            ->whereBetween('ia.created_at', [$monthStart, $monthEnd])
+            ->where('ia.quantity_change', '<', 0)
+            ->selectRaw('COALESCE(SUM(ABS(ia.quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(ia.total_cost_impact)), 0) as cost_removed, COALESCE(SUM(ABS(ia.quantity_change) * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_removed')
             ->first();
 
         $itemsAdded = (int) ($additions->items_added ?? 0);
         $costAdded = (float) ($additions->cost_added ?? 0);
+        $wholesaleAdded = (float) ($additions->wholesale_added ?? 0);
         $itemsRemoved = (int) ($deletions->items_removed ?? 0);
         $costRemoved = (float) ($deletions->cost_removed ?? 0);
+        $wholesaleRemoved = (float) ($deletions->wholesale_removed ?? 0);
 
         return [
             'period' => $monthStart->format('M Y'),
@@ -1156,10 +1201,13 @@ class InventoryReportController extends Controller
             'month_key' => $monthStart->format('Y-m'), // For linking to weekly view
             'items_added' => $itemsAdded,
             'cost_added' => $costAdded,
+            'wholesale_added' => $wholesaleAdded,
             'items_removed' => $itemsRemoved,
             'cost_removed' => $costRemoved,
+            'wholesale_removed' => $wholesaleRemoved,
             'net_items' => $itemsAdded - $itemsRemoved,
             'net_cost' => $costAdded - $costRemoved,
+            'net_wholesale' => $wholesaleAdded - $wholesaleRemoved,
         ];
     }
 
@@ -1181,34 +1229,43 @@ class InventoryReportController extends Controller
             $yearStart = Carbon::createFromDate($year, 1, 1)->startOfDay();
             $yearEnd = Carbon::createFromDate($year, 12, 31)->endOfDay();
 
-            $additions = DB::table('inventory_adjustments')
-                ->where('store_id', $storeId)
-                ->whereBetween('created_at', [$yearStart, $yearEnd])
-                ->where('quantity_change', '>', 0)
-                ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+            $additions = DB::table('inventory_adjustments as ia')
+                ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+                ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+                ->where('ia.store_id', $storeId)
+                ->whereBetween('ia.created_at', [$yearStart, $yearEnd])
+                ->where('ia.quantity_change', '>', 0)
+                ->selectRaw('COALESCE(SUM(ia.quantity_change), 0) as items_added, COALESCE(SUM(ia.total_cost_impact), 0) as cost_added, COALESCE(SUM(ia.quantity_change * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_added')
                 ->first();
 
-            $deletions = DB::table('inventory_adjustments')
-                ->where('store_id', $storeId)
-                ->whereBetween('created_at', [$yearStart, $yearEnd])
-                ->where('quantity_change', '<', 0)
-                ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+            $deletions = DB::table('inventory_adjustments as ia')
+                ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+                ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+                ->where('ia.store_id', $storeId)
+                ->whereBetween('ia.created_at', [$yearStart, $yearEnd])
+                ->where('ia.quantity_change', '<', 0)
+                ->selectRaw('COALESCE(SUM(ABS(ia.quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(ia.total_cost_impact)), 0) as cost_removed, COALESCE(SUM(ABS(ia.quantity_change) * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_removed')
                 ->first();
 
             $itemsAdded = (int) ($additions->items_added ?? 0);
             $costAdded = (float) ($additions->cost_added ?? 0);
+            $wholesaleAdded = (float) ($additions->wholesale_added ?? 0);
             $itemsRemoved = (int) ($deletions->items_removed ?? 0);
             $costRemoved = (float) ($deletions->cost_removed ?? 0);
+            $wholesaleRemoved = (float) ($deletions->wholesale_removed ?? 0);
 
             $years->push([
                 'period' => (string) $year,
                 'year' => $year,
                 'items_added' => $itemsAdded,
                 'cost_added' => $costAdded,
+                'wholesale_added' => $wholesaleAdded,
                 'items_removed' => $itemsRemoved,
                 'cost_removed' => $costRemoved,
+                'wholesale_removed' => $wholesaleRemoved,
                 'net_items' => $itemsAdded - $itemsRemoved,
                 'net_cost' => $costAdded - $costRemoved,
+                'net_wholesale' => $wholesaleAdded - $wholesaleRemoved,
             ]);
         }
 
@@ -1238,34 +1295,43 @@ class InventoryReportController extends Controller
      */
     protected function getDayData(int $storeId, Carbon $dayStart, Carbon $dayEnd): array
     {
-        $additions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->whereBetween('created_at', [$dayStart, $dayEnd])
-            ->where('quantity_change', '>', 0)
-            ->selectRaw('COALESCE(SUM(quantity_change), 0) as items_added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+        $additions = DB::table('inventory_adjustments as ia')
+            ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+            ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+            ->where('ia.store_id', $storeId)
+            ->whereBetween('ia.created_at', [$dayStart, $dayEnd])
+            ->where('ia.quantity_change', '>', 0)
+            ->selectRaw('COALESCE(SUM(ia.quantity_change), 0) as items_added, COALESCE(SUM(ia.total_cost_impact), 0) as cost_added, COALESCE(SUM(ia.quantity_change * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_added')
             ->first();
 
-        $deletions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->whereBetween('created_at', [$dayStart, $dayEnd])
-            ->where('quantity_change', '<', 0)
-            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_removed')
+        $deletions = DB::table('inventory_adjustments as ia')
+            ->join('inventory as i', 'ia.inventory_id', '=', 'i.id')
+            ->join('product_variants as pv', 'i.product_variant_id', '=', 'pv.id')
+            ->where('ia.store_id', $storeId)
+            ->whereBetween('ia.created_at', [$dayStart, $dayEnd])
+            ->where('ia.quantity_change', '<', 0)
+            ->selectRaw('COALESCE(SUM(ABS(ia.quantity_change)), 0) as items_removed, COALESCE(SUM(ABS(ia.total_cost_impact)), 0) as cost_removed, COALESCE(SUM(ABS(ia.quantity_change) * COALESCE(pv.wholesale_price, 0)), 0) as wholesale_removed')
             ->first();
 
         $itemsAdded = (int) ($additions->items_added ?? 0);
         $costAdded = (float) ($additions->cost_added ?? 0);
+        $wholesaleAdded = (float) ($additions->wholesale_added ?? 0);
         $itemsRemoved = (int) ($deletions->items_removed ?? 0);
         $costRemoved = (float) ($deletions->cost_removed ?? 0);
+        $wholesaleRemoved = (float) ($deletions->wholesale_removed ?? 0);
 
         return [
             'period' => $dayStart->format('M d, Y'),
             'date' => $dayStart->format('Y-m-d'),
             'items_added' => $itemsAdded,
             'cost_added' => $costAdded,
+            'wholesale_added' => $wholesaleAdded,
             'items_removed' => $itemsRemoved,
             'cost_removed' => $costRemoved,
+            'wholesale_removed' => $wholesaleRemoved,
             'net_items' => $itemsAdded - $itemsRemoved,
             'net_cost' => $costAdded - $costRemoved,
+            'net_wholesale' => $wholesaleAdded - $wholesaleRemoved,
         ];
     }
 }
