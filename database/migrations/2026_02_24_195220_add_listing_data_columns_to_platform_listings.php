@@ -66,7 +66,16 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Drop the sales_channel_id FK that depends on the composite unique index,
+        // then drop the unique index itself
         Schema::table('platform_listings', function (Blueprint $table) {
+            $table->dropForeign(['sales_channel_id']);
+            $table->dropUnique('pl_channel_product_unique');
+        });
+
+        // Re-add the sales_channel_id FK and the original unique constraint
+        Schema::table('platform_listings', function (Blueprint $table) {
+            $table->foreign('sales_channel_id')->references('id')->on('sales_channels')->nullOnDelete();
             $table->unique(['store_marketplace_id', 'external_listing_id'], 'pl_conn_listing_unique');
         });
 
@@ -76,7 +85,6 @@ return new class extends Migration
         });
 
         Schema::table('platform_listings', function (Blueprint $table) {
-            $table->dropUnique('pl_channel_product_unique');
             $table->dropColumn([
                 'title',
                 'description',

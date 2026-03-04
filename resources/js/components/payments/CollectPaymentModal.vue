@@ -180,6 +180,7 @@ const paymentMethods = [
     { value: 'terminal', label: 'Card Terminal', icon: ComputerDesktopIcon, requiresTerminal: true },
     { value: 'card', label: 'Card (Offline)', icon: CreditCardIcon },
     { value: 'check', label: 'Check', icon: BanknotesIcon },
+    { value: 'store_credit', label: 'Store Credit', icon: CreditCardIcon },
     { value: 'bank_transfer', label: 'Bank Transfer', icon: BanknotesIcon },
     { value: 'external', label: 'External/Other', icon: BanknotesIcon },
 ];

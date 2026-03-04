@@ -23,6 +23,7 @@ class ProcessPaymentRequest extends FormRequest
             Payment::METHOD_CARD,
             Payment::METHOD_CHECK,
             Payment::METHOD_BANK_TRANSFER,
+            Payment::METHOD_STORE_CREDIT,
             Payment::METHOD_EXTERNAL,
         ]);
 

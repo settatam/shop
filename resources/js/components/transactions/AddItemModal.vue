@@ -224,29 +224,27 @@ async function loadTemplateFields(categoryId: number) {
     }
 }
 
-// --- Precious Metal Options (matching template field values) ---
+// --- Precious Metal Options (matching TransactionItem constants) ---
 const preciousMetalOptions = [
-    { value: '10k', label: '10K Gold' },
-    { value: '14k', label: '14K Gold' },
-    { value: '18k', label: '18K Gold' },
-    { value: '20k', label: '20K Gold' },
-    { value: '22k', label: '22K Gold' },
-    { value: '24k', label: '24K Gold' },
-    { value: 'sterling', label: 'Sterling Silver' },
+    { value: 'gold_10k', label: '10K Gold' },
+    { value: 'gold_14k', label: '14K Gold' },
+    { value: 'gold_18k', label: '18K Gold' },
+    { value: 'gold_22k', label: '22K Gold' },
+    { value: 'gold_24k', label: '24K Gold' },
+    { value: 'silver', label: 'Sterling Silver' },
     { value: 'platinum', label: 'Platinum' },
     { value: 'palladium', label: 'Palladium' },
 ];
 
 // Map category names to metal values for auto-detection
 const categoryMetalMap: Record<string, string> = {
-    '10k': '10k',
-    '14k': '14k',
-    '18k': '18k',
-    '20k': '20k',
-    '22k': '22k',
-    '24k': '24k',
-    'gold': '24k', // Pure gold in Bullion context
-    'silver': 'sterling',
+    '10k': 'gold_10k',
+    '14k': 'gold_14k',
+    '18k': 'gold_18k',
+    '22k': 'gold_22k',
+    '24k': 'gold_24k',
+    'gold': 'gold_24k', // Pure gold in Bullion context
+    'silver': 'silver',
     'platinum': 'platinum',
     'palladium': 'palladium',
 };
@@ -312,9 +310,21 @@ const dwtField = computed(() =>
 );
 
 // Sync direct fields to template attributes
+// Map between TransactionItem constants and template field values
+const metalToTemplate: Record<string, string> = {
+    'gold_10k': '10k', 'gold_14k': '14k', 'gold_18k': '18k',
+    'gold_22k': '22k', 'gold_24k': '24k',
+    'silver': 'sterling', 'platinum': 'platinum', 'palladium': 'palladium',
+};
+const templateToMetal: Record<string, string> = {
+    '10k': 'gold_10k', '14k': 'gold_14k', '18k': 'gold_18k',
+    '22k': 'gold_22k', '24k': 'gold_24k',
+    'sterling': 'silver', 'platinum': 'platinum', 'palladium': 'palladium',
+};
+
 function syncMetalToTemplate() {
     if (preciousMetalField.value && form.value.precious_metal) {
-        form.value.attributes[preciousMetalField.value.id] = form.value.precious_metal;
+        form.value.attributes[preciousMetalField.value.id] = metalToTemplate[form.value.precious_metal] ?? form.value.precious_metal;
     }
     if (dwtField.value && form.value.dwt) {
         form.value.attributes[dwtField.value.id] = String(form.value.dwt);
@@ -325,8 +335,11 @@ function syncMetalToTemplate() {
 function syncTemplateToMetal() {
     if (preciousMetalField.value) {
         const val = form.value.attributes[preciousMetalField.value.id];
-        if (val && val !== form.value.precious_metal) {
-            form.value.precious_metal = val;
+        if (val) {
+            const mapped = templateToMetal[val] ?? val;
+            if (mapped !== form.value.precious_metal) {
+                form.value.precious_metal = mapped;
+            }
         }
     }
     if (dwtField.value) {

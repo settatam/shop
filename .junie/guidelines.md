@@ -17,6 +17,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/reverb (REVERB) - v1
 - laravel/scout (SCOUT) - v10
 - laravel/wayfinder (WAYFINDER) - v0
+- laravel/dusk (DUSK) - v8
 - laravel/mcp (MCP) - v0
 - laravel/pint (PINT) - v1
 - laravel/sail (SAIL) - v1

@@ -21,7 +21,7 @@ class StoreFactory extends Factory
             'business_name' => $name,
             'account_email' => fake()->companyEmail(),
             'customer_email' => fake()->companyEmail(),
-            'phone' => fake()->phoneNumber(),
+            'phone' => fake()->numerify('##########'),
             'address' => fake()->streetAddress(),
             'city' => fake()->city(),
             'state' => fake()->state(),

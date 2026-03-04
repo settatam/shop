@@ -106,10 +106,12 @@ class InventoryReportController extends Controller
      */
     protected function getOverallTotals(int $storeId, Carbon $weekStart): array
     {
-        // Total inventory
+        // Total inventory (exclude soft-deleted products)
         $inventory = DB::table('inventory')
             ->where('inventory.store_id', $storeId)
             ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
+            ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
             ->selectRaw('
                 COALESCE(SUM(inventory.quantity), 0) as total_stock,
                 COALESCE(SUM(inventory.quantity * inventory.unit_cost), 0) as total_value,
@@ -118,20 +120,28 @@ class InventoryReportController extends Controller
             ')
             ->first();
 
-        // Weekly additions
+        // Weekly additions (exclude soft-deleted products)
         $additions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->where('created_at', '>=', $weekStart)
-            ->where('quantity_change', '>', 0)
-            ->selectRaw('COALESCE(SUM(quantity_change), 0) as added, COALESCE(SUM(total_cost_impact), 0) as cost_added')
+            ->where('inventory_adjustments.store_id', $storeId)
+            ->where('inventory_adjustments.created_at', '>=', $weekStart)
+            ->where('inventory_adjustments.quantity_change', '>', 0)
+            ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
+            ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
+            ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
+            ->selectRaw('COALESCE(SUM(inventory_adjustments.quantity_change), 0) as added, COALESCE(SUM(inventory_adjustments.total_cost_impact), 0) as cost_added')
             ->first();
 
-        // Weekly deletions
+        // Weekly deletions (exclude soft-deleted products)
         $deletions = DB::table('inventory_adjustments')
-            ->where('store_id', $storeId)
-            ->where('created_at', '>=', $weekStart)
-            ->where('quantity_change', '<', 0)
-            ->selectRaw('COALESCE(SUM(ABS(quantity_change)), 0) as deleted, COALESCE(SUM(ABS(total_cost_impact)), 0) as cost_deleted')
+            ->where('inventory_adjustments.store_id', $storeId)
+            ->where('inventory_adjustments.created_at', '>=', $weekStart)
+            ->where('inventory_adjustments.quantity_change', '<', 0)
+            ->join('inventory', 'inventory_adjustments.inventory_id', '=', 'inventory.id')
+            ->join('product_variants', 'inventory.product_variant_id', '=', 'product_variants.id')
+            ->join('products', 'product_variants.product_id', '=', 'products.id')
+            ->whereNull('products.deleted_at')
+            ->selectRaw('COALESCE(SUM(ABS(inventory_adjustments.quantity_change)), 0) as deleted, COALESCE(SUM(ABS(inventory_adjustments.total_cost_impact)), 0) as cost_deleted')
             ->first();
 
         $totalValue = (float) ($inventory->total_value ?? 0);
