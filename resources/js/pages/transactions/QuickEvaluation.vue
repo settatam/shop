@@ -18,7 +18,7 @@ import { SparklesIcon, GlobeAltIcon, MagnifyingGlassIcon, ArrowTopRightOnSquareI
 import axios from 'axios';
 
 // Components for the conversion modal
-import CustomerStep from '@/components/transactions/CustomerStep.vue';
+import CustomerStep from '@/components/customers/CustomerStep.vue';
 import PaymentStep from '@/components/transactions/PaymentStep.vue';
 import SelectUserStep from '@/components/transactions/SelectUserStep.vue';
 import {

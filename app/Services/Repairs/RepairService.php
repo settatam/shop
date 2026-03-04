@@ -3,6 +3,7 @@
 namespace App\Services\Repairs;
 
 use App\Models\Customer;
+use App\Models\CustomerDocument;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Repair;
@@ -15,6 +16,7 @@ use App\Services\Orders\OrderCreationService;
 use App\Services\StoreContext;
 use App\Services\TaxService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class RepairService
@@ -97,6 +99,14 @@ class RepairService
                     ]);
                 }
                 $customerId = $customer->id;
+            }
+
+            // Save customer ID photos if uploaded
+            if (! empty($data['id_photos']) && $customerId) {
+                $customer = $customer ?? Customer::find($customerId);
+                if ($customer) {
+                    $this->saveCustomerIdPhotos($customer, $storeId, $data['id_photos']);
+                }
             }
 
             // Get or create vendor
@@ -319,5 +329,30 @@ class RepairService
             'total' => max(0, $total),
             'profit' => $subtotal - $vendorTotal,
         ];
+    }
+
+    /**
+     * Save customer ID photos.
+     *
+     * @param  array<\Illuminate\Http\UploadedFile>  $photos
+     */
+    protected function saveCustomerIdPhotos(Customer $customer, int $storeId, array $photos): void
+    {
+        $types = [CustomerDocument::TYPE_ID_FRONT, CustomerDocument::TYPE_ID_BACK];
+
+        foreach ($photos as $index => $photo) {
+            $type = $types[$index] ?? CustomerDocument::TYPE_OTHER;
+            $relativePath = $photo->store("customers/{$customer->id}/identity", 'do_spaces');
+            $fullUrl = Storage::disk('do_spaces')->url($relativePath);
+
+            $customer->documents()->create([
+                'type' => $type,
+                'path' => $fullUrl,
+                'original_filename' => $photo->getClientOriginalName(),
+                'mime_type' => $photo->getMimeType(),
+                'size' => $photo->getSize(),
+                'uploaded_by' => auth()->id(),
+            ]);
+        }
     }
 }

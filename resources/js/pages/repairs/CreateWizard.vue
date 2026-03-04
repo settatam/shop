@@ -18,7 +18,7 @@ import {
     PencilIcon,
 } from '@heroicons/vue/24/outline';
 import debounce from 'lodash/debounce';
-import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
+import CustomerStep from '@/components/customers/CustomerStep.vue';
 
 interface StoreUser {
     id: number;
@@ -166,12 +166,8 @@ const formData = ref({
     is_appraisal: props.isAppraisal,
 });
 
-// Customer search
-const customerQuery = ref('');
-const customerResults = ref<Customer[]>([]);
-const isSearchingCustomers = ref(false);
-const showNewCustomerForm = ref(false);
-const newCustomer = ref<CustomerFormData>(getEmptyCustomerForm());
+// Customer ID photo files
+const idPhotos = ref<File[]>([]);
 
 // Vendor search
 const vendorQuery = ref('');
@@ -229,69 +225,13 @@ watch(() => formData.value.warehouse_id, (newWarehouseId) => {
     formData.value.tax_rate = getTaxRateForWarehouse(newWarehouseId);
 });
 
-// Customer search
-const searchCustomers = debounce(async (query: string) => {
-    if (!query || query.length < 2) {
-        customerResults.value = [];
-        return;
-    }
-    isSearchingCustomers.value = true;
-    try {
-        const response = await fetch(`${basePath.value}/search-customers?query=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        customerResults.value = data.customers;
-    } finally {
-        isSearchingCustomers.value = false;
-    }
-}, 300);
-
-watch(customerQuery, (value) => {
-    searchCustomers(value);
-});
-
-function selectCustomer(customer: Customer) {
-    formData.value.customer_id = customer.id;
-    formData.value.customer = customer;
-    customerQuery.value = '';
-    customerResults.value = [];
-    showNewCustomerForm.value = false;
-}
-
-function clearCustomer() {
-    formData.value.customer_id = null;
-    formData.value.customer = null;
-}
-
-function startNewCustomer() {
-    showNewCustomerForm.value = true;
-    formData.value.customer_id = null;
-    newCustomer.value = getEmptyCustomerForm();
-}
-
-function cancelNewCustomer() {
-    showNewCustomerForm.value = false;
-}
-
-function confirmNewCustomer() {
-    formData.value.customer = {
-        id: 0,
-        first_name: newCustomer.value.first_name,
-        last_name: newCustomer.value.last_name,
-        full_name: `${newCustomer.value.first_name} ${newCustomer.value.last_name}`,
-        email: newCustomer.value.email,
-        phone_number: newCustomer.value.phone,
-        company_name: newCustomer.value.company_name,
-        lead_source_id: newCustomer.value.lead_source_id,
-        address: newCustomer.value.address?.address_line1 ? {
-            address_line1: newCustomer.value.address.address_line1,
-            address_line2: newCustomer.value.address.address_line2 || undefined,
-            city: newCustomer.value.address.city || undefined,
-            state: newCustomer.value.address.state || undefined,
-            postal_code: newCustomer.value.address.postal_code || undefined,
-            country: newCustomer.value.address.country || 'US',
-        } : undefined,
-    };
-    showNewCustomerForm.value = false;
+function handleCustomerSelect(customer: any, customerId: number | null) {
+    formData.value.customer = customer ? {
+        ...customer,
+        id: customer.id ?? 0,
+        full_name: customer.full_name || `${customer.first_name} ${customer.last_name}`.trim(),
+    } : null;
+    formData.value.customer_id = customerId;
 }
 
 // Vendor search
@@ -457,6 +397,11 @@ async function submit() {
         description: formData.value.description,
         is_appraisal: formData.value.is_appraisal,
     };
+
+    // Include ID photos if present
+    if (idPhotos.value.length > 0) {
+        payload.id_photos = idPhotos.value;
+    }
 
     router.post(basePath.value, payload, {
         onError: (errs) => {
@@ -630,87 +575,16 @@ async function submit() {
                                 </div>
 
                                 <!-- Step 2: Customer -->
-                                <div v-else-if="currentStep === 2" class="space-y-6">
-                                    <div>
-                                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Select or Create Customer</h2>
-                                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose an existing customer or create a new one.</p>
-                                    </div>
-
-                                    <!-- Selected Customer -->
-                                    <div v-if="formData.customer_id || formData.customer" class="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                                        <div class="flex items-center gap-3">
-                                            <div class="flex size-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                                                <UserIcon class="size-6 text-green-600 dark:text-green-400" />
-                                            </div>
-                                            <div>
-                                                <p class="font-medium text-gray-900 dark:text-white">{{ formData.customer?.full_name }}</p>
-                                                <p v-if="formData.customer?.email" class="text-sm text-gray-500 dark:text-gray-400">{{ formData.customer.email }}</p>
-                                            </div>
-                                        </div>
-                                        <button type="button" @click="clearCustomer" class="rounded p-1 text-gray-400 hover:text-gray-500">
-                                            <XMarkIcon class="size-5" />
-                                        </button>
-                                    </div>
-
-                                    <!-- Search / New Customer Form -->
-                                    <div v-else>
-                                        <div v-if="!showNewCustomerForm">
-                                            <div class="relative mb-4">
-                                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-                                                <input
-                                                    v-model="customerQuery"
-                                                    type="text"
-                                                    placeholder="Search customers by name, email, or phone..."
-                                                    class="w-full rounded-lg border-0 py-3 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-
-                                            <!-- Search Results -->
-                                            <div v-if="customerResults.length > 0" class="mb-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2 dark:border-gray-700">
-                                                <button
-                                                    v-for="customer in customerResults"
-                                                    :key="customer.id"
-                                                    type="button"
-                                                    @click="selectCustomer(customer)"
-                                                    class="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                >
-                                                    <UserIcon class="size-8 text-gray-400" />
-                                                    <div>
-                                                        <p class="font-medium text-gray-900 dark:text-white">{{ customer.full_name }}</p>
-                                                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ customer.email || customer.phone_number }}</p>
-                                                    </div>
-                                                </button>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                @click="startNewCustomer"
-                                                class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                            >
-                                                <PlusIcon class="size-5" />
-                                                Create New Customer
-                                            </button>
-                                        </div>
-
-                                        <!-- New Customer Form -->
-                                        <div v-else class="space-y-4">
-                                            <CreateCustomerForm
-                                                v-model="newCustomer"
-                                                :show-company-name="true"
-                                                :show-lead-source="true"
-                                            />
-
-                                            <div class="flex gap-2">
-                                                <button type="button" @click="cancelNewCustomer" class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600">
-                                                    Cancel
-                                                </button>
-                                                <button type="button" @click="confirmNewCustomer" :disabled="!newCustomer.first_name || !newCustomer.last_name" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
-                                                    Confirm Customer
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <CustomerStep
+                                    v-else-if="currentStep === 2"
+                                    :customer-id="formData.customer_id"
+                                    :customer="formData.customer"
+                                    :show-id-photos="true"
+                                    :show-company-name="true"
+                                    :show-lead-source="true"
+                                    @update="handleCustomerSelect"
+                                    @update:id-photos="(files: File[]) => idPhotos = files"
+                                />
 
                                 <!-- Step 3: Items -->
                                 <div v-else-if="currentStep === 3" class="space-y-6">

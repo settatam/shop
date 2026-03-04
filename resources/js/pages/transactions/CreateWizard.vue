@@ -14,7 +14,7 @@ import {
     PencilIcon,
 } from '@heroicons/vue/24/outline';
 import SelectUserStep from '@/components/transactions/SelectUserStep.vue';
-import CustomerStep from '@/components/transactions/CustomerStep.vue';
+import CustomerStep from '@/components/customers/CustomerStep.vue';
 import ItemsStep from '@/components/transactions/ItemsStep.vue';
 import PaymentStep from '@/components/transactions/PaymentStep.vue';
 

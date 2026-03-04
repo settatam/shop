@@ -40,9 +40,20 @@ interface Customer {
 interface Props {
     customerId: number | null;
     customer: Customer | null;
+    showIdPhotos?: boolean;
+    showCompanyName?: boolean;
+    showLeadSource?: boolean;
+    title?: string;
+    description?: string;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    showIdPhotos: true,
+    showCompanyName: true,
+    showLeadSource: true,
+    title: 'Customer Information',
+    description: 'Search for an existing customer or create a new one.',
+});
 
 const emit = defineEmits<{
     update: [customer: Customer | null, customerId: number | null];
@@ -199,10 +210,10 @@ const filteredOptions = computed(() => {
         <div class="flex items-center justify-between">
             <div>
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-                    Customer Information
+                    {{ title }}
                 </h2>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Search for an existing customer or create a new one.
+                    {{ description }}
                 </p>
             </div>
             <div class="flex gap-2">
@@ -375,7 +386,7 @@ const filteredOptions = computed(() => {
                     />
                 </div>
 
-                <div class="sm:col-span-2">
+                <div v-if="showCompanyName" class="sm:col-span-2">
                     <label for="company_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Company Name
                     </label>
@@ -414,7 +425,7 @@ const filteredOptions = computed(() => {
                     />
                 </div>
 
-                <div class="sm:col-span-2">
+                <div v-if="showLeadSource" class="sm:col-span-2">
                     <label for="lead_source" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         Lead Source
                     </label>
@@ -495,7 +506,7 @@ const filteredOptions = computed(() => {
                 </div>
 
                 <!-- ID Photo Upload -->
-                <div class="sm:col-span-2">
+                <div v-if="showIdPhotos" class="sm:col-span-2">
                     <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Customer ID (optional)</p>
                     <div class="flex flex-wrap gap-3">
                         <div v-for="(photo, index) in idPhotos" :key="index" class="relative">
