@@ -36,7 +36,6 @@ interface SelectOption {
 interface Warehouse {
     value: number;
     label: string;
-    tax_rate: number | null;
 }
 
 interface Customer {
@@ -591,9 +590,6 @@ function submitTransaction() {
                                                 <option :value="null">No warehouse (use store default)</option>
                                                 <option v-for="wh in warehouses" :key="wh.value" :value="wh.value">{{ wh.label }}</option>
                                             </select>
-                                            <p v-if="selectedWarehouse?.tax_rate !== null && selectedWarehouse?.tax_rate !== undefined" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                Tax rate: {{ (selectedWarehouse.tax_rate * 100).toFixed(2) }}%
-                                            </p>
                                         </div>
                                     </div>
 

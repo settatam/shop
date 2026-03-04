@@ -102,13 +102,14 @@ class StoreCreditService
         float $amount,
         string $payoutMethod,
         ?string $description = null,
+        ?array $payoutDetails = null,
         ?int $userId = null,
     ): StoreCredit {
         if ($amount <= 0) {
             throw new InvalidArgumentException('Cash out amount must be greater than zero.');
         }
 
-        return DB::transaction(function () use ($customer, $amount, $payoutMethod, $description, $userId) {
+        return DB::transaction(function () use ($customer, $amount, $payoutMethod, $description, $payoutDetails, $userId) {
             $customer = Customer::lockForUpdate()->find($customer->id);
 
             if ($amount > (float) $customer->store_credit_balance) {
@@ -125,6 +126,7 @@ class StoreCreditService
                 'balance_after' => $newBalance,
                 'source' => StoreCredit::SOURCE_CASH_OUT,
                 'payout_method' => $payoutMethod,
+                'payout_details' => $payoutDetails,
                 'description' => $description ?? "Cash out via {$payoutMethod}",
                 'user_id' => $userId ?? auth()->id(),
             ]);

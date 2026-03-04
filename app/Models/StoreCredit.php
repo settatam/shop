@@ -49,6 +49,7 @@ class StoreCredit extends Model
         'reference_type',
         'reference_id',
         'payout_method',
+        'payout_details',
         'description',
         'user_id',
     ];
@@ -58,6 +59,7 @@ class StoreCredit extends Model
         return [
             'amount' => 'decimal:2',
             'balance_after' => 'decimal:2',
+            'payout_details' => 'array',
         ];
     }
 

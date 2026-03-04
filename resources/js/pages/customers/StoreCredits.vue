@@ -2,9 +2,15 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
-import { ArrowLeftIcon } from '@heroicons/vue/20/solid';
-import { BanknotesIcon } from '@heroicons/vue/24/outline';
+import { ref, computed } from 'vue';
+import { ArrowLeftIcon, CheckCircleIcon } from '@heroicons/vue/20/solid';
+import {
+    BanknotesIcon,
+    DocumentCheckIcon,
+    CreditCardIcon,
+    BuildingLibraryIcon,
+} from '@heroicons/vue/24/outline';
+import { RadioGroup, RadioGroupLabel, RadioGroupOption } from '@headlessui/vue';
 
 interface StoreCreditEntry {
     id: number;
@@ -38,6 +44,11 @@ interface Customer {
     last_name: string | null;
     full_name: string;
     email: string | null;
+    phone_number: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip: string | null;
     store_credit_balance: string;
 }
 
@@ -58,17 +69,52 @@ const breadcrumbs: BreadcrumbItem[] = [
 const showCashOutModal = ref(false);
 
 const cashOutForm = useForm({
-    amount: '',
-    payout_method: 'cash',
+    amount: '' as string | number,
+    payout_method: '',
+    payout_details: {} as Record<string, any>,
     notes: '',
 });
 
 const openCashOut = () => {
     cashOutForm.amount = props.customer.store_credit_balance;
-    cashOutForm.payout_method = 'cash';
+    cashOutForm.payout_method = '';
+    cashOutForm.payout_details = {};
     cashOutForm.notes = '';
     showCashOutModal.value = true;
 };
+
+const paymentMethodIcons: Record<string, any> = {
+    cash: BanknotesIcon,
+    check: DocumentCheckIcon,
+    paypal: CreditCardIcon,
+    venmo: CreditCardIcon,
+    ach: BuildingLibraryIcon,
+    wire_transfer: BuildingLibraryIcon,
+};
+
+function getIcon(method: string) {
+    return paymentMethodIcons[method] || CreditCardIcon;
+}
+
+function selectMethod(method: string) {
+    cashOutForm.payout_method = method;
+    cashOutForm.payout_details = {};
+
+    if (method === 'check' && props.customer) {
+        cashOutForm.payout_details = {
+            check_mailing_address: {
+                address: props.customer.address || '',
+                city: props.customer.city || '',
+                state: props.customer.state || '',
+                zip: props.customer.zip || '',
+            },
+        };
+    }
+}
+
+const isFormValid = computed(() => {
+    return cashOutForm.amount && Number(cashOutForm.amount) > 0 && cashOutForm.payout_method;
+});
 
 const submitCashOut = () => {
     cashOutForm.post(`/customers/${props.customer.id}/store-credits/cash-out`, {
@@ -258,14 +304,18 @@ const payoutMethodLabels: Record<string, string> = {
             <div v-if="showCashOutModal" class="fixed inset-0 z-50 overflow-y-auto">
                 <div class="flex min-h-full items-center justify-center p-4">
                     <div class="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75" @click="showCashOutModal = false" />
-                    <div class="relative w-full max-w-md transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 shadow-xl dark:bg-gray-800 sm:p-6">
-                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Cash Out Store Credit</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    <div class="relative w-full max-w-lg transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 shadow-xl dark:bg-gray-800 sm:p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-1">Cash Out Store Credit</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">
                             Available balance: <span class="font-semibold text-gray-900 dark:text-white">{{ formatCurrency(customer.store_credit_balance) }}</span>
                         </p>
-                        <form @submit.prevent="submitCashOut" class="space-y-4">
+
+                        <form @submit.prevent="submitCashOut" class="space-y-5">
+                            <!-- Amount -->
                             <div>
-                                <label for="cashout_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+                                <label for="cashout_amount" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Amount <span class="text-red-500">*</span>
+                                </label>
                                 <div class="relative mt-1">
                                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                         <span class="text-gray-500 sm:text-sm">$</span>
@@ -278,38 +328,234 @@ const payoutMethodLabels: Record<string, string> = {
                                         min="0.01"
                                         :max="Number(customer.store_credit_balance)"
                                         required
-                                        class="block w-full rounded-md border-0 py-1.5 pl-7 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        class="block w-full rounded-md border-0 py-2 pl-7 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                     />
                                 </div>
                                 <p v-if="cashOutForm.errors.amount" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                     {{ cashOutForm.errors.amount }}
                                 </p>
                             </div>
+
+                            <!-- Payment Method Selection -->
                             <div>
-                                <label for="cashout_method" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Payout Method</label>
-                                <select
-                                    id="cashout_method"
-                                    v-model="cashOutForm.payout_method"
-                                    required
-                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                >
-                                    <option v-for="method in payoutMethods" :key="method.value" :value="method.value">
-                                        {{ method.label }}
-                                    </option>
-                                </select>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Payout Method <span class="text-red-500">*</span>
+                                </label>
+                                <RadioGroup :model-value="cashOutForm.payout_method" @update:model-value="selectMethod">
+                                    <RadioGroupLabel class="sr-only">Select payout method</RadioGroupLabel>
+                                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                        <RadioGroupOption
+                                            v-for="method in payoutMethods"
+                                            :key="method.value"
+                                            :value="method.value"
+                                            v-slot="{ checked, active }"
+                                            as="template"
+                                        >
+                                            <div
+                                                :class="[
+                                                    'relative flex cursor-pointer flex-col rounded-lg border p-3 shadow-sm focus:outline-none',
+                                                    checked
+                                                        ? 'border-indigo-600 ring-2 ring-indigo-600'
+                                                        : 'border-gray-300 dark:border-gray-600',
+                                                    active ? 'border-indigo-600 ring-2 ring-indigo-600' : '',
+                                                ]"
+                                            >
+                                                <div class="flex items-center justify-between">
+                                                    <component
+                                                        :is="getIcon(method.value)"
+                                                        :class="[
+                                                            'size-5',
+                                                            checked ? 'text-indigo-600' : 'text-gray-400',
+                                                        ]"
+                                                    />
+                                                    <CheckCircleIcon
+                                                        v-if="checked"
+                                                        class="size-4 text-indigo-600"
+                                                    />
+                                                </div>
+                                                <RadioGroupLabel
+                                                    as="span"
+                                                    :class="[
+                                                        'mt-1 block text-xs font-medium',
+                                                        checked ? 'text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-white',
+                                                    ]"
+                                                >
+                                                    {{ method.label }}
+                                                </RadioGroupLabel>
+                                            </div>
+                                        </RadioGroupOption>
+                                    </div>
+                                </RadioGroup>
                                 <p v-if="cashOutForm.errors.payout_method" class="mt-1 text-sm text-red-600 dark:text-red-400">
                                     {{ cashOutForm.errors.payout_method }}
                                 </p>
                             </div>
+
+                            <!-- Method-specific details -->
+                            <div v-if="cashOutForm.payout_method" class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+                                <!-- PayPal -->
+                                <div v-if="cashOutForm.payout_method === 'paypal'">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        PayPal Email <span class="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="email"
+                                        v-model="cashOutForm.payout_details.paypal_email"
+                                        class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        placeholder="customer@email.com"
+                                    />
+                                    <p v-if="cashOutForm.errors['payout_details.paypal_email']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                        {{ cashOutForm.errors['payout_details.paypal_email'] }}
+                                    </p>
+                                </div>
+
+                                <!-- Venmo -->
+                                <div v-if="cashOutForm.payout_method === 'venmo'">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Venmo Handle <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="relative mt-1">
+                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                            <span class="text-gray-500 dark:text-gray-400 sm:text-sm">@</span>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            v-model="cashOutForm.payout_details.venmo_handle"
+                                            class="block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            placeholder="username"
+                                        />
+                                    </div>
+                                    <p v-if="cashOutForm.errors['payout_details.venmo_handle']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                        {{ cashOutForm.errors['payout_details.venmo_handle'] }}
+                                    </p>
+                                </div>
+
+                                <!-- Check -->
+                                <div v-if="cashOutForm.payout_method === 'check'" class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Check Number</label>
+                                        <input
+                                            type="text"
+                                            v-model="cashOutForm.payout_details.check_number"
+                                            class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            placeholder="Check #"
+                                        />
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Mailing Address</p>
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <div class="sm:col-span-2">
+                                            <input
+                                                type="text"
+                                                v-model="cashOutForm.payout_details.check_mailing_address.address"
+                                                class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                placeholder="Street Address"
+                                            />
+                                            <p v-if="cashOutForm.errors['payout_details.check_mailing_address.address']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ cashOutForm.errors['payout_details.check_mailing_address.address'] }}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="text"
+                                                v-model="cashOutForm.payout_details.check_mailing_address.city"
+                                                class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                placeholder="City"
+                                            />
+                                            <p v-if="cashOutForm.errors['payout_details.check_mailing_address.city']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ cashOutForm.errors['payout_details.check_mailing_address.city'] }}
+                                            </p>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <input
+                                                    type="text"
+                                                    v-model="cashOutForm.payout_details.check_mailing_address.state"
+                                                    class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    placeholder="State"
+                                                />
+                                                <p v-if="cashOutForm.errors['payout_details.check_mailing_address.state']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                    {{ cashOutForm.errors['payout_details.check_mailing_address.state'] }}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <input
+                                                    type="text"
+                                                    v-model="cashOutForm.payout_details.check_mailing_address.zip"
+                                                    class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    placeholder="ZIP"
+                                                />
+                                                <p v-if="cashOutForm.errors['payout_details.check_mailing_address.zip']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                    {{ cashOutForm.errors['payout_details.check_mailing_address.zip'] }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ACH / Wire Transfer -->
+                                <div v-if="cashOutForm.payout_method === 'ach' || cashOutForm.payout_method === 'wire_transfer'" class="space-y-3">
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Bank Information</p>
+                                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <div class="sm:col-span-2">
+                                            <input
+                                                type="text"
+                                                v-model="cashOutForm.payout_details.bank_name"
+                                                class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                placeholder="Bank Name"
+                                            />
+                                            <p v-if="cashOutForm.errors['payout_details.bank_name']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ cashOutForm.errors['payout_details.bank_name'] }}
+                                            </p>
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <input
+                                                type="text"
+                                                v-model="cashOutForm.payout_details.account_holder_name"
+                                                class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                placeholder="Account Holder Name"
+                                            />
+                                            <p v-if="cashOutForm.errors['payout_details.account_holder_name']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ cashOutForm.errors['payout_details.account_holder_name'] }}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="text"
+                                                v-model="cashOutForm.payout_details.routing_number"
+                                                class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                placeholder="Routing Number"
+                                            />
+                                            <p v-if="cashOutForm.errors['payout_details.routing_number']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ cashOutForm.errors['payout_details.routing_number'] }}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <input
+                                                type="text"
+                                                v-model="cashOutForm.payout_details.account_number"
+                                                class="block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                placeholder="Account Number"
+                                            />
+                                            <p v-if="cashOutForm.errors['payout_details.account_number']" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ cashOutForm.errors['payout_details.account_number'] }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Notes -->
                             <div>
                                 <label for="cashout_notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes (optional)</label>
                                 <textarea
                                     id="cashout_notes"
                                     v-model="cashOutForm.notes"
                                     rows="2"
-                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    class="mt-1 block w-full rounded-md border-0 px-3 py-2 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                 />
                             </div>
+
+                            <!-- Actions -->
                             <div class="flex gap-3 justify-end pt-2">
                                 <button
                                     type="button"
@@ -320,7 +566,7 @@ const payoutMethodLabels: Record<string, string> = {
                                 </button>
                                 <button
                                     type="submit"
-                                    :disabled="cashOutForm.processing"
+                                    :disabled="cashOutForm.processing || !isFormValid"
                                     class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
                                 >
                                     {{ cashOutForm.processing ? 'Processing...' : 'Cash Out' }}

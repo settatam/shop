@@ -33,7 +33,7 @@ class StoreCreditController extends Controller
             ->paginate(25);
 
         return Inertia::render('customers/StoreCredits', [
-            'customer' => $customer->only('id', 'first_name', 'last_name', 'full_name', 'email', 'store_credit_balance'),
+            'customer' => $customer->only('id', 'first_name', 'last_name', 'full_name', 'email', 'phone_number', 'address', 'city', 'state', 'zip', 'store_credit_balance'),
             'credits' => $credits,
             'payoutMethods' => [
                 ['value' => StoreCredit::PAYOUT_CASH, 'label' => 'Cash'],
@@ -65,6 +65,7 @@ class StoreCreditController extends Controller
             amount: $amount,
             payoutMethod: $request->validated('payout_method'),
             description: $request->validated('notes'),
+            payoutDetails: $request->validated('payout_details'),
         );
 
         return back()->with('success', 'Store credit cashed out successfully.');
