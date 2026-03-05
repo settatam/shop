@@ -56,6 +56,8 @@ class Repair extends Model implements Payable
         'customer_id',
         'vendor_id',
         'user_id',
+        'store_user_id',
+        'created_by',
         'order_id',
         'repair_number',
         'status',
@@ -154,6 +156,18 @@ class Repair extends Model implements Payable
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** The store employee (salesperson) who made the repair. */
+    public function storeUser(): BelongsTo
+    {
+        return $this->belongsTo(StoreUser::class);
+    }
+
+    /** The logged-in user who created the record. */
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function order(): BelongsTo

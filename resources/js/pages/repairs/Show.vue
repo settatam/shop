@@ -938,14 +938,19 @@ function onVendorPaymentSaved() {
                             </dl>
                         </div>
 
-                        <!-- Employee -->
-                        <div v-if="repair.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Handled By</h2>
+                        <!-- Salesperson -->
+                        <div v-if="repair.store_user || repair.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Salesperson</h2>
                             <div class="flex items-center gap-3">
                                 <div class="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
                                     <UserIcon class="size-5 text-gray-500 dark:text-gray-400" />
                                 </div>
-                                <p class="font-medium text-gray-900 dark:text-white">{{ repair.user.name }}</p>
+                                <div>
+                                    <p class="font-medium text-gray-900 dark:text-white">{{ repair.store_user?.name || repair.user.name }}</p>
+                                    <p v-if="repair.created_by_user && repair.created_by_user.id !== repair.user?.id" class="text-sm text-gray-500 dark:text-gray-400">
+                                        Created by {{ repair.created_by_user.name }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

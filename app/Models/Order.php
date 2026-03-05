@@ -109,6 +109,8 @@ class Order extends Model implements Payable
         'trade_in_transaction_id',
         'customer_id',
         'user_id',
+        'store_user_id',
+        'created_by',
         'warehouse_id',
         'total',
         'sub_total',
@@ -188,6 +190,18 @@ class Order extends Model implements Payable
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** The store employee (salesperson) who made the sale. */
+    public function storeUser(): BelongsTo
+    {
+        return $this->belongsTo(StoreUser::class);
+    }
+
+    /** The logged-in user who created the record. */
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     /** The warehouse from which items are fulfilled. */

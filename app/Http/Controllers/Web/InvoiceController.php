@@ -90,6 +90,7 @@ class InvoiceController extends Controller
             'invoiceable.items.product.images',
             'invoiceable.items.product.category',
             'invoiceable.user',
+            'invoiceable.storeUser',
             'invoiceable.customer.defaultAddress.state',
             'invoiceable.customer.addresses.state',
             'customer.defaultAddress.state',
@@ -134,8 +135,8 @@ class InvoiceController extends Controller
         // Extract service fee from the invoiceable (Order, Memo, or Repair)
         $serviceFee = $this->extractServiceFee($invoiceable);
 
-        // Get salesperson name
-        $salesperson = $invoiceable?->user?->name ?? null;
+        // Get salesperson name (prefer store user, fall back to user)
+        $salesperson = $invoiceable?->storeUser?->full_name ?? $invoiceable?->user?->name ?? null;
 
         // Get date of purchase
         $dateOfPurchase = $invoiceable?->date_of_purchase ?? $invoiceable?->created_at ?? $invoice->created_at;
@@ -378,6 +379,7 @@ class InvoiceController extends Controller
             'invoiceable.items.product.images',
             'invoiceable.items.product.category',
             'invoiceable.user',
+            'invoiceable.storeUser',
             'invoiceable.customer.defaultAddress.state',
             'invoiceable.customer.addresses.state',
             'invoiceable.payments',
@@ -504,10 +506,13 @@ class InvoiceController extends Controller
                 'date_of_purchase' => $invoiceable?->date_of_purchase?->toISOString() ?? $invoiceable?->created_at?->toISOString(),
                 'created_at' => $invoice->created_at->toISOString(),
                 'customer' => $customerData,
-                'user' => $invoiceable?->user ? [
+                'user' => $invoiceable?->storeUser ? [
+                    'id' => $invoiceable->storeUser->id,
+                    'name' => $invoiceable->storeUser->full_name,
+                ] : ($invoiceable?->user ? [
                     'id' => $invoiceable->user->id,
                     'name' => $invoiceable->user->name,
-                ] : null,
+                ] : null),
                 'service_fee_value' => $serviceFeeValue,
                 'service_fee_unit' => $serviceFeeUnit,
                 'trade_in_credit' => $tradeInCredit,

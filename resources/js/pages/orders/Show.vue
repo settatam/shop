@@ -750,6 +750,12 @@ function processReturn() {
                                 <span :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', statusColors[order.status]]">
                                     {{ statusLabels[order.status] }}
                                 </span>
+                                <span
+                                    v-if="order.shipped_at"
+                                    class="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+                                >
+                                    Fulfilled
+                                </span>
                                 <!-- Platform badge for external orders -->
                                 <span
                                     v-if="orderPlatform && orderPlatform !== 'pos' && orderPlatform !== 'in_store'"
@@ -768,7 +774,7 @@ function processReturn() {
 
                     <!-- Action buttons -->
                     <div class="flex flex-wrap gap-2">
-                        <button
+                        <!-- <button
                             v-if="order.can_be_confirmed"
                             type="button"
                             @click="confirmOrder"
@@ -777,7 +783,7 @@ function processReturn() {
                         >
                             <CheckCircleIcon class="size-4" />
                             Confirm
-                        </button>
+                        </button> -->
 
                         <button
                             v-if="order.can_be_shipped"
@@ -799,17 +805,6 @@ function processReturn() {
                         >
                             <ShoppingBagIcon class="size-4" />
                             Mark Delivered
-                        </button>
-
-                        <button
-                            v-if="order.can_be_completed"
-                            type="button"
-                            @click="completeOrder"
-                            :disabled="isProcessing"
-                            class="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
-                        >
-                            <CheckCircleIcon class="size-4" />
-                            Complete
                         </button>
 
                         <button
@@ -1474,14 +1469,19 @@ function processReturn() {
                             </dl>
                         </div>
 
-                        <!-- Employee -->
-                        <div v-if="order.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Handled By</h2>
+                        <!-- Salesperson -->
+                        <div v-if="order.store_user || order.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Salesperson</h2>
                             <div class="flex items-center gap-3">
                                 <div class="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
                                     <UserIcon class="size-5 text-gray-500 dark:text-gray-400" />
                                 </div>
-                                <p class="font-medium text-gray-900 dark:text-white">{{ order.user.name }}</p>
+                                <div>
+                                    <p class="font-medium text-gray-900 dark:text-white">{{ order.store_user?.name || order.user.name }}</p>
+                                    <p v-if="order.created_by_user && order.created_by_user.id !== order.user?.id" class="text-sm text-gray-500 dark:text-gray-400">
+                                        Created by {{ order.created_by_user.name }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

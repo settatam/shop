@@ -359,6 +359,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'show'])->name('web.transactions.show');
         Route::get('transactions/{transaction}/print-barcode', [\App\Http\Controllers\Web\TransactionController::class, 'printBarcode'])->name('web.transactions.print-barcode');
         Route::get('transactions/{transaction}/print-invoice', [\App\Http\Controllers\Web\TransactionController::class, 'printInvoice'])->name('web.transactions.print-invoice');
+        Route::get('transactions/{transaction}/invoice-pdf', [\App\Http\Controllers\Web\TransactionController::class, 'downloadInvoicePdf'])->name('web.transactions.invoice-pdf');
     });
     Route::middleware('permission:transactions.update')->group(function () {
         Route::get('transactions/{transaction}/edit', [\App\Http\Controllers\Web\TransactionController::class, 'edit'])->name('web.transactions.edit');

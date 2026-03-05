@@ -120,9 +120,11 @@ class TransactionService
                 }
             }
 
-            // Get the user ID from store_user
+            // Get the user ID from store_user (salesperson)
             $storeUser = StoreUser::find($data['store_user_id']);
             $userId = $storeUser?->user_id ?? auth()->id();
+            $storeUserId = $storeUser?->id;
+            $createdBy = auth()->id();
 
             // Calculate totals from items
             $totalBuyPrice = collect($data['items'])->sum('buy_price');
@@ -147,6 +149,8 @@ class TransactionService
                 'warehouse_id' => $warehouseId,
                 'customer_id' => $customerId,
                 'user_id' => $userId,
+                'store_user_id' => $storeUserId,
+                'created_by' => $createdBy,
                 'type' => Transaction::TYPE_IN_STORE,
                 'preliminary_offer' => $totalBuyPrice,
                 'final_offer' => $totalBuyPrice,

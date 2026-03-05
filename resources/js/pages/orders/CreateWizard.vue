@@ -1598,7 +1598,7 @@ const steps = [
                                     </div>
                                     <div class="flex justify-between">
                                         <dt class="text-gray-500 dark:text-gray-400">Items</dt>
-                                        <dd class="text-gray-900 dark:text-white">{{ form.items.length }}</dd>
+                                        <dd class="text-gray-900 dark:text-white">{{ form.items.reduce((sum, item) => sum + item.quantity, 0) }}</dd>
                                     </div>
                                     <div v-if="form.has_trade_in" class="flex justify-between">
                                         <dt class="text-gray-500 dark:text-gray-400">Trade-In Items</dt>

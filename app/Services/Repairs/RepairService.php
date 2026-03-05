@@ -122,9 +122,11 @@ class RepairService
                 $vendorId = $vendor->id;
             }
 
-            // Get the user ID from store_user
+            // Get the user ID from store_user (salesperson)
             $storeUser = StoreUser::find($data['store_user_id']);
             $userId = $storeUser?->user_id ?? auth()->id();
+            $storeUserId = $storeUser?->id;
+            $createdBy = auth()->id();
 
             // Create the repair
             $repair = Repair::create([
@@ -133,6 +135,8 @@ class RepairService
                 'customer_id' => $customerId,
                 'vendor_id' => $vendorId,
                 'user_id' => $userId,
+                'store_user_id' => $storeUserId,
+                'created_by' => $createdBy,
                 'service_fee' => $data['service_fee'] ?? 0,
                 'tax_rate' => $data['tax_rate'] ?? $defaultTaxRate,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,

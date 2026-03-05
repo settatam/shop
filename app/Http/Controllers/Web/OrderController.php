@@ -118,6 +118,8 @@ class OrderController extends Controller
         $order->load([
             'customer.leadSource',
             'user',
+            'storeUser',
+            'createdByUser',
             'warehouse',
             'salesChannel.storeMarketplace',
             'platformOrder.marketplace',
@@ -1817,6 +1819,14 @@ class OrderController extends Controller
             'user' => $order->user ? [
                 'id' => $order->user->id,
                 'name' => $order->user->name,
+            ] : null,
+            'store_user' => $order->storeUser ? [
+                'id' => $order->storeUser->id,
+                'name' => $order->storeUser->full_name,
+            ] : null,
+            'created_by_user' => $order->createdByUser ? [
+                'id' => $order->createdByUser->id,
+                'name' => $order->createdByUser->name,
             ] : null,
             'warehouse' => $order->warehouse ? [
                 'id' => $order->warehouse->id,

@@ -63,6 +63,8 @@ class RepairController extends Controller
             'customer.leadSource',
             'vendor',
             'user',
+            'storeUser',
+            'createdByUser',
             'items.product',
             'items.category',
             'order',
@@ -572,6 +574,14 @@ class RepairController extends Controller
             'user' => $repair->user ? [
                 'id' => $repair->user->id,
                 'name' => $repair->user->name,
+            ] : null,
+            'store_user' => $repair->storeUser ? [
+                'id' => $repair->storeUser->id,
+                'name' => $repair->storeUser->full_name,
+            ] : null,
+            'created_by_user' => $repair->createdByUser ? [
+                'id' => $repair->createdByUser->id,
+                'name' => $repair->createdByUser->name,
             ] : null,
             'items' => $repair->items->map(fn ($item) => [
                 'id' => $item->id,

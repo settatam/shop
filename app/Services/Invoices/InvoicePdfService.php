@@ -208,9 +208,9 @@ class InvoicePdfService
             return null;
         }
 
-        $invoiceable->load('user');
+        $invoiceable->load(['user', 'storeUser']);
 
-        return $invoiceable->user?->name;
+        return $invoiceable->storeUser?->full_name ?? $invoiceable->user?->name;
     }
 
     /**

@@ -15,6 +15,14 @@ interface AiResearch {
     [key: string]: unknown;
 }
 
+interface Props {
+    hideAddButton?: boolean;
+}
+
+withDefaults(defineProps<Props>(), {
+    hideAddButton: false,
+});
+
 const emit = defineEmits<{
     addItem: [data: {
         title: string;
@@ -23,6 +31,11 @@ const emit = defineEmits<{
         buy_price: number;
         precious_metal?: string;
         images: File[];
+    }];
+    results: [data: {
+        title: string;
+        description?: string;
+        research: AiResearch;
     }];
 }>();
 
@@ -141,6 +154,12 @@ async function analyze() {
         const researchData = await researchResponse.json();
         aiResearch.value = researchData.research;
         step.value = 'results';
+
+        emit('results', {
+            title: title.value,
+            description: description.value || undefined,
+            research: researchData.research,
+        });
     } catch (e) {
         error.value = e instanceof Error ? e.message : 'An error occurred';
     } finally {
@@ -355,7 +374,7 @@ function reset() {
                 </div>
 
                 <!-- Buy this item button -->
-                <div class="flex justify-end">
+                <div v-if="!hideAddButton" class="flex justify-end">
                     <button
                         type="button"
                         @click="handleAddItem"

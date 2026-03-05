@@ -13,6 +13,7 @@ import RepairsByStatus from '@/components/dashboard/RepairsByStatus.vue';
 import RecentMemos from '@/components/dashboard/RecentMemos.vue';
 import MemosByStatus from '@/components/dashboard/MemosByStatus.vue';
 import TodaySummary from '@/components/dashboard/TodaySummary.vue';
+import QuickTools from '@/components/dashboard/QuickTools.vue';
 import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
@@ -199,6 +200,9 @@ const breadcrumbs: BreadcrumbItem[] = [
                     New Sale
                 </Link>
             </div>
+
+            <!-- Quick Tools -->
+            <QuickTools />
 
             <!-- Stats Cards -->
             <StatsCard :stats="stats" />

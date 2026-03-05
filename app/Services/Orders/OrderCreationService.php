@@ -57,9 +57,11 @@ class OrderCreationService
         $this->validateStockAvailability($data['items'] ?? [], $data['bucket_items'] ?? []);
 
         return DB::transaction(function () use ($data, $store) {
-            // Get user from store_user
+            // Get user from store_user (salesperson)
             $storeUser = StoreUser::with('user')->find($data['store_user_id']);
             $userId = $storeUser?->user_id;
+            $storeUserId = $storeUser?->id;
+            $createdBy = auth()->id();
 
             // Get or create customer
             $customerId = null;
@@ -115,6 +117,8 @@ class OrderCreationService
                 'store_id' => $store->id,
                 'customer_id' => $customerId,
                 'user_id' => $userId,
+                'store_user_id' => $storeUserId,
+                'created_by' => $createdBy,
                 'warehouse_id' => $warehouse?->id,
                 'sales_channel_id' => $defaultLocalChannel->id,
                 'status' => Order::STATUS_PENDING,

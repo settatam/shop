@@ -10,9 +10,12 @@ interface SelectOption {
 
 interface Props {
     preciousMetals: SelectOption[];
+    hideAddButton?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    hideAddButton: false,
+});
 
 const emit = defineEmits<{
     addItem: [data: {
@@ -155,6 +158,7 @@ function handleAddItem() {
                         <p class="text-lg font-bold text-green-600 dark:text-green-400">${{ buyPrice.toFixed(2) }}</p>
                     </div>
                     <button
+                        v-if="!hideAddButton"
                         type="button"
                         @click="handleAddItem"
                         class="inline-flex shrink-0 items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"

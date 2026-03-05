@@ -44,7 +44,7 @@ import {
     PaperAirplaneIcon,
     ArchiveBoxIcon,
     ArrowUturnLeftIcon,
-    ClipboardDocumentListIcon,
+    ArrowDownTrayIcon,
     PhotoIcon,
     ChevronLeftIcon,
     ChevronRightIcon,
@@ -857,8 +857,8 @@ const formatWeight = (weight: number | string | null) => {
     return `${num.toFixed(2)} dwt`;
 };
 
-function printPackingSlip() {
-    window.open(`/transactions/${props.transaction.id}/packing-slip/stream`, '_blank');
+function downloadInvoicePdf() {
+    window.location.href = `/transactions/${props.transaction.id}/invoice-pdf`;
 }
 
 // Status helpers
@@ -1404,14 +1404,14 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         Store Invoice
                     </Link>
 
-                    <!-- Print Packing Slip -->
+                    <!-- Download PDF Invoice -->
                     <button
                         type="button"
-                        @click="printPackingSlip"
+                        @click="downloadInvoicePdf"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700"
                     >
-                        <ClipboardDocumentListIcon class="-ml-0.5 size-5" />
-                        Packing Slip
+                        <ArrowDownTrayIcon class="-ml-0.5 size-5" />
+                        Download PDF
                     </button>
 
                     <!-- Assign (Online only) -->
@@ -2271,10 +2271,16 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                         {{ transaction.bin_location }}
                                     </dd>
                                 </div>
-                                <div v-if="transaction.user" class="flex items-center justify-between">
+                                <div v-if="transaction.store_user || transaction.user" class="flex items-center justify-between">
+                                    <dt class="text-sm text-gray-500 dark:text-gray-400">Salesperson</dt>
+                                    <dd class="text-sm text-gray-900 dark:text-white">
+                                        {{ transaction.store_user?.name || transaction.user.name }}
+                                    </dd>
+                                </div>
+                                <div v-if="transaction.created_by_user" class="flex items-center justify-between">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Created By</dt>
                                     <dd class="text-sm text-gray-900 dark:text-white">
-                                        {{ transaction.user.name }}
+                                        {{ transaction.created_by_user.name }}
                                     </dd>
                                 </div>
                                 <div v-if="transaction.assigned_user" class="flex items-center justify-between">

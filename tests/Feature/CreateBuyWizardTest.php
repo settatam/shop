@@ -549,4 +549,47 @@ class CreateBuyWizardTest extends TestCase
 
         $response->assertSessionHasErrors(['payments']);
     }
+
+    public function test_can_download_transaction_invoice_pdf(): void
+    {
+        $this->actingAs($this->user);
+
+        $customer = Customer::factory()->create(['store_id' => $this->store->id]);
+        $category = Category::factory()->create(['store_id' => $this->store->id]);
+
+        // Create a transaction first
+        $response = $this->withStore()->post('/transactions/buy', [
+            'store_user_id' => $this->storeUser->id,
+            'customer_id' => $customer->id,
+            'items' => [
+                [
+                    'title' => 'Gold Chain',
+                    'category_id' => $category->id,
+                    'precious_metal' => TransactionItem::METAL_GOLD_14K,
+                    'dwt' => 3.0,
+                    'condition' => TransactionItem::CONDITION_USED,
+                    'price' => 400,
+                    'buy_price' => 250,
+                ],
+            ],
+            'payments' => [
+                [
+                    'method' => Transaction::PAYMENT_CASH,
+                    'amount' => 250,
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect();
+
+        $transaction = Transaction::where('store_id', $this->store->id)->latest()->first();
+        $this->assertNotNull($transaction);
+
+        // Download the PDF invoice
+        $pdfResponse = $this->withStore()->get("/transactions/{$transaction->id}/invoice-pdf");
+
+        $pdfResponse->assertStatus(200);
+        $pdfResponse->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringContainsString('attachment', $pdfResponse->headers->get('Content-Disposition'));
+    }
 }

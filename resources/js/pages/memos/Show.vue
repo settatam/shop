@@ -984,14 +984,19 @@ function resetAddItemForm() {
                             </dl>
                         </div>
 
-                        <!-- Employee -->
-                        <div v-if="memo.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Handled By</h2>
+                        <!-- Salesperson -->
+                        <div v-if="memo.store_user || memo.user" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Salesperson</h2>
                             <div class="flex items-center gap-3">
                                 <div class="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
                                     <UserIcon class="size-5 text-gray-500 dark:text-gray-400" />
                                 </div>
-                                <p class="font-medium text-gray-900 dark:text-white">{{ memo.user.name }}</p>
+                                <div>
+                                    <p class="font-medium text-gray-900 dark:text-white">{{ memo.store_user?.name || memo.user.name }}</p>
+                                    <p v-if="memo.created_by_user && memo.created_by_user.id !== memo.user?.id" class="text-sm text-gray-500 dark:text-gray-400">
+                                        Created by {{ memo.created_by_user.name }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

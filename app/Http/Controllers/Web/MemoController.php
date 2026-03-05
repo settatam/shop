@@ -64,6 +64,8 @@ class MemoController extends Controller
         $memo->load([
             'vendor',
             'user',
+            'storeUser',
+            'createdByUser',
             'items.product.images',
             'items.category',
             'order',
@@ -754,6 +756,14 @@ class MemoController extends Controller
             'user' => $memo->user ? [
                 'id' => $memo->user->id,
                 'name' => $memo->user->name,
+            ] : null,
+            'store_user' => $memo->storeUser ? [
+                'id' => $memo->storeUser->id,
+                'name' => $memo->storeUser->full_name,
+            ] : null,
+            'created_by_user' => $memo->createdByUser ? [
+                'id' => $memo->createdByUser->id,
+                'name' => $memo->createdByUser->name,
             ] : null,
             'items' => $memo->items->map(fn ($item) => [
                 'id' => $item->id,

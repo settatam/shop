@@ -25,6 +25,7 @@ use App\Services\Shipping\ShippingLabelService;
 use App\Services\StoreContext;
 use App\Services\Transactions\TransactionPaymentService;
 use App\Services\Transactions\TransactionService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -122,6 +123,8 @@ class TransactionController extends Controller
             'customer.documents',
             'shippingAddress',
             'user',
+            'storeUser',
+            'createdByUser',
             'assignedUser',
             'items.images',
             'items.category',
@@ -1655,6 +1658,134 @@ class TransactionController extends Controller
         ]);
     }
 
+    public function downloadInvoicePdf(Transaction $transaction): \Illuminate\Http\Response
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $transaction->store_id !== $store->id) {
+            abort(404);
+        }
+
+        $transaction->load([
+            'customer.defaultAddress.state',
+            'customer.addresses.state',
+            'user',
+            'storeUser',
+            'items.images',
+            'items.category',
+        ]);
+
+        $paymentMethodLabels = [
+            'cash' => 'Cash',
+            'check' => 'Check',
+            'store_credit' => 'Store Credit',
+            'ach' => 'ACH Transfer',
+            'paypal' => 'PayPal',
+            'venmo' => 'Venmo',
+            'card' => 'Credit Card',
+            'bank_transfer' => 'Bank Transfer',
+            'wire_transfer' => 'Wire Transfer',
+            'external' => 'External',
+        ];
+
+        // Build payment info from payment_details JSON
+        $payments = [];
+        $paymentDetails = $transaction->payment_details['payments'] ?? [];
+
+        if (! empty($paymentDetails)) {
+            foreach ($paymentDetails as $payment) {
+                $method = $payment['method'] ?? $transaction->payment_method;
+                $payments[] = [
+                    'mode' => $paymentMethodLabels[$method] ?? ucfirst(str_replace('_', ' ', $method)),
+                    'total_paid' => $payment['amount'] ?? 0,
+                ];
+            }
+        } elseif ($transaction->payment_method) {
+            $payments[] = [
+                'mode' => $paymentMethodLabels[$transaction->payment_method] ?? ucfirst(str_replace('_', ' ', $transaction->payment_method)),
+                'total_paid' => $transaction->final_offer ?? $transaction->total_buy_price ?? 0,
+            ];
+        }
+
+        $uniqueMethods = collect($payments)->pluck('mode')->unique()->implode(', ');
+
+        // Build line items
+        $lineItems = $transaction->items->map(fn ($item) => [
+            'title' => $item->title ?? 'Untitled Item',
+            'category' => $item->category?->name ?? '-',
+            'quantity' => $item->quantity ?? 1,
+            'total' => ($item->buy_price ?? 0) * ($item->quantity ?? 1),
+            'image' => $item->images->first()?->url ?? null,
+        ])->toArray();
+
+        // Build customer data
+        $customerData = null;
+        if ($transaction->customer) {
+            $customerAddress = $transaction->customer->defaultAddress
+                ?? $transaction->customer->addresses->first();
+
+            $customerData = [
+                'name' => $transaction->customer->full_name,
+                'company_name' => $customerAddress?->company ?? $transaction->customer->company_name,
+                'address' => $customerAddress?->address ?? $transaction->customer->address,
+                'address2' => $customerAddress?->address2 ?? $transaction->customer->address2,
+                'city' => $customerAddress?->city ?? $transaction->customer->city,
+                'state' => $customerAddress?->state_abbreviation ?? $customerAddress?->state?->name ?? null,
+                'zip' => $customerAddress?->zip ?? $transaction->customer->zip,
+                'phone' => $customerAddress?->phone ?? $transaction->customer->phone_number,
+                'email' => $transaction->customer->email,
+            ];
+        }
+
+        // Get logo as base64 for DomPDF
+        $logoBase64 = null;
+        if ($store->logo) {
+            try {
+                $logoContents = \Illuminate\Support\Facades\Storage::disk('do_spaces')->get($store->logo);
+                if ($logoContents) {
+                    $ext = pathinfo($store->logo, PATHINFO_EXTENSION);
+                    $mimeTypes = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'gif' => 'image/gif', 'svg' => 'image/svg+xml'];
+                    $mime = $mimeTypes[$ext] ?? 'image/png';
+                    $logoBase64 = 'data:'.$mime.';base64,'.base64_encode($logoContents);
+                }
+            } catch (\Exception $e) {
+                $logoBase64 = null;
+            }
+        }
+
+        $total = $transaction->final_offer ?? $transaction->total_buy_price ?? 0;
+        $salesperson = $transaction->storeUser?->full_name ?? $transaction->user?->name ?? null;
+
+        $pdf = Pdf::loadView('pdf.transaction-invoice', [
+            'store' => [
+                'name' => $store->business_name ?? $store->name,
+                'logo' => $logoBase64,
+                'address' => $store->address,
+                'address2' => $store->address2,
+                'city' => $store->city,
+                'state' => $store->state,
+                'zip' => $store->zip,
+                'phone' => $store->phone,
+                'email' => $store->customer_email ?? $store->account_email,
+            ],
+            'customer' => $customerData,
+            'transactionNumber' => $transaction->transaction_number,
+            'dateOfIssue' => $transaction->created_at->format('m/d/Y'),
+            'primaryPaymentMethod' => $uniqueMethods ?: 'N/A',
+            'paymentModes' => $payments,
+            'lineItems' => $lineItems,
+            'total' => $total,
+            'salesperson' => $salesperson,
+        ]);
+
+        $filename = 'buy-invoice-'.($transaction->transaction_number ?? $transaction->id).'.pdf';
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
     /**
      * Format transaction for frontend.
      *
@@ -1767,6 +1898,14 @@ class TransactionController extends Controller
             'user' => $transaction->user ? [
                 'id' => $transaction->user->id,
                 'name' => $transaction->user->name,
+            ] : null,
+            'store_user' => $transaction->storeUser ? [
+                'id' => $transaction->storeUser->id,
+                'name' => $transaction->storeUser->full_name,
+            ] : null,
+            'created_by_user' => $transaction->createdByUser ? [
+                'id' => $transaction->createdByUser->id,
+                'name' => $transaction->createdByUser->name,
             ] : null,
             'assigned_user' => $transaction->assignedUser ? [
                 'id' => $transaction->assignedUser->id,

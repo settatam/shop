@@ -83,9 +83,11 @@ class MemoService
                 $vendorId = $vendor->id;
             }
 
-            // Get the user ID from store_user
+            // Get the user ID from store_user (salesperson)
             $storeUser = StoreUser::find($data['store_user_id']);
             $userId = $storeUser?->user_id ?? auth()->id();
+            $storeUserId = $storeUser?->id;
+            $createdBy = auth()->id();
 
             // Create the memo
             $memo = Memo::create([
@@ -93,6 +95,8 @@ class MemoService
                 'warehouse_id' => $warehouseId,
                 'vendor_id' => $vendorId,
                 'user_id' => $userId,
+                'store_user_id' => $storeUserId,
+                'created_by' => $createdBy,
                 'tenure' => $data['tenure'] ?? Memo::TENURE_30_DAYS,
                 'tax_rate' => $data['tax_rate'] ?? $defaultTaxRate,
                 'charge_taxes' => $data['charge_taxes'] ?? false,
