@@ -52,6 +52,7 @@ interface TransactionItem {
     buy_price: number;
     precious_metal?: string;
     dwt?: number;
+    tenor?: number;
     attributes: Record<number, string>;
     images: File[];
 }
@@ -77,7 +78,7 @@ interface Props {
     categories: Category[];
     editingItem?: TransactionItem | null;
     existingImages?: ExistingImage[];
-    mode?: 'buy' | 'repair';
+    mode?: 'buy' | 'repair' | 'memo';
     prefillItem?: PrefillData | null;
 }
 
@@ -86,9 +87,21 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // Dynamic labels based on mode
-const buyPriceLabel = computed(() => props.mode === 'repair' ? 'Vendor Cost' : 'Buy Price');
-const buyPriceHelp = computed(() => props.mode === 'repair' ? 'What the vendor charges for this repair' : 'The amount you\'re paying for this item');
-const estimatedValueLabel = computed(() => props.mode === 'repair' ? 'Customer Cost' : 'Estimated Value');
+const buyPriceLabel = computed(() => {
+    if (props.mode === 'repair') return 'Vendor Cost';
+    if (props.mode === 'memo') return 'Cost';
+    return 'Buy Price';
+});
+const buyPriceHelp = computed(() => {
+    if (props.mode === 'repair') return 'What the vendor charges for this repair';
+    if (props.mode === 'memo') return 'Your cost for this item';
+    return 'The amount you\'re paying for this item';
+});
+const estimatedValueLabel = computed(() => {
+    if (props.mode === 'repair') return 'Customer Cost';
+    if (props.mode === 'memo') return 'Amount to Pay';
+    return 'Estimated Value';
+});
 
 const emit = defineEmits<{
     close: [];
@@ -462,6 +475,7 @@ function makeEmptyForm(): TransactionItem {
         buy_price: 0,
         precious_metal: undefined,
         dwt: undefined,
+        tenor: props.mode === 'memo' ? 30 : undefined,
         attributes: {},
         images: [],
     };
@@ -1055,6 +1069,23 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                             <div v-else-if="loadingSpotPrice" class="mt-1 text-xs text-gray-400">
                                                 Calculating prices...
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Terms (memo mode only) -->
+                                    <div v-if="mode === 'memo'" class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="tenor" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Terms (days)
+                                            </label>
+                                            <input
+                                                id="tenor"
+                                                v-model.number="form.tenor"
+                                                type="number"
+                                                min="1"
+                                                :class="inputClass"
+                                                placeholder="30"
+                                            />
                                         </div>
                                     </div>
 

@@ -91,6 +91,7 @@ interface RepairItem {
     dwt?: number;
     precious_metal?: string;
     profit: number;
+    days_with_vendor?: number | null;
     category?: Category;
     product?: Product;
 }
@@ -463,7 +464,7 @@ function printPackingSlip() {
     window.open(`${basePath.value}/${props.repair.id}/packing-slip/stream`, '_blank');
 }
 
-const profit = computed(() => props.repair.customer_total - props.repair.vendor_total);
+
 
 function openVendorPaymentModal() {
     showVendorPaymentModal.value = true;
@@ -732,9 +733,10 @@ function removeItem(itemId: number) {
                                     <thead class="bg-gray-50 dark:bg-gray-700">
                                         <tr>
                                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Item</th>
+                                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Category</th>
                                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Vendor Cost</th>
                                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Customer Cost</th>
-                                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Profit</th>
+                                            <th scope="col" class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Days</th>
                                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"><span class="sr-only">Actions</span></th>
                                         </tr>
                                     </thead>
@@ -748,10 +750,12 @@ function removeItem(itemId: number) {
                                                     <div>
                                                         <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
                                                         <p v-if="item.sku" class="text-xs text-gray-500 dark:text-gray-400">SKU: {{ item.sku }}</p>
-                                                        <p v-if="item.category" class="text-sm text-gray-500 dark:text-gray-400">{{ item.category.name }}</p>
                                                         <p v-if="item.description" class="max-w-xs truncate text-sm text-gray-500 dark:text-gray-400">{{ item.description }}</p>
                                                     </div>
                                                 </div>
+                                            </td>
+                                            <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                                {{ item.category?.name || '-' }}
                                             </td>
                                             <td class="whitespace-nowrap px-6 py-4 text-right">
                                                 <div class="flex items-center justify-end gap-1">
@@ -779,8 +783,11 @@ function removeItem(itemId: number) {
                                                     />
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm" :class="item.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                                {{ formatCurrency(item.profit) }}
+                                            <td class="whitespace-nowrap px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                <span v-if="item.days_with_vendor !== null && item.days_with_vendor !== undefined">
+                                                    {{ item.days_with_vendor }}
+                                                </span>
+                                                <span v-else>-</span>
                                             </td>
                                             <td class="whitespace-nowrap px-6 py-4 text-right">
                                                 <button
@@ -794,23 +801,21 @@ function removeItem(itemId: number) {
                                             </td>
                                         </tr>
                                         <tr v-if="repair.items.length === 0">
-                                            <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                            <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                                 No items in this repair.
                                             </td>
                                         </tr>
                                     </tbody>
                                     <tfoot class="bg-gray-50 dark:bg-gray-700">
                                         <tr>
-                                            <td class="whitespace-nowrap px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">Total</td>
+                                            <td class="whitespace-nowrap px-6 py-3 text-sm font-medium text-gray-900 dark:text-white" colspan="2">Total</td>
                                             <td class="whitespace-nowrap px-6 py-3 text-right text-sm font-medium text-gray-500 dark:text-gray-400">
                                                 {{ formatCurrency(repair.vendor_total) }}
                                             </td>
                                             <td class="whitespace-nowrap px-6 py-3 text-right text-sm font-medium text-gray-900 dark:text-white">
                                                 {{ formatCurrency(repair.customer_total) }}
                                             </td>
-                                            <td class="whitespace-nowrap px-6 py-3 text-right text-sm font-medium" :class="profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
-                                                {{ formatCurrency(profit) }}
-                                            </td>
+                                            <td></td>
                                             <td></td>
                                         </tr>
                                     </tfoot>

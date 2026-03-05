@@ -3,6 +3,8 @@ import { ref, computed } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { NotesSection } from '@/components/notes';
+import ProductSearch from '@/components/products/ProductSearch.vue';
+import AddItemModal from '@/components/transactions/AddItemModal.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import {
@@ -22,6 +24,7 @@ import {
     ArrowDownTrayIcon,
     PlusIcon,
     MagnifyingGlassIcon,
+    MapPinIcon,
 } from '@heroicons/vue/24/outline';
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import VendorEditModal from '@/components/vendors/VendorEditModal.vue';
@@ -34,6 +37,12 @@ interface Vendor {
     display_name?: string;
     email?: string;
     phone?: string;
+    address_line1?: string;
+    address_line2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    country?: string;
 }
 
 interface User {
@@ -59,6 +68,7 @@ interface MemoItem {
     tenor: number;
     due_date?: string;
     effective_due_date?: string;
+    days_with_vendor?: number | null;
     is_returned: boolean;
     can_be_returned: boolean;
     quantity: number;
@@ -91,8 +101,12 @@ interface Payment {
 }
 
 interface Category {
-    value: number;
-    label: string;
+    id: number;
+    name: string;
+    full_path: string;
+    parent_id: number | null;
+    level: number;
+    template_id: number | null;
 }
 
 interface Memo {
@@ -223,19 +237,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 const showPaymentModal = ref(false);
 const showVendorEditModal = ref(false);
 const showAddItemModal = ref(false);
+const showProductSearch = ref(false);
+const editingItem = ref(null);
 const isProcessing = ref(false);
 
-// Add item state
-const productSearchQuery = ref('');
-const searchResults = ref<any[]>([]);
-const selectedProduct = ref<any>(null);
-const addItemForm = ref({
-    product_id: null as number | null,
-    price: 0,
-    cost: 0,
-    tenor: props.memo.tenure,
-});
-const isSearching = ref(false);
+const disabledProductIds = computed(() =>
+    props.memo.items.filter(i => i.product_id && !i.is_returned).map(i => i.product_id),
+);
 
 const statusColors: Record<string, string> = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
@@ -421,58 +429,54 @@ const statusSteps = computed(() => {
 });
 
 // Add item functions
-async function searchProducts() {
-    if (!productSearchQuery.value || productSearchQuery.value.length < 2) {
-        searchResults.value = [];
-        return;
-    }
-
-    isSearching.value = true;
-    try {
-        const response = await fetch(`/memos/search-products?query=${encodeURIComponent(productSearchQuery.value)}`);
-        const data = await response.json();
-        searchResults.value = data.products || [];
-    } catch (error) {
-        console.error('Error searching products:', error);
-        searchResults.value = [];
-    } finally {
-        isSearching.value = false;
-    }
-}
-
-function selectProduct(product: any) {
-    selectedProduct.value = product;
-    addItemForm.value.product_id = product.id;
-    addItemForm.value.price = product.price || 0;
-    addItemForm.value.cost = product.cost || 0;
-    searchResults.value = [];
-    productSearchQuery.value = product.title;
-}
-
-function addItem() {
-    if (!addItemForm.value.product_id || isProcessing.value) return;
-    isProcessing.value = true;
-    router.post(`/memos/${props.memo.id}/add-item`, addItemForm.value, {
+function handleProductSelect(product: any) {
+    router.post(`/memos/${props.memo.id}/add-item`, {
+        product_id: product.id,
+        price: product.price || 0,
+        cost: product.cost || 0,
+        tenor: props.memo.tenure,
+    }, {
         preserveScroll: true,
-        onSuccess: () => {
-            showAddItemModal.value = false;
-            resetAddItemForm();
-        },
-        onFinish: () => { isProcessing.value = false; },
+        onSuccess: () => { showProductSearch.value = false; },
     });
 }
 
-function resetAddItemForm() {
-    productSearchQuery.value = '';
-    searchResults.value = [];
-    selectedProduct.value = null;
-    addItemForm.value = {
-        product_id: null,
-        price: 0,
-        cost: 0,
-        tenor: props.memo.tenure,
-    };
+function openAddItemModal() {
+    editingItem.value = null;
+    showAddItemModal.value = true;
 }
+
+function handleSaveItem(item: any) {
+    router.post(`/memos/${props.memo.id}/add-item`, {
+        title: item.title,
+        description: item.description,
+        category_id: item.category_id,
+        cost: item.buy_price || 0,
+        price: item.price || 0,
+        tenor: item.tenor || props.memo.tenure,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => { showAddItemModal.value = false; },
+    });
+}
+
+function removeItem(itemId: number) {
+    if (!confirm('Remove this item from the memo?')) return;
+    router.delete(`/memos/${props.memo.id}/items/${itemId}`, {
+        preserveScroll: true,
+    });
+}
+
+const vendorAddress = computed(() => {
+    if (!props.memo.vendor) return '';
+    const parts = [
+        props.memo.vendor.address_line1,
+        props.memo.vendor.address_line2,
+        [props.memo.vendor.city, props.memo.vendor.state].filter(Boolean).join(', '),
+        props.memo.vendor.postal_code,
+    ].filter(Boolean);
+    return parts.join(', ');
+});
 </script>
 
 <template>
@@ -516,7 +520,7 @@ function resetAddItemForm() {
                         <button
                             v-if="memo.is_pending"
                             type="button"
-                            @click="showAddItemModal = true"
+                            @click="showProductSearch = true"
                             class="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500"
                         >
                             <PlusIcon class="size-4" />
@@ -680,29 +684,49 @@ function resetAddItemForm() {
                                     <h2 class="text-lg font-medium text-gray-900 dark:text-white">
                                         Items ({{ memo.active_items_count }} active, {{ memo.returned_items_count }} returned)
                                     </h2>
-                                    <button
-                                        v-if="memo.is_pending"
-                                        type="button"
-                                        @click="showAddItemModal = true"
-                                        class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                                    >
-                                        <PlusIcon class="size-4" />
-                                        Add Item
-                                    </button>
+                                    <div v-if="memo.is_pending" class="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            @click="showProductSearch = !showProductSearch"
+                                            class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                        >
+                                            <MagnifyingGlassIcon class="size-4" />
+                                            Search Product
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="openAddItemModal"
+                                            class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                        >
+                                            <PlusIcon class="size-4" />
+                                            Add Custom Item
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
+                            <!-- Product Search -->
+                            <div v-if="showProductSearch && memo.is_pending" class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                                <ProductSearch
+                                    search-url="/memos/search-products"
+                                    :disabled-product-ids="disabledProductIds"
+                                    @select="handleProductSelect"
+                                />
+                            </div>
+
                             <!-- Items Table -->
-                            <div class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <div>
+                                <table class="w-full divide-y divide-gray-200 dark:divide-gray-700">
                                     <thead class="bg-gray-50 dark:bg-gray-700">
                                         <tr>
-                                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Item</th>
-                                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Cost</th>
-                                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Amount</th>
-                                            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Terms</th>
-                                            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Due Date</th>
-                                            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Status</th>
+                                            <th class="w-[40%] px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Item</th>
+                                            <th class="px-2 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Cost</th>
+                                            <th class="px-2 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Amount</th>
+                                            <th class="px-2 py-2 text-center text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Terms</th>
+                                            <th class="px-2 py-2 text-center text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Due</th>
+                                            <th class="px-2 py-2 text-center text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Days</th>
+                                            <th class="px-2 py-2 text-right text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">Status</th>
+                                            <th v-if="memo.is_pending" class="w-8 px-2 py-2"></th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -711,22 +735,22 @@ function resetAddItemForm() {
                                             :key="item.id"
                                             :class="item.is_returned ? 'bg-gray-50 opacity-60 dark:bg-gray-800/50' : ''"
                                         >
-                                            <td class="whitespace-nowrap px-4 py-4">
-                                                <div class="flex items-center gap-3">
-                                                    <div class="flex size-10 shrink-0 items-center justify-center rounded bg-gray-100 dark:bg-gray-700">
-                                                        <img v-if="item.product?.image" :src="item.product.image" class="size-10 rounded object-cover" />
-                                                        <CubeIcon v-else class="size-5 text-gray-400" />
+                                            <td class="px-3 py-2.5">
+                                                <div class="flex items-center gap-2">
+                                                    <div class="flex size-8 shrink-0 items-center justify-center rounded bg-gray-100 dark:bg-gray-700">
+                                                        <img v-if="item.product?.image" :src="item.product.image" class="size-8 rounded object-cover" />
+                                                        <CubeIcon v-else class="size-4 text-gray-400" />
                                                     </div>
-                                                    <div>
-                                                        <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
-                                                        <p v-if="item.sku" class="text-xs text-gray-500 dark:text-gray-400">SKU: {{ item.sku }}</p>
+                                                    <div class="min-w-0">
+                                                        <p class="truncate text-xs font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                                                        <p v-if="item.sku" class="truncate text-[10px] text-gray-500 dark:text-gray-400">{{ item.sku }}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-500 dark:text-gray-400">
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-xs text-gray-500 dark:text-gray-400">
                                                 <template v-if="canEditItems && !item.is_returned">
                                                     <div class="relative inline-block">
-                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-400 text-xs">$</span>
+                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-1.5 text-gray-400 text-[10px]">$</span>
                                                         <input
                                                             type="number"
                                                             :value="item.cost"
@@ -734,7 +758,7 @@ function resetAddItemForm() {
                                                             min="0"
                                                             @blur="updateItemField(item.id, 'cost', $event.target.value)"
                                                             @keyup.enter="($event.target as HTMLInputElement).blur()"
-                                                            class="w-20 rounded border-0 py-1 pl-5 pr-1 text-right text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            class="w-[70px] rounded border-0 py-0.5 pl-4 pr-1 text-right text-xs text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                         />
                                                     </div>
                                                 </template>
@@ -742,10 +766,10 @@ function resetAddItemForm() {
                                                     {{ formatCurrency(item.cost) }}
                                                 </template>
                                             </td>
-                                            <td class="whitespace-nowrap px-4 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-xs font-medium text-gray-900 dark:text-white">
                                                 <template v-if="canEditItems && !item.is_returned">
                                                     <div class="relative inline-block">
-                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-400 text-xs">$</span>
+                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-1.5 text-gray-400 text-[10px]">$</span>
                                                         <input
                                                             type="number"
                                                             :value="item.price"
@@ -753,7 +777,7 @@ function resetAddItemForm() {
                                                             min="0"
                                                             @blur="updateItemField(item.id, 'price', $event.target.value)"
                                                             @keyup.enter="($event.target as HTMLInputElement).blur()"
-                                                            class="w-20 rounded border-0 py-1 pl-5 pr-1 text-right text-sm font-medium text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            class="w-[70px] rounded border-0 py-0.5 pl-4 pr-1 text-right text-xs font-medium text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                         />
                                                     </div>
                                                 </template>
@@ -761,30 +785,36 @@ function resetAddItemForm() {
                                                     {{ formatCurrency(item.price) }}
                                                 </template>
                                             </td>
-                                            <td class="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400">
                                                 <template v-if="canEditItems && !item.is_returned">
-                                                    <div class="inline-flex items-center gap-1">
+                                                    <div class="inline-flex items-center gap-0.5">
                                                         <input
                                                             type="number"
                                                             :value="item.tenor"
                                                             min="1"
                                                             @blur="updateItemField(item.id, 'tenor', $event.target.value)"
                                                             @keyup.enter="($event.target as HTMLInputElement).blur()"
-                                                            class="w-14 rounded border-0 py-1 px-2 text-center text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            class="w-11 rounded border-0 py-0.5 px-1 text-center text-xs text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                         />
-                                                        <span class="text-xs">days</span>
+                                                        <span class="text-[10px]">d</span>
                                                     </div>
                                                 </template>
                                                 <template v-else>
-                                                    {{ item.tenor }} days
+                                                    {{ item.tenor }}d
                                                 </template>
                                             </td>
-                                            <td class="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                                <span v-if="item.effective_due_date">{{ formatDate(item.effective_due_date) }}</span>
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400">
+                                                <span v-if="item.effective_due_date">{{ new Date(item.effective_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
                                                 <span v-else class="text-gray-400">-</span>
                                             </td>
-                                            <td class="whitespace-nowrap px-4 py-4 text-right">
-                                                <span v-if="item.is_returned" class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-300">
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400">
+                                                <span v-if="item.days_with_vendor !== null && item.days_with_vendor !== undefined" :class="item.days_with_vendor > (item.tenor || 30) ? 'text-red-600 font-medium dark:text-red-400' : ''">
+                                                    {{ item.days_with_vendor }}
+                                                </span>
+                                                <span v-else class="text-gray-400">-</span>
+                                            </td>
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-right">
+                                                <span v-if="item.is_returned" class="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:bg-red-900 dark:text-red-300">
                                                     Returned
                                                 </span>
                                                 <button
@@ -792,23 +822,33 @@ function resetAddItemForm() {
                                                     type="button"
                                                     @click="returnItem(item.id)"
                                                     :disabled="isProcessing"
-                                                    class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-500 disabled:opacity-50"
+                                                    class="inline-flex items-center gap-0.5 text-xs text-indigo-600 hover:text-indigo-500 disabled:opacity-50"
                                                 >
-                                                    <ArrowPathIcon class="size-4" />
+                                                    <ArrowPathIcon class="size-3" />
                                                     Return
                                                 </button>
-                                                <span v-else class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-300">
+                                                <span v-else class="inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900 dark:text-green-300">
                                                     Active
                                                 </span>
                                             </td>
+                                            <td v-if="memo.is_pending" class="whitespace-nowrap px-4 py-4 text-right">
+                                                <button
+                                                    type="button"
+                                                    @click="removeItem(item.id)"
+                                                    class="text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                                                    title="Remove item"
+                                                >
+                                                    <TrashIcon class="size-4" />
+                                                </button>
+                                            </td>
                                         </tr>
                                         <tr v-if="memo.items.length === 0">
-                                            <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                            <td :colspan="memo.is_pending ? 8 : 7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                                                 No items in this memo.
                                                 <button
                                                     v-if="memo.is_pending"
                                                     type="button"
-                                                    @click="showAddItemModal = true"
+                                                    @click="showProductSearch = true"
                                                     class="ml-2 text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
                                                 >
                                                     Add your first item
@@ -817,6 +857,29 @@ function resetAddItemForm() {
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+
+                        <!-- Status Change -->
+                        <div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Status</h2>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <select
+                                    :value="memo.status"
+                                    @change="changeStatus(($event.target as HTMLSelectElement).value)"
+                                    :disabled="isProcessing"
+                                    :class="['rounded-full px-3 py-1.5 text-sm font-medium border-0 cursor-pointer focus:ring-2 focus:ring-indigo-500', statusColors[memo.status]]"
+                                >
+                                    <option v-for="status in statuses" :key="status.value" :value="status.value">
+                                        {{ status.label }}
+                                    </option>
+                                </select>
+                                <span v-if="memo.is_overdue" class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-300">
+                                    Overdue
+                                </span>
+                                <span class="text-sm text-gray-500 dark:text-gray-400">
+                                    Last updated {{ formatDate(memo.updated_at) }}
+                                </span>
                             </div>
                         </div>
 
@@ -891,17 +954,21 @@ function resetAddItemForm() {
                                     <PencilIcon class="size-4" />
                                 </button>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <div class="flex size-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+                            <div class="flex items-start gap-3">
+                                <div class="flex size-12 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
                                     <UserIcon class="size-6 text-indigo-600 dark:text-indigo-400" />
                                 </div>
-                                <div class="flex-1">
+                                <div class="flex-1 space-y-1">
                                     <Link :href="`/vendors/${memo.vendor.id}`" class="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
-                                        {{ memo.vendor.display_name || memo.vendor.name }}
+                                        {{ memo.vendor.name }}
                                     </Link>
                                     <p v-if="memo.vendor.company_name" class="text-sm text-gray-500 dark:text-gray-400">{{ memo.vendor.company_name }}</p>
-                                    <p v-if="memo.vendor.email" class="text-sm text-gray-500 dark:text-gray-400">{{ memo.vendor.email }}</p>
                                     <p v-if="memo.vendor.phone" class="text-sm text-gray-500 dark:text-gray-400">{{ memo.vendor.phone }}</p>
+                                    <p v-if="memo.vendor.email" class="text-sm text-gray-500 dark:text-gray-400">{{ memo.vendor.email }}</p>
+                                    <div v-if="vendorAddress" class="flex items-start gap-1.5 pt-1">
+                                        <MapPinIcon class="mt-0.5 size-3.5 shrink-0 text-gray-400" />
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ vendorAddress }}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1034,117 +1101,13 @@ function resetAddItemForm() {
         />
 
         <!-- Add Item Modal -->
-        <Teleport to="body">
-            <div v-if="showAddItemModal" class="fixed inset-0 z-50 overflow-y-auto">
-                <div class="flex min-h-screen items-center justify-center p-4">
-                    <div class="fixed inset-0 bg-gray-500/75 transition-opacity" @click="showAddItemModal = false"></div>
-
-                    <div class="relative w-full max-w-lg transform rounded-lg bg-white p-6 shadow-xl transition-all dark:bg-gray-800">
-                        <h3 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Add Item to Memo</h3>
-
-                        <!-- Product Search -->
-                        <div class="mb-4">
-                            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Search Product</label>
-                            <div class="relative">
-                                <input
-                                    v-model="productSearchQuery"
-                                    type="text"
-                                    placeholder="Search by title or SKU..."
-                                    @input="searchProducts"
-                                    class="w-full rounded-md border-0 py-2 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                />
-                                <MagnifyingGlassIcon class="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-                            </div>
-
-                            <!-- Search Results -->
-                            <div v-if="searchResults.length > 0" class="mt-2 max-h-48 overflow-y-auto rounded-md border border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-700">
-                                <button
-                                    v-for="product in searchResults"
-                                    :key="product.id"
-                                    type="button"
-                                    @click="selectProduct(product)"
-                                    class="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600"
-                                >
-                                    <div class="flex size-8 items-center justify-center rounded bg-gray-100 dark:bg-gray-600">
-                                        <img v-if="product.image" :src="product.image" class="size-8 rounded object-cover" />
-                                        <CubeIcon v-else class="size-4 text-gray-400" />
-                                    </div>
-                                    <div class="flex-1">
-                                        <p class="text-sm font-medium text-gray-900 dark:text-white">{{ product.title }}</p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                                            <span v-if="product.sku">SKU: {{ product.sku }}</span>
-                                            <span v-if="product.sku"> | </span>
-                                            {{ formatCurrency(product.price) }}
-                                        </p>
-                                    </div>
-                                </button>
-                            </div>
-
-                            <p v-if="isSearching" class="mt-2 text-sm text-gray-500">Searching...</p>
-                        </div>
-
-                        <!-- Selected Product Details -->
-                        <div v-if="selectedProduct" class="mb-4 rounded-md bg-gray-50 p-3 dark:bg-gray-700">
-                            <p class="font-medium text-gray-900 dark:text-white">{{ selectedProduct.title }}</p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">SKU: {{ selectedProduct.sku }}</p>
-                        </div>
-
-                        <!-- Price and Cost -->
-                        <div class="mb-4 grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Cost</label>
-                                <input
-                                    v-model.number="addItemForm.cost"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    class="w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                />
-                            </div>
-                            <div>
-                                <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Amount to Pay</label>
-                                <input
-                                    v-model.number="addItemForm.price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    class="w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Terms (days) -->
-                        <div class="mb-6">
-                            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Terms (days)</label>
-                            <input
-                                v-model.number="addItemForm.tenor"
-                                type="number"
-                                min="1"
-                                class="w-full rounded-md border-0 py-2 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                            />
-                        </div>
-
-                        <!-- Actions -->
-                        <div class="flex justify-end gap-3">
-                            <button
-                                type="button"
-                                @click="showAddItemModal = false; resetAddItemForm();"
-                                class="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                @click="addItem"
-                                :disabled="!addItemForm.product_id || isProcessing"
-                                class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-                            >
-                                {{ isProcessing ? 'Adding...' : 'Add Item' }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </Teleport>
+        <AddItemModal
+            :open="showAddItemModal"
+            :categories="categories"
+            :editing-item="editingItem"
+            mode="memo"
+            @close="showAddItemModal = false"
+            @save="handleSaveItem"
+        />
     </AppLayout>
 </template>

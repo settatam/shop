@@ -589,6 +589,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('memos/{memo}/return-item/{item}', [MemoController::class, 'returnItem'])->name('web.memos.return-item');
         Route::post('memos/{memo}/add-item', [MemoController::class, 'addItem'])->name('web.memos.add-item');
         Route::patch('memos/{memo}/items/{item}', [MemoController::class, 'updateItem'])->name('web.memos.update-item');
+        Route::delete('memos/{memo}/items/{item}', [MemoController::class, 'removeItem'])->name('web.memos.remove-item');
         Route::post('memos/{memo}/change-status', [MemoController::class, 'changeStatus'])->name('web.memos.change-status');
         Route::post('memos/bulk-action', [MemoController::class, 'bulkAction'])->name('web.memos.bulk-action');
     });

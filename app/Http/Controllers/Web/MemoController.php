@@ -75,11 +75,16 @@ class MemoController extends Controller
 
         // Get categories for add item modal
         $categories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
             ->map(fn ($category) => [
-                'value' => $category->id,
-                'label' => $category->name,
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
             ]);
 
         return Inertia::render('memos/Show', [
@@ -299,40 +304,55 @@ class MemoController extends Controller
         }
 
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
+            'product_id' => 'nullable|integer|exists:products,id',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'title' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:2000',
             'price' => 'nullable|numeric|min:0',
             'cost' => 'nullable|numeric|min:0',
             'tenor' => 'nullable|integer|min:1',
         ]);
 
-        $product = Product::with(['variants', 'category', 'images'])->findOrFail($validated['product_id']);
-        $variant = $product->variants->first();
+        $product = ! empty($validated['product_id'])
+            ? Product::with(['variants', 'category', 'images'])->find($validated['product_id'])
+            : null;
 
-        // Check if product is available
-        if ($product->quantity <= 0) {
-            return back()->with('error', 'Product is out of stock.');
+        if ($product) {
+            $variant = $product->variants->first();
+
+            // Check if product is available
+            if ($product->quantity <= 0) {
+                return back()->with('error', 'Product is out of stock.');
+            }
+
+            $effectiveCost = $validated['cost'] ?? $variant?->effective_cost ?? 0;
+
+            $memo->items()->create([
+                'product_id' => $product->id,
+                'category_id' => $product->category_id,
+                'sku' => $variant?->sku,
+                'title' => $product->title,
+                'description' => $product->description,
+                'price' => $validated['price'] ?? $variant?->price ?? 0,
+                'cost' => $effectiveCost,
+                'tenor' => $validated['tenor'] ?? $memo->tenure,
+                'is_returned' => false,
+            ]);
+
+            MemoItem::markProductOnMemo($product);
+        } else {
+            $memo->items()->create([
+                'product_id' => null,
+                'category_id' => $validated['category_id'] ?? null,
+                'title' => $validated['title'] ?? 'Untitled Item',
+                'description' => $validated['description'] ?? null,
+                'price' => $validated['price'] ?? 0,
+                'cost' => $validated['cost'] ?? 0,
+                'tenor' => $validated['tenor'] ?? $memo->tenure,
+                'is_returned' => false,
+            ]);
         }
 
-        // Create the memo item
-        // Cost priority: provided cost > wholesale_price > cost
-        $effectiveCost = $validated['cost'] ?? $variant?->effective_cost ?? 0;
-
-        $memo->items()->create([
-            'product_id' => $product->id,
-            'category_id' => $product->category_id,
-            'sku' => $variant?->sku,
-            'title' => $product->title,
-            'description' => $product->description,
-            'price' => $validated['price'] ?? $variant?->price ?? 0,
-            'cost' => $effectiveCost,
-            'tenor' => $validated['tenor'] ?? $memo->tenure,
-            'is_returned' => false,
-        ]);
-
-        // Mark product as on memo (out of stock)
-        MemoItem::markProductOnMemo($product);
-
-        // Recalculate totals
         $memo->calculateTotals();
 
         return back()->with('success', 'Item added to memo.');
@@ -402,6 +422,23 @@ class MemoController extends Controller
         $memo->calculateTotals();
 
         return back()->with('success', 'Item updated.');
+    }
+
+    public function removeItem(Memo $memo, MemoItem $item): RedirectResponse
+    {
+        $this->authorizeMemo($memo);
+
+        if ($item->memo_id !== $memo->id) {
+            return back()->with('error', 'Item does not belong to this memo.');
+        }
+
+        if (! $memo->isPending()) {
+            return back()->with('error', 'Items can only be removed from pending memos.');
+        }
+
+        $this->memoService->removeItem($item);
+
+        return back()->with('success', 'Item removed successfully.');
     }
 
     public function changeStatus(Request $request, Memo $memo): RedirectResponse
@@ -754,6 +791,12 @@ class MemoController extends Controller
                 'display_name' => $memo->vendor->display_name,
                 'email' => $memo->vendor->email,
                 'phone' => $memo->vendor->phone,
+                'address_line1' => $memo->vendor->address_line1,
+                'address_line2' => $memo->vendor->address_line2,
+                'city' => $memo->vendor->city,
+                'state' => $memo->vendor->state,
+                'postal_code' => $memo->vendor->postal_code,
+                'country' => $memo->vendor->country,
             ] : null,
             'user' => $memo->user ? [
                 'id' => $memo->user->id,
@@ -782,6 +825,9 @@ class MemoController extends Controller
                 'can_be_returned' => $item->canBeReturned(),
                 'quantity' => $item->quantity,
                 'profit' => $item->profit,
+                'days_with_vendor' => $memo->date_vendor_received && ! $item->is_returned
+                    ? (int) $memo->date_vendor_received->diffInDays(now())
+                    : null,
                 'product' => $item->product ? [
                     'id' => $item->product->id,
                     'title' => $item->product->title,

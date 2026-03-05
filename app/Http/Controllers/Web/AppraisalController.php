@@ -654,6 +654,9 @@ class AppraisalController extends Controller
                 'dwt' => $item->dwt,
                 'precious_metal' => $item->precious_metal,
                 'profit' => $item->profit,
+                'days_with_vendor' => $repair->date_received_by_vendor
+                    ? (int) $repair->date_received_by_vendor->diffInDays($repair->date_completed ?? now())
+                    : null,
                 'category' => $item->category ? [
                     'id' => $item->category->id,
                     'name' => $item->category->name,
