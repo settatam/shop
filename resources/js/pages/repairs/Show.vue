@@ -30,6 +30,8 @@ import { CustomerCard } from '@/components/customers';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 import VendorEditModal from '@/components/vendors/VendorEditModal.vue';
 import VendorPaymentForm from '@/components/repairs/VendorPaymentForm.vue';
+import ProductSearch from '@/components/products/ProductSearch.vue';
+import AddItemModal from '@/components/transactions/AddItemModal.vue';
 import { PencilIcon } from '@heroicons/vue/20/solid';
 
 interface LeadSource {
@@ -65,6 +67,10 @@ interface User {
 interface Category {
     id: number;
     name: string;
+    full_path: string;
+    parent_id: number | null;
+    level: number;
+    template_id: number | null;
 }
 
 interface Product {
@@ -234,6 +240,7 @@ interface Props {
     repair: Repair;
     statuses: Status[];
     paymentMethods: PaymentMethod[];
+    categories: Category[];
     activityLogs?: ActivityDay[];
     isAppraisal?: boolean;
 }
@@ -470,6 +477,69 @@ function onVendorPaymentSaved() {
     closeVendorPaymentModal();
     router.reload({ only: ['repair'] });
 }
+
+// Item management
+const showAddItemModal = ref(false);
+const showProductSearch = ref(false);
+const editingItem = ref<any>(null);
+
+const disabledProductIds = computed(() => {
+    return props.repair.items.filter(i => i.product_id).map(i => i.product_id!);
+});
+
+function handleProductSelect(product: any) {
+    router.post(`${basePath.value}/${props.repair.id}/add-item`, {
+        product_id: product.id,
+        title: product.title,
+        description: product.description || '',
+        sku: product.sku,
+        vendor_cost: parseFloat(String(product.cost)) || 0,
+        customer_cost: parseFloat(String(product.price)) || 0,
+    }, {
+        preserveScroll: true,
+    });
+}
+
+function openAddItemModal() {
+    editingItem.value = null;
+    showAddItemModal.value = true;
+}
+
+function handleSaveItem(item: any) {
+    router.post(`${basePath.value}/${props.repair.id}/add-item`, {
+        title: item.title,
+        description: item.description,
+        category_id: item.category_id,
+        vendor_cost: item.buy_price || 0,
+        customer_cost: item.price || 0,
+        precious_metal: item.precious_metal,
+        dwt: item.dwt,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showAddItemModal.value = false;
+        },
+    });
+}
+
+function updateItemField(itemId: number, field: string, value: number) {
+    router.patch(`${basePath.value}/${props.repair.id}/items/${itemId}`, {
+        [field]: value,
+    }, {
+        preserveScroll: true,
+    });
+}
+
+const debouncedUpdateItem = useDebounceFn((itemId: number, field: string, value: number) => {
+    updateItemField(itemId, field, value);
+}, 500);
+
+function removeItem(itemId: number) {
+    if (!confirm('Remove this item from the repair?')) return;
+    router.delete(`${basePath.value}/${props.repair.id}/items/${itemId}`, {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
@@ -624,11 +694,39 @@ function onVendorPaymentSaved() {
                     <div class="space-y-6 lg:col-span-2">
                         <!-- Items -->
                         <div class="rounded-lg bg-white shadow dark:bg-gray-800">
-                            <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                            <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
                                 <h2 class="text-lg font-medium text-gray-900 dark:text-white">
                                     Repair Items ({{ repair.items.length }})
                                 </h2>
+                                <div class="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        @click="showProductSearch = !showProductSearch"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-600"
+                                    >
+                                        <MagnifyingGlassIcon class="size-4" />
+                                        Search Product
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="openAddItemModal"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+                                    >
+                                        <PlusIcon class="size-4" />
+                                        Add Custom Item
+                                    </button>
+                                </div>
                             </div>
+
+                            <!-- Product Search (toggleable) -->
+                            <div v-if="showProductSearch" class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+                                <ProductSearch
+                                    :search-url="`${basePath}/search-products`"
+                                    :disabled-product-ids="disabledProductIds"
+                                    @select="handleProductSelect"
+                                />
+                            </div>
+
                             <div class="overflow-x-auto">
                                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                     <thead class="bg-gray-50 dark:bg-gray-700">
@@ -637,6 +735,7 @@ function onVendorPaymentSaved() {
                                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Vendor Cost</th>
                                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Customer Cost</th>
                                             <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Profit</th>
+                                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"><span class="sr-only">Actions</span></th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -648,23 +747,54 @@ function onVendorPaymentSaved() {
                                                     </div>
                                                     <div>
                                                         <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                                                        <p v-if="item.sku" class="text-xs text-gray-500 dark:text-gray-400">SKU: {{ item.sku }}</p>
                                                         <p v-if="item.category" class="text-sm text-gray-500 dark:text-gray-400">{{ item.category.name }}</p>
-                                                        <p v-if="item.description" class="text-sm text-gray-500 dark:text-gray-400">{{ item.description }}</p>
+                                                        <p v-if="item.description" class="max-w-xs truncate text-sm text-gray-500 dark:text-gray-400">{{ item.description }}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm text-gray-500 dark:text-gray-400">
-                                                {{ formatCurrency(item.vendor_cost) }}
+                                            <td class="whitespace-nowrap px-6 py-4 text-right">
+                                                <div class="flex items-center justify-end gap-1">
+                                                    <span class="text-sm text-gray-400">$</span>
+                                                    <input
+                                                        type="number"
+                                                        :value="item.vendor_cost"
+                                                        @change="updateItemField(item.id, 'vendor_cost', parseFloat(($event.target as HTMLInputElement).value) || 0)"
+                                                        min="0"
+                                                        step="0.01"
+                                                        class="w-24 rounded border-0 bg-transparent p-0 text-right text-sm text-gray-500 focus:ring-0 dark:text-gray-400"
+                                                    />
+                                                </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
-                                                {{ formatCurrency(item.customer_cost) }}
+                                            <td class="whitespace-nowrap px-6 py-4 text-right">
+                                                <div class="flex items-center justify-end gap-1">
+                                                    <span class="text-sm text-gray-400">$</span>
+                                                    <input
+                                                        type="number"
+                                                        :value="item.customer_cost"
+                                                        @change="updateItemField(item.id, 'customer_cost', parseFloat(($event.target as HTMLInputElement).value) || 0)"
+                                                        min="0"
+                                                        step="0.01"
+                                                        class="w-24 rounded border-0 bg-transparent p-0 text-right text-sm font-medium text-gray-900 focus:ring-0 dark:text-white"
+                                                    />
+                                                </div>
                                             </td>
                                             <td class="whitespace-nowrap px-6 py-4 text-right text-sm" :class="item.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                                 {{ formatCurrency(item.profit) }}
                                             </td>
+                                            <td class="whitespace-nowrap px-6 py-4 text-right">
+                                                <button
+                                                    type="button"
+                                                    @click="removeItem(item.id)"
+                                                    class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700"
+                                                    title="Remove item"
+                                                >
+                                                    <TrashIcon class="size-4" />
+                                                </button>
+                                            </td>
                                         </tr>
                                         <tr v-if="repair.items.length === 0">
-                                            <td colspan="4" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                            <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                                 No items in this repair.
                                             </td>
                                         </tr>
@@ -681,11 +811,22 @@ function onVendorPaymentSaved() {
                                             <td class="whitespace-nowrap px-6 py-3 text-right text-sm font-medium" :class="profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
                                                 {{ formatCurrency(profit) }}
                                             </td>
+                                            <td></td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Add/Edit Item Modal -->
+                        <AddItemModal
+                            :open="showAddItemModal"
+                            :categories="categories"
+                            :editing-item="editingItem"
+                            mode="repair"
+                            @close="showAddItemModal = false"
+                            @save="handleSaveItem"
+                        />
 
                         <!-- Description -->
                         <div v-if="repair.description" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">

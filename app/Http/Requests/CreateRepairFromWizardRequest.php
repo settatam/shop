@@ -36,6 +36,7 @@ class CreateRepairFromWizardRequest extends FormRequest
 
             // Step 3: Items (products brought for repair)
             'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
             'items.*.title' => ['required', 'string', 'max:255'],
             'items.*.description' => ['nullable', 'string', 'max:2000'],
             'items.*.category_id' => ['nullable', 'integer', 'exists:categories,id'],

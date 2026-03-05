@@ -626,6 +626,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::middleware('permission:repairs.view')->group(function () {
         Route::get('repairs', [RepairController::class, 'index'])->name('web.repairs.index');
         Route::get('repairs/search-customers', [RepairController::class, 'searchCustomers'])->name('web.repairs.search-customers');
+        Route::get('repairs/search-products', [RepairController::class, 'searchProducts'])->name('web.repairs.search-products');
         Route::get('repairs/search-vendors', [RepairController::class, 'searchVendors'])->name('web.repairs.search-vendors');
         Route::get('repairs/{repair}', [RepairController::class, 'show'])->name('web.repairs.show');
     });
@@ -636,6 +637,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('repairs/{repair}/mark-completed', [RepairController::class, 'markCompleted'])->name('web.repairs.mark-completed');
         Route::post('repairs/{repair}/receive-payment', [RepairController::class, 'receivePayment'])->name('web.repairs.receive-payment');
         Route::post('repairs/{repair}/change-status', [RepairController::class, 'changeStatus'])->name('web.repairs.change-status');
+        Route::post('repairs/{repair}/add-item', [RepairController::class, 'addItem'])->name('web.repairs.add-item');
         Route::patch('repairs/{repair}/items/{item}', [RepairController::class, 'updateItem'])->name('web.repairs.update-item');
         Route::delete('repairs/{repair}/items/{item}', [RepairController::class, 'removeItem'])->name('web.repairs.remove-item');
         Route::post('repairs/bulk-action', [RepairController::class, 'bulkAction'])->name('web.repairs.bulk-action');

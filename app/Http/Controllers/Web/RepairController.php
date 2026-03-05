@@ -7,6 +7,7 @@ use App\Http\Requests\CreateRepairFromWizardRequest;
 use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\Product;
 use App\Models\Repair;
 use App\Models\RepairItem;
 use App\Models\Vendor;
@@ -37,7 +38,6 @@ class RepairController extends Controller
         }
 
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
             ->orderBy('name')
             ->get()
             ->map(fn ($vendor) => [
@@ -75,10 +75,24 @@ class RepairController extends Controller
             'vendorPayments.vendor',
         ]);
 
+        $categories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($category) => [
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
+            ]);
+
         return Inertia::render('repairs/Show', [
             'repair' => $this->formatRepair($repair),
             'statuses' => $this->getStatuses(),
             'paymentMethods' => $this->getPaymentMethods(),
+            'categories' => $categories,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($repair)),
         ]);
     }
@@ -92,16 +106,15 @@ class RepairController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get store users for the employee dropdown (only assignable users with repair permission)
+        // Get store users for the employee dropdown (all assignable users)
         $storeUsers = $store->storeUsers()
-            ->with(['user', 'role'])
+            ->with(['user'])
             ->whereNotNull('user_id')
             ->where('can_be_assigned', true)
             ->get()
-            ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('repairs.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
-                'name' => $storeUser->user?->name ?? $storeUser->full_name ?? 'Unknown',
+                'name' => $storeUser->user?->name ?? 'Unknown',
             ])
             ->sortBy('name')
             ->values();
@@ -374,6 +387,27 @@ class RepairController extends Controller
 
     // Item Management
 
+    public function addItem(Request $request, Repair $repair): RedirectResponse
+    {
+        $this->authorizeRepair($repair);
+
+        $validated = $request->validate([
+            'product_id' => 'nullable|integer|exists:products,id',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'sku' => 'nullable|string|max:100',
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string|max:2000',
+            'vendor_cost' => 'nullable|numeric|min:0',
+            'customer_cost' => 'nullable|numeric|min:0',
+            'dwt' => 'nullable|numeric|min:0',
+            'precious_metal' => 'nullable|string|max:50',
+        ]);
+
+        $this->repairService->addItem($repair, $validated);
+
+        return back()->with('success', 'Item added successfully.');
+    }
+
     public function updateItem(Request $request, Repair $repair, RepairItem $item): RedirectResponse
     {
         $this->authorizeRepair($repair);
@@ -408,6 +442,49 @@ class RepairController extends Controller
     }
 
     // Search APIs for Wizard
+
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json(['products' => []], 200);
+        }
+
+        $query = $request->get('query', '');
+
+        $products = Product::where('store_id', $store->id)
+            ->where('quantity', '>', 0)
+            ->where('status', Product::STATUS_ACTIVE)
+            ->when($query, function ($q) use ($query) {
+                $q->where(function ($sub) use ($query) {
+                    $sub->where('title', 'like', "%{$query}%")
+                        ->orWhere('description', 'like', "%{$query}%")
+                        ->orWhereHas('variants', function ($variantQuery) use ($query) {
+                            $variantQuery->where('sku', 'like', "%{$query}%");
+                        });
+                });
+            })
+            ->with(['images', 'variants'])
+            ->limit(20)
+            ->get()
+            ->map(function ($product) {
+                $variant = $product->variants->first();
+
+                return [
+                    'id' => $product->id,
+                    'title' => $product->title,
+                    'sku' => $variant?->sku,
+                    'description' => $product->description,
+                    'price' => $variant?->price ?? 0,
+                    'cost' => $variant?->cost ?? 0,
+                    'quantity' => $product->quantity,
+                    'image' => $product->images->first()?->url,
+                ];
+            });
+
+        return response()->json(['products' => $products]);
+    }
 
     public function searchCustomers(Request $request): JsonResponse
     {
@@ -455,7 +532,6 @@ class RepairController extends Controller
         $query = $request->get('query', '');
 
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
             ->when($query, function ($q) use ($query) {
                 $q->where(function ($sub) use ($query) {
                     $sub->where('name', 'like', "%{$query}%")

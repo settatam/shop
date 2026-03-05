@@ -20,6 +20,7 @@ import {
 import debounce from 'lodash/debounce';
 import CustomerStep from '@/components/customers/CustomerStep.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
+import ProductSearch from '@/components/products/ProductSearch.vue';
 
 interface StoreUser {
     id: number;
@@ -71,9 +72,11 @@ interface Vendor {
 
 interface RepairItem {
     id: string;
+    product_id?: number;
     title: string;
     description?: string;
     category_id?: number;
+    sku?: string;
     vendor_cost: number;
     customer_cost: number;
     dwt?: number;
@@ -340,6 +343,24 @@ function removeItem(id: string) {
     formData.value.items = formData.value.items.filter(item => item.id !== id);
 }
 
+// Product search
+const disabledProductIds = computed(() => {
+    return formData.value.items.filter(i => i.product_id).map(i => i.product_id!);
+});
+
+function handleProductSelect(product: any) {
+    const repairItem: RepairItem = {
+        id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        product_id: product.id,
+        title: product.title,
+        description: product.description || '',
+        sku: product.sku,
+        vendor_cost: parseFloat(String(product.cost)) || 0,
+        customer_cost: parseFloat(String(product.price)) || 0,
+    };
+    formData.value.items.push(repairItem);
+}
+
 // Validation
 function canProceed(): boolean {
     switch (currentStep.value) {
@@ -402,6 +423,7 @@ async function submit() {
             lead_source_id: formData.value.customer?.lead_source_id,
         },
         items: formData.value.items.map(item => ({
+            product_id: item.product_id || null,
             title: item.title,
             description: item.description,
             category_id: item.category_id,
@@ -578,26 +600,23 @@ async function submit() {
                                         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Select Employee</h2>
                                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose the employee handling this repair.</p>
                                     </div>
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                         <button
                                             v-for="user in storeUsers"
                                             :key="user.id"
                                             type="button"
                                             @click="formData.store_user_id = user.id"
                                             :class="[
-                                                'flex items-center gap-4 rounded-lg border-2 p-4 text-left transition-all',
+                                                'flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-colors',
                                                 formData.store_user_id === user.id
-                                                    ? 'border-indigo-600 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-900/20'
+                                                    ? 'border-indigo-600 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/20'
                                                     : 'border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500',
                                             ]"
                                         >
-                                            <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
-                                                <UserIcon class="size-6 text-gray-500 dark:text-gray-400" />
+                                            <div class="flex size-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+                                                <UserIcon class="size-5 text-gray-500 dark:text-gray-400" />
                                             </div>
-                                            <div>
-                                                <p class="font-medium text-gray-900 dark:text-white">{{ user.name }}</p>
-                                            </div>
-                                            <CheckIcon v-if="formData.store_user_id === user.id" class="ml-auto size-6 text-indigo-600" />
+                                            <span class="font-medium text-gray-900 dark:text-white">{{ user.name }}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -619,7 +638,7 @@ async function submit() {
                                     <div class="flex items-center justify-between">
                                         <div>
                                             <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Repair Items</h2>
-                                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Add items to be repaired.</p>
+                                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Search for an existing product or add a custom item.</p>
                                         </div>
                                         <button
                                             type="button"
@@ -627,9 +646,16 @@ async function submit() {
                                             class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                                         >
                                             <PlusIcon class="-ml-0.5 size-5" aria-hidden="true" />
-                                            Add Item
+                                            Add Custom Item
                                         </button>
                                     </div>
+
+                                    <!-- Product Search -->
+                                    <ProductSearch
+                                        :search-url="`${basePath}/search-products`"
+                                        :disabled-product-ids="disabledProductIds"
+                                        @select="handleProductSelect"
+                                    />
 
                                     <!-- Empty state -->
                                     <div
@@ -785,8 +811,12 @@ async function submit() {
                                                 >
                                                     <WrenchScrewdriverIcon class="size-8 text-gray-400" />
                                                     <div>
-                                                        <p class="font-medium text-gray-900 dark:text-white">{{ vendor.display_name || vendor.name }}</p>
-                                                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ vendor.email }}</p>
+                                                        <p class="font-medium text-gray-900 dark:text-white">{{ vendor.company_name || vendor.name }}</p>
+                                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                            <span v-if="vendor.company_name && vendor.name">{{ vendor.name }}</span>
+                                                            <span v-if="vendor.company_name && vendor.name && vendor.email"> &middot; </span>
+                                                            <span v-if="vendor.email">{{ vendor.email }}</span>
+                                                        </p>
                                                     </div>
                                                 </button>
                                             </div>

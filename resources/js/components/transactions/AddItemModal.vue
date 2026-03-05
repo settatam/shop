@@ -410,13 +410,9 @@ function calculateSpotPrice() {
 }
 
 function fillSpotPrice() {
-    // Fill Est. Value with market price
+    // Fill Est. Value with market price only — leave buy price for the user to decide
     if (spotPrice.value !== null) {
         form.value.price = spotPrice.value;
-    }
-    // Fill Buy Price with store's calculated buy price
-    if (calculatedBuyPrice.value !== null) {
-        form.value.buy_price = calculatedBuyPrice.value;
     }
 }
 
@@ -1053,11 +1049,7 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                                     <template v-if="spotPrice !== null">
                                                         Market: ${{ spotPrice.toFixed(2) }}
                                                     </template>
-                                                    <template v-if="spotPrice !== null && calculatedBuyPrice !== null"> | </template>
-                                                    <template v-if="calculatedBuyPrice !== null">
-                                                        Buy: ${{ calculatedBuyPrice.toFixed(2) }}
-                                                    </template>
-                                                    — click to fill both
+                                                    — click to use as estimated value
                                                 </button>
                                             </div>
                                             <div v-else-if="loadingSpotPrice" class="mt-1 text-xs text-gray-400">

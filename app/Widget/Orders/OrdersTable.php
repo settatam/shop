@@ -292,10 +292,20 @@ class OrdersTable extends Table
         $profit = $salesPrice + $serviceFee - $cost;
 
         // Get payment types
+        $paymentLabels = [
+            'cash' => 'Cash',
+            'card' => 'Credit Card',
+            'credit_card' => 'Credit Card',
+            'debit_card' => 'Debit Card',
+            'check' => 'Check',
+            'wire' => 'Wire Transfer',
+            'ach' => 'ACH Transfer',
+            'store_credit' => 'Store Credit',
+        ];
         $paymentTypes = $order->payments
             ->pluck('payment_method')
             ->unique()
-            ->map(fn ($method) => ucfirst(str_replace('_', ' ', $method)))
+            ->map(fn ($method) => $paymentLabels[$method] ?? ucfirst(str_replace('_', ' ', $method)))
             ->implode(', ');
 
         // Format marketplace - use sales channel name if available

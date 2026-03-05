@@ -148,8 +148,19 @@ class RepairService
 
             // Add items
             foreach ($data['items'] as $itemData) {
+                $product = ! empty($itemData['product_id'])
+                    ? Product::find($itemData['product_id'])
+                    : null;
+
+                $sku = $itemData['sku'] ?? null;
+                if ($product && ! $sku) {
+                    $sku = $product->variants->first()?->sku;
+                }
+
                 $repair->items()->create([
+                    'product_id' => $product?->id,
                     'category_id' => $itemData['category_id'] ?? null,
+                    'sku' => $sku,
                     'title' => $itemData['title'],
                     'description' => $itemData['description'] ?? null,
                     'vendor_cost' => $itemData['vendor_cost'] ?? 0,
@@ -158,6 +169,10 @@ class RepairService
                     'precious_metal' => $itemData['precious_metal'] ?? null,
                     'status' => RepairItem::STATUS_PENDING,
                 ]);
+
+                if ($product) {
+                    RepairItem::markProductInRepair($product);
+                }
             }
 
             // Calculate totals

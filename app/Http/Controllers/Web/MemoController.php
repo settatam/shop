@@ -38,7 +38,6 @@ class MemoController extends Controller
         }
 
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
             ->orderBy('name')
             ->get()
             ->map(fn ($vendor) => [
@@ -102,16 +101,15 @@ class MemoController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
-        // Get store users for the employee dropdown (only assignable users with memo permission)
+        // Get store users for the employee dropdown (all assignable users)
         $storeUsers = $store->storeUsers()
-            ->with(['user', 'role'])
+            ->with(['user'])
             ->whereNotNull('user_id')
             ->where('can_be_assigned', true)
             ->get()
-            ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('memos.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
-                'name' => $storeUser->user?->name ?? $storeUser->name ?? 'Unknown',
+                'name' => $storeUser->user?->name ?? 'Unknown',
             ])
             ->sortBy('name')
             ->values();
@@ -119,13 +117,18 @@ class MemoController extends Controller
         // Get the current user's store user ID
         $currentStoreUserId = auth()->user()?->currentStoreUser()?->id;
 
-        // Get categories for filtering products
+        // Get categories for AddItemModal
         $categories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
             ->map(fn ($category) => [
-                'value' => $category->id,
-                'label' => $category->name,
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
             ]);
 
         // Get warehouses for the warehouse dropdown
@@ -584,7 +587,6 @@ class MemoController extends Controller
         $query = $request->get('query', '');
 
         $vendors = Vendor::where('store_id', $store->id)
-            ->where('is_active', true)
             ->when($query, function ($q) use ($query) {
                 $q->where(function ($sub) use ($query) {
                     $sub->where('name', 'like', "%{$query}%")

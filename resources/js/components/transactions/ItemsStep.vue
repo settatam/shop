@@ -181,20 +181,11 @@ function getConditionName(conditionValue?: string): string {
                         Offer Amount
                     </label>
                     <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                        {{ itemsSkipped ? 'Enter the total amount to pay the customer' : 'Total based on item buy prices (editable)' }}
+                        Total based on item buy prices
                     </p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="text-lg font-medium text-gray-500 dark:text-gray-400">$</span>
-                    <input
-                        id="offer_amount"
-                        v-model.number="localOfferAmount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        class="w-32 rounded-md border-0 bg-white py-2 text-right text-xl font-bold text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-800 dark:text-white dark:ring-gray-600"
-                        placeholder="0.00"
-                    />
+                    <span class="text-2xl font-bold text-gray-900 dark:text-white">${{ (localOfferAmount || 0).toFixed(2) }}</span>
                 </div>
             </div>
         </div>
@@ -230,14 +221,14 @@ function getConditionName(conditionValue?: string): string {
                     </p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button
+                    <!-- <button
                         type="button"
                         @click="skipItems"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-600"
                     >
                         <ForwardIcon class="-ml-0.5 size-5" aria-hidden="true" />
                         Skip Items
-                    </button>
+                    </button> -->
                     <button
                         type="button"
                         @click="openAddModal"
@@ -312,7 +303,7 @@ function getConditionName(conditionValue?: string): string {
                 </svg>
                 <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No items</h3>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Add items for detailed tracking, or skip to just enter an offer amount.
+                    Add the items being purchased from the customer.
                 </p>
                 <div class="mt-6 flex items-center justify-center gap-3">
                     <button
@@ -323,14 +314,14 @@ function getConditionName(conditionValue?: string): string {
                         <PlusIcon class="-ml-0.5 mr-1.5 size-5" aria-hidden="true" />
                         Add Item
                     </button>
-                    <button
+                    <!-- <button
                         type="button"
                         @click="skipItems"
                         class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                     >
                         <ForwardIcon class="-ml-0.5 mr-1.5 size-5" aria-hidden="true" />
                         Skip Items
-                    </button>
+                    </button> -->
                 </div>
             </div>
 
