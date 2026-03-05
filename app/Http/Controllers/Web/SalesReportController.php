@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\SalesChannel;
+use App\Models\Store;
 use App\Services\StoreContext;
 use App\Traits\SendsReportEmails;
 use Carbon\Carbon;
@@ -26,7 +27,7 @@ class SalesReportController extends Controller
      */
     protected const PAYMENT_METHOD_LABELS = [
         'cash' => 'Cash',
-        'card' => 'Card',
+        'card' => 'Credit Card',
         'store_credit' => 'Store Credit',
         'layaway' => 'Layaway',
         'external' => 'External',
@@ -1772,6 +1773,178 @@ class SalesReportController extends Controller
      * Get category breakdown for orders.
      * Returns sales aggregated by each leaf category.
      */
+    /**
+     * Email daily sales report (orders table).
+     */
+    public function emailDaily(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        [$startDate, $endDate] = $this->parseDateRange($request);
+
+        $channels = $this->getSalesChannels($store->id);
+
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $dailyData = $this->getDailyAggregatedData($store->id, $startDate, $endDate, $channels, $categoryIds);
+
+        $dateLabel = $this->getDateRangeLabel($startDate, $endDate);
+
+        return $this->emailSalesAggregatedData($request, $dailyData, $channels, 'Daily Sales Report', $dateLabel, $store);
+    }
+
+    /**
+     * Email daily sales category breakdown.
+     */
+    public function emailDailyCategories(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        [$startDate, $endDate] = $this->parseDateRange($request);
+
+        return $this->emailSalesCategoryBreakdown($request, $store, $startDate, $endDate, 'Daily Sales by Category');
+    }
+
+    /**
+     * Email monthly sales category breakdown.
+     */
+    public function emailMonthlyCategories(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startMonth = $request->input('start_month', now()->subMonths(12)->month);
+        $startYear = $request->input('start_year', now()->subMonths(12)->year);
+        $endMonth = $request->input('end_month', now()->month);
+        $endYear = $request->input('end_year', now()->year);
+
+        $startDate = Carbon::createFromDate($startYear, $startMonth, 1)->startOfMonth();
+        $endDate = Carbon::createFromDate($endYear, $endMonth, 1)->endOfMonth();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        return $this->emailSalesCategoryBreakdown($request, $store, $startDate, $endDate, 'Monthly Sales by Category');
+    }
+
+    /**
+     * Email MTD sales category breakdown.
+     */
+    public function emailMonthToDateCategories(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->startOfDay()
+            : now()->startOfMonth();
+
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->endOfDay()
+            : now()->endOfDay();
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        return $this->emailSalesCategoryBreakdown($request, $store, $startDate, $endDate, 'Month-to-Date Sales by Category');
+    }
+
+    /**
+     * Email a sales category breakdown report for a given date range.
+     */
+    protected function emailSalesCategoryBreakdown(Request $request, Store $store, Carbon $startDate, Carbon $endDate, string $title): JsonResponse
+    {
+        $categoryIds = null;
+        if ($request->filled('category_id')) {
+            $categoryIds = $this->getCategoryDescendantIds((int) $request->category_id, $store->id);
+        }
+
+        $ordersQuery = Order::query()
+            ->where('store_id', $store->id)
+            ->whereIn('status', Order::PAID_STATUSES)
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->with(['items.product.category', 'items.category', 'items.variant']);
+
+        if ($categoryIds) {
+            $ordersQuery->whereHas('items', function ($q) use ($categoryIds) {
+                $q->where(function ($q2) use ($categoryIds) {
+                    $q2->whereIn('category_id', $categoryIds)
+                        ->orWhereHas('product', function ($q3) use ($categoryIds) {
+                            $q3->whereIn('category_id', $categoryIds);
+                        });
+                });
+            });
+        }
+
+        $categoryBreakdown = $this->getCategoryBreakdown($ordersQuery->get(), $store->id);
+
+        $headers = ['Category', 'Items Sold', 'Orders', 'Cost', 'Wholesale', 'Sales', 'Profit'];
+
+        $totals = [
+            'category_name' => 'TOTALS',
+            'items_sold' => collect($categoryBreakdown)->sum('items_sold'),
+            'orders_count' => collect($categoryBreakdown)->sum('orders_count'),
+            'total_cost' => collect($categoryBreakdown)->sum('total_cost'),
+            'total_wholesale' => collect($categoryBreakdown)->sum('total_wholesale'),
+            'total_sales' => collect($categoryBreakdown)->sum('total_sales'),
+            'total_profit' => collect($categoryBreakdown)->sum('total_profit'),
+        ];
+
+        $formatRow = fn ($row) => [
+            $row['category_name'],
+            $row['items_sold'],
+            $row['orders_count'],
+            '$'.number_format($row['total_cost'], 2),
+            '$'.number_format($row['total_wholesale'], 2),
+            '$'.number_format($row['total_sales'], 2),
+            '$'.number_format($row['total_profit'], 2),
+        ];
+
+        $dateLabel = "{$startDate->format('M j, Y')} to {$endDate->format('M j, Y')}";
+
+        return $this->sendReportEmail(
+            $request,
+            $title,
+            "Category breakdown for {$dateLabel}",
+            $headers,
+            $categoryBreakdown,
+            $totals,
+            $formatRow,
+            'sales-by-category-'.now()->format('Y-m-d').'.csv',
+            $store,
+        );
+    }
+
+    /**
+     * Parse start/end date range from request, supporting both range and single date modes.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function parseDateRange(Request $request): array
+    {
+        if ($request->filled('start_date') || $request->filled('end_date')) {
+            $startDate = $request->filled('start_date')
+                ? Carbon::parse($request->input('start_date'))->startOfDay()
+                : now()->startOfDay();
+            $endDate = $request->filled('end_date')
+                ? Carbon::parse($request->input('end_date'))->endOfDay()
+                : now()->endOfDay();
+        } else {
+            $date = $request->get('date', now()->format('Y-m-d'));
+            $startDate = Carbon::parse($date)->startOfDay();
+            $endDate = Carbon::parse($date)->endOfDay();
+        }
+
+        if ($startDate > $endDate) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        return [$startDate, $endDate];
+    }
+
     protected function getCategoryBreakdown(Collection $orders, int $storeId): array
     {
         $categories = Category::where('store_id', $storeId)

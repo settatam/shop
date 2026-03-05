@@ -471,4 +471,60 @@ class SalesReportTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/csv; charset=utf-8');
     }
+
+    public function test_can_email_daily_sales_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/reports/sales/daily/email', [
+                'emails' => ['test@example.com'],
+                'subject' => 'Daily Sales Report',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['success', 'message']);
+    }
+
+    public function test_can_email_daily_sales_categories_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/reports/sales/daily/email/categories', [
+                'emails' => ['test@example.com'],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['success', 'message']);
+    }
+
+    public function test_can_email_monthly_sales_categories_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/reports/sales/monthly/email/categories', [
+                'emails' => ['test@example.com'],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['success', 'message']);
+    }
+
+    public function test_can_email_mtd_category_breakdown_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/reports/sales/mtd/category-breakdown/email', [
+                'emails' => ['test@example.com'],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['success', 'message']);
+    }
+
+    public function test_can_email_leads_incoming_kits_report(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/reports/leads/incoming-kits/email', [
+                'emails' => ['test@example.com'],
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['success', 'message']);
+    }
 }

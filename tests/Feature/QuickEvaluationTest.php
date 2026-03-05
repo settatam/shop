@@ -10,6 +10,8 @@ use App\Models\StoreUser;
 use App\Models\User;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -199,5 +201,64 @@ class QuickEvaluationTest extends TestCase
         $response = $this->delete("/transactions/quick-evaluation/{$evaluation->id}");
 
         $response->assertStatus(404);
+    }
+
+    public function test_temporary_images_can_be_uploaded(): void
+    {
+        Storage::fake('do_spaces');
+
+        $this->actingAs($this->owner);
+
+        $response = $this->postJson('/transactions/quick-evaluation/temp-images', [
+            'images' => [
+                UploadedFile::fake()->image('photo1.jpg', 800, 600),
+                UploadedFile::fake()->image('photo2.jpg', 800, 600),
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'image_urls',
+        ]);
+        $response->assertJsonCount(2, 'image_urls');
+    }
+
+    public function test_temporary_images_upload_requires_images(): void
+    {
+        $this->actingAs($this->owner);
+
+        $response = $this->postJson('/transactions/quick-evaluation/temp-images', []);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['images']);
+    }
+
+    public function test_temporary_images_upload_rejects_too_many_images(): void
+    {
+        $this->actingAs($this->owner);
+
+        $response = $this->postJson('/transactions/quick-evaluation/temp-images', [
+            'images' => [
+                UploadedFile::fake()->image('photo1.jpg'),
+                UploadedFile::fake()->image('photo2.jpg'),
+                UploadedFile::fake()->image('photo3.jpg'),
+                UploadedFile::fake()->image('photo4.jpg'),
+                UploadedFile::fake()->image('photo5.jpg'),
+            ],
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['images']);
+    }
+
+    public function test_temporary_images_upload_requires_authentication(): void
+    {
+        $response = $this->postJson('/transactions/quick-evaluation/temp-images', [
+            'images' => [
+                UploadedFile::fake()->image('photo1.jpg'),
+            ],
+        ]);
+
+        $response->assertStatus(401);
     }
 }

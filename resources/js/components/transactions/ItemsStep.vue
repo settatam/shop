@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { PlusIcon, PencilIcon, TrashIcon, ForwardIcon } from '@heroicons/vue/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, ForwardIcon, CurrencyDollarIcon, CameraIcon } from '@heroicons/vue/24/outline';
 import AddItemModal from './AddItemModal.vue';
+import MetalsCalculatorTool from './MetalsCalculatorTool.vue';
+import AiPhotoAnalysisTool from './AiPhotoAnalysisTool.vue';
 
 interface Category {
     value: number;
@@ -81,9 +83,45 @@ function addItemsInstead() {
 
 const showModal = ref(false);
 const editingItem = ref<TransactionItem | null>(null);
+const prefillItem = ref<Record<string, unknown> | null>(null);
+const activeTool = ref<'metals' | 'ai' | null>(null);
+
+function toggleTool(tool: 'metals' | 'ai') {
+    activeTool.value = activeTool.value === tool ? null : tool;
+}
+
+function handleToolAddItem(data: {
+    title?: string;
+    description?: string;
+    price?: number;
+    buy_price?: number;
+    precious_metal?: string;
+    dwt?: number;
+    images?: File[];
+}) {
+    // Build prefill data from tool output
+    const prefill: Record<string, unknown> = {};
+
+    if (data.precious_metal) {
+        const metalOption = props.preciousMetals.find(m => m.value === data.precious_metal);
+        prefill.title = metalOption?.label || data.precious_metal;
+    }
+    if (data.title) prefill.title = data.title;
+    if (data.description) prefill.description = data.description;
+    if (data.price !== undefined) prefill.price = data.price;
+    if (data.buy_price !== undefined) prefill.buy_price = data.buy_price;
+    if (data.precious_metal) prefill.precious_metal = data.precious_metal;
+    if (data.dwt !== undefined) prefill.dwt = data.dwt;
+    if (data.images) prefill.images = data.images;
+
+    prefillItem.value = prefill;
+    editingItem.value = null;
+    showModal.value = true;
+}
 
 function openAddModal() {
     editingItem.value = null;
+    prefillItem.value = null;
     showModal.value = true;
 }
 
@@ -95,6 +133,7 @@ function openEditModal(item: TransactionItem) {
 function closeModal() {
     showModal.value = false;
     editingItem.value = null;
+    prefillItem.value = null;
 }
 
 function handleSaveItem(item: TransactionItem) {
@@ -209,6 +248,48 @@ function getConditionName(conditionValue?: string): string {
                     </button>
                 </div>
             </div>
+
+            <!-- Quick Tools -->
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Quick Tools:</span>
+                <button
+                    type="button"
+                    @click="toggleTool('metals')"
+                    :class="[
+                        'inline-flex items-center gap-x-1 rounded-md px-2.5 py-1.5 text-xs font-medium shadow-sm ring-1 ring-inset',
+                        activeTool === 'metals'
+                            ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-700'
+                            : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-600'
+                    ]"
+                >
+                    <CurrencyDollarIcon class="size-3.5" />
+                    Metals Calculator
+                </button>
+                <button
+                    type="button"
+                    @click="toggleTool('ai')"
+                    :class="[
+                        'inline-flex items-center gap-x-1 rounded-md px-2.5 py-1.5 text-xs font-medium shadow-sm ring-1 ring-inset',
+                        activeTool === 'ai'
+                            ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-700'
+                            : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-600'
+                    ]"
+                >
+                    <CameraIcon class="size-3.5" />
+                    AI Photo Analysis
+                </button>
+            </div>
+
+            <!-- Active Tool Panel -->
+            <MetalsCalculatorTool
+                v-if="activeTool === 'metals'"
+                :precious-metals="preciousMetals"
+                @add-item="handleToolAddItem"
+            />
+            <AiPhotoAnalysisTool
+                v-if="activeTool === 'ai'"
+                @add-item="handleToolAddItem"
+            />
 
             <!-- Empty state -->
             <div
@@ -348,6 +429,7 @@ function getConditionName(conditionValue?: string): string {
             :open="showModal"
             :categories="categories"
             :editing-item="editingItem"
+            :prefill-item="prefillItem"
             @close="closeModal"
             @save="handleSaveItem"
         />

@@ -588,6 +588,40 @@ class LeadsReportController extends Controller
     }
 
     /**
+     * Email Incoming Kits report.
+     */
+    public function emailIncomingKits(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $incomingKits = $this->getIncomingKits($store->id);
+
+        $headers = ['Transaction ID', 'Return Shipped', 'Days In Transit', 'Customer', 'Status', 'Return Tracking', 'Est. Value'];
+
+        $formatRow = fn ($row) => [
+            $row['transaction_number'],
+            $row['return_shipped_at'],
+            $row['days_in_transit'],
+            $row['customer_name'],
+            $row['status'],
+            $row['return_tracking'] ?? '-',
+            '$'.number_format($row['estimated_value'], 2),
+        ];
+
+        return $this->sendReportEmail(
+            $request,
+            'Incoming Kits Report',
+            'Kits shipped back, pending receipt',
+            $headers,
+            $incomingKits,
+            [],
+            $formatRow,
+            'incoming-kits-'.now()->format('Y-m-d').'.csv',
+            $store,
+        );
+    }
+
+    /**
      * Send a leads report email using the shared trait.
      */
     protected function emailLeadsData(Request $request, array $data, string $title, string $description, $store): JsonResponse

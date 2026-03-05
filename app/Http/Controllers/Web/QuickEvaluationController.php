@@ -16,6 +16,8 @@ use App\Services\Transactions\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -331,6 +333,47 @@ class QuickEvaluationController extends Controller
 
         return redirect()->route('web.transactions.show', $transaction)
             ->with('success', 'Transaction created successfully from evaluation.');
+    }
+
+    public function uploadTemporaryImages(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json(['error' => 'Please select a store first.'], 400);
+        }
+
+        $request->validate([
+            'images' => ['required', 'array', 'min:1', 'max:4'],
+            'images.*' => ['image', 'max:10240'],
+        ]);
+
+        $storeSlug = Str::slug($store->name);
+        $uuid = Str::uuid();
+        $disk = config('filesystems.disks.do_spaces.bucket') ? 'do_spaces' : 'public';
+
+        $imageUrls = [];
+
+        foreach ($request->file('images') as $file) {
+            $filename = Str::uuid().'.'.$file->getClientOriginalExtension();
+            $path = "{$storeSlug}/temp-evaluations/{$uuid}/{$filename}";
+
+            Storage::disk($disk)->put($path, file_get_contents($file->path()), [
+                'visibility' => 'public',
+                'ACL' => 'public-read',
+            ]);
+
+            if ($disk === 'do_spaces') {
+                $cdnUrl = rtrim(config('filesystems.disks.do_spaces.url'), '/');
+                $imageUrls[] = "{$cdnUrl}/{$path}";
+            } else {
+                $imageUrls[] = Storage::disk($disk)->url($path);
+            }
+        }
+
+        return response()->json([
+            'image_urls' => $imageUrls,
+        ]);
     }
 
     public function destroy(QuickEvaluation $evaluation): RedirectResponse

@@ -20,7 +20,7 @@ class SalesReportService
      */
     protected const PAYMENT_METHOD_LABELS = [
         'cash' => 'Cash',
-        'card' => 'Card',
+        'card' => 'Credit Card',
         'store_credit' => 'Store Credit',
         'layaway' => 'Layaway',
         'external' => 'External',

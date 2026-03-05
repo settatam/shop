@@ -348,6 +348,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('transactions/quick-evaluation/similar-items', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'searchSimilarItems'])->name('web.transactions.quick-evaluation.similar-items');
         Route::post('transactions/quick-evaluation/ai-research', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'generateAiResearch'])->name('web.transactions.quick-evaluation.ai-research');
         Route::post('transactions/quick-evaluation/web-search', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'webPriceSearch'])->name('web.transactions.quick-evaluation.web-search');
+        Route::post('transactions/quick-evaluation/temp-images', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'uploadTemporaryImages'])->name('web.transactions.quick-evaluation.temp-images');
         Route::post('transactions/quick-evaluation/{evaluation}/images', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'uploadImages'])->name('web.transactions.quick-evaluation.upload-images');
         Route::post('transactions/quick-evaluation/{evaluation}/convert', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'convertToTransaction'])->name('web.transactions.quick-evaluation.convert');
         Route::delete('transactions/quick-evaluation/{evaluation}', [\App\Http\Controllers\Web\QuickEvaluationController::class, 'destroy'])->name('web.transactions.quick-evaluation.destroy');
@@ -919,15 +920,19 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     Route::prefix('reports/sales')->name('reports.sales.')->middleware('permission:reports.view')->group(function () {
         Route::get('daily', [SalesReportController::class, 'daily'])->name('daily');
         Route::get('daily/export', [SalesReportController::class, 'exportDaily'])->name('daily.export');
+        Route::post('daily/email', [SalesReportController::class, 'emailDaily'])->name('daily.email');
+        Route::post('daily/email/categories', [SalesReportController::class, 'emailDailyCategories'])->name('daily.email.categories');
         Route::get('daily-items', [SalesReportController::class, 'dailyItems'])->name('daily-items');
         Route::get('daily-items/export', [SalesReportController::class, 'exportDailyItems'])->name('daily-items.export');
         Route::post('daily-items/email', [SalesReportController::class, 'emailDailyItems'])->name('daily-items.email');
         Route::get('monthly', [SalesReportController::class, 'monthly'])->name('monthly');
         Route::get('monthly/export', [SalesReportController::class, 'exportMonthly'])->name('monthly.export');
         Route::post('monthly/email', [SalesReportController::class, 'emailMonthly'])->name('monthly.email');
+        Route::post('monthly/email/categories', [SalesReportController::class, 'emailMonthlyCategories'])->name('monthly.email.categories');
         Route::get('mtd', [SalesReportController::class, 'monthToDate'])->name('mtd');
         Route::get('mtd/export', [SalesReportController::class, 'exportMonthToDate'])->name('mtd.export');
         Route::post('mtd/email', [SalesReportController::class, 'emailMonthToDate'])->name('mtd.email');
+        Route::post('mtd/category-breakdown/email', [SalesReportController::class, 'emailMonthToDateCategories'])->name('mtd.category-breakdown.email');
     });
 
     // Inventory Reports
@@ -1018,6 +1023,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('daily-kits', [LeadsReportController::class, 'dailyKits'])->name('daily-kits');
         Route::get('daily-kits/export', [LeadsReportController::class, 'exportDailyKits'])->name('daily-kits.export');
         Route::post('daily-kits/email', [LeadsReportController::class, 'emailDailyKits'])->name('daily-kits.email');
+        Route::post('incoming-kits/email', [LeadsReportController::class, 'emailIncomingKits'])->name('incoming-kits.email');
     });
 
     // Transactions Reports

@@ -573,9 +573,7 @@ function downloadInvoice() {
     window.location.href = `/invoices/${props.order.invoice.id}/pdf`;
 }
 
-const totalProfit = computed(() => {
-    return props.order.items.reduce((sum, item) => sum + (item.line_profit ?? 0), 0);
-});
+
 
 const serviceFeeAmount = computed(() => {
     const value = props.order.service_fee_value ?? 0;
@@ -605,6 +603,7 @@ const totalRefunds = computed(() => {
 function formatPaymentMethod(method: string): string {
     const labels: Record<string, string> = {
         cash: 'Cash',
+        card: 'Credit Card',
         credit_card: 'Credit Card',
         debit_card: 'Debit Card',
         check: 'Check',
@@ -1006,9 +1005,6 @@ function processReturn() {
                                                 <p v-if="item.discount > 0" class="text-sm text-green-600 dark:text-green-400">
                                                     -{{ formatCurrency(item.discount) }} discount
                                                 </p>
-                                                <p v-if="item.line_profit !== undefined" class="text-xs text-gray-400">
-                                                    Profit: {{ formatCurrency(item.line_profit) }}
-                                                </p>
                                             </div>
                                             <button
                                                 v-if="canProcessReturn"
@@ -1334,10 +1330,6 @@ function processReturn() {
                                 <div class="flex justify-between text-base font-bold">
                                     <dt class="text-gray-900 dark:text-white">Balance Due</dt>
                                     <dd class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(order.balance_due ?? order.total) }}</dd>
-                                </div>
-                                <div v-if="totalProfit > 0" class="flex justify-between border-t border-gray-200 pt-3 text-sm dark:border-gray-700">
-                                    <dt class="text-gray-500 dark:text-gray-400">Estimated Profit</dt>
-                                    <dd class="font-medium text-green-600 dark:text-green-400">{{ formatCurrency(totalProfit) }}</dd>
                                 </div>
                             </dl>
                         </div>

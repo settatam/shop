@@ -62,12 +62,23 @@ interface ExistingImage {
     thumbnail_url: string | null;
 }
 
+interface PrefillData {
+    title?: string;
+    description?: string;
+    price?: number;
+    buy_price?: number;
+    precious_metal?: string;
+    dwt?: number;
+    images?: File[];
+}
+
 interface Props {
     open: boolean;
     categories: Category[];
     editingItem?: TransactionItem | null;
     existingImages?: ExistingImage[];
     mode?: 'buy' | 'repair';
+    prefillItem?: PrefillData | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -513,6 +524,32 @@ watch(() => props.open, (isOpen) => {
             }
             selectionPath.value = path;
         }
+    } else if (isOpen && props.prefillItem) {
+        const prefill = props.prefillItem;
+        const newForm = makeEmptyForm();
+        if (prefill.title) newForm.title = prefill.title;
+        if (prefill.description) newForm.description = prefill.description;
+        if (prefill.price !== undefined) newForm.price = prefill.price;
+        if (prefill.buy_price !== undefined) newForm.buy_price = prefill.buy_price;
+        if (prefill.precious_metal) newForm.precious_metal = prefill.precious_metal;
+        if (prefill.dwt !== undefined) newForm.dwt = prefill.dwt;
+        if (prefill.images) {
+            newForm.images = prefill.images;
+            // Generate previews for prefilled images
+            imagePreviews.value = [];
+            for (const file of prefill.images) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreviews.value.push(e.target?.result as string);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        form.value = newForm;
+        selectionPath.value = [];
+        templateFields.value = [];
+        imagesToDelete.value = [];
+        // Spot price will auto-calculate via watchers if metal+dwt are set
     } else if (isOpen) {
         form.value = makeEmptyForm();
         selectionPath.value = [];

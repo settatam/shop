@@ -1972,6 +1972,7 @@ class OrderController extends Controller
     {
         return [
             ['value' => 'cash', 'label' => 'Cash'],
+            ['value' => 'card', 'label' => 'Credit Card'],
             ['value' => 'credit_card', 'label' => 'Credit Card'],
             ['value' => 'debit_card', 'label' => 'Debit Card'],
             ['value' => 'check', 'label' => 'Check'],
