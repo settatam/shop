@@ -181,4 +181,95 @@ class RepairProductSearchTest extends TestCase
         $this->assertNotNull($repairItem);
         $this->assertNull($repairItem->product_id);
     }
+
+    public function test_can_add_item_to_existing_repair(): void
+    {
+        $this->actingAs($this->user);
+
+        $repair = Repair::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => Customer::factory()->create(['store_id' => $this->store->id])->id,
+        ]);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'title' => 'Pendant for Repair',
+            'quantity' => 1,
+            'status' => Product::STATUS_ACTIVE,
+        ]);
+        ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'sku' => 'PND-001',
+        ]);
+
+        $response = $this->post("/repairs/{$repair->id}/add-item", [
+            'product_id' => $product->id,
+            'title' => $product->title,
+            'vendor_cost' => 25,
+            'customer_cost' => 60,
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('repair_items', [
+            'repair_id' => $repair->id,
+            'product_id' => $product->id,
+            'title' => 'Pendant for Repair',
+        ]);
+
+        $product->refresh();
+        $this->assertEquals(Product::STATUS_IN_REPAIR, $product->status);
+    }
+
+    public function test_can_add_custom_item_to_existing_repair(): void
+    {
+        $this->actingAs($this->user);
+
+        $repair = Repair::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => Customer::factory()->create(['store_id' => $this->store->id])->id,
+        ]);
+
+        $response = $this->post("/repairs/{$repair->id}/add-item", [
+            'title' => 'Chain Solder',
+            'description' => 'Fix broken chain link',
+            'vendor_cost' => 15,
+            'customer_cost' => 40,
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('repair_items', [
+            'repair_id' => $repair->id,
+            'title' => 'Chain Solder',
+            'description' => 'Fix broken chain link',
+        ]);
+    }
+
+    public function test_can_inline_update_item_costs(): void
+    {
+        $this->actingAs($this->user);
+
+        $repair = Repair::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => Customer::factory()->create(['store_id' => $this->store->id])->id,
+        ]);
+
+        $item = RepairItem::factory()->create([
+            'repair_id' => $repair->id,
+            'vendor_cost' => 50,
+            'customer_cost' => 100,
+        ]);
+
+        $response = $this->patch("/repairs/{$repair->id}/items/{$item->id}", [
+            'vendor_cost' => 75,
+            'customer_cost' => 150,
+        ]);
+
+        $response->assertRedirect();
+
+        $item->refresh();
+        $this->assertEquals(75, $item->vendor_cost);
+        $this->assertEquals(150, $item->customer_cost);
+    }
 }

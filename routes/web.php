@@ -665,10 +665,12 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('appraisals', [AppraisalController::class, 'index'])->name('web.appraisals.index');
         Route::get('appraisals/search-customers', [AppraisalController::class, 'searchCustomers'])->name('web.appraisals.search-customers');
         Route::get('appraisals/search-vendors', [AppraisalController::class, 'searchVendors'])->name('web.appraisals.search-vendors');
+        Route::get('appraisals/search-products', [AppraisalController::class, 'searchProducts'])->name('web.appraisals.search-products');
         Route::get('appraisals/{repair}', [AppraisalController::class, 'show'])->name('web.appraisals.show');
     });
     Route::middleware('permission:appraisals.update')->group(function () {
         Route::patch('appraisals/{repair}', [AppraisalController::class, 'update'])->name('web.appraisals.update');
+        Route::post('appraisals/{repair}/add-item', [AppraisalController::class, 'addItem'])->name('web.appraisals.add-item');
         Route::post('appraisals/{repair}/send-to-vendor', [AppraisalController::class, 'sendToVendor'])->name('web.appraisals.send-to-vendor');
         Route::post('appraisals/{repair}/mark-received', [AppraisalController::class, 'markReceived'])->name('web.appraisals.mark-received');
         Route::post('appraisals/{repair}/mark-completed', [AppraisalController::class, 'markCompleted'])->name('web.appraisals.mark-completed');

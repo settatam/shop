@@ -7,6 +7,7 @@ use App\Http\Requests\CreateAppraisalFromWizardRequest;
 use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\Product;
 use App\Models\Repair;
 use App\Models\RepairItem;
 use App\Models\Vendor;
@@ -74,10 +75,24 @@ class AppraisalController extends Controller
             'vendorPayments.vendor',
         ]);
 
+        $categories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($category) => [
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
+            ]);
+
         return Inertia::render('repairs/Show', [
             'repair' => $this->formatRepair($repair),
             'statuses' => $this->getStatuses(),
             'paymentMethods' => $this->getPaymentMethods(),
+            'categories' => $categories,
             'activityLogs' => Inertia::defer(fn () => app(ActivityLogFormatter::class)->formatForSubject($repair)),
             'isAppraisal' => true,
         ]);
@@ -108,11 +123,16 @@ class AppraisalController extends Controller
         $currentStoreUserId = auth()->user()?->currentStoreUser()?->id;
 
         $categories = Category::where('store_id', $store->id)
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
             ->map(fn ($category) => [
-                'value' => $category->id,
-                'label' => $category->name,
+                'id' => $category->id,
+                'name' => $category->name,
+                'full_path' => $category->full_path,
+                'parent_id' => $category->parent_id,
+                'level' => $category->level,
+                'template_id' => $category->template_id,
             ]);
 
         $warehouses = Warehouse::where('store_id', $store->id)
@@ -466,6 +486,70 @@ class AppraisalController extends Controller
             ]);
 
         return response()->json(['vendors' => $vendors]);
+    }
+
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store) {
+            return response()->json(['products' => []], 200);
+        }
+
+        $query = $request->get('query', '');
+
+        $products = Product::where('store_id', $store->id)
+            ->where('quantity', '>', 0)
+            ->where('status', Product::STATUS_ACTIVE)
+            ->when($query, function ($q) use ($query) {
+                $q->where(function ($sub) use ($query) {
+                    $sub->where('title', 'like', "%{$query}%")
+                        ->orWhere('description', 'like', "%{$query}%")
+                        ->orWhereHas('variants', function ($variantQuery) use ($query) {
+                            $variantQuery->where('sku', 'like', "%{$query}%");
+                        });
+                });
+            })
+            ->with(['images', 'variants'])
+            ->limit(20)
+            ->get()
+            ->map(function ($product) {
+                $variant = $product->variants->first();
+
+                return [
+                    'id' => $product->id,
+                    'title' => $product->title,
+                    'sku' => $variant?->sku,
+                    'description' => $product->description,
+                    'price' => $variant?->price ?? 0,
+                    'cost' => $variant?->cost ?? 0,
+                    'quantity' => $product->quantity,
+                    'image' => $product->images->first()?->url,
+                ];
+            });
+
+        return response()->json(['products' => $products]);
+    }
+
+    public function addItem(Request $request, Repair $repair): RedirectResponse
+    {
+        $this->authorizeAppraisal($repair);
+
+        $validated = $request->validate([
+            'product_id' => 'nullable|integer|exists:products,id',
+            'category_id' => 'nullable|integer|exists:categories,id',
+            'sku' => 'nullable|string|max:100',
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string|max:2000',
+            'vendor_cost' => 'nullable|numeric|min:0',
+            'customer_cost' => 'nullable|numeric|min:0',
+            'dwt' => 'nullable|numeric|min:0',
+            'precious_metal' => 'nullable|string|max:50',
+        ]);
+
+        $this->repairService->addItem($repair, $validated);
+
+        return back()->with('success', 'Item added successfully.');
     }
 
     protected function authorizeAppraisal(Repair $repair): void
