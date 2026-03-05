@@ -402,8 +402,8 @@ function submitMemo() {
     };
 
     router.post('/memos', payload, {
-        preserveState: false,
-        preserveScroll: false,
+        preserveState: true,
+        preserveScroll: true,
         onFinish: () => {
             isSubmitting.value = false;
         },
@@ -882,7 +882,7 @@ function getPaymentTermLabel(days: number): string {
             :open="showAddItemModal"
             :categories="categories"
             :editing-item="editingItem"
-            mode="repair"
+            mode="memo"
             @close="showAddItemModal = false"
             @save="handleSaveItem"
         />
