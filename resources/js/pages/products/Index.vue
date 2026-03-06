@@ -522,20 +522,6 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
                     </option>
                 </select>
 
-                <!-- Clear Filters -->
-                <button
-                    v-if="activeFilterCount > 0"
-                    type="button"
-                    class="inline-flex items-center gap-x-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                    @click="clearAllFilters"
-                >
-                    <XMarkIcon class="size-4" aria-hidden="true" />
-                    Clear all
-                </button>
-            </div>
-
-            <!-- Filters Row 2 -->
-            <div class="flex flex-wrap items-center gap-3">
                 <!-- Tags Dropdown -->
                 <div v-if="tags.length > 0" class="tag-dropdown-container relative" @focusout="handleTagDropdownBlur">
                     <button
@@ -691,6 +677,17 @@ async function handleMarketplacePriceUpdate(productId: number, listingId: number
                         {{ size.label }}
                     </option>
                 </select>
+
+                <!-- Clear Filters -->
+                <button
+                    v-if="activeFilterCount > 0"
+                    type="button"
+                    class="inline-flex items-center gap-x-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    @click="clearAllFilters"
+                >
+                    <XMarkIcon class="size-4" aria-hidden="true" />
+                    Clear all
+                </button>
             </div>
 
             <!-- Data Table -->

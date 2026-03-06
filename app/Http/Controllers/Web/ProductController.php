@@ -266,31 +266,41 @@ class ProductController extends Controller
         $cacheKey = "store_{$storeId}_brand_options";
 
         $cached = cache()->remember($cacheKey, now()->addHour(), function () use ($storeId) {
-            // Get brand-type fields from templates
-            $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
-                ->where('type', ProductTemplateField::TYPE_BRAND)
-                ->pluck('id');
+            // Get brand fields from templates (type 'brand' or select fields named 'brand')
+            $brandFields = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+                ->where(fn ($q) => $q->where('type', ProductTemplateField::TYPE_BRAND)->orWhere('name', 'brand'))
+                ->with('options')
+                ->get();
 
-            $brands = collect();
+            $brandFieldIds = $brandFields->pluck('id');
 
-            if ($brandFieldIds->isNotEmpty()) {
-                $brands = ProductAttributeValue::whereIn('product_template_field_id', $brandFieldIds)
-                    ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
-                    ->whereNotNull('value')
-                    ->where('value', '!=', '')
-                    ->distinct()
-                    ->pluck('value')
-                    ->filter()
-                    ->unique()
-                    ->sort()
-                    ->values()
-                    ->map(fn ($brand) => [
-                        'value' => $brand,
-                        'label' => $brand,
-                    ]);
+            if ($brandFieldIds->isEmpty()) {
+                return collect();
             }
 
-            return $brands;
+            // Build a lookup from option value to label
+            $optionLabels = [];
+            foreach ($brandFields as $field) {
+                foreach ($field->options as $option) {
+                    $optionLabels[$option->value] = $option->label;
+                }
+            }
+
+            return ProductAttributeValue::whereIn('product_template_field_id', $brandFieldIds)
+                ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
+                ->whereNotNull('value')
+                ->where('value', '!=', '')
+                ->where('value', '!=', '0')
+                ->distinct()
+                ->pluck('value')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->map(fn ($brand) => [
+                    'value' => $brand,
+                    'label' => $optionLabels[$brand] ?? $brand,
+                ]);
         });
 
         // Ensure we always return a Collection (cache may return array)

@@ -163,9 +163,8 @@ class ProductsTable extends Table
 
         // Apply brand filter (from attribute values)
         if ($brand = data_get($filter, 'brand')) {
-            // Get brand-type field IDs for this store
             $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
-                ->where('type', ProductTemplateField::TYPE_BRAND)
+                ->where(fn ($q) => $q->where('type', ProductTemplateField::TYPE_BRAND)->orWhere('name', 'brand'))
                 ->pluck('id');
 
             if ($brandFieldIds->isNotEmpty()) {
@@ -480,18 +479,29 @@ class ProductsTable extends Table
 
         // Get brands from attribute values (cached)
         $brands = cache()->remember("store_{$storeId}_brand_options", now()->addHour(), function () use ($storeId) {
-            $brandFieldIds = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
-                ->where('type', ProductTemplateField::TYPE_BRAND)
-                ->pluck('id');
+            $brandFields = ProductTemplateField::whereHas('template', fn ($q) => $q->where('store_id', $storeId))
+                ->where(fn ($q) => $q->where('type', ProductTemplateField::TYPE_BRAND)->orWhere('name', 'brand'))
+                ->with('options')
+                ->get();
+
+            $brandFieldIds = $brandFields->pluck('id');
 
             if ($brandFieldIds->isEmpty()) {
                 return [];
+            }
+
+            $optionLabels = [];
+            foreach ($brandFields as $field) {
+                foreach ($field->options as $option) {
+                    $optionLabels[$option->value] = $option->label;
+                }
             }
 
             return ProductAttributeValue::whereIn('product_template_field_id', $brandFieldIds)
                 ->whereHas('product', fn ($q) => $q->where('store_id', $storeId))
                 ->whereNotNull('value')
                 ->where('value', '!=', '')
+                ->where('value', '!=', '0')
                 ->distinct()
                 ->pluck('value')
                 ->filter()
@@ -500,7 +510,7 @@ class ProductsTable extends Table
                 ->values()
                 ->map(fn ($brand) => [
                     'value' => $brand,
-                    'label' => $brand,
+                    'label' => $optionLabels[$brand] ?? $brand,
                 ])
                 ->toArray();
         });
