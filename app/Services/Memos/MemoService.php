@@ -14,6 +14,7 @@ use App\Services\Orders\OrderCreationService;
 use App\Services\StoreContext;
 use App\Services\TaxService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class MemoService
@@ -265,18 +266,25 @@ class MemoService
         }
 
         return DB::transaction(function () use ($memo) {
-            $items = $memo->items()
-                ->where('is_returned', false)
-                ->get()
-                ->map(fn (MemoItem $item) => [
-                    'title' => $item->title ?? 'Memo Item',
-                    'sku' => $item->sku,
-                    'quantity' => 1,
-                    'price' => $item->price,        // Selling price
-                    'cost' => $item->cost,          // Cost for profit calculation
-                    'product_id' => $item->product_id,
-                    'reduce_stock' => false,        // Don't reduce stock for memo items
-                ])->toArray();
+            $activeItems = $memo->items()->where('is_returned', false)->get();
+
+            // Create ad-hoc products for items without a linked product
+            foreach ($activeItems as $item) {
+                if (! $item->product_id) {
+                    $this->createAdHocProduct($item, $memo->store_id);
+                    $item->refresh();
+                }
+            }
+
+            $items = $activeItems->map(fn (MemoItem $item) => [
+                'title' => $item->title ?? 'Memo Item',
+                'sku' => $item->sku,
+                'quantity' => 1,
+                'price' => $item->price,
+                'cost' => $item->cost,
+                'product_id' => $item->product_id,
+                'reduce_stock' => false,
+            ])->toArray();
 
             // Build customer data from vendor for order creation
             $vendor = $memo->vendor;
@@ -299,11 +307,20 @@ class MemoService
                 'notes' => "Created from Memo #{$memo->memo_number}",
             ], $store);
 
-            // Update invoice number to use MEM-<order.id> format for memo orders
-            $order->update(['invoice_number' => "MEM-{$order->id}"]);
+            // Use memo number as invoice number
+            $order->update(['invoice_number' => $memo->memo_number]);
 
             $memo->update(['order_id' => $order->id]);
             $memo->markPaymentReceived();
+
+            // Mark products as sold
+            $activeItems->each(function (MemoItem $item) {
+                if ($item->product_id) {
+                    Product::where('id', $item->product_id)
+                        ->whereIn('status', [Product::STATUS_IN_MEMO, Product::STATUS_DRAFT])
+                        ->update(['status' => Product::STATUS_SOLD, 'quantity' => 0]);
+                }
+            });
 
             // Create and mark invoice as paid
             $invoice = $this->invoiceService->createFromMemo($memo);
@@ -311,6 +328,38 @@ class MemoService
 
             return $order;
         });
+    }
+
+    /**
+     * Create an ad-hoc product for a memo item that has no linked product.
+     */
+    protected function createAdHocProduct(MemoItem $memoItem, int $storeId): void
+    {
+        $title = $memoItem->title ?? 'Memo Item';
+        $handle = Str::slug($title).'-'.Str::random(6);
+
+        $product = Product::create([
+            'store_id' => $storeId,
+            'title' => $title,
+            'handle' => $handle,
+            'description' => $memoItem->description,
+            'category_id' => $memoItem->category_id,
+            'status' => Product::STATUS_SOLD,
+            'quantity' => 0,
+            'is_published' => false,
+            'is_draft' => false,
+            'has_variants' => false,
+            'track_quantity' => true,
+        ]);
+
+        $product->variants()->create([
+            'sku' => $memoItem->sku ?? 'SKU-'.strtoupper(Str::random(8)),
+            'price' => $memoItem->price ?? 0,
+            'cost' => $memoItem->cost ?? 0,
+            'quantity' => 0,
+        ]);
+
+        $memoItem->update(['product_id' => $product->id]);
     }
 
     public function calculateTotals(Memo $memo): array

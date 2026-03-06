@@ -4,10 +4,13 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\Memo;
+use App\Models\MemoItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\Product;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MemoPaymentService
 {
@@ -291,7 +294,12 @@ class MemoPaymentService
     public function completeMemoPayment(Memo $memo): array
     {
         return DB::transaction(function () use ($memo) {
-            $memo = $memo->fresh(['items', 'vendor']);
+            $memo = $memo->fresh(['items', 'items.product.variants', 'vendor']);
+
+            // Ensure grand_total is set (may be 0 if never calculated via payment modal)
+            if ((float) $memo->grand_total <= 0 && (float) $memo->total > 0) {
+                $memo->update(['grand_total' => $memo->total]);
+            }
 
             // Create the order (sale)
             $order = $this->createOrderFromMemo($memo);
@@ -325,7 +333,7 @@ class MemoPaymentService
             'store_id' => $memo->store_id,
             'memo_id' => $memo->id,
             'user_id' => $memo->user_id,
-            'invoice_number' => 'MEM-TEMP', // Temporary, will be updated with order ID
+            'invoice_number' => $memo->memo_number,
             'sub_total' => $memo->total,
             'sales_tax' => $memo->tax_amount ?? 0,
             'shipping_cost' => $memo->shipping_cost ?? 0,
@@ -337,24 +345,68 @@ class MemoPaymentService
             'notes' => "Created from Memo #{$memo->memo_number}",
         ]);
 
-        // Update invoice number with MEM-<order.id> format
-        $order->update(['invoice_number' => "MEM-{$order->id}"]);
-
-        // Create order items from memo items
+        // Create order items from memo items and mark products as sold
         foreach ($memo->active_items as $memoItem) {
+            // Create ad-hoc product for items without a product
+            if (! $memoItem->product_id) {
+                $this->createAdHocProduct($memoItem, $memo->store_id);
+            }
+
+            $variant = $memoItem->product?->variants?->first();
+
             OrderItem::create([
                 'order_id' => $order->id,
                 'product_id' => $memoItem->product_id,
-                'product_variant_id' => $memoItem->product_variant_id,
+                'product_variant_id' => $variant?->id,
                 'title' => $memoItem->title ?? $memoItem->product?->title ?? 'Unknown Product',
-                'sku' => $memoItem->sku,
+                'sku' => $memoItem->sku ?? $variant?->sku,
                 'quantity' => 1,
-                'price' => $memoItem->price,  // Selling price
-                'cost' => $memoItem->cost,    // Cost for profit calculation
+                'price' => $memoItem->price,
+                'cost' => $memoItem->cost,
             ]);
+
+            // Mark the product as sold
+            if ($memoItem->product_id) {
+                Product::where('id', $memoItem->product_id)
+                    ->whereIn('status', [Product::STATUS_IN_MEMO, Product::STATUS_DRAFT])
+                    ->update(['status' => Product::STATUS_SOLD, 'quantity' => 0]);
+            }
         }
 
         return $order;
+    }
+
+    /**
+     * Create an ad-hoc product for a memo item that has no linked product.
+     */
+    protected function createAdHocProduct(MemoItem $memoItem, int $storeId): void
+    {
+        $title = $memoItem->title ?? 'Memo Item';
+        $handle = Str::slug($title).'-'.Str::random(6);
+
+        $product = Product::create([
+            'store_id' => $storeId,
+            'title' => $title,
+            'handle' => $handle,
+            'description' => $memoItem->description,
+            'category_id' => $memoItem->category_id,
+            'status' => Product::STATUS_SOLD,
+            'quantity' => 0,
+            'is_published' => false,
+            'is_draft' => false,
+            'has_variants' => false,
+            'track_quantity' => true,
+        ]);
+
+        $variant = $product->variants()->create([
+            'sku' => $memoItem->sku ?? 'SKU-'.strtoupper(Str::random(8)),
+            'price' => $memoItem->price ?? 0,
+            'cost' => $memoItem->cost ?? 0,
+            'quantity' => 0,
+        ]);
+
+        // Link the product back to the memo item
+        $memoItem->update(['product_id' => $product->id]);
     }
 
     /**

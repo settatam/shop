@@ -78,7 +78,7 @@ interface MemoItem {
 
 interface Order {
     id: number;
-    order_number: string;
+    invoice_number: string;
 }
 
 interface Invoice {
@@ -507,6 +507,10 @@ const vendorAddress = computed(() => {
                                 <span v-if="memo.is_overdue" class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-300">
                                     Overdue
                                 </span>
+                                <Link v-if="memo.order" :href="`/orders/${memo.order.id}`" class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800">
+                                    <BanknotesIcon class="size-3" />
+                                    Sale: {{ memo.order.invoice_number }}
+                                </Link>
                             </div>
                             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                 Created {{ formatDate(memo.created_at) }}
@@ -750,7 +754,7 @@ const vendorAddress = computed(() => {
                                             <td class="whitespace-nowrap px-2 py-2.5 text-right text-xs text-gray-500 dark:text-gray-400">
                                                 <template v-if="canEditItems && !item.is_returned">
                                                     <div class="relative inline-block">
-                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-1.5 text-gray-400 text-[10px]">$</span>
+                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-gray-400">$</span>
                                                         <input
                                                             type="number"
                                                             :value="item.cost"
@@ -758,7 +762,7 @@ const vendorAddress = computed(() => {
                                                             min="0"
                                                             @blur="updateItemField(item.id, 'cost', $event.target.value)"
                                                             @keyup.enter="($event.target as HTMLInputElement).blur()"
-                                                            class="w-[70px] rounded border-0 py-0.5 pl-4 pr-1 text-right text-xs text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            class="w-24 rounded border-0 py-1 pl-4 pr-1 text-right text-sm text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                         />
                                                     </div>
                                                 </template>
@@ -769,7 +773,7 @@ const vendorAddress = computed(() => {
                                             <td class="whitespace-nowrap px-2 py-2.5 text-right text-xs font-medium text-gray-900 dark:text-white">
                                                 <template v-if="canEditItems && !item.is_returned">
                                                     <div class="relative inline-block">
-                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-1.5 text-gray-400 text-[10px]">$</span>
+                                                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-xs text-gray-400">$</span>
                                                         <input
                                                             type="number"
                                                             :value="item.price"
@@ -777,7 +781,7 @@ const vendorAddress = computed(() => {
                                                             min="0"
                                                             @blur="updateItemField(item.id, 'price', $event.target.value)"
                                                             @keyup.enter="($event.target as HTMLInputElement).blur()"
-                                                            class="w-[70px] rounded border-0 py-0.5 pl-4 pr-1 text-right text-xs font-medium text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            class="w-24 rounded border-0 py-1 pl-4 pr-1 text-right text-sm font-medium text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                         />
                                                     </div>
                                                 </template>
@@ -941,6 +945,48 @@ const vendorAddress = computed(() => {
                             </dl>
                         </div>
 
+                        <!-- Invoice -->
+                        <div v-if="hasInvoice" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Invoice</h2>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ memo.invoice!.invoice_number || 'Invoice' }}</span>
+                                    <span :class="[
+                                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                        memo.invoice!.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                                    ]">
+                                        {{ memo.invoice!.status === 'paid' ? 'Paid' : memo.invoice!.status }}
+                                    </span>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        @click="viewInvoice"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/50 dark:text-indigo-300 dark:hover:bg-indigo-900"
+                                    >
+                                        <DocumentTextIcon class="size-3.5" />
+                                        View
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="printInvoice"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                    >
+                                        <PrinterIcon class="size-3.5" />
+                                        Print
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="downloadInvoice"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                    >
+                                        <ArrowDownTrayIcon class="size-3.5" />
+                                        Download PDF
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Vendor -->
                         <div v-if="memo.vendor" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <div class="flex items-center justify-between mb-4">
@@ -1067,13 +1113,6 @@ const vendorAddress = computed(() => {
                             </div>
                         </div>
 
-                        <!-- Order reference -->
-                        <div v-if="memo.order" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
-                            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Related Order</h2>
-                            <Link :href="`/orders/${memo.order.id}`" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
-                                {{ memo.order.order_number }}
-                            </Link>
-                        </div>
 
                     </div>
                 </div>

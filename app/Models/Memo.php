@@ -619,7 +619,10 @@ class Memo extends Model implements Payable
      */
     public function isFullyPaid(): bool
     {
-        return $this->balance_due <= 0 && $this->grand_total > 0;
+        // If grand_total was never calculated but payments cover the item total, treat as fully paid
+        $effectiveTotal = $this->grand_total > 0 ? $this->grand_total : (float) $this->total;
+
+        return $this->balance_due <= 0 && $this->total_paid >= $effectiveTotal && $effectiveTotal > 0;
     }
 
     /**

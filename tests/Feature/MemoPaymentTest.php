@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Memo;
 use App\Models\MemoItem;
+use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
@@ -617,6 +619,198 @@ class MemoPaymentTest extends TestCase
         $this->assertEquals(15, $payment->service_fee_value);
         $this->assertEquals('fixed', $payment->service_fee_unit);
         $this->assertEquals(15.00, $payment->service_fee_amount);
+    }
+
+    public function test_completed_payment_creates_adhoc_product_for_items_without_product(): void
+    {
+        $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
+        $memo = Memo::factory()->vendorReceived()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'total' => 250.00,
+            'grand_total' => 250.00,
+            'balance_due' => 250.00,
+            'total_paid' => 0,
+            'charge_taxes' => false,
+            'tax_rate' => 0,
+            'shipping_cost' => 0,
+        ]);
+
+        // Create a custom memo item with no product_id
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'product_id' => null,
+            'title' => 'Custom Gold Ring',
+            'sku' => null,
+            'price' => 250.00,
+            'cost' => 120.00,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoPaymentService::class);
+        $service->processPayment($memo, [
+            'payment_method' => Payment::METHOD_CASH,
+            'amount' => 250.00,
+        ], $this->user->id);
+
+        $memo->refresh();
+
+        // An ad-hoc product should have been created
+        $memoItem = $memo->items->first();
+        $this->assertNotNull($memoItem->product_id);
+
+        $product = Product::find($memoItem->product_id);
+        $this->assertNotNull($product);
+        $this->assertEquals('Custom Gold Ring', $product->title);
+        $this->assertEquals(Product::STATUS_SOLD, $product->status);
+        $this->assertEquals(0, $product->quantity);
+        $this->assertEquals($this->store->id, $product->store_id);
+
+        // Variant should have been created with correct pricing
+        $variant = $product->variants->first();
+        $this->assertNotNull($variant);
+        $this->assertEquals(250.00, (float) $variant->price);
+        $this->assertEquals(120.00, (float) $variant->cost);
+
+        // Order item should reference the new product
+        $order = Order::find($memo->order_id);
+        $orderItem = $order->items->first();
+        $this->assertEquals($product->id, $orderItem->product_id);
+    }
+
+    public function test_completed_payment_creates_order_with_memo_number_as_invoice_number(): void
+    {
+        $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
+        $memo = Memo::factory()->vendorReceived()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'memo_number' => 'M-2024-0042',
+            'total' => 300.00,
+            'grand_total' => 300.00,
+            'balance_due' => 300.00,
+            'total_paid' => 0,
+            'charge_taxes' => false,
+            'tax_rate' => 0,
+            'shipping_cost' => 0,
+        ]);
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'price' => 300.00,
+            'cost' => 150.00,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoPaymentService::class);
+        $service->processPayment($memo, [
+            'payment_method' => Payment::METHOD_CASH,
+            'amount' => 300.00,
+        ], $this->user->id);
+
+        $memo->refresh();
+
+        $this->assertNotNull($memo->order_id);
+
+        $order = Order::find($memo->order_id);
+        $this->assertEquals('M-2024-0042', $order->invoice_number);
+        $this->assertEquals('memo', $order->source_platform);
+        $this->assertEquals(Order::STATUS_COMPLETED, $order->status);
+    }
+
+    public function test_completed_payment_marks_products_as_sold(): void
+    {
+        $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
+
+        $product = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_IN_MEMO,
+            'quantity' => 0,
+        ]);
+
+        $memo = Memo::factory()->vendorReceived()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'total' => 200.00,
+            'grand_total' => 200.00,
+            'balance_due' => 200.00,
+            'total_paid' => 0,
+            'charge_taxes' => false,
+            'tax_rate' => 0,
+            'shipping_cost' => 0,
+        ]);
+
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'product_id' => $product->id,
+            'price' => 200.00,
+            'cost' => 100.00,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoPaymentService::class);
+        $service->processPayment($memo, [
+            'payment_method' => Payment::METHOD_CASH,
+            'amount' => 200.00,
+        ], $this->user->id);
+
+        $product->refresh();
+        $this->assertEquals(Product::STATUS_SOLD, $product->status);
+    }
+
+    public function test_completed_payment_does_not_mark_returned_items_as_sold(): void
+    {
+        $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
+
+        $activeProduct = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_IN_MEMO,
+            'quantity' => 0,
+        ]);
+
+        $returnedProduct = Product::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Product::STATUS_ACTIVE,
+            'quantity' => 1,
+        ]);
+
+        $memo = Memo::factory()->vendorReceived()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'total' => 200.00,
+            'grand_total' => 200.00,
+            'balance_due' => 200.00,
+            'total_paid' => 0,
+            'charge_taxes' => false,
+            'tax_rate' => 0,
+            'shipping_cost' => 0,
+        ]);
+
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'product_id' => $activeProduct->id,
+            'price' => 200.00,
+            'cost' => 100.00,
+            'is_returned' => false,
+        ]);
+
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'product_id' => $returnedProduct->id,
+            'price' => 150.00,
+            'cost' => 75.00,
+            'is_returned' => true,
+        ]);
+
+        $service = app(MemoPaymentService::class);
+        $service->processPayment($memo, [
+            'payment_method' => Payment::METHOD_CASH,
+            'amount' => 200.00,
+        ], $this->user->id);
+
+        $activeProduct->refresh();
+        $returnedProduct->refresh();
+
+        $this->assertEquals(Product::STATUS_SOLD, $activeProduct->status);
+        $this->assertEquals(Product::STATUS_ACTIVE, $returnedProduct->status);
     }
 
     protected function createMemoWithItems(float $total = 500.00, bool $chargeTaxes = true): Memo

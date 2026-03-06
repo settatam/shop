@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, PhotoIcon, XMarkIcon, SparklesIcon, VideoCameraIcon, LockClosedIcon, Cog6ToothIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, PhotoIcon, XMarkIcon, XCircleIcon, SparklesIcon, VideoCameraIcon, LockClosedIcon, Cog6ToothIcon } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
 
@@ -487,16 +487,14 @@ function submit() {
         <div class="flex h-full flex-1 flex-col p-4">
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Validation Error Summary -->
-                <div v-if="hasAnyErrors" class="rounded-md bg-red-50 p-4 dark:bg-red-900/30">
+                <div v-if="hasAnyErrors" class="rounded-lg border border-red-300 bg-red-50 p-4 shadow-sm dark:border-red-800 dark:bg-red-900/30">
                     <div class="flex">
                         <div class="shrink-0">
-                            <svg class="size-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                            </svg>
+                            <XCircleIcon class="size-5 text-red-500 dark:text-red-400" />
                         </div>
                         <div class="ml-3">
-                            <h3 class="text-sm font-medium text-red-800 dark:text-red-200">
-                                There were errors with your submission
+                            <h3 class="text-sm font-semibold text-red-800 dark:text-red-200">
+                                There {{ Object.keys(form.errors).length === 1 ? 'is 1 error' : `are ${Object.keys(form.errors).length} errors` }} with your submission
                             </h3>
                             <div class="mt-2 text-sm text-red-700 dark:text-red-300">
                                 <ul role="list" class="list-disc space-y-1 pl-5">

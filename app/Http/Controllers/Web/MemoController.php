@@ -839,7 +839,7 @@ class MemoController extends Controller
             'returned_items_count' => $memo->returned_items->count(),
             'order' => $memo->order ? [
                 'id' => $memo->order->id,
-                'order_number' => $memo->order->order_number,
+                'invoice_number' => $memo->order->invoice_number,
             ] : null,
             'invoice' => $memo->invoice ? [
                 'id' => $memo->invoice->id,

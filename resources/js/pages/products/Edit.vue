@@ -11,6 +11,7 @@ import {
     PhotoIcon,
     ArrowLeftIcon,
     XMarkIcon,
+    XCircleIcon,
     StarIcon,
     PrinterIcon,
     SparklesIcon,
@@ -689,9 +690,16 @@ function removeVariant(index: number) {
     }
 }
 
+const hasAnyErrors = computed(() => Object.keys(form.errors).length > 0);
+
 function submit() {
     form.put(`/products/${props.product.id}`, {
         forceFormData: true,
+        preserveState: true,
+        preserveScroll: true,
+        onError: () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
     });
 }
 
@@ -769,6 +777,25 @@ function formatDate(date: string): string {
                         >
                             {{ form.processing ? 'Saving...' : 'Save Changes' }}
                         </button>
+                    </div>
+                </div>
+
+                <!-- Validation Error Summary -->
+                <div v-if="hasAnyErrors" class="rounded-lg border border-red-300 bg-red-50 p-4 shadow-sm dark:border-red-800 dark:bg-red-900/30">
+                    <div class="flex">
+                        <div class="shrink-0">
+                            <XCircleIcon class="size-5 text-red-500 dark:text-red-400" />
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-semibold text-red-800 dark:text-red-200">
+                                There {{ Object.keys(form.errors).length === 1 ? 'is 1 error' : `are ${Object.keys(form.errors).length} errors` }} with your submission
+                            </h3>
+                            <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                                <ul role="list" class="list-disc space-y-1 pl-5">
+                                    <li v-for="(error, key) in form.errors" :key="key">{{ error }}</li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
