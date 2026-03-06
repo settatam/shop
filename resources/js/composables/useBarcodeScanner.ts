@@ -77,7 +77,7 @@ export function useBarcodeScanner(options: BarcodeScannerOptions) {
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-        if (!isEnabled.value) return;
+        if (!isEnabled.value || !event.key) return;
 
         const currentTime = Date.now();
         const timeDiff = currentTime - lastKeyTime.value;

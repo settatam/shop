@@ -89,6 +89,7 @@ class InvoiceController extends Controller
         $invoice->load([
             'invoiceable.items.product.images',
             'invoiceable.items.product.category',
+            'invoiceable.items.category',
             'invoiceable.user',
             'invoiceable.storeUser',
             'invoiceable.customer.defaultAddress.state',
@@ -120,7 +121,7 @@ class InvoiceController extends Controller
                 $lineItems[] = [
                     'description' => $this->getItemDescription($item),
                     'sku' => $item->sku ?? $item->product?->sku ?? null,
-                    'category' => $item->product?->category?->name ?? $item->category ?? null,
+                    'category' => $item->product?->category?->name ?? ($item->category instanceof \App\Models\Category ? $item->category->name : null),
                     'image' => $this->getItemImageUrl($item),
                     'quantity' => $item->quantity ?? 1,
                     'unit_price' => $item->price ?? $item->unit_price ?? 0,
@@ -378,12 +379,12 @@ class InvoiceController extends Controller
         $invoice->load([
             'invoiceable.items.product.images',
             'invoiceable.items.product.category',
+            'invoiceable.items.category',
             'invoiceable.user',
             'invoiceable.storeUser',
             'invoiceable.customer.defaultAddress.state',
             'invoiceable.customer.addresses.state',
             'invoiceable.payments',
-            'invoiceable.tradeInTransaction.items',
             'customer.defaultAddress.state',
             'customer.addresses.state',
             'store',
@@ -392,6 +393,11 @@ class InvoiceController extends Controller
 
         $store = $invoice->store;
         $invoiceable = $invoice->invoiceable;
+
+        // Load tradeInTransaction only for models that have it (e.g., Memo, Order)
+        if ($invoiceable && method_exists($invoiceable, 'tradeInTransaction')) {
+            $invoiceable->load('tradeInTransaction.items');
+        }
         $customer = $invoice->customer ?? $invoiceable?->customer;
 
         // Get payments from invoice or invoiceable
@@ -445,7 +451,7 @@ class InvoiceController extends Controller
                 'discount' => $item->discount ?? 0,
                 'tax' => $item->tax ?? 0,
                 'line_total' => $item->line_total ?? (($item->quantity ?? 1) * ($item->price ?? $item->unit_price ?? 0)),
-                'category' => $item->product?->category?->name ?? $item->category ?? null,
+                'category' => $item->product?->category?->name ?? ($item->category instanceof \App\Models\Category ? $item->category->name : null),
                 'product' => $item->product ? [
                     'id' => $item->product->id,
                     'title' => $item->product->title ?? $item->product->name,
