@@ -14,6 +14,7 @@ import {
 } from '@headlessui/vue';
 import CategoryPlatformMappingModal from '@/components/platforms/CategoryPlatformMappingModal.vue';
 import CategoryFieldMappingPanel from '@/components/platforms/CategoryFieldMappingPanel.vue';
+import ShopifyCategoryMetafieldPanel from '@/components/platforms/ShopifyCategoryMetafieldPanel.vue';
 import axios from 'axios';
 
 interface Category {
@@ -74,6 +75,7 @@ interface PlatformMapping {
     item_specifics_synced_at: string | null;
     field_mappings: Record<string, string>;
     default_values: Record<string, string>;
+    metadata: Record<string, unknown>;
 }
 
 interface Props {
@@ -322,6 +324,7 @@ function onMappingSaved(data: Record<string, unknown>) {
         item_specifics_synced_at: null,
         field_mappings: {},
         default_values: {},
+        metadata: {},
     };
 
     if (existingIndex >= 0) {
@@ -709,7 +712,7 @@ function formatSyncDate(isoDate: string | null): string {
                                                         </div>
                                                     </div>
 
-                                                    <!-- Field mappings panel -->
+                                                    <!-- eBay Field mappings panel -->
                                                     <div
                                                         v-if="getMappingForMarketplace(marketplace.id)!.ebay_category_internal_id"
                                                         class="border-t border-gray-100 pt-4 dark:border-gray-700"
@@ -730,6 +733,28 @@ function formatSyncDate(isoDate: string | null): string {
                                                                 Saving...
                                                             </span>
                                                         </div>
+                                                    </div>
+
+                                                    <!-- Shopify Metafield configuration panel -->
+                                                    <div
+                                                        v-if="marketplace.platform === 'shopify'"
+                                                        class="border-t border-gray-100 pt-4 dark:border-gray-700"
+                                                    >
+                                                        <ShopifyCategoryMetafieldPanel
+                                                            :category-id="category.id"
+                                                            :mapping-id="getMappingForMarketplace(marketplace.id)!.id"
+                                                            :template-fields="templateFields"
+                                                            :existing-config="{
+                                                                metafield_mappings: (getMappingForMarketplace(marketplace.id)!.metadata?.metafield_mappings as Record<string, string>) ?? {},
+                                                                enabled_metafields: (getMappingForMarketplace(marketplace.id)!.metadata?.enabled_metafields as string[]) ?? [],
+                                                            }"
+                                                            @config-changed="(config) => {
+                                                                const idx = mappings.findIndex((m) => m.id === getMappingForMarketplace(marketplace.id)!.id);
+                                                                if (idx >= 0) {
+                                                                    mappings[idx].metadata = config;
+                                                                }
+                                                            }"
+                                                        />
                                                     </div>
                                                 </div>
                                             </template>

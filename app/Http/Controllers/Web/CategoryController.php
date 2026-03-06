@@ -414,6 +414,7 @@ class CategoryController extends Controller
             'item_specifics_synced_at' => $mapping->item_specifics_synced_at?->toIso8601String(),
             'field_mappings' => $mapping->field_mappings ?? [],
             'default_values' => $mapping->default_values ?? [],
+            'metadata' => $mapping->metadata ?? [],
         ]);
 
         // Get templates for dropdown

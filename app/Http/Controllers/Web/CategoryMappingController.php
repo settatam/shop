@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\CategoryPlatformMapping;
 use App\Models\EbayCategory;
+use App\Models\ShopifyMetafieldDefinition;
 use App\Models\StoreMarketplace;
 use App\Services\Platforms\CategoryMappingService;
 use App\Services\StoreContext;
@@ -96,17 +98,25 @@ class CategoryMappingController extends Controller
         $validated = $request->validate([
             'field_mappings' => ['nullable', 'array'],
             'default_values' => ['nullable', 'array'],
+            'metadata' => ['nullable', 'array'],
         ]);
 
-        $mapping->update([
+        $updateData = [
             'field_mappings' => $validated['field_mappings'] ?? [],
             'default_values' => $validated['default_values'] ?? [],
-        ]);
+        ];
+
+        if (array_key_exists('metadata', $validated)) {
+            $updateData['metadata'] = $validated['metadata'];
+        }
+
+        $mapping->update($updateData);
 
         return response()->json([
             'id' => $mapping->id,
             'field_mappings' => $mapping->field_mappings,
             'default_values' => $mapping->default_values,
+            'metadata' => $mapping->metadata,
         ]);
     }
 
@@ -123,6 +133,45 @@ class CategoryMappingController extends Controller
         $this->categoryMappingService->deleteMapping($mapping);
 
         return response()->json(['message' => 'Mapping deleted.']);
+    }
+
+    /**
+     * Get Shopify metafield definitions for a category mapping.
+     */
+    public function shopifyMetafields(Category $category, CategoryPlatformMapping $mapping): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        abort_unless($category->store_id === $store->id, 403);
+        abort_unless($mapping->category_id === $category->id, 403);
+        abort_unless($mapping->platform === Platform::Shopify, 404);
+
+        $definitions = ShopifyMetafieldDefinition::where('store_marketplace_id', $mapping->store_marketplace_id)
+            ->orderBy('name')
+            ->get();
+
+        $enabledMetafields = $mapping->getEnabledMetafields();
+        $metafieldMappings = $mapping->getMetafieldMappings();
+
+        $definitionsData = $definitions->map(function (ShopifyMetafieldDefinition $def) use ($enabledMetafields, $metafieldMappings) {
+            $fullKey = $def->namespace.'.'.$def->key;
+
+            return [
+                'id' => $def->id,
+                'name' => $def->name,
+                'key' => $def->key,
+                'namespace' => $def->namespace,
+                'type' => $def->type,
+                'description' => $def->description,
+                'enabled' => empty($enabledMetafields) || in_array($fullKey, $enabledMetafields),
+                'mapped_template_field' => $metafieldMappings[$fullKey] ?? null,
+            ];
+        })->toArray();
+
+        return response()->json([
+            'definitions' => $definitionsData,
+            'has_definitions' => $definitions->isNotEmpty(),
+        ]);
     }
 
     /**

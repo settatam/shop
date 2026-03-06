@@ -69,6 +69,34 @@ class CategoryPlatformMapping extends Model
     }
 
     /**
+     * Get Shopify metafield mappings from metadata.
+     *
+     * @return array<string, string> Map of metafield full key (namespace.key) to template field name
+     */
+    public function getMetafieldMappings(): array
+    {
+        return $this->metadata['metafield_mappings'] ?? [];
+    }
+
+    /**
+     * Get list of enabled Shopify metafield full keys from metadata.
+     *
+     * @return array<int, string> List of enabled metafield full keys (namespace.key)
+     */
+    public function getEnabledMetafields(): array
+    {
+        return $this->metadata['enabled_metafields'] ?? [];
+    }
+
+    /**
+     * Check if this mapping has Shopify metafield configuration.
+     */
+    public function hasMetafieldConfig(): bool
+    {
+        return ! empty($this->metadata['enabled_metafields']);
+    }
+
+    /**
      * Check if item specifics need to be synced.
      */
     public function needsItemSpecificsSync(): bool

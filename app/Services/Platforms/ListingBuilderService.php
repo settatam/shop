@@ -3,6 +3,7 @@
 namespace App\Services\Platforms;
 
 use App\Enums\Platform;
+use App\Models\CategoryPlatformMapping;
 use App\Models\PlatformListing;
 use App\Models\Product;
 use App\Models\StoreMarketplace;
@@ -453,6 +454,17 @@ class ListingBuilderService
         $allMetafieldMappings = $platformMapping?->metafield_mappings ?? [];
         $excludedFields = $platformMapping?->excluded_metafields ?? [];
 
+        // Load category-level metafield config
+        $categoryMapping = $product->category_id && $marketplace
+            ? CategoryPlatformMapping::where('category_id', $product->category_id)
+                ->where('store_marketplace_id', $marketplace->id)
+                ->where('platform', $platform)
+                ->first()
+            : null;
+
+        $categoryEnabledMetafields = $categoryMapping?->getEnabledMetafields() ?? [];
+        $categoryMetafieldMappings = $categoryMapping?->getMetafieldMappings() ?? [];
+
         // Build metafields for ALL non-private template fields
         foreach ($template->fields as $field) {
             // Skip private fields - these are internal only
@@ -483,6 +495,21 @@ class ListingBuilderService
 
             $namespace = $config['namespace'] ?? 'custom';
             $key = $config['key'] ?? $field->name;
+            $fullKey = $namespace.'.'.$key;
+
+            // If category has enabled metafields list, skip those not enabled
+            if (! empty($categoryEnabledMetafields) && ! in_array($fullKey, $categoryEnabledMetafields)) {
+                continue;
+            }
+
+            // Check if category has a mapping that overrides the template field → metafield key
+            if (isset($categoryMetafieldMappings[$fullKey])) {
+                $categoryMappedField = $categoryMetafieldMappings[$fullKey];
+                $categoryValue = $attributes[$categoryMappedField] ?? $this->getProductAttributeValue($product, $categoryMappedField);
+                if ($categoryValue !== null && $categoryValue !== '') {
+                    $value = $categoryValue;
+                }
+            }
 
             $metafields[] = [
                 'namespace' => $namespace,

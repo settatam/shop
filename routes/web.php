@@ -253,6 +253,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     // Category Platform Mappings
     Route::middleware('permission:categories.view')->group(function () {
         Route::get('categories/{category}/platform-mappings', [CategoryMappingController::class, 'index'])->name('categories.platform-mappings.index');
+        Route::get('categories/{category}/platform-mappings/{mapping}/shopify-metafields', [CategoryMappingController::class, 'shopifyMetafields'])->name('categories.platform-mappings.shopify-metafields');
     });
     Route::middleware('permission:categories.update')->group(function () {
         Route::post('categories/{category}/platform-mappings/{marketplace}', [CategoryMappingController::class, 'store'])->name('categories.platform-mappings.store');

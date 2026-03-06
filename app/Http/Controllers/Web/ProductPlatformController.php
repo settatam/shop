@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\ActivityLog;
+use App\Models\CategoryPlatformMapping;
 use App\Models\EbayItemSpecific;
 use App\Models\MarketplacePolicy;
 use App\Models\PlatformListing;
@@ -762,9 +764,28 @@ class ProductPlatformController extends Controller
         $metafieldOverrides = $listing?->metafield_overrides ?? [];
         $fieldMappings = $metafieldOverrides['field_mappings'] ?? [];
 
-        $definitionsData = $definitions->map(function (ShopifyMetafieldDefinition $def) use ($fieldMappings, $listingAttributes, $templateFieldValues) {
+        // Load category-level metafield config
+        $categoryMapping = $product->category_id
+            ? CategoryPlatformMapping::where('category_id', $product->category_id)
+                ->where('store_marketplace_id', $marketplace->id)
+                ->where('platform', Platform::Shopify)
+                ->first()
+            : null;
+
+        $categoryEnabledMetafields = $categoryMapping?->getEnabledMetafields() ?? [];
+        $categoryMetafieldMappings = $categoryMapping?->getMetafieldMappings() ?? [];
+
+        // Filter definitions by category config if enabled metafields are set
+        if (! empty($categoryEnabledMetafields)) {
+            $definitions = $definitions->filter(function (ShopifyMetafieldDefinition $def) use ($categoryEnabledMetafields) {
+                return in_array($def->namespace.'.'.$def->key, $categoryEnabledMetafields);
+            });
+        }
+
+        $definitionsData = $definitions->map(function (ShopifyMetafieldDefinition $def) use ($fieldMappings, $categoryMetafieldMappings, $listingAttributes, $templateFieldValues) {
             $fullKey = $def->namespace.'.'.$def->key;
-            $mappedTemplateField = $fieldMappings[$fullKey] ?? null;
+            // Priority: listing-level mapping → category-level mapping
+            $mappedTemplateField = $fieldMappings[$fullKey] ?? $categoryMetafieldMappings[$fullKey] ?? null;
             $isListingOverride = isset($listingAttributes[$fullKey]);
             $resolvedValue = $listingAttributes[$fullKey]
                 ?? ($mappedTemplateField ? ($templateFieldValues[$mappedTemplateField] ?? null) : null);
@@ -780,7 +801,7 @@ class ProductPlatformController extends Controller
                 'resolved_value' => $resolvedValue,
                 'is_listing_override' => $isListingOverride,
             ];
-        })->toArray();
+        })->values()->toArray();
 
         return [
             'definitions' => $definitionsData,
