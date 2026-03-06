@@ -690,6 +690,262 @@ function submit() {
                             </div>
                         </div>
 
+                        <!-- Template Attributes Section -->
+                        <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('attributes')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Template</h3>
+                                <div class="flex items-center gap-2">
+                                    <a :href="`/templates/${template.id}/edit`" target="_blank" class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300" @click.stop>
+                                        {{ template.name }}
+                                    </a>
+                                    <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
+                                    <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                                </div>
+                            </button>
+
+                            <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <div class="space-y-6">
+                                    <!-- Grouped Fields -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="flex gap-2">
+                                            <div
+                                                v-for="field in fields"
+                                                :key="field.id"
+                                                :class="[
+                                                    field.width_class === 'full' ? 'flex-1' : '',
+                                                    field.width_class === 'half' ? 'w-1/2' : '',
+                                                    field.width_class === 'third' ? 'w-1/3' : '',
+                                                    field.width_class === 'quarter' ? 'w-1/4' : '',
+                                                    field.group_position > 1 ? 'w-auto shrink-0' : 'flex-1',
+                                                ]"
+                                            >
+                                                <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    {{ field.label }}
+                                                    <span v-if="field.is_required" class="text-red-500">*</span>
+                                                </label>
+
+                                                <input
+                                                    v-if="field.type === 'text'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="text"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <input
+                                                    v-else-if="field.type === 'number'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="number"
+                                                    step="any"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <!-- Textarea -->
+                                                <textarea
+                                                    v-else-if="field.type === 'textarea'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :placeholder="field.placeholder || ''"
+                                                    :required="field.is_required"
+                                                    rows="3"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <select
+                                                    v-else-if="field.type === 'select'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                    <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                        {{ opt.label }}
+                                                    </option>
+                                                </select>
+
+                                                <select
+                                                    v-else-if="field.type === 'brand'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option value="">{{ field.placeholder || 'Select brand...' }}</option>
+                                                    <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
+                                                        {{ brand.name }}
+                                                    </option>
+                                                </select>
+
+                                                <input
+                                                    v-else-if="field.type === 'date'"
+                                                    :id="`attr_${field.id}`"
+                                                    v-model="form.attributes[field.id]"
+                                                    type="date"
+                                                    :required="field.is_required"
+                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+
+                                                <p v-if="field.help_text && field.group_position === 1" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    {{ field.help_text }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Standalone Fields -->
+                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        <div
+                                            v-for="field in groupedTemplateFields.standalone"
+                                            :key="field.id"
+                                            :class="[
+                                                field.width_class === 'full' ? 'sm:col-span-2' : '',
+                                            ]"
+                                        >
+                                            <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ field.label }}
+                                                <span v-if="field.is_required" class="text-red-500">*</span>
+                                            </label>
+
+                                            <input
+                                                v-if="field.type === 'text'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="text"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <input
+                                                v-else-if="field.type === 'number'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="number"
+                                                step="any"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <textarea
+                                                v-else-if="field.type === 'textarea'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :placeholder="field.placeholder || ''"
+                                                :required="field.is_required"
+                                                rows="3"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <select
+                                                v-else-if="field.type === 'select'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="">{{ field.placeholder || 'Select...' }}</option>
+                                                <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
+                                                    {{ opt.label }}
+                                                </option>
+                                            </select>
+
+                                            <div v-else-if="field.type === 'checkbox'" class="mt-2 space-y-2">
+                                                <label
+                                                    v-for="opt in field.options"
+                                                    :key="opt.value"
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        :value="opt.value"
+                                                        :checked="(form.attributes[field.id] || '').split(',').includes(opt.value)"
+                                                        @change="(e: Event) => {
+                                                            const target = e.target as HTMLInputElement;
+                                                            const current = (form.attributes[field.id] || '').split(',').filter(Boolean);
+                                                            if (target.checked) {
+                                                                current.push(opt.value);
+                                                            } else {
+                                                                const idx = current.indexOf(opt.value);
+                                                                if (idx > -1) current.splice(idx, 1);
+                                                            }
+                                                            form.attributes[field.id] = current.join(',');
+                                                        }"
+                                                        class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                    />
+                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
+                                                </label>
+                                            </div>
+
+                                            <div v-else-if="field.type === 'radio'" class="mt-2 space-y-2">
+                                                <label
+                                                    v-for="opt in field.options"
+                                                    :key="opt.value"
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        :name="`attr_${field.id}`"
+                                                        :value="opt.value"
+                                                        v-model="form.attributes[field.id]"
+                                                        class="size-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                    />
+                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
+                                                </label>
+                                            </div>
+
+                                            <select
+                                                v-else-if="field.type === 'brand'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="">{{ field.placeholder || 'Select brand...' }}</option>
+                                                <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
+                                                    {{ brand.name }}
+                                                </option>
+                                            </select>
+
+                                            <input
+                                                v-else-if="field.type === 'date'"
+                                                :id="`attr_${field.id}`"
+                                                v-model="form.attributes[field.id]"
+                                                type="date"
+                                                :required="field.is_required"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+
+                                            <p v-if="field.help_text" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                {{ field.help_text }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loading Template State -->
+                        <div v-else-if="loadingTemplate" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 p-6">
+                            <div class="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
+                                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span>Loading template fields...</span>
+                            </div>
+                        </div>
+
                         <!-- Pricing Section -->
                         <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
@@ -1038,264 +1294,6 @@ function submit() {
                                 </div>
 
                                 <p v-if="form.errors.variants" class="mt-2 text-sm text-red-600">{{ form.errors.variants }}</p>
-                            </div>
-                        </div>
-
-                        <!-- Template Attributes Section -->
-                        <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('attributes')"
-                            >
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">
-                                        <a :href="`/templates/${template.id}/edit`" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400" @click.stop>
-                                            {{ template.name }}
-                                        </a>
-                                    </h3>
-                                    <p v-if="template.description" class="text-sm text-gray-500 dark:text-gray-400">{{ template.description }}</p>
-                                </div>
-                                <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
-                            </button>
-
-                            <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <div class="space-y-6">
-                                    <!-- Grouped Fields -->
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div v-for="(fields, groupName) in groupedTemplateFields.groups" :key="groupName" class="flex gap-2">
-                                            <div
-                                                v-for="field in fields"
-                                                :key="field.id"
-                                                :class="[
-                                                    field.width_class === 'full' ? 'flex-1' : '',
-                                                    field.width_class === 'half' ? 'w-1/2' : '',
-                                                    field.width_class === 'third' ? 'w-1/3' : '',
-                                                    field.width_class === 'quarter' ? 'w-1/4' : '',
-                                                    field.group_position > 1 ? 'w-auto shrink-0' : 'flex-1',
-                                                ]"
-                                            >
-                                                <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    {{ field.label }}
-                                                    <span v-if="field.is_required" class="text-red-500">*</span>
-                                                </label>
-
-                                                <input
-                                                    v-if="field.type === 'text'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    type="text"
-                                                    :placeholder="field.placeholder || ''"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <input
-                                                    v-else-if="field.type === 'number'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    type="number"
-                                                    step="any"
-                                                    :placeholder="field.placeholder || ''"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <!-- Textarea -->
-                                                <textarea
-                                                    v-else-if="field.type === 'textarea'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    :placeholder="field.placeholder || ''"
-                                                    :required="field.is_required"
-                                                    rows="3"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <select
-                                                    v-else-if="field.type === 'select'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="">{{ field.placeholder || 'Select...' }}</option>
-                                                    <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                                                        {{ opt.label }}
-                                                    </option>
-                                                </select>
-
-                                                <select
-                                                    v-else-if="field.type === 'brand'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="">{{ field.placeholder || 'Select brand...' }}</option>
-                                                    <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
-                                                        {{ brand.name }}
-                                                    </option>
-                                                </select>
-
-                                                <input
-                                                    v-else-if="field.type === 'date'"
-                                                    :id="`attr_${field.id}`"
-                                                    v-model="form.attributes[field.id]"
-                                                    type="date"
-                                                    :required="field.is_required"
-                                                    class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-
-                                                <p v-if="field.help_text && field.group_position === 1" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                    {{ field.help_text }}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Standalone Fields -->
-                                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        <div
-                                            v-for="field in groupedTemplateFields.standalone"
-                                            :key="field.id"
-                                            :class="[
-                                                field.width_class === 'full' ? 'sm:col-span-2' : '',
-                                            ]"
-                                        >
-                                            <label :for="`attr_${field.id}`" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                {{ field.label }}
-                                                <span v-if="field.is_required" class="text-red-500">*</span>
-                                            </label>
-
-                                            <input
-                                                v-if="field.type === 'text'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                type="text"
-                                                :placeholder="field.placeholder || ''"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
-                                            <input
-                                                v-else-if="field.type === 'number'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                type="number"
-                                                step="any"
-                                                :placeholder="field.placeholder || ''"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
-                                            <textarea
-                                                v-else-if="field.type === 'textarea'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                :placeholder="field.placeholder || ''"
-                                                :required="field.is_required"
-                                                rows="3"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
-                                            <select
-                                                v-else-if="field.type === 'select'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option value="">{{ field.placeholder || 'Select...' }}</option>
-                                                <option v-for="opt in field.options" :key="opt.value" :value="opt.value">
-                                                    {{ opt.label }}
-                                                </option>
-                                            </select>
-
-                                            <div v-else-if="field.type === 'checkbox'" class="mt-2 space-y-2">
-                                                <label
-                                                    v-for="opt in field.options"
-                                                    :key="opt.value"
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        :value="opt.value"
-                                                        :checked="(form.attributes[field.id] || '').split(',').includes(opt.value)"
-                                                        @change="(e: Event) => {
-                                                            const target = e.target as HTMLInputElement;
-                                                            const current = (form.attributes[field.id] || '').split(',').filter(Boolean);
-                                                            if (target.checked) {
-                                                                current.push(opt.value);
-                                                            } else {
-                                                                const idx = current.indexOf(opt.value);
-                                                                if (idx > -1) current.splice(idx, 1);
-                                                            }
-                                                            form.attributes[field.id] = current.join(',');
-                                                        }"
-                                                        class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                                    />
-                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
-                                                </label>
-                                            </div>
-
-                                            <div v-else-if="field.type === 'radio'" class="mt-2 space-y-2">
-                                                <label
-                                                    v-for="opt in field.options"
-                                                    :key="opt.value"
-                                                    class="flex items-center gap-2"
-                                                >
-                                                    <input
-                                                        type="radio"
-                                                        :name="`attr_${field.id}`"
-                                                        :value="opt.value"
-                                                        v-model="form.attributes[field.id]"
-                                                        class="size-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                                    />
-                                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ opt.label }}</span>
-                                                </label>
-                                            </div>
-
-                                            <select
-                                                v-else-if="field.type === 'brand'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option value="">{{ field.placeholder || 'Select brand...' }}</option>
-                                                <option v-for="brand in templateBrands" :key="brand.id" :value="brand.id.toString()">
-                                                    {{ brand.name }}
-                                                </option>
-                                            </select>
-
-                                            <input
-                                                v-else-if="field.type === 'date'"
-                                                :id="`attr_${field.id}`"
-                                                v-model="form.attributes[field.id]"
-                                                type="date"
-                                                :required="field.is_required"
-                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-
-                                            <p v-if="field.help_text" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                                {{ field.help_text }}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Loading Template State -->
-                        <div v-else-if="loadingTemplate" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10 p-6">
-                            <div class="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400">
-                                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                <span>Loading template fields...</span>
                             </div>
                         </div>
 

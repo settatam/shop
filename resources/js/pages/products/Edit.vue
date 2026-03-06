@@ -880,16 +880,14 @@ function formatDate(date: string): string {
                                 class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
                                 @click="toggleSection('attributes')"
                             >
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Template</h3>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                                        <a :href="`/templates/${template.id}/edit`" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400" @click.stop>
-                                            {{ template.name }}
-                                        </a>
-                                    </p>
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Template</h3>
+                                <div class="flex items-center gap-2">
+                                    <a :href="`/templates/${template.id}/edit`" target="_blank" class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300" @click.stop>
+                                        {{ template.name }}
+                                    </a>
+                                    <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
+                                    <ChevronUpIcon v-else class="size-5 text-gray-400" />
                                 </div>
-                                <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
                             </button>
 
                             <div v-show="sections.attributes" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
@@ -1133,113 +1131,6 @@ function formatDate(date: string): string {
                             </div>
                         </div>
 
-                        <!-- Media Section -->
-                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                            <button
-                                type="button"
-                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
-                                @click="toggleSection('media')"
-                            >
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Images</h3>
-                                <ChevronDownIcon v-if="!sections.media" class="size-5 text-gray-400" />
-                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
-                            </button>
-
-                            <div v-show="sections.media" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
-                                <!-- Existing images -->
-                                <div v-if="product.images.length > 0" class="mb-4">
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Images</p>
-                                    <div class="flex flex-wrap gap-4">
-                                        <div
-                                            v-for="image in product.images"
-                                            :key="image.id"
-                                            class="group relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200 dark:bg-gray-700 dark:ring-gray-600"
-                                        >
-                                            <img
-                                                :src="image.url"
-                                                :alt="image.alt || product.title"
-                                                class="h-full w-full object-cover"
-                                            />
-                                            <!-- Actions overlay -->
-                                            <div class="absolute inset-0 flex items-center justify-center gap-1 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    v-if="!image.is_primary"
-                                                    type="button"
-                                                    class="rounded-full bg-white p-1.5 text-yellow-600 hover:bg-yellow-50"
-                                                    title="Set as primary"
-                                                    @click="setPrimaryImage(image.id)"
-                                                >
-                                                    <StarIcon class="size-4" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    class="rounded-full bg-white p-1.5 text-red-600 hover:bg-red-50"
-                                                    title="Delete image"
-                                                    @click="deleteExistingImage(image.id)"
-                                                >
-                                                    <TrashIcon class="size-4" />
-                                                </button>
-                                            </div>
-                                            <span
-                                                v-if="image.is_primary"
-                                                class="absolute bottom-0 left-0 right-0 bg-indigo-600 px-1 py-0.5 text-center text-xs font-medium text-white"
-                                            >
-                                                Primary
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- New image previews -->
-                                <div v-if="newImagePreviews.length > 0" class="mb-4">
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Images (will be uploaded on save)</p>
-                                    <div class="flex flex-wrap gap-4">
-                                        <div
-                                            v-for="(preview, index) in newImagePreviews"
-                                            :key="index"
-                                            class="relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200 ring-dashed dark:bg-gray-700 dark:ring-gray-600"
-                                        >
-                                            <img
-                                                :src="preview"
-                                                class="h-full w-full object-cover"
-                                            />
-                                            <button
-                                                type="button"
-                                                class="absolute right-1 top-1 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
-                                                @click="removeNewImage(index)"
-                                            >
-                                                <XMarkIcon class="size-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Upload area -->
-                                <div
-                                    class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-8 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-colors"
-                                    @click="imageInputRef?.click()"
-                                    @dragover.prevent
-                                    @drop="handleImageDrop"
-                                >
-                                    <PhotoIcon class="size-12 text-gray-400 dark:text-gray-500" />
-                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                        Drag & drop images or <span class="text-indigo-600 dark:text-indigo-400">click to upload</span>
-                                    </p>
-                                    <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                                        PNG, JPG, WEBP up to 10MB each
-                                    </p>
-                                </div>
-                                <input
-                                    ref="imageInputRef"
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    class="hidden"
-                                    @change="handleImageSelect"
-                                />
-                            </div>
-                        </div>
-
                         <!-- Pricing Section -->
                         <div v-if="!hasVariants" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button
@@ -1454,6 +1345,113 @@ function formatDate(date: string): string {
                                         </label>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Media Section -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <button
+                                type="button"
+                                class="flex w-full items-center justify-between px-4 py-4 sm:px-6"
+                                @click="toggleSection('media')"
+                            >
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Images</h3>
+                                <ChevronDownIcon v-if="!sections.media" class="size-5 text-gray-400" />
+                                <ChevronUpIcon v-else class="size-5 text-gray-400" />
+                            </button>
+
+                            <div v-show="sections.media" class="border-t border-gray-200 px-4 py-5 sm:px-6 dark:border-gray-700">
+                                <!-- Existing images -->
+                                <div v-if="product.images.length > 0" class="mb-4">
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Images</p>
+                                    <div class="flex flex-wrap gap-4">
+                                        <div
+                                            v-for="image in product.images"
+                                            :key="image.id"
+                                            class="group relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200 dark:bg-gray-700 dark:ring-gray-600"
+                                        >
+                                            <img
+                                                :src="image.url"
+                                                :alt="image.alt || product.title"
+                                                class="h-full w-full object-cover"
+                                            />
+                                            <!-- Actions overlay -->
+                                            <div class="absolute inset-0 flex items-center justify-center gap-1 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    v-if="!image.is_primary"
+                                                    type="button"
+                                                    class="rounded-full bg-white p-1.5 text-yellow-600 hover:bg-yellow-50"
+                                                    title="Set as primary"
+                                                    @click="setPrimaryImage(image.id)"
+                                                >
+                                                    <StarIcon class="size-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="rounded-full bg-white p-1.5 text-red-600 hover:bg-red-50"
+                                                    title="Delete image"
+                                                    @click="deleteExistingImage(image.id)"
+                                                >
+                                                    <TrashIcon class="size-4" />
+                                                </button>
+                                            </div>
+                                            <span
+                                                v-if="image.is_primary"
+                                                class="absolute bottom-0 left-0 right-0 bg-indigo-600 px-1 py-0.5 text-center text-xs font-medium text-white"
+                                            >
+                                                Primary
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- New image previews -->
+                                <div v-if="newImagePreviews.length > 0" class="mb-4">
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Images (will be uploaded on save)</p>
+                                    <div class="flex flex-wrap gap-4">
+                                        <div
+                                            v-for="(preview, index) in newImagePreviews"
+                                            :key="index"
+                                            class="relative h-24 w-24 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200 ring-dashed dark:bg-gray-700 dark:ring-gray-600"
+                                        >
+                                            <img
+                                                :src="preview"
+                                                class="h-full w-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                class="absolute right-1 top-1 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
+                                                @click="removeNewImage(index)"
+                                            >
+                                                <XMarkIcon class="size-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Upload area -->
+                                <div
+                                    class="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-8 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 cursor-pointer transition-colors"
+                                    @click="imageInputRef?.click()"
+                                    @dragover.prevent
+                                    @drop="handleImageDrop"
+                                >
+                                    <PhotoIcon class="size-12 text-gray-400 dark:text-gray-500" />
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        Drag & drop images or <span class="text-indigo-600 dark:text-indigo-400">click to upload</span>
+                                    </p>
+                                    <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                        PNG, JPG, WEBP up to 10MB each
+                                    </p>
+                                </div>
+                                <input
+                                    ref="imageInputRef"
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    class="hidden"
+                                    @change="handleImageSelect"
+                                />
                             </div>
                         </div>
 

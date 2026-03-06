@@ -13,6 +13,7 @@ use App\Models\InventoryAdjustment;
 use App\Models\PlatformListing;
 use App\Models\PrinterSetting;
 use App\Models\Product;
+use App\Models\ProductAttributeValue;
 use App\Models\ProductTemplateField;
 use App\Models\ProductVariant;
 use App\Models\StoreMarketplace;
