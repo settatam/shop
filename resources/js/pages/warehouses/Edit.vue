@@ -2,6 +2,8 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import { US_STATES } from '@/lib/states';
+import { formatPhoneNumber } from '@/lib/utils';
 
 interface Warehouse {
     id: number;
@@ -210,12 +212,14 @@ function submit() {
                                         <label for="state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                             State / Province
                                         </label>
-                                        <input
+                                        <select
                                             id="state"
                                             v-model="form.state"
-                                            type="text"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                        />
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                        >
+                                            <option value="">Select state</option>
+                                            <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                        </select>
                                     </div>
 
                                     <div>
@@ -268,8 +272,10 @@ function submit() {
                                         </label>
                                         <input
                                             id="phone"
-                                            v-model="form.phone"
+                                            :value="form.phone"
                                             type="tel"
+                                            placeholder="(555) 123-4567"
+                                            @input="form.phone = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                             class="mt-1 block w-full rounded-md border-0 bg-white px-2 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                     </div>

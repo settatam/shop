@@ -287,9 +287,15 @@ class Product extends Model
             // Ensure variants are in sync (new variants added to product get listing variants)
             $this->syncListingVariants($existingListing);
 
-            // If product just became active and channel has auto_list, list it (unless excluded)
-            if ($this->status === self::STATUS_ACTIVE && $channel->auto_list && $existingListing->isNotListed() && $existingListing->should_list) {
+            // If product is active and channel has auto_list, ensure it's listed (unless excluded)
+            if ($this->status === self::STATUS_ACTIVE && $channel->auto_list && ! $existingListing->isListed() && $existingListing->should_list) {
                 $existingListing->markAsListed();
+            }
+
+            // Sync price from product variant if listing price is zero
+            $defaultVariant = $this->variants()->first();
+            if ($defaultVariant && $existingListing->platform_price <= 0) {
+                $existingListing->update(['platform_price' => $defaultVariant->price]);
             }
 
             return $existingListing;
@@ -856,6 +862,11 @@ class Product extends Model
     // ──────────────────────────────────────────────────────────────
     //  Activity Logging
     // ──────────────────────────────────────────────────────────────
+
+    protected function shouldTriggerNotifications(): bool
+    {
+        return false;
+    }
 
     protected function getActivityPrefix(): string
     {

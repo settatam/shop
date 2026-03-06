@@ -80,10 +80,12 @@ interface Props {
     existingImages?: ExistingImage[];
     mode?: 'buy' | 'repair' | 'memo';
     prefillItem?: PrefillData | null;
+    disableBuyPrice?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     mode: 'buy',
+    disableBuyPrice: false,
 });
 
 // Dynamic labels based on mode
@@ -1026,7 +1028,11 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                                     step="0.01"
                                                     min="0"
                                                     required
-                                                    class="block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    :disabled="disableBuyPrice"
+                                                    :class="[
+                                                        'block w-full rounded-md border-0 py-2 pl-7 pr-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600',
+                                                        disableBuyPrice ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60' : '',
+                                                    ]"
                                                     placeholder="0.00"
                                                 />
                                             </div>

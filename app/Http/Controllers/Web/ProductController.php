@@ -347,6 +347,7 @@ class ProductController extends Controller
             'brands' => $brands,
             'warehouses' => $warehouses,
             'vendors' => $vendors,
+            'availableStatuses' => Product::getStatusesForStore($store),
         ]);
     }
 
@@ -370,12 +371,12 @@ class ProductController extends Controller
             'charge_taxes' => 'boolean',
             'compare_at_price' => 'nullable|numeric|min:0',
             'price_code' => 'nullable|string|max:50',
-            'is_published' => 'boolean',
+            'status' => 'nullable|string|in:draft,active,awaiting_confirmation,sold,in_repair,in_memo,archive,in_bucket',
             'has_variants' => 'boolean',
             'track_quantity' => 'boolean',
             'sell_out_of_stock' => 'boolean',
             'variants' => 'required|array|min:1',
-            'variants.*.sku' => 'required|string|max:255',
+            'variants.*.sku' => 'nullable|string|max:255',
             'variants.*.price' => 'required|numeric|min:0',
             'variants.*.cost' => 'nullable|numeric|min:0',
             'variants.*.wholesale_price' => 'nullable|numeric|min:0',
@@ -410,18 +411,26 @@ class ProductController extends Controller
         // Determine has_variants based on user input (not just count)
         $hasVariants = $validated['has_variants'] ?? (count($validated['variants']) > 1);
 
-        // Validate: cannot publish if quantity is 0 and sell_out_of_stock is false
-        $isPublished = $validated['is_published'] ?? false;
+        // Determine status and publishing state
+        $status = $validated['status'] ?? Product::STATUS_ACTIVE;
+        $isPublished = $status === Product::STATUS_ACTIVE;
+        $isDraft = $status === Product::STATUS_DRAFT;
+
+        // Validate: cannot activate if quantity is 0 and sell_out_of_stock is false
         $sellOutOfStock = $validated['sell_out_of_stock'] ?? false;
-        if ($isPublished && ! $sellOutOfStock) {
+        if ($status === Product::STATUS_ACTIVE && ! $sellOutOfStock) {
             $totalQuantity = collect($validated['variants'] ?? [])->sum('quantity');
             if ($totalQuantity <= 0) {
                 throw ValidationException::withMessages([
-                    'is_published' => 'Products with no available stock cannot be published unless "Continue selling when out of stock" is enabled.',
+                    'status' => 'Products with no available stock cannot be made active unless "Continue selling when out of stock" is enabled.',
                 ]);
             }
         }
 
+        // Create product as draft initially so that the booted::created hook
+        // creates listings as 'not_listed'. After variants and inventory are
+        // fully set up, we update to the requested status which triggers
+        // the updated hook to properly list on auto_list channels.
         $product = Product::create([
             'store_id' => $store->id,
             'title' => $validated['title'],
@@ -431,8 +440,9 @@ class ProductController extends Controller
             'template_id' => $validated['template_id'] ?? null,
             'vendor_id' => $validated['vendor_id'] ?? null,
             'brand_id' => $validated['brand_id'] ?? null,
-            'is_published' => $validated['is_published'] ?? false,
-            'is_draft' => ! ($validated['is_published'] ?? false),
+            'status' => Product::STATUS_DRAFT,
+            'is_published' => false,
+            'is_draft' => true,
             'has_variants' => $hasVariants,
             'track_quantity' => $validated['track_quantity'] ?? true,
             'sell_out_of_stock' => $validated['sell_out_of_stock'] ?? false,
@@ -462,7 +472,7 @@ class ProductController extends Controller
             $optionValue = $hasVariants ? ($variantData['option1_value'] ?? null) : null;
 
             $variant = $product->variants()->create([
-                'sku' => $variantData['sku'],
+                'sku' => $variantData['sku'] ?? null,
                 'price' => $variantData['price'],
                 'cost' => $variantData['cost'] ?? null,
                 'wholesale_price' => $variantData['wholesale_price'] ?? null,
@@ -496,19 +506,9 @@ class ProductController extends Controller
             }
         }
 
-        // Auto-generate SKU and barcode in format: CATEGORY_PREFIX-product_id
-        $product->generateSkusForVariants();
-
-        // Save template attribute values
-        if (! empty($validated['attributes'])) {
-            foreach ($validated['attributes'] as $fieldId => $value) {
-                if ($value !== null && $value !== '') {
-                    $product->setTemplateAttributeValue((int) $fieldId, $value);
-                }
-            }
-        }
-
-        // Handle image uploads
+        // Handle image uploads before SKU generation, since generating SKUs
+        // triggers variant updates → activity logging → notifications, which
+        // could abort the request if a notification fails.
         if ($request->hasFile('images')) {
             $this->imageService->uploadMultiple(
                 files: $request->file('images'),
@@ -557,6 +557,30 @@ class ProductController extends Controller
                     );
                 }
             }
+        }
+
+        // Save template attribute values
+        if (! empty($validated['attributes'])) {
+            foreach ($validated['attributes'] as $fieldId => $value) {
+                if ($value !== null && $value !== '') {
+                    $product->setTemplateAttributeValue((int) $fieldId, $value);
+                }
+            }
+        }
+
+        // Auto-generate SKU and barcode in format: CATEGORY_PREFIX-product_id
+        // This triggers variant updates → activity logging → notifications,
+        // so it runs after images/videos are already saved.
+        $product->generateSkusForVariants();
+
+        // Now update to the requested status. This triggers the updated hook
+        // which will list on auto_list channels (inventory is already set up).
+        if ($status !== Product::STATUS_DRAFT) {
+            $product->update([
+                'status' => $status,
+                'is_published' => $isPublished,
+                'is_draft' => $isDraft,
+            ]);
         }
 
         return redirect()->route('products.show', $product)

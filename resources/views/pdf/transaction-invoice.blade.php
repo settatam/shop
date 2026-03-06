@@ -316,13 +316,7 @@
                                 {{ $customer['city'] }}<br>
                             @endif
                             @if(!empty($customer['state']) || !empty($customer['zip']))
-                                {{ $customer['state'] ?? '' }} {{ $customer['zip'] ?? '' }}<br>
-                            @endif
-                            @if(!empty($customer['phone']))
-                                {{ $customer['phone'] }}<br>
-                            @endif
-                            @if(!empty($customer['email']))
-                                {{ $customer['email'] }}
+                                {{ $customer['state'] ?? '' }} {{ $customer['zip'] ?? '' }}
                             @endif
                         @else
                             <span class="meta-value-italic">Walk-in customer</span>

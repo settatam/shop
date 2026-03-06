@@ -39,6 +39,8 @@ export function getEmptyCustomerForm(): CustomerFormData {
 <script setup lang="ts">
 import { computed } from 'vue';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
+import { US_STATES } from '@/lib/states';
+import { formatPhoneNumber } from '@/lib/utils';
 
 interface Props {
     modelValue: CustomerFormData;
@@ -131,8 +133,9 @@ function updateAddressField(field: keyof CustomerFormData['address'], value: str
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
             <input
                 :value="customer.phone"
-                @input="updateField('phone', ($event.target as HTMLInputElement).value)"
+                @input="updateField('phone', formatPhoneNumber(($event.target as HTMLInputElement).value))"
                 type="tel"
+                placeholder="(555) 123-4567"
                 class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
             />
         </div>
@@ -190,13 +193,15 @@ function updateAddressField(field: keyof CustomerFormData['address'], value: str
 
         <!-- State -->
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">State / Province</label>
-            <input
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
+            <select
                 :value="customer.address.state"
-                @input="updateAddressField('state', ($event.target as HTMLInputElement).value)"
-                type="text"
+                @change="updateAddressField('state', ($event.target as HTMLSelectElement).value)"
                 class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-            />
+            >
+                <option value="">Select state</option>
+                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+            </select>
         </div>
 
         <!-- Postal Code -->

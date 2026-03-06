@@ -120,8 +120,8 @@ class NotificationManager
             $content = NotificationTemplate::renderWithLayout($content, is_array($storeData) ? $storeData : []);
         }
 
-        // Get recipients
-        $recipients = $subscription->getRecipientEmails($data);
+        // Get recipients (filter out any null/empty emails)
+        $recipients = collect($subscription->getRecipientEmails($data))->filter()->values();
 
         // Get the appropriate driver
         $driver = $this->driver($template->channel);

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
+import { US_STATES } from '@/lib/states';
+import { formatPhoneNumber } from '@/lib/utils';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 
@@ -236,8 +238,10 @@ const save = () => {
                                                 </label>
                                                 <input
                                                     id="edit_vendor_phone"
-                                                    v-model="form.phone"
+                                                    :value="form.phone"
                                                     type="tel"
+                                                    placeholder="(555) 123-4567"
+                                                    @input="form.phone = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                                     class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 />
                                             </div>
@@ -313,12 +317,14 @@ const save = () => {
                                                     >
                                                         State
                                                     </label>
-                                                    <input
+                                                    <select
                                                         id="edit_vendor_state"
                                                         v-model="form.state"
-                                                        type="text"
-                                                        class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
+                                                        class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    >
+                                                        <option value="">Select state</option>
+                                                        <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                                    </select>
                                                 </div>
                                             </div>
                                             <div class="grid grid-cols-2 gap-4">
@@ -395,8 +401,10 @@ const save = () => {
                                                 </label>
                                                 <input
                                                     id="edit_vendor_contact_phone"
-                                                    v-model="form.contact_phone"
+                                                    :value="form.contact_phone"
                                                     type="tel"
+                                                    placeholder="(555) 123-4567"
+                                                    @input="form.contact_phone = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                                     class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                 />
                                             </div>

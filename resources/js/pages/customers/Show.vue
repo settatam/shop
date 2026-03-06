@@ -5,6 +5,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { US_STATES } from '@/lib/states';
+import { formatPhoneNumber } from '@/lib/utils';
 import {
     ArrowLeftIcon,
     PencilIcon,
@@ -973,8 +975,10 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                             <label for="edit_phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
                                             <input
                                                 id="edit_phone"
-                                                v-model="editForm.phone_number"
+                                                :value="editForm.phone_number"
                                                 type="tel"
+                                                placeholder="(555) 123-4567"
+                                                @input="editForm.phone_number = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                                 class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                             />
                                         </div>
@@ -1018,12 +1022,14 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                         </div>
                                         <div>
                                             <label for="edit_state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
-                                            <input
+                                            <select
                                                 id="edit_state"
                                                 v-model="editForm.state"
-                                                type="text"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
+                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="">Select state</option>
+                                                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                            </select>
                                         </div>
                                         <div>
                                             <label for="edit_lead_source" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
@@ -1344,14 +1350,14 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                 </div>
                                 <div class="col-span-1">
                                     <label for="address_state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
-                                    <input
+                                    <select
                                         id="address_state"
                                         v-model="addressForm.state"
-                                        type="text"
-                                        maxlength="2"
-                                        placeholder="CA"
-                                        class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                    />
+                                        class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                    >
+                                        <option value="">Select state</option>
+                                        <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                    </select>
                                 </div>
                                 <div class="col-span-2">
                                     <label for="address_zip" class="block text-sm font-medium text-gray-700 dark:text-gray-300">ZIP *</label>
@@ -1368,8 +1374,10 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                 <label for="address_phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone (optional)</label>
                                 <input
                                     id="address_phone"
-                                    v-model="addressForm.phone"
+                                    :value="addressForm.phone"
                                     type="tel"
+                                    placeholder="(555) 123-4567"
+                                    @input="addressForm.phone = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                     class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                 />
                             </div>

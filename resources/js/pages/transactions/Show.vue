@@ -638,7 +638,7 @@ async function handleSaveItem(item: EditableItem, deletedImageIds: number[] = []
         if (editingItem.value && editingItem.value.id && !editingItem.value.id.includes('-')) {
             // Update existing item
             itemId = parseInt(editingItem.value.id);
-            await axios.put(`/api/v1/transactions/${props.transaction.id}/items/${itemId}`, {
+            const updatePayload: Record<string, any> = {
                 title: item.title,
                 description: item.description,
                 category_id: item.category_id,
@@ -646,8 +646,11 @@ async function handleSaveItem(item: EditableItem, deletedImageIds: number[] = []
                 dwt: item.dwt,
                 condition: item.condition,
                 price: item.price,
-                buy_price: item.buy_price,
-            });
+            };
+            if (props.transaction.status !== 'payment_processed') {
+                updatePayload.buy_price = item.buy_price;
+            }
+            await axios.put(`/api/v1/transactions/${props.transaction.id}/items/${itemId}`, updatePayload);
 
             // Delete images that were marked for removal
             for (const imageId of deletedImageIds) {
@@ -3097,6 +3100,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
             :categories="categories ?? []"
             :editing-item="editingItem"
             :existing-images="editingItemImages"
+            :disable-buy-price="transaction.status === 'payment_processed'"
             @close="showAddItemModal = false"
             @save="handleSaveItem"
         />

@@ -52,14 +52,14 @@ class ProductStatusValidationTest extends TestCase
         $this->category = Category::factory()->create(['store_id' => $this->store->id]);
     }
 
-    public function test_cannot_publish_product_with_zero_quantity_and_sell_out_of_stock_disabled(): void
+    public function test_cannot_activate_product_with_zero_quantity_and_sell_out_of_stock_disabled(): void
     {
         $this->actingAs($this->user);
 
         $response = $this->withSession(['current_store_id' => $this->store->id])
             ->post('/products', [
                 'title' => 'Test Product',
-                'is_published' => true,
+                'status' => 'active',
                 'sell_out_of_stock' => false,
                 'track_quantity' => true,
                 'has_variants' => false,
@@ -74,17 +74,17 @@ class ProductStatusValidationTest extends TestCase
                 ],
             ]);
 
-        $response->assertSessionHasErrors('is_published');
+        $response->assertSessionHasErrors('status');
     }
 
-    public function test_can_publish_product_with_zero_quantity_when_sell_out_of_stock_enabled(): void
+    public function test_can_activate_product_with_zero_quantity_when_sell_out_of_stock_enabled(): void
     {
         $this->actingAs($this->user);
 
         $response = $this->withSession(['current_store_id' => $this->store->id])
             ->post('/products', [
                 'title' => 'Test Product',
-                'is_published' => true,
+                'status' => 'active',
                 'sell_out_of_stock' => true, // Enabled
                 'track_quantity' => true,
                 'has_variants' => false,
@@ -99,21 +99,22 @@ class ProductStatusValidationTest extends TestCase
                 ],
             ]);
 
-        $response->assertSessionDoesntHaveErrors('is_published');
+        $response->assertSessionDoesntHaveErrors('status');
         $this->assertDatabaseHas('products', [
             'title' => 'Test Product',
+            'status' => Product::STATUS_ACTIVE,
             'is_published' => true,
         ]);
     }
 
-    public function test_can_publish_product_with_positive_quantity(): void
+    public function test_can_activate_product_with_positive_quantity(): void
     {
         $this->actingAs($this->user);
 
         $response = $this->withSession(['current_store_id' => $this->store->id])
             ->post('/products', [
                 'title' => 'Test Product With Stock',
-                'is_published' => true,
+                'status' => 'active',
                 'sell_out_of_stock' => false,
                 'track_quantity' => true,
                 'has_variants' => false,
@@ -128,9 +129,10 @@ class ProductStatusValidationTest extends TestCase
                 ],
             ]);
 
-        $response->assertSessionDoesntHaveErrors('is_published');
+        $response->assertSessionDoesntHaveErrors('status');
         $this->assertDatabaseHas('products', [
             'title' => 'Test Product With Stock',
+            'status' => Product::STATUS_ACTIVE,
             'is_published' => true,
         ]);
     }
@@ -228,7 +230,7 @@ class ProductStatusValidationTest extends TestCase
         $response = $this->withSession(['current_store_id' => $this->store->id])
             ->post('/products', [
                 'title' => 'Draft Product',
-                'is_published' => false, // Draft
+                'status' => 'draft',
                 'sell_out_of_stock' => false,
                 'track_quantity' => true,
                 'has_variants' => false,
@@ -243,10 +245,39 @@ class ProductStatusValidationTest extends TestCase
                 ],
             ]);
 
-        $response->assertSessionDoesntHaveErrors('is_published');
+        $response->assertSessionDoesntHaveErrors('status');
         $this->assertDatabaseHas('products', [
             'title' => 'Draft Product',
+            'status' => Product::STATUS_DRAFT,
             'is_published' => false,
+        ]);
+    }
+
+    public function test_can_create_product_without_sku(): void
+    {
+        $this->actingAs($this->user);
+
+        $response = $this->withSession(['current_store_id' => $this->store->id])
+            ->post('/products', [
+                'title' => 'No SKU Product',
+                'status' => 'active',
+                'sell_out_of_stock' => true,
+                'track_quantity' => true,
+                'has_variants' => false,
+                'charge_taxes' => true,
+                'variants' => [
+                    [
+                        'price' => 49.99,
+                        'quantity' => 1,
+                        'warehouse_id' => $this->warehouse->id,
+                    ],
+                ],
+            ]);
+
+        $response->assertSessionDoesntHaveErrors();
+        $this->assertDatabaseHas('products', [
+            'title' => 'No SKU Product',
+            'status' => Product::STATUS_ACTIVE,
         ]);
     }
 }

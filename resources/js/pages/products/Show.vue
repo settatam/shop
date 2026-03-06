@@ -494,7 +494,11 @@ function submitTransfer(asDraft: boolean) {
                     <!-- Template Attributes -->
                     <div v-if="template && templateFields && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">{{ template.name }}</h3>
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+                                <a :href="`/templates/${template.id}/edit`" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400">
+                                    {{ template.name }}
+                                </a>
+                            </h3>
                             <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div v-for="field in templateFields" :key="field.id">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">{{ field.label }}</dt>
@@ -736,6 +740,14 @@ function submitTransfer(asDraft: boolean) {
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Organization</h3>
                             <dl class="space-y-3">
+                                <div v-if="template" class="flex items-center justify-between">
+                                    <dt class="text-sm text-gray-500 dark:text-gray-400">Template</dt>
+                                    <dd class="text-sm font-medium">
+                                        <a :href="`/templates/${template.id}/edit`" target="_blank" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                                            {{ template.name }}
+                                        </a>
+                                    </dd>
+                                </div>
                                 <div class="flex items-center justify-between">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Category</dt>
                                     <dd class="text-sm font-medium text-gray-900 dark:text-white">

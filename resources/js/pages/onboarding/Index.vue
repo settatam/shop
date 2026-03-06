@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { Head } from '@inertiajs/vue3';
+import { US_STATES } from '@/lib/states';
 import AppLogo from '@/components/AppLogo.vue';
 import {
     MapPinIcon,
@@ -309,13 +310,14 @@ function getCategoryChildrenCount(catId: number) {
                                     <label for="state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                         State / Province
                                     </label>
-                                    <input
-                                        type="text"
+                                    <select
                                         id="state"
                                         v-model="formData.state"
-                                        placeholder="CA"
-                                        class="mt-1 block w-full rounded-lg border-0 bg-white dark:bg-gray-900 py-2.5 px-4 text-gray-900 dark:text-white shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-white/10 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
-                                    />
+                                        class="mt-1 block w-full rounded-lg border-0 bg-white dark:bg-gray-900 py-2.5 px-4 text-gray-900 dark:text-white shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-white/10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm"
+                                    >
+                                        <option value="">Select state</option>
+                                        <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-4">

@@ -32,6 +32,7 @@ class UpdateCustomerRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:255'],
             'address2' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:100'],
+            'state' => ['nullable', 'string', 'max:100'],
             'zip' => ['nullable', 'string', 'max:20'],
             'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
             'notes' => ['nullable', 'string', 'max:2000'],

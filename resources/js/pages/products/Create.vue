@@ -94,6 +94,7 @@ interface Props {
     brands: Brand[];
     warehouses: Warehouse[];
     vendors: Vendor[];
+    availableStatuses: Record<string, string>;
 }
 
 const props = defineProps<Props>();
@@ -180,7 +181,7 @@ const form = useForm({
     template_id: '' as string | number,
     vendor_id: '' as string | number,
     brand_id: '' as string | number,
-    is_published: false,
+    status: 'active',
     has_variants: false,
     track_quantity: true,
     sell_out_of_stock: false,
@@ -200,7 +201,7 @@ const form = useForm({
     domestic_shipping_cost: '' as string | number,
     international_shipping_cost: '' as string | number,
     variants: [
-        { sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: '' as string | number },
+        { sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: 1, warehouse_id: '' as string | number },
     ] as Variant[],
     attributes: {} as Record<number, string>,
     images: [] as File[],
@@ -218,7 +219,7 @@ watch(hasVariants, (newValue) => {
     form.has_variants = newValue;
     // If switching to no variants mode, keep only first variant and clear options
     if (!newValue) {
-        form.variants = [form.variants[0] || { sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: defaultWarehouseId.value }];
+        form.variants = [form.variants[0] || { sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: 1, warehouse_id: defaultWarehouseId.value }];
         form.variants[0].option1_name = '';
         form.variants[0].option1_value = '';
     }
@@ -407,7 +408,7 @@ watch(() => form.category_id, async (newCategoryId) => {
 
 function addVariant() {
     if (!hasVariants.value) return;
-    form.variants.push({ sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: '0', warehouse_id: defaultWarehouseId.value });
+    form.variants.push({ sku: '', barcode: '', option1_name: '', option1_value: '', price: '', wholesale_price: '', cost: '', quantity: 1, warehouse_id: defaultWarehouseId.value });
 }
 
 function removeVariant(index: number) {
@@ -639,7 +640,7 @@ function submit() {
                                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                         <div>
                                             <label for="sku" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                SKU <span class="text-red-500">*</span>
+                                                SKU
                                             </label>
                                             <div class="mt-1 flex gap-2">
                                                 <input
@@ -922,13 +923,12 @@ function submit() {
                                         <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
                                             <div>
                                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    SKU <span class="text-red-500">*</span>
+                                                    SKU
                                                 </label>
                                                 <div class="mt-1 flex gap-1">
                                                     <input
                                                         v-model="variant.sku"
                                                         type="text"
-                                                        required
                                                         :class="[
                                                             'block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm/6 dark:bg-gray-700 dark:text-white',
                                                             getError(`variants.${index}.sku`) ? 'ring-red-300 focus:ring-red-500 dark:ring-red-600' : 'ring-gray-300 focus:ring-indigo-600 dark:ring-gray-600'
@@ -1049,7 +1049,11 @@ function submit() {
                                 @click="toggleSection('attributes')"
                             >
                                 <div>
-                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ template.name }}</h3>
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                                        <a :href="`/templates/${template.id}/edit`" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400" @click.stop>
+                                            {{ template.name }}
+                                        </a>
+                                    </h3>
                                     <p v-if="template.description" class="text-sm text-gray-500 dark:text-gray-400">{{ template.description }}</p>
                                 </div>
                                 <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
@@ -1712,15 +1716,31 @@ function submit() {
                             <div class="px-4 py-5 sm:p-6">
                                 <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Status</h3>
 
-                                <div class="space-y-3">
-                                    <label class="flex items-center gap-3">
-                                        <input
-                                            v-model="form.is_published"
-                                            type="checkbox"
-                                            class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
-                                        />
-                                        <span class="text-sm text-gray-700 dark:text-gray-300">Published</span>
-                                    </label>
+                                <select
+                                    v-model="form.status"
+                                    class="block w-full rounded-md border-0 bg-white py-1.5 pl-3 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                >
+                                    <option
+                                        v-for="(label, value) in props.availableStatuses"
+                                        :key="value"
+                                        :value="value"
+                                    >
+                                        {{ label }}
+                                    </option>
+                                </select>
+                                <p v-if="form.errors.status" class="mt-1 text-sm text-red-600">{{ form.errors.status }}</p>
+
+                                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <span
+                                        :class="[
+                                            'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                            form.status === 'active' ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20' :
+                                            form.status === 'draft' ? 'bg-yellow-50 text-yellow-800 ring-1 ring-inset ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20' :
+                                            'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20',
+                                        ]"
+                                    >
+                                        {{ props.availableStatuses[form.status] || form.status }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -1757,7 +1777,9 @@ function submit() {
                                             Product Type
                                         </label>
                                         <div class="text-sm text-gray-900 dark:text-white">
-                                            {{ template.name }}
+                                            <a :href="`/templates/${template.id}/edit`" target="_blank" class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                                                {{ template.name }}
+                                            </a>
                                         </div>
                                     </div>
                                     <div v-else-if="!loadingTemplate && form.category_id">

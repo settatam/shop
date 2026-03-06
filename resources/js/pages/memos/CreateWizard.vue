@@ -26,6 +26,7 @@ import {
 } from '@headlessui/vue';
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
+import { formatPhoneNumber } from '@/lib/utils';
 import axios from 'axios';
 import ProductSearch from '@/components/products/ProductSearch.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
@@ -652,7 +653,7 @@ function getPaymentTermLabel(days: number): string {
                                             </div>
                                             <div>
                                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                                <input v-model="newVendor.phone" type="tel" @input="updateNewVendor" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
+                                                <input :value="newVendor.phone" type="tel" placeholder="(555) 123-4567" @input="newVendor.phone = formatPhoneNumber(($event.target as HTMLInputElement).value); updateNewVendor()" class="mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600" />
                                             </div>
                                         </div>
                                     </template>

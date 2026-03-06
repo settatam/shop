@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
+import { US_STATES } from '@/lib/states';
+import { formatPhoneNumber } from '@/lib/utils';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/24/outline';
 import LeadSourceSelect from './LeadSourceSelect.vue';
@@ -363,8 +365,10 @@ const save = () => {
                                         </label>
                                         <input
                                             id="edit_customer_phone"
-                                            v-model="form.phone_number"
+                                            :value="form.phone_number"
                                             type="tel"
+                                            placeholder="(555) 123-4567"
+                                            @input="form.phone_number = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                             class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                         />
                                         <p v-if="form.errors.phone_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -501,13 +505,13 @@ const save = () => {
                                                         </div>
                                                         <div class="col-span-1">
                                                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
-                                                            <input
+                                                            <select
                                                                 v-model="addressForms[address.id].state"
-                                                                type="text"
-                                                                maxlength="2"
-                                                                placeholder="CA"
-                                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                            />
+                                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            >
+                                                                <option value="">Select state</option>
+                                                                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                                            </select>
                                                         </div>
                                                         <div class="col-span-2">
                                                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">ZIP</label>
@@ -521,8 +525,10 @@ const save = () => {
                                                     <div>
                                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
                                                         <input
-                                                            v-model="addressForms[address.id].phone"
+                                                            :value="addressForms[address.id].phone"
                                                             type="tel"
+                                                            placeholder="(555) 123-4567"
+                                                            @input="addressForms[address.id].phone = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                                                             class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
                                                         />
                                                     </div>
@@ -606,12 +612,14 @@ const save = () => {
                                                     >
                                                         State
                                                     </label>
-                                                    <input
+                                                    <select
                                                         id="edit_customer_state"
                                                         v-model="form.state"
-                                                        type="text"
-                                                        class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
+                                                        class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                    >
+                                                        <option value="">Select state</option>
+                                                        <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                                    </select>
                                                 </div>
                                             </div>
 

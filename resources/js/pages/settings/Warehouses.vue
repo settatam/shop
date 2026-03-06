@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import { US_STATES } from '@/lib/states';
 import {
     PlusIcon,
     PencilSquareIcon,
@@ -420,12 +421,15 @@ function makeDefault(warehouse: Warehouse) {
                                             />
                                         </div>
                                         <div class="space-y-2">
-                                            <Label for="state">State / Province</Label>
-                                            <Input
+                                            <Label for="state">State</Label>
+                                            <select
                                                 id="state"
                                                 v-model="formData.state"
-                                                placeholder="PA"
-                                            />
+                                                class="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <option value="">Select state</option>
+                                                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                            </select>
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">

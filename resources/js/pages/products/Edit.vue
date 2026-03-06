@@ -879,7 +879,11 @@ function formatDate(date: string): string {
                             >
                                 <div>
                                     <h3 class="text-base font-semibold text-gray-900 dark:text-white">Product Template</h3>
-                                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ template.name }}</p>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                                        <a :href="`/templates/${template.id}/edit`" target="_blank" class="hover:text-indigo-600 dark:hover:text-indigo-400" @click.stop>
+                                            {{ template.name }}
+                                        </a>
+                                    </p>
                                 </div>
                                 <ChevronDownIcon v-if="!sections.attributes" class="size-5 text-gray-400" />
                                 <ChevronUpIcon v-else class="size-5 text-gray-400" />

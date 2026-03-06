@@ -53,7 +53,8 @@ trait LogsActivity
             $this,
             null,
             $properties,
-            $description ?? $this->getActivityDescription($action)
+            $description ?? $this->getActivityDescription($action),
+            $this->shouldTriggerNotifications()
         );
     }
 
@@ -65,6 +66,15 @@ trait LogsActivity
         $map = $this->getActivityMap();
 
         return $map[$action] ?? null;
+    }
+
+    /**
+     * Whether activity logging should trigger notifications.
+     * Override this in your model to disable.
+     */
+    protected function shouldTriggerNotifications(): bool
+    {
+        return true;
     }
 
     /**

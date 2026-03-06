@@ -19,6 +19,11 @@ class ProductVariant extends Model
      */
     protected array $priceFields = ['price', 'wholesale_price', 'cost'];
 
+    protected function shouldTriggerNotifications(): bool
+    {
+        return false;
+    }
+
     protected $fillable = [
         'product_id',
         'sku',

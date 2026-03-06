@@ -25,6 +25,12 @@ class EmailDriver extends AbstractNotificationDriver
         $log = $this->createLog($recipient, $content, $options);
         $subject = $options['subject'] ?? 'Notification from '.$this->store->name;
 
+        if (empty($recipient)) {
+            $log->markAsFailed('Recipient email address is empty');
+
+            return $log;
+        }
+
         try {
             // Redirect to developer email in non-production
             $to = config('app.env') !== 'production'

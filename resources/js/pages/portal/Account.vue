@@ -3,6 +3,7 @@ import InputError from '@/components/InputError.vue';
 import { Spinner } from '@/components/ui/spinner';
 import PortalLayout from '@/layouts/portal/PortalLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { formatPhoneNumber } from '@/lib/utils';
 
 const props = defineProps<{
     customer: {
@@ -90,8 +91,10 @@ function submit() {
                 <div class="mt-2">
                     <input
                         id="phone_number"
-                        v-model="form.phone_number"
+                        :value="form.phone_number"
                         type="tel"
+                        placeholder="(555) 123-4567"
+                        @input="form.phone_number = formatPhoneNumber(($event.target as HTMLInputElement).value)"
                         class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
                     />
                 </div>

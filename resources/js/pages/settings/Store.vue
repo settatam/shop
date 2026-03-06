@@ -3,6 +3,7 @@ import StoreSettingsController from '@/actions/App/Http/Controllers/Settings/Sto
 import { edit } from '@/routes/store-settings';
 import { Form, Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import { US_STATES } from '@/lib/states';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
@@ -371,13 +372,16 @@ function removeLogo() {
                                     </div>
 
                                     <div class="grid gap-2">
-                                        <Label for="state">State / Province</Label>
-                                        <Input
+                                        <Label for="state">State</Label>
+                                        <select
                                             id="state"
                                             name="state"
-                                            :default-value="store.state ?? ''"
-                                            placeholder="NY"
-                                        />
+                                            :value="store.state ?? ''"
+                                            class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            <option value="">Select state</option>
+                                            <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                        </select>
                                         <InputError :message="errors.state" />
                                     </div>
 
