@@ -466,6 +466,10 @@ function printPackingSlip() {
 
 
 
+const totalVendorCost = computed(() => {
+    return props.repair.items.reduce((sum, item) => sum + (item.vendor_cost || 0), 0);
+});
+
 function openVendorPaymentModal() {
     showVendorPaymentModal.value = true;
 }
@@ -1148,6 +1152,7 @@ function removeItem(itemId: number) {
         <VendorPaymentForm
             :show="showVendorPaymentModal"
             :repair-id="repair.id"
+            :default-amount="totalVendorCost"
             @close="closeVendorPaymentModal"
             @saved="onVendorPaymentSaved"
         />

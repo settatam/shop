@@ -108,14 +108,13 @@ class AppraisalController extends Controller
         }
 
         $storeUsers = $store->storeUsers()
-            ->with(['user', 'role'])
+            ->with(['user'])
             ->whereNotNull('user_id')
             ->where('can_be_assigned', true)
             ->get()
-            ->filter(fn ($storeUser) => $storeUser->is_owner || $storeUser->hasPermission('appraisals.create'))
             ->map(fn ($storeUser) => [
                 'id' => $storeUser->id,
-                'name' => $storeUser->user?->name ?? $storeUser->full_name ?? 'Unknown',
+                'name' => $storeUser->user?->name ?? 'Unknown',
             ])
             ->sortBy('name')
             ->values();

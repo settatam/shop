@@ -19,11 +19,13 @@ interface Props {
     show: boolean;
     repairId: number;
     payment?: VendorPayment | null;
+    defaultAmount?: number | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     show: false,
     payment: null,
+    defaultAmount: null,
 });
 
 const emit = defineEmits<{
@@ -72,6 +74,10 @@ watch(
                 isEditing.value = false;
                 form.reset();
                 form.payment_date = new Date().toISOString().split('T')[0];
+                const amt = Number(props.defaultAmount);
+                if (amt > 0) {
+                    form.amount = amt.toFixed(2);
+                }
             }
         }
     },
