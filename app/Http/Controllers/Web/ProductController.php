@@ -426,14 +426,27 @@ class ProductController extends Controller
         $isPublished = $status === Product::STATUS_ACTIVE;
         $isDraft = $status === Product::STATUS_DRAFT;
 
-        // Validate: cannot activate if quantity is 0 and sell_out_of_stock is false
+        // Validate: active products must have vendor, price > 0, and quantity > 0
         $sellOutOfStock = $validated['sell_out_of_stock'] ?? false;
-        if ($status === Product::STATUS_ACTIVE && ! $sellOutOfStock) {
+        if ($status === Product::STATUS_ACTIVE) {
+            $errors = [];
+
+            if (empty($validated['vendor_id'])) {
+                $errors['vendor_id'] = 'A vendor is required for active products.';
+            }
+
             $totalQuantity = collect($validated['variants'] ?? [])->sum('quantity');
-            if ($totalQuantity <= 0) {
-                throw ValidationException::withMessages([
-                    'status' => 'Products with no available stock cannot be made active unless "Continue selling when out of stock" is enabled.',
-                ]);
+            if ($totalQuantity <= 0 && ! $sellOutOfStock) {
+                $errors['status'] = 'Products with no available stock cannot be made active unless "Continue selling when out of stock" is enabled.';
+            }
+
+            $maxPrice = collect($validated['variants'] ?? [])->max('price');
+            if (! $maxPrice || $maxPrice <= 0) {
+                $errors['variants.0.price'] = 'At least one variant must have a price greater than 0 for active products.';
+            }
+
+            if (! empty($errors)) {
+                throw ValidationException::withMessages($errors);
             }
         }
 
@@ -1109,14 +1122,27 @@ class ProductController extends Controller
         $isPublished = $status === Product::STATUS_ACTIVE;
         $isDraft = $status === Product::STATUS_DRAFT;
 
-        // Validate: cannot make active if quantity is 0 and sell_out_of_stock is false
+        // Validate: active products must have vendor, price > 0, and quantity > 0
         $sellOutOfStock = $validated['sell_out_of_stock'] ?? false;
-        if ($status === Product::STATUS_ACTIVE && ! $sellOutOfStock) {
+        if ($status === Product::STATUS_ACTIVE) {
+            $errors = [];
+
+            if (empty($validated['vendor_id'])) {
+                $errors['vendor_id'] = 'A vendor is required for active products.';
+            }
+
             $totalQuantity = collect($validated['variants'] ?? [])->sum('quantity');
-            if ($totalQuantity <= 0) {
-                throw ValidationException::withMessages([
-                    'status' => 'Products with no available stock cannot be made active unless "Continue selling when out of stock" is enabled.',
-                ]);
+            if ($totalQuantity <= 0 && ! $sellOutOfStock) {
+                $errors['status'] = 'Products with no available stock cannot be made active unless "Continue selling when out of stock" is enabled.';
+            }
+
+            $maxPrice = collect($validated['variants'] ?? [])->max('price');
+            if (! $maxPrice || $maxPrice <= 0) {
+                $errors['variants.0.price'] = 'At least one variant must have a price greater than 0 for active products.';
+            }
+
+            if (! empty($errors)) {
+                throw ValidationException::withMessages($errors);
             }
         }
 

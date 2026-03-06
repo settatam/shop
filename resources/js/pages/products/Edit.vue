@@ -791,91 +791,88 @@ function formatDate(date: string): string {
                     </div>
                 </div>
 
-                <!-- Product Information Section (Top) -->
-                <div class="mb-6">
-                    <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Product Information</h3>
-                            <div class="space-y-4">
-                                <!-- Category -->
-                                <div>
-                                    <div class="flex items-center justify-between mb-1">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Category <span v-if="isFieldRequired('category_id')" class="text-red-500">*</span>
-                                        </label>
-                                        <a v-if="form.category_id" :href="`/categories/${form.category_id}/settings`" target="_blank" class="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400" title="Category settings">
-                                            <Cog6ToothIcon class="size-4" />
-                                        </a>
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <!-- Main content -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <!-- Product Information Section (Top) -->
+                        <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Product Information</h3>
+                                <div class="space-y-4">
+                                    <!-- Category -->
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Category <span v-if="isFieldRequired('category_id')" class="text-red-500">*</span>
+                                            </label>
+                                            <a v-if="form.category_id" :href="`/categories/${form.category_id}/settings`" target="_blank" class="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400" title="Category settings">
+                                                <Cog6ToothIcon class="size-4" />
+                                            </a>
+                                        </div>
+                                        <CategorySelector
+                                            v-model="form.category_id"
+                                            :categories="categories"
+                                        />
+                                        <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
                                     </div>
-                                    <CategorySelector
-                                        v-model="form.category_id"
-                                        :categories="categories"
-                                    />
-                                    <p v-if="form.errors.category_id" class="mt-1 text-sm text-red-600">{{ form.errors.category_id }}</p>
-                                </div>
 
-                                <!-- Title -->
-                                <div>
-                                    <div class="flex items-center justify-between">
-                                        <label for="title_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Title <span class="text-red-500">*</span>
-                                        </label>
-                                        <button
-                                            type="button"
+                                    <!-- Title -->
+                                    <div>
+                                        <div class="flex items-center justify-between">
+                                            <label for="title_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Title <span class="text-red-500">*</span>
+                                            </label>
+                                            <button
+                                                type="button"
+                                                :disabled="generatingTitle"
+                                                class="inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50"
+                                                @click="generateTitle"
+                                            >
+                                                <SparklesIcon class="size-3" :class="{ 'animate-pulse': generatingTitle }" />
+                                                {{ generatingTitle ? 'Generating...' : 'Generate with AI' }}
+                                            </button>
+                                        </div>
+                                        <input
+                                            id="title_top"
+                                            v-model="form.title"
+                                            type="text"
+                                            required
                                             :disabled="generatingTitle"
-                                            class="inline-flex items-center gap-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 px-2 py-1 text-xs font-medium text-white shadow-sm hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50"
-                                            @click="generateTitle"
-                                        >
-                                            <SparklesIcon class="size-3" :class="{ 'animate-pulse': generatingTitle }" />
-                                            {{ generatingTitle ? 'Generating...' : 'Generate with AI' }}
-                                        </button>
+                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                        />
+                                        <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
                                     </div>
-                                    <input
-                                        id="title_top"
-                                        v-model="form.title"
-                                        type="text"
-                                        required
-                                        :disabled="generatingTitle"
-                                        class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                    />
-                                    <p v-if="form.errors.title" class="mt-1 text-sm text-red-600">{{ form.errors.title }}</p>
-                                </div>
 
-                                <!-- SKU and Barcode -->
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label for="sku_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            SKU
-                                        </label>
-                                        <input
-                                            id="sku_top"
-                                            v-model="form.variants[0].sku"
-                                            type="text"
-                                            :disabled="hasVariants"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label for="barcode_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Barcode
-                                        </label>
-                                        <input
-                                            id="barcode_top"
-                                            v-model="form.variants[0].barcode"
-                                            type="text"
-                                            :disabled="hasVariants"
-                                            class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
-                                        />
+                                    <!-- SKU and Barcode -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="sku_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                SKU
+                                            </label>
+                                            <input
+                                                id="sku_top"
+                                                v-model="form.variants[0].sku"
+                                                type="text"
+                                                :disabled="hasVariants"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label for="barcode_top" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Barcode
+                                            </label>
+                                            <input
+                                                id="barcode_top"
+                                                v-model="form.variants[0].barcode"
+                                                type="text"
+                                                :disabled="hasVariants"
+                                                class="mt-1 block w-full rounded-md border-0 bg-white px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 disabled:bg-gray-100 disabled:text-gray-500 dark:disabled:bg-gray-600"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <!-- Main content -->
-                    <div class="lg:col-span-2 space-y-6">
                         <!-- Product Template Section -->
                         <div v-if="template && templateFields.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                             <button

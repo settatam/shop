@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\Store;
 use App\Models\StoreUser;
 use App\Models\User;
+use App\Models\Vendor;
 use App\Models\Warehouse;
 use App\Services\StoreContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,6 +23,8 @@ class ProductStatusValidationTest extends TestCase
     protected Store $store;
 
     protected Warehouse $warehouse;
+
+    protected Vendor $vendor;
 
     protected Category $category;
 
@@ -49,6 +52,7 @@ class ProductStatusValidationTest extends TestCase
             'store_id' => $this->store->id,
             'is_default' => true,
         ]);
+        $this->vendor = Vendor::factory()->create(['store_id' => $this->store->id]);
         $this->category = Category::factory()->create(['store_id' => $this->store->id]);
     }
 
@@ -85,6 +89,7 @@ class ProductStatusValidationTest extends TestCase
             ->post('/products', [
                 'title' => 'Test Product',
                 'status' => 'active',
+                'vendor_id' => $this->vendor->id,
                 'sell_out_of_stock' => true, // Enabled
                 'track_quantity' => true,
                 'has_variants' => false,
@@ -115,6 +120,7 @@ class ProductStatusValidationTest extends TestCase
             ->post('/products', [
                 'title' => 'Test Product With Stock',
                 'status' => 'active',
+                'vendor_id' => $this->vendor->id,
                 'sell_out_of_stock' => false,
                 'track_quantity' => true,
                 'has_variants' => false,
@@ -200,6 +206,7 @@ class ProductStatusValidationTest extends TestCase
         $response = $this->withSession(['current_store_id' => $this->store->id])
             ->put("/products/{$product->id}", [
                 'title' => $product->title,
+                'vendor_id' => $this->vendor->id,
                 'status' => 'active',
                 'sell_out_of_stock' => true, // Enabling sell out of stock
                 'track_quantity' => true,
@@ -261,6 +268,7 @@ class ProductStatusValidationTest extends TestCase
             ->post('/products', [
                 'title' => 'No SKU Product',
                 'status' => 'active',
+                'vendor_id' => $this->vendor->id,
                 'sell_out_of_stock' => true,
                 'track_quantity' => true,
                 'has_variants' => false,
