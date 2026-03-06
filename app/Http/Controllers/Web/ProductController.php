@@ -693,6 +693,7 @@ class ProductController extends Controller
                 'category' => $product->category ? [
                     'id' => $product->category->id,
                     'name' => $product->category->name,
+                    'full_path' => $product->category->full_path,
                 ] : null,
                 'brand' => $product->brand ? [
                     'id' => $product->brand->id,

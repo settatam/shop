@@ -6,7 +6,7 @@ import { PlatformListingsTab } from '@/components/platforms';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { ref, computed, onMounted } from 'vue';
-import { PencilIcon, TrashIcon, ArrowLeftIcon, PrinterIcon, ShoppingCartIcon, ArrowsRightLeftIcon, XMarkIcon, CheckCircleIcon } from '@heroicons/vue/20/solid';
+import { PencilIcon, TrashIcon, ArrowLeftIcon, PrinterIcon, ShoppingCartIcon, ArrowsRightLeftIcon, XMarkIcon, CheckCircleIcon, Cog6ToothIcon } from '@heroicons/vue/20/solid';
 import DeleteProductDialog from '@/components/products/DeleteProductDialog.vue';
 
 interface Variant {
@@ -117,7 +117,7 @@ interface Product {
     price_code: string | null;
     created_at: string;
     updated_at: string;
-    category: { id: number; name: string } | null;
+    category: { id: number; name: string; full_path: string } | null;
     brand: { id: number; name: string } | null;
     vendor: { id: number; name: string; company_name?: string; phone?: string; email?: string; address?: string; city?: string; state?: string; zip?: string } | null;
     tags: Tag[];
@@ -751,7 +751,13 @@ function submitTransfer(asDraft: boolean) {
                                 <div class="flex items-center justify-between">
                                     <dt class="text-sm text-gray-500 dark:text-gray-400">Category</dt>
                                     <dd class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ product.category?.name || '-' }}
+                                        <span v-if="product.category" class="inline-flex items-center gap-1.5">
+                                            {{ product.category.full_path }}
+                                            <a :href="`/categories/${product.category.id}/settings`" target="_blank" class="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+                                                <Cog6ToothIcon class="size-4" />
+                                            </a>
+                                        </span>
+                                        <span v-else>-</span>
                                     </dd>
                                 </div>
                                 <div class="flex items-center justify-between">

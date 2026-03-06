@@ -119,6 +119,40 @@ const mappedCount = computed(() => {
     return props.data.definitions.filter((d) => hasValue(d)).length;
 });
 
+// Filter mode: 'relevant' shows only metafields matching template fields, 'all' shows everything
+const filterMode = ref<'relevant' | 'all'>(props.templateFields.length > 0 ? 'relevant' : 'all');
+
+// Normalize a string for fuzzy matching
+function normalize(str: string): string {
+    return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Build a set of normalized template field names/labels for quick lookup
+const templateFieldNormalized = computed(() => {
+    const names = new Set<string>();
+    for (const field of props.templateFields) {
+        names.add(normalize(field.name));
+        names.add(normalize(field.label));
+    }
+    return names;
+});
+
+function isRelevant(def: MetafieldDefinition): boolean {
+    // Already mapped
+    if (localMappings.value[fullKey(def)]) return true;
+    // Has a value
+    if (hasValue(def)) return true;
+    // Name or key matches a template field
+    const norms = templateFieldNormalized.value;
+    if (norms.has(normalize(def.name)) || norms.has(normalize(def.key))) return true;
+    return false;
+}
+
+const filteredDefinitions = computed(() => {
+    if (filterMode.value === 'all') return props.data.definitions;
+    return props.data.definitions.filter(isRelevant);
+});
+
 function updateMapping(def: MetafieldDefinition, templateFieldName: string) {
     const key = fullKey(def);
     if (templateFieldName) {
@@ -218,6 +252,28 @@ function metafieldTypeBadge(type: string): string {
                 </p>
             </div>
             <div class="flex items-center gap-2">
+                <div v-if="templateFields.length > 0" class="inline-flex rounded-md shadow-sm text-xs">
+                    <button
+                        type="button"
+                        class="px-2.5 py-1.5 rounded-l-md border font-medium"
+                        :class="filterMode === 'relevant'
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-600 dark:text-indigo-300'
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'"
+                        @click="filterMode = 'relevant'"
+                    >
+                        Relevant ({{ data.definitions.filter(isRelevant).length }})
+                    </button>
+                    <button
+                        type="button"
+                        class="-ml-px px-2.5 py-1.5 rounded-r-md border font-medium"
+                        :class="filterMode === 'all'
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-600 dark:text-indigo-300'
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'"
+                        @click="filterMode = 'all'"
+                    >
+                        All ({{ data.definitions.length }})
+                    </button>
+                </div>
                 <Button type="button" variant="outline" size="sm" @click="autoMap">
                     Auto-Map
                 </Button>
@@ -230,7 +286,7 @@ function metafieldTypeBadge(type: string): string {
         </div>
 
         <!-- Column headers -->
-        <div v-if="data.definitions.length > 0" class="text-[10px] text-muted-foreground grid grid-cols-12 gap-3 px-2">
+        <div v-if="filteredDefinitions.length > 0" class="text-[10px] text-muted-foreground grid grid-cols-12 gap-3 px-2">
             <div class="col-span-3">Metafield</div>
             <div class="col-span-3">Template Field</div>
             <div class="col-span-2">Type</div>
@@ -239,9 +295,9 @@ function metafieldTypeBadge(type: string): string {
         </div>
 
         <!-- Definitions list -->
-        <div v-if="data.definitions.length > 0" class="space-y-2">
+        <div v-if="filteredDefinitions.length > 0" class="space-y-2">
             <div
-                v-for="def in data.definitions"
+                v-for="def in filteredDefinitions"
                 :key="def.id"
                 class="grid grid-cols-12 items-center gap-3 p-2 rounded-md border dark:border-gray-700"
                 :class="{
