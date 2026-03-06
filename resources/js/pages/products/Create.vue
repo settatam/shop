@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
-import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, PhotoIcon, XMarkIcon, SparklesIcon, VideoCameraIcon, LockClosedIcon } from '@heroicons/vue/20/solid';
+import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, PhotoIcon, XMarkIcon, SparklesIcon, VideoCameraIcon, LockClosedIcon, Cog6ToothIcon } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
 
@@ -1757,9 +1757,14 @@ function submit() {
                                             Category
                                         </label>
                                         <div class="rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-700">
-                                            <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                                {{ categories.find(c => c.id == form.category_id)?.full_path || 'Unknown' }}
-                                            </p>
+                                            <div class="flex items-center justify-between">
+                                                <a :href="`/categories/${form.category_id}/settings`" target="_blank" class="text-sm font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400">
+                                                    {{ categories.find(c => c.id == form.category_id)?.full_path || 'Unknown' }}
+                                                </a>
+                                                <a :href="`/categories/${form.category_id}/settings`" target="_blank" class="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+                                                    <Cog6ToothIcon class="size-4" />
+                                                </a>
+                                            </div>
                                             <button
                                                 type="button"
                                                 class="mt-1 text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"

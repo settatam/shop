@@ -46,7 +46,7 @@ async function loadProduct() {
     error.value = false;
 
     try {
-        const response = await axios.get(`/api/v1/products/${props.productId}/preview`);
+        const response = await axios.get(`/products/${props.productId}/preview`);
         product.value = response.data;
     } catch (e) {
         console.error('Failed to load product preview:', e);

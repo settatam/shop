@@ -1802,6 +1802,49 @@ class ProductController extends Controller
     }
 
     /**
+     * Get a quick preview of a product for hover cards.
+     */
+    public function preview(Product $product): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $product->store_id !== $store->id) {
+            abort(404);
+        }
+
+        $product->load(['category', 'brand', 'primaryImage', 'variants.inventories.warehouse']);
+
+        $inventoryLevels = [];
+        foreach ($product->variants as $variant) {
+            foreach ($variant->inventories as $inventory) {
+                $warehouseId = $inventory->warehouse_id;
+                if (! isset($inventoryLevels[$warehouseId])) {
+                    $inventoryLevels[$warehouseId] = [
+                        'warehouse_name' => $inventory->warehouse?->name ?? 'Unknown',
+                        'warehouse_code' => $inventory->warehouse?->code ?? '',
+                        'quantity' => 0,
+                        'available_quantity' => 0,
+                    ];
+                }
+                $inventoryLevels[$warehouseId]['quantity'] += $inventory->quantity;
+                $inventoryLevels[$warehouseId]['available_quantity'] += $inventory->available_quantity;
+            }
+        }
+
+        return response()->json([
+            'id' => $product->id,
+            'title' => $product->title,
+            'image_url' => $product->primaryImage?->url,
+            'price' => $product->variants->min('price') ?? 0,
+            'status' => $product->status_label,
+            'category_name' => $product->category?->name,
+            'brand_name' => $product->brand?->name,
+            'total_quantity' => $product->total_quantity,
+            'inventory_levels' => array_values($inventoryLevels),
+        ]);
+    }
+
+    /**
      * Lookup a product by barcode or SKU for global barcode scanning.
      */
     public function lookupBarcode(Request $request): JsonResponse

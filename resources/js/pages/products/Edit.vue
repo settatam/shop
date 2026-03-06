@@ -14,6 +14,7 @@ import {
     StarIcon,
     PrinterIcon,
     SparklesIcon,
+    Cog6ToothIcon,
 } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 import CategorySelector from '@/components/products/CategorySelector.vue';
@@ -798,9 +799,14 @@ function formatDate(date: string): string {
                             <div class="space-y-4">
                                 <!-- Category -->
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Category <span v-if="isFieldRequired('category_id')" class="text-red-500">*</span>
-                                    </label>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Category <span v-if="isFieldRequired('category_id')" class="text-red-500">*</span>
+                                        </label>
+                                        <a v-if="form.category_id" :href="`/categories/${form.category_id}/settings`" target="_blank" class="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400" title="Category settings">
+                                            <Cog6ToothIcon class="size-4" />
+                                        </a>
+                                    </div>
                                     <CategorySelector
                                         v-model="form.category_id"
                                         :categories="categories"

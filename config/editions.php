@@ -88,6 +88,16 @@ return [
                 'product_status_in_bucket',
                 'product_status_awaiting_confirmation',
                 'single_item_inventory',
+
+                'field_requirements' => [
+                    'products' => [
+                        'vendor_id' => [
+                            'required' => true,
+                            'label' => 'Vendor',
+                            'message' => 'Please select a vendor before saving.',
+                        ],
+                    ],
+                ],
             ],
         ],
 

@@ -168,6 +168,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('products/advanced-search/modal', [\App\Http\Controllers\Web\AdvancedProductSearchController::class, 'search'])->name('products.advanced-search');
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
         Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
+        Route::get('products/{product}/preview', [ProductController::class, 'preview'])->name('products.preview');
         Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');
     });
     Route::middleware('permission:products.update')->group(function () {
