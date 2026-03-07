@@ -813,6 +813,109 @@ class MemoPaymentTest extends TestCase
         $this->assertEquals(Product::STATUS_ACTIVE, $returnedProduct->status);
     }
 
+    public function test_completed_payment_creates_customer_from_vendor(): void
+    {
+        $vendor = Vendor::factory()->create([
+            'store_id' => $this->store->id,
+            'name' => 'John Smith',
+            'company_name' => 'Smith Jewelers',
+            'email' => 'john@smithjewelers.com',
+            'phone' => '(555) 123-4567',
+        ]);
+
+        $memo = Memo::factory()->vendorReceived()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'total' => 300.00,
+            'grand_total' => 300.00,
+            'balance_due' => 300.00,
+            'total_paid' => 0,
+            'charge_taxes' => false,
+            'tax_rate' => 0,
+            'shipping_cost' => 0,
+        ]);
+
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'price' => 300.00,
+            'cost' => 150.00,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoPaymentService::class);
+        $result = $service->processPayment($memo, [
+            'payment_method' => Payment::METHOD_CASH,
+            'amount' => 300.00,
+        ], $this->user->id);
+
+        // Verify customer was created from vendor
+        $this->assertDatabaseHas('customers', [
+            'store_id' => $this->store->id,
+            'first_name' => 'John',
+            'last_name' => 'Smith',
+            'company_name' => 'Smith Jewelers',
+            'email' => 'john@smithjewelers.com',
+        ]);
+
+        // Verify invoice has customer_id
+        $invoice = $memo->fresh()->invoice;
+        $this->assertNotNull($invoice);
+        $this->assertNotNull($invoice->customer_id);
+
+        // Verify order has customer_id
+        $order = $memo->fresh()->order;
+        $this->assertNotNull($order);
+        $this->assertNotNull($order->customer_id);
+        $this->assertEquals($invoice->customer_id, $order->customer_id);
+    }
+
+    public function test_completed_payment_reuses_existing_customer_for_vendor(): void
+    {
+        $vendor = Vendor::factory()->create([
+            'store_id' => $this->store->id,
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+        ]);
+
+        // Pre-create a customer with the same email
+        $existingCustomer = \App\Models\Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'email' => 'jane@example.com',
+        ]);
+
+        $memo = Memo::factory()->vendorReceived()->create([
+            'store_id' => $this->store->id,
+            'vendor_id' => $vendor->id,
+            'total' => 200.00,
+            'grand_total' => 200.00,
+            'balance_due' => 200.00,
+            'total_paid' => 0,
+            'charge_taxes' => false,
+            'tax_rate' => 0,
+            'shipping_cost' => 0,
+        ]);
+
+        MemoItem::factory()->create([
+            'memo_id' => $memo->id,
+            'price' => 200.00,
+            'is_returned' => false,
+        ]);
+
+        $service = app(MemoPaymentService::class);
+        $service->processPayment($memo, [
+            'payment_method' => Payment::METHOD_CASH,
+            'amount' => 200.00,
+        ], $this->user->id);
+
+        // Should reuse existing customer, not create a new one
+        $this->assertEquals(1, \App\Models\Customer::where('email', 'jane@example.com')->count());
+
+        $invoice = $memo->fresh()->invoice;
+        $this->assertEquals($existingCustomer->id, $invoice->customer_id);
+    }
+
     protected function createMemoWithItems(float $total = 500.00, bool $chargeTaxes = true): Memo
     {
         $vendor = Vendor::factory()->create(['store_id' => $this->store->id]);

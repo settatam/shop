@@ -52,7 +52,7 @@ class CreateMemoFromWizardRequest extends FormRequest
 
             // Step 3: Items (products from inventory)
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
             'items.*.price' => ['required', 'numeric', 'min:0'],
             'items.*.tenor' => ['nullable', 'integer', Rule::in(Memo::PAYMENT_TERMS)],
             'items.*.title' => ['nullable', 'string', 'max:255'],

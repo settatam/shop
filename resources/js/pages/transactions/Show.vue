@@ -1485,6 +1485,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     Items ({{ transaction.items.length }})
                                 </h3>
                                 <button
+                                    v-if="transaction.status !== 'payment_processed'"
                                     type="button"
                                     class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
                                     @click="openAddItemModal"
@@ -1503,7 +1504,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                                            <th v-if="transaction.status !== 'payment_processed'" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1625,7 +1626,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
+                                            <td v-if="transaction.status !== 'payment_processed'" class="whitespace-nowrap px-3 py-4 text-sm text-right">
                                                 <button
                                                     type="button"
                                                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 mr-2"
@@ -1706,6 +1707,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     Items ({{ transaction.items.length }})
                                 </h3>
                                 <button
+                                    v-if="transaction.status !== 'payment_processed'"
                                     type="button"
                                     class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
                                     @click="openAddItemModal"
@@ -1724,7 +1726,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                                            <th v-if="transaction.status !== 'payment_processed'" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1846,7 +1848,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
+                                            <td v-if="transaction.status !== 'payment_processed'" class="whitespace-nowrap px-3 py-4 text-sm text-right">
                                                 <button
                                                     type="button"
                                                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 mr-2"

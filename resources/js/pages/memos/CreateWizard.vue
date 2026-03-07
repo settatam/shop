@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { router, Head } from '@inertiajs/vue3';
+import { router, Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import {
@@ -28,6 +28,7 @@ import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
 import { formatPhoneNumber } from '@/lib/utils';
 import axios from 'axios';
+import { toast } from 'vue-sonner';
 import ProductSearch from '@/components/products/ProductSearch.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
 
@@ -364,9 +365,9 @@ function openAddItemModal(query?: string) {
 function handleSaveItem(item: any) {
     formData.value.items.push({
         id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        product_id: 0,
+        product_id: item.product_id || null,
         product: {
-            id: 0,
+            id: item.product_id || 0,
             title: item.title,
             description: item.description,
         },
@@ -389,7 +390,7 @@ function submitMemo() {
         vendor_id: formData.value.vendor_id,
         vendor: formData.value.vendor_id ? null : formData.value.vendor,
         items: formData.value.items.map(item => ({
-            product_id: item.product_id,
+            product_id: item.product_id || null,
             price: item.price,
             tenor: item.tenor,
             title: item.title,
@@ -408,8 +409,12 @@ function submitMemo() {
         onFinish: () => {
             isSubmitting.value = false;
         },
-        onError: () => {
+        onError: (errors) => {
             isSubmitting.value = false;
+            const firstError = Object.values(errors)[0];
+            if (firstError) {
+                toast.error(String(firstError));
+            }
         },
     });
 }

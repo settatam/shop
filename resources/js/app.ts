@@ -13,6 +13,7 @@ window.axios = axios;
 
 // ---- Axios + CSRF setup (Passport + CreateFreshApiToken) ----
 axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+axios.defaults.withCredentials = true;
 
 // Tell Axios which cookie/header to use for XSRF.
 // Axios will automatically read the XSRF-TOKEN cookie and send X-XSRF-TOKEN

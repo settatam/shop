@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Memo;
 use App\Models\MemoItem;
@@ -9,6 +10,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Vendor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -301,11 +303,14 @@ class MemoPaymentService
                 $memo->update(['grand_total' => $memo->total]);
             }
 
+            // Find or create a customer from the vendor
+            $customer = $this->findOrCreateCustomerFromVendor($memo->vendor, $memo->store_id);
+
             // Create the order (sale)
-            $order = $this->createOrderFromMemo($memo);
+            $order = $this->createOrderFromMemo($memo, $customer);
 
             // Create the invoice
-            $invoice = $this->createInvoiceFromMemo($memo, $order);
+            $invoice = $this->createInvoiceFromMemo($memo, $order, $customer);
 
             // Link payments to invoice
             $memo->payments()->update(['invoice_id' => $invoice->id]);
@@ -327,12 +332,13 @@ class MemoPaymentService
     /**
      * Create an order (sale) from a memo.
      */
-    protected function createOrderFromMemo(Memo $memo): Order
+    protected function createOrderFromMemo(Memo $memo, ?Customer $customer = null): Order
     {
         $order = Order::create([
             'store_id' => $memo->store_id,
             'memo_id' => $memo->id,
             'user_id' => $memo->user_id,
+            'customer_id' => $customer?->id,
             'invoice_number' => $memo->memo_number,
             'sub_total' => $memo->total,
             'sales_tax' => $memo->tax_amount ?? 0,
@@ -412,11 +418,12 @@ class MemoPaymentService
     /**
      * Create an invoice from a memo.
      */
-    protected function createInvoiceFromMemo(Memo $memo, Order $order): Invoice
+    protected function createInvoiceFromMemo(Memo $memo, Order $order, ?Customer $customer = null): Invoice
     {
         return Invoice::create([
             'store_id' => $memo->store_id,
             'user_id' => $memo->user_id,
+            'customer_id' => $customer?->id,
             'invoiceable_type' => Memo::class,
             'invoiceable_id' => $memo->id,
             'subtotal' => $memo->total,
@@ -430,6 +437,51 @@ class MemoPaymentService
             'currency' => 'USD',
             'paid_at' => now(),
             'notes' => "Invoice for Memo #{$memo->memo_number}",
+        ]);
+    }
+
+    /**
+     * Find or create a Customer record from a Vendor.
+     */
+    protected function findOrCreateCustomerFromVendor(?Vendor $vendor, int $storeId): ?Customer
+    {
+        if (! $vendor) {
+            return null;
+        }
+
+        // Try to find an existing customer by email first, then by name + store
+        if ($vendor->email) {
+            $customer = Customer::where('store_id', $storeId)
+                ->where('email', $vendor->email)
+                ->first();
+
+            if ($customer) {
+                return $customer;
+            }
+        }
+
+        // Parse vendor name into first/last
+        $nameParts = explode(' ', trim($vendor->name ?? ''), 2);
+        $firstName = $nameParts[0] ?? $vendor->company_name ?? 'Vendor';
+        $lastName = $nameParts[1] ?? '';
+
+        // Try matching by name
+        $customer = Customer::where('store_id', $storeId)
+            ->where('first_name', $firstName)
+            ->where('last_name', $lastName)
+            ->first();
+
+        if ($customer) {
+            return $customer;
+        }
+
+        return Customer::create([
+            'store_id' => $storeId,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'company_name' => $vendor->company_name,
+            'email' => $vendor->email,
+            'phone_number' => $vendor->phone,
         ]);
     }
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import MetalsCalculatorTool from '@/components/transactions/MetalsCalculatorTool.vue';
 import AiPhotoAnalysisTool from '@/components/transactions/AiPhotoAnalysisTool.vue';
-import { CalculatorIcon, CameraIcon, DollarSign } from 'lucide-vue-next';
+import WebPriceSearchCard from '@/components/transactions/WebPriceSearchCard.vue';
+import { CalculatorIcon, CameraIcon, DollarSign, SearchIcon } from 'lucide-vue-next';
 
 interface SimilarItem {
     id: number;
@@ -15,7 +16,18 @@ interface SimilarItem {
     similarity_score: number;
 }
 
-const activeTab = ref<'metals' | 'analyzer'>('metals');
+const activeTab = ref<'metals' | 'analyzer' | 'search'>('metals');
+
+// Web search state
+const searchQuery = ref('');
+const searchCriteria = ref<{ title: string } | null>(null);
+
+function triggerSearch() {
+    const query = searchQuery.value.trim();
+    if (!query) return;
+    // Update criteria to trigger the WebPriceSearchCard
+    searchCriteria.value = { title: query };
+}
 
 const preciousMetalOptions = [
     { value: 'gold_10k', label: '10K Gold' },
@@ -108,6 +120,19 @@ function formatDaysAgo(days: number): string {
                         <CameraIcon class="size-4" />
                         Product Analyzer
                     </button>
+                    <button
+                        type="button"
+                        @click="activeTab = 'search'"
+                        :class="[
+                            'inline-flex items-center gap-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                            activeTab === 'search'
+                                ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-600 dark:text-white'
+                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200',
+                        ]"
+                    >
+                        <SearchIcon class="size-4" />
+                        Web Search
+                    </button>
                 </div>
             </div>
         </div>
@@ -187,6 +212,47 @@ function formatDaysAgo(days: number): string {
                         <DollarSign class="size-4" />
                         Start a new buy
                     </Link>
+                </div>
+            </div>
+
+            <!-- Web Search -->
+            <div v-if="activeTab === 'search'">
+                <div class="mb-4">
+                    <label for="web-search-query" class="sr-only">Search for an item</label>
+                    <div class="flex gap-2">
+                        <input
+                            id="web-search-query"
+                            v-model="searchQuery"
+                            type="text"
+                            placeholder="e.g. 14K Gold Diamond Ring"
+                            class="block w-full rounded-md border-0 py-2 text-sm text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:placeholder:text-gray-500"
+                            @keydown.enter="triggerSearch"
+                        />
+                        <button
+                            type="button"
+                            :disabled="!searchQuery.trim()"
+                            class="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
+                            @click="triggerSearch"
+                        >
+                            <SearchIcon class="size-4" />
+                            Search
+                        </button>
+                    </div>
+                </div>
+
+                <WebPriceSearchCard
+                    v-if="searchCriteria"
+                    :key="searchCriteria.title"
+                    :search-criteria="searchCriteria"
+                    auto-search
+                    class="shadow-none ring-0"
+                />
+
+                <div v-else class="py-8 text-center">
+                    <SearchIcon class="mx-auto size-10 text-gray-300 dark:text-gray-600" />
+                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        Enter an item description to search Google Shopping and eBay for comparable prices.
+                    </p>
                 </div>
             </div>
         </div>

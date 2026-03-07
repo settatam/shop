@@ -822,7 +822,7 @@ const vendorAddress = computed(() => {
                                                     Returned
                                                 </span>
                                                 <button
-                                                    v-else-if="item.can_be_returned && memo.is_vendor_received"
+                                                    v-else-if="item.can_be_returned && !memo.is_payment_received && !memo.is_cancelled"
                                                     type="button"
                                                     @click="returnItem(item.id)"
                                                     :disabled="isProcessing"
@@ -860,6 +860,19 @@ const vendorAddress = computed(() => {
                                             </td>
                                         </tr>
                                     </tbody>
+                                    <tfoot v-if="memo.items.length > 0">
+                                        <tr class="bg-gray-50 dark:bg-gray-700/50">
+                                            <td class="px-3 py-2.5 text-right text-xs font-semibold text-gray-900 dark:text-white">Total</td>
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-xs font-semibold text-gray-900 dark:text-white">
+                                                {{ formatCurrency(memo.items.filter(i => !i.is_returned).reduce((sum, i) => sum + Number(i.cost || 0), 0)) }}
+                                            </td>
+                                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-xs font-semibold text-gray-900 dark:text-white">
+                                                {{ formatCurrency(memo.items.filter(i => !i.is_returned).reduce((sum, i) => sum + Number(i.price || 0), 0)) }}
+                                            </td>
+                                            <td colspan="4"></td>
+                                            <td v-if="memo.is_pending"></td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                         </div>

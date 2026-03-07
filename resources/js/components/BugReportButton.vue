@@ -36,15 +36,16 @@ function closeModal() {
 async function captureScreenshot() {
     isCapturing.value = true;
 
-    // Temporarily hide the modal for the screenshot
-    const modal = document.querySelector('[role="dialog"]');
-    if (modal) {
-        (modal as HTMLElement).style.display = 'none';
-    }
+    // Preserve form state before closing
+    const savedDescription = description.value;
+    const savedScreenshot = screenshot.value;
+
+    // Close the modal properly so HeadlessUI cleans up
+    isOpen.value = false;
 
     try {
-        // Wait a moment for the modal to hide
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Wait for the modal close transition to complete
+        await new Promise(resolve => setTimeout(resolve, 350));
 
         const canvas = await html2canvas(document.body, {
             useCORS: true,
@@ -59,11 +60,11 @@ async function captureScreenshot() {
     } catch (error) {
         console.error('Failed to capture screenshot:', error);
         toast.error('Failed to capture screenshot');
+        screenshot.value = savedScreenshot;
     } finally {
-        // Show the modal again
-        if (modal) {
-            (modal as HTMLElement).style.display = '';
-        }
+        // Restore form state and reopen modal
+        description.value = savedDescription;
+        isOpen.value = true;
         isCapturing.value = false;
     }
 }
@@ -71,6 +72,8 @@ async function captureScreenshot() {
 function removeScreenshot() {
     screenshot.value = null;
 }
+
+defineExpose({ openModal });
 
 async function submitBugReport() {
     if (!description.value.trim()) {
@@ -111,17 +114,6 @@ async function submitBugReport() {
 </script>
 
 <template>
-    <!-- Bug Report Floating Button -->
-    <button
-        type="button"
-        class="fixed bottom-6 left-6 z-40 flex items-center justify-center size-10 rounded-full bg-gray-100 text-gray-600 shadow-md hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-        title="Report a bug"
-        @click="openModal"
-    >
-        <BugAntIcon class="size-5" />
-        <span class="sr-only">Report a bug</span>
-    </button>
-
     <!-- Bug Report Modal -->
     <TransitionRoot as="template" :show="isOpen">
         <Dialog class="relative z-50" @close="closeModal">

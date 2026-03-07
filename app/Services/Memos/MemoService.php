@@ -107,32 +107,40 @@ class MemoService
 
             // Add items and mark products as out of stock
             foreach ($data['items'] as $itemData) {
-                $product = Product::with('variants')->find($itemData['product_id']);
+                $product = ! empty($itemData['product_id'])
+                    ? Product::with('variants')->find($itemData['product_id'])
+                    : null;
 
-                if (! $product) {
-                    continue;
+                if ($product) {
+                    $variant = $product->variants->first();
+                    $effectiveCost = $variant?->effective_cost ?? 0;
+
+                    $memo->items()->create([
+                        'product_id' => $product->id,
+                        'category_id' => $product->category_id,
+                        'sku' => $variant?->sku ?? $product->sku,
+                        'title' => $itemData['title'] ?? $product->title,
+                        'description' => $itemData['description'] ?? $product->description,
+                        'price' => $itemData['price'],
+                        'cost' => $effectiveCost,
+                        'tenor' => $itemData['tenor'] ?? $data['tenure'] ?? Memo::TENURE_30_DAYS,
+                        'charge_taxes' => $data['charge_taxes'] ?? false,
+                    ]);
+
+                    MemoItem::markProductOnMemo($product);
+                } else {
+                    // Custom item without a product
+                    $memo->items()->create([
+                        'product_id' => null,
+                        'category_id' => null,
+                        'title' => $itemData['title'] ?? 'Untitled Item',
+                        'description' => $itemData['description'] ?? null,
+                        'price' => $itemData['price'],
+                        'cost' => 0,
+                        'tenor' => $itemData['tenor'] ?? $data['tenure'] ?? Memo::TENURE_30_DAYS,
+                        'charge_taxes' => $data['charge_taxes'] ?? false,
+                    ]);
                 }
-
-                $variant = $product->variants->first();
-
-                // Cost priority: wholesale_price > cost
-                $effectiveCost = $variant?->effective_cost ?? 0;
-
-                // Create memo item
-                $memo->items()->create([
-                    'product_id' => $product->id,
-                    'category_id' => $product->category_id,
-                    'sku' => $variant?->sku ?? $product->sku,
-                    'title' => $itemData['title'] ?? $product->title,
-                    'description' => $itemData['description'] ?? $product->description,
-                    'price' => $itemData['price'],
-                    'cost' => $effectiveCost,
-                    'tenor' => $itemData['tenor'] ?? $data['tenure'] ?? Memo::TENURE_30_DAYS,
-                    'charge_taxes' => $data['charge_taxes'] ?? false,
-                ]);
-
-                // Mark product as out of stock (on memo)
-                MemoItem::markProductOnMemo($product);
             }
 
             // Calculate totals

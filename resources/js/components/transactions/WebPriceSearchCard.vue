@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { MagnifyingGlassIcon, ArrowPathIcon, ArrowTopRightOnSquareIcon, GlobeAltIcon } from '@heroicons/vue/20/solid';
 import axios from 'axios';
 
@@ -43,6 +43,7 @@ const props = defineProps<{
     };
     existingResults?: SearchResults | null;
     generatedAt?: string | null;
+    autoSearch?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -55,6 +56,12 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const hasResults = computed(() => results.value && results.value.listings?.length > 0);
+
+onMounted(() => {
+    if (props.autoSearch && !hasResults.value) {
+        search();
+    }
+});
 
 const search = async () => {
     loading.value = true;

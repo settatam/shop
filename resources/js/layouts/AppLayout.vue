@@ -12,6 +12,7 @@ import {
     XMarkIcon,
     CheckCircleIcon,
     XCircleIcon,
+    BugAntIcon,
 } from '@heroicons/vue/24/outline';
 import AppSidebar from '@/components/layout/AppSidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
@@ -34,6 +35,11 @@ withDefaults(defineProps<Props>(), {
 const sidebarOpen = ref(false);
 const chatOpen = ref(false);
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null);
+const bugReportRef = ref<InstanceType<typeof BugReportButton> | null>(null);
+
+function openBugReport() {
+    bugReportRef.value?.openModal();
+}
 
 const openSearch = () => {
     commandPaletteRef.value?.open();
@@ -216,11 +222,26 @@ onUnmounted(() => {
         <div class="lg:pl-72">
             <AppHeader :breadcrumbs="breadcrumbs" @open-sidebar="sidebarOpen = true" @open-search="openSearch" />
 
-            <main class="py-10">
+            <main class="py-10 pb-20">
                 <div class="px-4 sm:px-6 lg:px-8">
                     <slot />
                 </div>
             </main>
+
+            <!-- Footer -->
+            <footer class="border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>&copy; {{ new Date().getFullYear() }} Shopmata</span>
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white transition-colors"
+                        @click="openBugReport"
+                    >
+                        <BugAntIcon class="size-4" />
+                        Report a Bug
+                    </button>
+                </div>
+            </footer>
         </div>
 
         <!-- AI Chat Floating Button -->
@@ -252,7 +273,7 @@ onUnmounted(() => {
         <VoiceAssistant />
 
         <!-- Bug Report Button -->
-        <BugReportButton />
+        <BugReportButton ref="bugReportRef" />
 
         <!-- Global Search Command Palette -->
         <CommandPalette ref="commandPaletteRef" />
