@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import StatsCard from '@/components/dashboard/StatsCard.vue';
 import SalesChart from '@/components/dashboard/SalesChart.vue';
 import RecentOrders from '@/components/dashboard/RecentOrders.vue';
 import OrdersByStatus from '@/components/dashboard/OrdersByStatus.vue';
@@ -18,13 +17,6 @@ import { dashboard } from '@/routes';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
 import { DollarSign, ShoppingCart, Wrench, FileText } from 'lucide-vue-next';
-
-interface Stat {
-    name: string;
-    value: string;
-    change: string;
-    changeType: 'positive' | 'negative' | 'neutral';
-}
 
 interface ChartDataset {
     label: string;
@@ -139,7 +131,6 @@ interface TodaySummaryData {
 }
 
 interface Props {
-    stats: Stat[];
     salesChart: ChartData;
     recentOrders: Order[];
     ordersByStatus: Record<string, number>;
@@ -201,14 +192,11 @@ const breadcrumbs: BreadcrumbItem[] = [
                 </Link>
             </div>
 
+            <!-- Today's Activity -->
+            <TodaySummary :summary="todaySummary" />
+
             <!-- Quick Tools -->
             <QuickTools />
-
-            <!-- Stats Cards -->
-            <StatsCard :stats="stats" />
-
-            <!-- Today's Summary -->
-            <TodaySummary :summary="todaySummary" />
 
             <!-- Sales Chart (Full Width) -->
             <SalesChart :data="salesChart" />

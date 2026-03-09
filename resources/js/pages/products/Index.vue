@@ -156,12 +156,40 @@ function clearTags() {
     filters.value.tag_ids = [];
 }
 
+// Resolve a category_id to level2/level3 filter values
+function resolveCategoryId(categoryId: string): { level2: string; level3: string } {
+    // Check if it's a level2 category
+    if (props.level2Categories.some(c => String(c.id) === categoryId)) {
+        return { level2: categoryId, level3: '' };
+    }
+
+    // Check if it's a level3 category — find its parent
+    for (const [parentId, children] of Object.entries(props.level3ByParent)) {
+        if (children.some(c => String(c.id) === categoryId)) {
+            return { level2: parentId, level3: categoryId };
+        }
+    }
+
+    return { level2: '', level3: '' };
+}
+
 // Initialize filters from URL params
 function getFilterParams() {
     const params = new URLSearchParams(window.location.search);
+
+    let categoryLevel2 = params.get('category_level2_id') || '';
+    let categoryLevel3 = params.get('category_level3_id') || '';
+
+    // If only category_id is provided, resolve it to the correct level
+    if (!categoryLevel2 && !categoryLevel3 && params.get('category_id')) {
+        const resolved = resolveCategoryId(params.get('category_id')!);
+        categoryLevel2 = resolved.level2;
+        categoryLevel3 = resolved.level3;
+    }
+
     return {
-        category_level2_id: params.get('category_level2_id') || '',
-        category_level3_id: params.get('category_level3_id') || '',
+        category_level2_id: categoryLevel2,
+        category_level3_id: categoryLevel3,
         brand: params.get('brand') || '',
         status: params.get('status') || '',
         stock: params.get('stock') || '',
