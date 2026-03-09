@@ -37,6 +37,9 @@ import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
 import CameraScannerModal from '@/components/scanner/CameraScannerModal.vue';
+import IdScannerModal from '@/components/scanner/IdScannerModal.vue';
+import { useIdScanner } from '@/composables/useIdScanner';
+import { IdentificationIcon } from '@heroicons/vue/24/outline';
 
 interface StoreUser {
     id: number;
@@ -313,6 +316,48 @@ function switchToCustomerCreate() {
     form.customer_id = null;
 }
 
+// ID Scanning
+const showOrderIdScanner = ref(false);
+const { isProcessing: isOrderIdProcessing, processBarcode: processOrderIdBarcode } = useIdScanner();
+
+async function handleOrderIdScan(barcode: string) {
+    showOrderIdScanner.value = false;
+    const result = await processOrderIdBarcode(barcode);
+    if (result) {
+        applyOrderIdScanResult(result);
+    }
+}
+
+function applyOrderIdScanResult(result: any) {
+    if (result.existingCustomer) {
+        selectedCustomer.value = result.existingCustomer;
+        form.customer_id = result.existingCustomer.id;
+        form.customer = null;
+        isCreatingNewCustomer.value = false;
+    } else {
+        const data = result.parsedData;
+        isCreatingNewCustomer.value = true;
+        selectedCustomer.value = null;
+        form.customer_id = null;
+        newCustomer.value = {
+            ...getEmptyCustomerForm(),
+            first_name: data.first_name || '',
+            last_name: data.last_name || '',
+            address: {
+                ...getEmptyCustomerForm().address,
+                address_line1: data.address || '',
+                city: data.city || '',
+                state: data.state || '',
+                postal_code: data.zip || '',
+            },
+        };
+    }
+    // Navigate to customer step if not already there
+    if (currentStep.value !== 2) {
+        currentStep.value = 2;
+    }
+}
+
 // Step 3: Trade-In
 const showAddTradeInModal = ref(false);
 const editingTradeInItem = ref<TradeInItem | null>(null);
@@ -582,6 +627,14 @@ function showScannerFeedback(type: 'success' | 'error' | 'info', message: string
 
 async function handleBarcodeScan(barcode: string) {
     lastScannedBarcode.value = barcode;
+
+    // Check for ID barcode first
+    const idResult = await processOrderIdBarcode(barcode);
+    if (idResult) {
+        applyOrderIdScanResult(idResult);
+        showScannerFeedback('success', `ID scanned: ${idResult.parsedData.first_name} ${idResult.parsedData.last_name}`);
+        return;
+    }
 
     // Only process on the products step (step 4)
     if (currentStep.value !== 4) {
@@ -952,6 +1005,15 @@ const steps = [
                             <div class="flex gap-2">
                                 <button type="button" @click="switchToCustomerSearch" :class="['rounded-md px-3 py-1.5 text-sm font-medium', !isCreatingNewCustomer ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Search</button>
                                 <button type="button" @click="switchToCustomerCreate" :class="['rounded-md px-3 py-1.5 text-sm font-medium', isCreatingNewCustomer ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Create New</button>
+                                <button
+                                    type="button"
+                                    @click="showOrderIdScanner = true"
+                                    :disabled="isOrderIdProcessing"
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                                >
+                                    <IdentificationIcon class="size-4" />
+                                    {{ isOrderIdProcessing ? 'Processing...' : 'Scan ID' }}
+                                </button>
                             </div>
                         </div>
 
@@ -1707,6 +1769,13 @@ const steps = [
             :show="showCameraScanner"
             @close="showCameraScanner = false"
             @scan="handleBarcodeScan"
+        />
+
+        <!-- ID Scanner Modal -->
+        <IdScannerModal
+            :show="showOrderIdScanner"
+            @close="showOrderIdScanner = false"
+            @scanned="handleOrderIdScan"
         />
     </AppLayout>
 </template>

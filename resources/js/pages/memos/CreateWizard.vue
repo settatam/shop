@@ -31,6 +31,10 @@ import axios from 'axios';
 import { toast } from 'vue-sonner';
 import ProductSearch from '@/components/products/ProductSearch.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
+import IdScannerModal from '@/components/scanner/IdScannerModal.vue';
+import { useIdScanner } from '@/composables/useIdScanner';
+import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
+import { IdentificationIcon } from '@heroicons/vue/24/outline';
 
 interface StoreUser {
     id: number;
@@ -305,6 +309,48 @@ function updateNewVendor() {
     formData.value.vendor_id = null;
 }
 
+// ID Scanning for vendor
+const showMemoIdScanner = ref(false);
+const { isProcessing: isMemoIdProcessing, processBarcode: processMemoIdBarcode } = useIdScanner();
+
+useBarcodeScanner({
+    onScan: handleMemoBarcodeScan,
+    minLength: 50,
+});
+
+async function handleMemoBarcodeScan(barcode: string) {
+    const result = await processMemoIdBarcode(barcode);
+    if (result) {
+        applyMemoIdScanResult(result);
+    }
+}
+
+async function handleMemoIdCameraScan(barcode: string) {
+    showMemoIdScanner.value = false;
+    const result = await processMemoIdBarcode(barcode);
+    if (result) {
+        applyMemoIdScanResult(result);
+    }
+}
+
+function applyMemoIdScanResult(result: any) {
+    const data = result.parsedData;
+    vendorMode.value = 'create';
+    selectedVendor.value = null;
+    formData.value.vendor_id = null;
+    const fullName = [data.first_name, data.last_name].filter(Boolean).join(' ');
+    newVendor.value = {
+        name: fullName,
+        company_name: '',
+        email: '',
+        phone: '',
+    };
+    formData.value.vendor = { ...newVendor.value };
+    if (currentStep.value !== 2) {
+        currentStep.value = 2;
+    }
+}
+
 const vendorFilteredOptions = computed(() => {
     const results = [...vendorSearchResults.value];
     if (vendorQuery.value.length > 0) {
@@ -575,6 +621,15 @@ function getPaymentTermLabel(days: number): string {
                                         <div class="flex gap-2">
                                             <button type="button" @click="switchToVendorSearch" :class="['rounded-md px-3 py-1.5 text-sm font-medium', vendorMode === 'search' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Search</button>
                                             <button type="button" @click="switchToVendorCreate" :class="['rounded-md px-3 py-1.5 text-sm font-medium', vendorMode === 'create' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Create New</button>
+                                            <button
+                                                type="button"
+                                                @click="showMemoIdScanner = true"
+                                                :disabled="isMemoIdProcessing"
+                                                class="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                                            >
+                                                <IdentificationIcon class="size-4" />
+                                                {{ isMemoIdProcessing ? 'Processing...' : 'Scan ID' }}
+                                            </button>
                                         </div>
                                     </div>
 
