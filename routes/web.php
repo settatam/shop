@@ -552,6 +552,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
 
     // Customers
     Route::middleware('permission:customers.view')->group(function () {
+        Route::get('customers/export/quickbooks', [\App\Http\Controllers\Web\CustomerController::class, 'exportQuickbooks'])->name('web.customers.export-quickbooks');
         Route::get('customers', [\App\Http\Controllers\Web\CustomerController::class, 'index'])->name('web.customers.index');
         Route::get('customers/{customer}', [\App\Http\Controllers\Web\CustomerController::class, 'show'])->name('web.customers.show');
     });

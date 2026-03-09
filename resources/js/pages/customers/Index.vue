@@ -2,9 +2,9 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { MagnifyingGlassIcon, PencilSquareIcon, XMarkIcon } from '@heroicons/vue/20/solid';
-import { UserIcon, EnvelopeIcon, PhoneIcon, BuildingOfficeIcon, IdentificationIcon } from '@heroicons/vue/24/outline';
+import { UserIcon, EnvelopeIcon, PhoneIcon, BuildingOfficeIcon, IdentificationIcon, ArrowDownTrayIcon } from '@heroicons/vue/24/outline';
 import { useDebounceFn } from '@vueuse/core';
 import {
     Dialog,
@@ -137,6 +137,17 @@ const formatCurrency = (amount: number | null) => {
     }).format(amount);
 };
 
+// Export URL (passes current filters to the export endpoint)
+const exportUrl = computed(() => {
+    const params = new URLSearchParams();
+    if (searchQuery.value) params.set('search', searchQuery.value);
+    if (selectedLeadSource.value) params.set('lead_source_id', selectedLeadSource.value);
+    if (fromDate.value) params.set('from_date', fromDate.value);
+    if (toDate.value) params.set('to_date', toDate.value);
+    const qs = params.toString();
+    return `/customers/export/quickbooks${qs ? '?' + qs : ''}`;
+});
+
 // Lightbox state
 const showLightbox = ref(false);
 const lightboxImage = ref<{ url: string; name: string } | null>(null);
@@ -170,6 +181,13 @@ const closeLightbox = () => {
                         {{ customers.total }} customer{{ customers.total === 1 ? '' : 's' }} total
                     </p>
                 </div>
+                <a
+                    :href="exportUrl"
+                    class="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600"
+                >
+                    <ArrowDownTrayIcon class="size-4" />
+                    Export for QuickBooks
+                </a>
             </div>
 
             <!-- Filters -->

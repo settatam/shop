@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerController extends Controller
 {
@@ -357,5 +358,93 @@ class CustomerController extends Controller
         $address->delete();
 
         return back()->with('success', 'Address deleted successfully.');
+    }
+
+    /**
+     * Export customers as QuickBooks-compatible CSV.
+     */
+    public function exportQuickbooks(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $query = Customer::query()
+            ->where('store_id', $store->id);
+
+        if ($fromDate = $request->get('from_date')) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+
+        if ($toDate = $request->get('to_date')) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        if ($search = $request->get('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone_number', 'like', "%{$search}%");
+            });
+        }
+
+        if ($leadSourceId = $request->get('lead_source_id')) {
+            $query->where('lead_source_id', $leadSourceId);
+        }
+
+        $customers = $query->orderBy('created_at', 'desc')->get();
+
+        $fromLabel = $request->get('from_date', 'all');
+        $toLabel = $request->get('to_date', now()->format('Y-m-d'));
+        $filename = "customers-quickbooks-{$fromLabel}-to-{$toLabel}.csv";
+
+        return response()->streamDownload(function () use ($customers) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Display Name As',
+                'Title',
+                'First Name',
+                'Middle Name',
+                'Last Name',
+                'Company',
+                'Email',
+                'Phone',
+                'Mobile',
+                'Billing Address Line 1',
+                'Billing Address Line 2',
+                'Billing Address City',
+                'Billing Address State',
+                'Billing Address Postal Code',
+                'Billing Address Country',
+                'Notes',
+            ]);
+
+            foreach ($customers as $customer) {
+                $displayName = $customer->full_name ?: ($customer->email ?? "Customer #{$customer->id}");
+
+                fputcsv($handle, [
+                    $displayName,
+                    '',
+                    $customer->first_name ?? '',
+                    '',
+                    $customer->last_name ?? '',
+                    $customer->company_name ?? '',
+                    $customer->email ?? '',
+                    $customer->phone_number ?? '',
+                    '',
+                    $customer->address ?? '',
+                    $customer->address2 ?? '',
+                    $customer->city ?? '',
+                    $customer->state ?? '',
+                    $customer->zip ?? '',
+                    'US',
+                    $customer->id_number ? "ID: {$customer->id_number}" : '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 }

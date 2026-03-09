@@ -394,4 +394,104 @@ class CustomerTest extends TestCase
         $response->assertRedirect();
         $response->assertSessionHasNoErrors();
     }
+
+    public function test_can_export_customers_as_quickbooks_csv(): void
+    {
+        $this->actingAs($this->user);
+
+        Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'email' => 'john@example.com',
+            'phone_number' => '555-1234',
+            'address' => '123 Main St',
+            'city' => 'Sacramento',
+            'state' => 'CA',
+            'zip' => '94203',
+        ]);
+
+        Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'Jane',
+            'last_name' => 'Smith',
+        ]);
+
+        $response = $this->withStore()->get('/customers/export/quickbooks');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'text/csv; charset=utf-8');
+        $response->assertDownload();
+
+        $content = $response->streamedContent();
+        $this->assertStringContains('Display Name As', $content);
+        $this->assertStringContains('John Doe', $content);
+        $this->assertStringContains('Jane Smith', $content);
+        $this->assertStringContains('john@example.com', $content);
+        $this->assertStringContains('123 Main St', $content);
+    }
+
+    public function test_quickbooks_export_filters_by_date_range(): void
+    {
+        $this->actingAs($this->user);
+
+        Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'Recent',
+            'last_name' => 'Customer',
+            'created_at' => now(),
+        ]);
+
+        Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'Old',
+            'last_name' => 'Customer',
+            'created_at' => now()->subYear(),
+        ]);
+
+        $response = $this->withStore()->get('/customers/export/quickbooks?' . http_build_query([
+            'from_date' => now()->subWeek()->format('Y-m-d'),
+            'to_date' => now()->format('Y-m-d'),
+        ]));
+
+        $response->assertOk();
+        $content = $response->streamedContent();
+        $this->assertStringContains('Recent Customer', $content);
+        $this->assertStringNotContains('Old Customer', $content);
+    }
+
+    public function test_quickbooks_export_scopes_to_current_store(): void
+    {
+        $this->actingAs($this->user);
+
+        $otherStore = Store::factory()->create(['user_id' => $this->user->id, 'step' => 2]);
+
+        Customer::factory()->create([
+            'store_id' => $this->store->id,
+            'first_name' => 'My',
+            'last_name' => 'Customer',
+        ]);
+
+        Customer::factory()->create([
+            'store_id' => $otherStore->id,
+            'first_name' => 'Other',
+            'last_name' => 'Store',
+        ]);
+
+        $response = $this->withStore()->get('/customers/export/quickbooks');
+
+        $content = $response->streamedContent();
+        $this->assertStringContains('My Customer', $content);
+        $this->assertStringNotContains('Other Store', $content);
+    }
+
+    private function assertStringContains(string $needle, string $haystack): void
+    {
+        $this->assertTrue(str_contains($haystack, $needle), "Failed asserting that string contains '{$needle}'");
+    }
+
+    private function assertStringNotContains(string $needle, string $haystack): void
+    {
+        $this->assertFalse(str_contains($haystack, $needle), "Failed asserting that string does not contain '{$needle}'");
+    }
 }

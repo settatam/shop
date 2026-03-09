@@ -247,30 +247,26 @@ watch(filters, () => {
 function applyFilters() {
     const filterParams: Record<string, unknown> = {
         page: 1,
+        category_id: filters.value.category_level3_id || filters.value.category_level2_id || undefined,
+        category_level2_id: filters.value.category_level2_id || undefined,
+        category_level3_id: filters.value.category_level3_id || undefined,
+        brand: filters.value.brand || undefined,
+        status: filters.value.status || undefined,
+        stock: filters.value.stock || undefined,
+        type: filters.value.type || undefined,
+        marketplace_id: filters.value.marketplace_id || undefined,
+        tag_ids: filters.value.tag_ids.length > 0 ? filters.value.tag_ids.join(',') : undefined,
+        from_date: filters.value.from_date || undefined,
+        to_date: filters.value.to_date || undefined,
+        min_price: filters.value.min_price || undefined,
+        max_price: filters.value.max_price || undefined,
+        min_cost: filters.value.min_cost || undefined,
+        max_cost: filters.value.max_cost || undefined,
+        stone_shape: filters.value.stone_shape || undefined,
+        min_stone_weight: filters.value.min_stone_weight || undefined,
+        max_stone_weight: filters.value.max_stone_weight || undefined,
+        ring_size: filters.value.ring_size || undefined,
     };
-
-    // Use level3 if selected, otherwise use level2 (which includes all its children)
-    if (filters.value.category_level3_id) {
-        filterParams.category_id = filters.value.category_level3_id;
-    } else if (filters.value.category_level2_id) {
-        filterParams.category_id = filters.value.category_level2_id;
-    }
-    if (filters.value.brand) filterParams.brand = filters.value.brand;
-    if (filters.value.status) filterParams.status = filters.value.status;
-    if (filters.value.stock) filterParams.stock = filters.value.stock;
-    if (filters.value.type) filterParams.type = filters.value.type;
-    if (filters.value.marketplace_id) filterParams.marketplace_id = filters.value.marketplace_id;
-    if (filters.value.tag_ids.length > 0) filterParams.tag_ids = filters.value.tag_ids.join(',');
-    if (filters.value.from_date) filterParams.from_date = filters.value.from_date;
-    if (filters.value.to_date) filterParams.to_date = filters.value.to_date;
-    if (filters.value.min_price) filterParams.min_price = filters.value.min_price;
-    if (filters.value.max_price) filterParams.max_price = filters.value.max_price;
-    if (filters.value.min_cost) filterParams.min_cost = filters.value.min_cost;
-    if (filters.value.max_cost) filterParams.max_cost = filters.value.max_cost;
-    if (filters.value.stone_shape) filterParams.stone_shape = filters.value.stone_shape;
-    if (filters.value.min_stone_weight) filterParams.min_stone_weight = filters.value.min_stone_weight;
-    if (filters.value.max_stone_weight) filterParams.max_stone_weight = filters.value.max_stone_weight;
-    if (filters.value.ring_size) filterParams.ring_size = filters.value.ring_size;
 
     updateFilter(filterParams);
 }
