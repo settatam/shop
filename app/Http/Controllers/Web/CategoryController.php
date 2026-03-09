@@ -221,6 +221,7 @@ class CategoryController extends Controller
     {
         $categories = Category::where('store_id', $storeId)
             ->with('template:id,name')
+            ->withCount('products')
             ->orderBy('sort_order')
             ->get();
 
@@ -241,6 +242,8 @@ class CategoryController extends Controller
             if ($category->parent_id == $parentId) {
                 $children = $this->buildTree($categories, $category->id);
 
+                $descendantCount = $this->sumProductCounts($children);
+
                 $tree[] = [
                     'id' => $category->id,
                     'name' => $category->name,
@@ -253,7 +256,7 @@ class CategoryController extends Controller
                     'sku_prefix' => $category->sku_prefix,
                     'sort_order' => $category->sort_order,
                     'level' => $category->level,
-                    'products_count' => $category->products()->count(),
+                    'products_count' => $category->products_count + $descendantCount,
                     'is_leaf' => empty($children),
                     'children' => $children,
                 ];
@@ -261,6 +264,22 @@ class CategoryController extends Controller
         }
 
         return $tree;
+    }
+
+    /**
+     * Sum products_count across all nodes in a tree.
+     *
+     * @param  array<int, array<string, mixed>>  $nodes
+     */
+    protected function sumProductCounts(array $nodes): int
+    {
+        $total = 0;
+
+        foreach ($nodes as $node) {
+            $total += $node['products_count'];
+        }
+
+        return $total;
     }
 
     /**

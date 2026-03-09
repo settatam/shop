@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import {
     ChevronRightIcon,
     Cog6ToothIcon,
@@ -104,9 +104,12 @@ const isExpanded = props.expandedIds.has(props.category.id);
             </span>
 
             <!-- Products count -->
-            <span class="text-xs text-gray-400 dark:text-gray-500">
+            <Link
+                :href="`/products?category_id=${category.id}`"
+                class="text-xs text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400"
+            >
                 {{ category.products_count }} product{{ category.products_count !== 1 ? 's' : '' }}
-            </span>
+            </Link>
 
             <!-- Actions -->
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
