@@ -92,8 +92,6 @@ class InvoiceController extends Controller
             'invoiceable.items.category',
             'invoiceable.user',
             'invoiceable.storeUser',
-            'invoiceable.customer.defaultAddress.state',
-            'invoiceable.customer.addresses.state',
             'customer.defaultAddress.state',
             'customer.addresses.state',
             'store',
@@ -102,6 +100,11 @@ class InvoiceController extends Controller
 
         $store = $invoice->store;
         $invoiceable = $invoice->invoiceable;
+
+        // Load customer from invoiceable only if the relationship exists
+        if ($invoiceable && method_exists($invoiceable, 'customer')) {
+            $invoiceable->load('customer.defaultAddress.state', 'customer.addresses.state');
+        }
 
         // Get customer - try invoice first, then fall back to invoiceable
         $customer = $invoice->customer ?? $invoiceable?->customer;
@@ -382,8 +385,6 @@ class InvoiceController extends Controller
             'invoiceable.items.category',
             'invoiceable.user',
             'invoiceable.storeUser',
-            'invoiceable.customer.defaultAddress.state',
-            'invoiceable.customer.addresses.state',
             'invoiceable.payments',
             'customer.defaultAddress.state',
             'customer.addresses.state',
@@ -393,6 +394,11 @@ class InvoiceController extends Controller
 
         $store = $invoice->store;
         $invoiceable = $invoice->invoiceable;
+
+        // Load customer from invoiceable only if the relationship exists
+        if ($invoiceable && method_exists($invoiceable, 'customer')) {
+            $invoiceable->load('customer.defaultAddress.state', 'customer.addresses.state');
+        }
 
         // Load tradeInTransaction only for models that have it (e.g., Memo, Order)
         if ($invoiceable && method_exists($invoiceable, 'tradeInTransaction')) {

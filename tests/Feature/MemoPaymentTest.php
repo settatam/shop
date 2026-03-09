@@ -281,7 +281,10 @@ class MemoPaymentTest extends TestCase
         $this->assertEquals(0, $result['memo']->balance_due);
         $this->assertTrue($result['is_fully_paid']);
 
-        $this->assertCount(2, $memo->fresh()->payments);
+        // Payments are moved to the order when fully paid (memo is a sale)
+        $order = Order::find($memo->fresh()->order_id);
+        $this->assertNotNull($order);
+        $this->assertCount(2, $order->payments);
     }
 
     public function test_payment_service_voids_payment(): void
@@ -528,7 +531,10 @@ class MemoPaymentTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('is_fully_paid', true);
 
-        $this->assertCount(2, $memo->fresh()->payments);
+        // Payments are moved to the order when fully paid
+        $order = Order::find($memo->fresh()->order_id);
+        $this->assertNotNull($order);
+        $this->assertCount(2, $order->payments);
         $this->assertEquals(500.00, $memo->fresh()->total_paid);
     }
 
@@ -571,7 +577,10 @@ class MemoPaymentTest extends TestCase
             ->assertJsonPath('is_fully_paid', true)
             ->assertJsonCount(2, 'payments');
 
-        $payments = $memo->fresh()->payments;
+        // Payments are moved to the order when fully paid
+        $order = Order::find($memo->fresh()->order_id);
+        $this->assertNotNull($order);
+        $payments = $order->payments;
         $this->assertCount(2, $payments);
 
         // Check the card payment has service fee
@@ -615,7 +624,10 @@ class MemoPaymentTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('is_fully_paid', true);
 
-        $payment = $memo->fresh()->payments->first();
+        // Payment is moved to the order when fully paid
+        $order = Order::find($memo->fresh()->order_id);
+        $this->assertNotNull($order);
+        $payment = $order->payments->first();
         $this->assertEquals(15, $payment->service_fee_value);
         $this->assertEquals('fixed', $payment->service_fee_unit);
         $this->assertEquals(15.00, $payment->service_fee_amount);
@@ -862,11 +874,16 @@ class MemoPaymentTest extends TestCase
         $this->assertNotNull($invoice);
         $this->assertNotNull($invoice->customer_id);
 
-        // Verify order has customer_id
+        // Verify order has customer_id and payments
         $order = $memo->fresh()->order;
         $this->assertNotNull($order);
         $this->assertNotNull($order->customer_id);
         $this->assertEquals($invoice->customer_id, $order->customer_id);
+
+        // Verify order has payment records (so it shows as paid on the order page)
+        $this->assertTrue($order->payments()->exists());
+        $this->assertEquals(300.00, (float) $order->payments()->sum('amount'));
+        $this->assertTrue($order->isFullyPaid());
     }
 
     public function test_completed_payment_reuses_existing_customer_for_vendor(): void

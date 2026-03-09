@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BrandController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ChatController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\CustomerIdScanController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\InventoryTransferController;
 use App\Http\Controllers\Api\V1\InvoiceController;
@@ -99,6 +100,8 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     Route::apiResource('brands', BrandController::class);
 
     // Customers
+    Route::post('customers/id-scan/parse', [CustomerIdScanController::class, 'parse']);
+    Route::post('customers/id-scan/lookup', [CustomerIdScanController::class, 'lookup']);
     Route::apiResource('customers', CustomerController::class);
 
     // Orders

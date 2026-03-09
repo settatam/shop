@@ -83,6 +83,10 @@ class CustomerController extends Controller
             'state_id' => 'nullable|integer',
             'country_id' => 'nullable|integer',
             'zip' => 'nullable|string|max:20',
+            'id_number' => 'nullable|string|max:100',
+            'id_issuing_state' => 'nullable|string|max:5',
+            'id_expiration_date' => 'nullable|date',
+            'date_of_birth' => 'nullable|date',
             'accepts_marketing' => 'boolean',
         ]);
 
@@ -152,6 +156,10 @@ class CustomerController extends Controller
             'state_id' => 'nullable|integer',
             'country_id' => 'nullable|integer',
             'zip' => 'nullable|string|max:20',
+            'id_number' => 'nullable|string|max:100',
+            'id_issuing_state' => 'nullable|string|max:5',
+            'id_expiration_date' => 'nullable|date',
+            'date_of_birth' => 'nullable|date',
             'accepts_marketing' => 'boolean',
             'is_active' => 'boolean',
         ]);
@@ -221,6 +229,7 @@ class CustomerController extends Controller
             'city' => $city,
             'state' => $state,
             'zip' => $zip,
+            'id_number' => $customer->id_number,
             'is_active' => $customer->is_active,
             'created_at' => $customer->created_at?->toISOString(),
         ];

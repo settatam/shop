@@ -38,6 +38,7 @@ export function useCameraScanner(options: CameraScannerOptions) {
             Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.QR_CODE,
             Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.PDF_417,
         ],
     } = options;
 

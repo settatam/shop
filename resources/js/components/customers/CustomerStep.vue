@@ -17,9 +17,12 @@ import {
     PlusIcon,
     XMarkIcon,
 } from '@heroicons/vue/20/solid';
-import { UserIcon, CameraIcon } from '@heroicons/vue/24/outline';
+import { UserIcon, CameraIcon, IdentificationIcon } from '@heroicons/vue/24/outline';
 import axios from 'axios';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
+import IdScannerModal from '@/components/scanner/IdScannerModal.vue';
+import { useIdScanner, type IdScanResult } from '@/composables/useIdScanner';
+import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
 
 interface Customer {
     id?: number;
@@ -37,6 +40,10 @@ interface Customer {
     zip?: string;
     country_id?: number;
     lead_source_id?: number | null;
+    id_number?: string;
+    id_issuing_state?: string;
+    id_expiration_date?: string;
+    date_of_birth?: string;
 }
 
 interface Props {
@@ -85,6 +92,55 @@ const newCustomer = ref<Customer>({
     country_id: undefined,
     lead_source_id: null,
 });
+
+// ID scanning
+const showIdScanner = ref(false);
+const { isProcessing: isIdProcessing, processBarcode } = useIdScanner();
+
+useBarcodeScanner({
+    onScan: handleBarcodeScan,
+    minLength: 50,
+});
+
+async function handleBarcodeScan(barcode: string) {
+    const result = await processBarcode(barcode);
+    if (result) {
+        applyIdScanResult(result);
+    }
+}
+
+async function handleCameraIdScan(barcode: string) {
+    showIdScanner.value = false;
+    const result = await processBarcode(barcode);
+    if (result) {
+        applyIdScanResult(result);
+    }
+}
+
+function applyIdScanResult(result: IdScanResult) {
+    if (result.existingCustomer) {
+        mode.value = 'search';
+        selectedExisting.value = result.existingCustomer as any;
+        emit('update', result.existingCustomer as any, result.existingCustomer.id);
+    } else {
+        mode.value = 'create';
+        const data = result.parsedData;
+        newCustomer.value = {
+            ...newCustomer.value,
+            first_name: data.first_name || '',
+            last_name: data.last_name || '',
+            address: data.address || '',
+            city: data.city || '',
+            state: data.state || '',
+            zip: data.zip || '',
+            id_number: data.id_number || undefined,
+            id_issuing_state: data.id_issuing_state || undefined,
+            id_expiration_date: data.id_expiration_date || undefined,
+            date_of_birth: data.date_of_birth || undefined,
+        };
+        emit('update', newCustomer.value, null);
+    }
+}
 
 // ID photo files
 const idPhotos = ref<{ file: File; preview: string }[]>([]);
@@ -242,6 +298,15 @@ const filteredOptions = computed(() => {
                     ]"
                 >
                     Create New
+                </button>
+                <button
+                    type="button"
+                    @click="showIdScanner = true"
+                    :disabled="isIdProcessing"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
+                >
+                    <IdentificationIcon class="size-4" />
+                    {{ isIdProcessing ? 'Processing...' : 'Scan ID' }}
                 </button>
             </div>
         </div>
@@ -532,5 +597,12 @@ const filteredOptions = computed(() => {
                 </div>
             </div>
         </template>
+
+        <!-- ID Scanner Modal -->
+        <IdScannerModal
+            :show="showIdScanner"
+            @close="showIdScanner = false"
+            @scanned="handleCameraIdScan"
+        />
     </div>
 </template>

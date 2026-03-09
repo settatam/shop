@@ -1,5 +1,4 @@
 import { ref, computed } from 'vue';
-import axios from 'axios';
 import { useDebounceFn } from '@vueuse/core';
 
 export interface SearchResult {

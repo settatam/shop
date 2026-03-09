@@ -312,8 +312,14 @@ class MemoPaymentService
             // Create the invoice
             $invoice = $this->createInvoiceFromMemo($memo, $order, $customer);
 
-            // Link payments to invoice
-            $memo->payments()->update(['invoice_id' => $invoice->id]);
+            // Move payments from memo to the order (memo is a sale)
+            $memo->payments()->update([
+                'payable_type' => Order::class,
+                'payable_id' => $order->id,
+                'order_id' => $order->id,
+                'invoice_id' => $invoice->id,
+                'customer_id' => $customer?->id,
+            ]);
 
             // Update memo status
             $memo->markPaymentReceived();

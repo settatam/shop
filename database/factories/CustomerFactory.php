@@ -40,6 +40,16 @@ class CustomerFactory extends Factory
         ]);
     }
 
+    public function withIdNumber(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'id_number' => fake()->regexify('[A-Z][0-9]{7}'),
+            'id_issuing_state' => fake()->stateAbbr(),
+            'id_expiration_date' => fake()->dateTimeBetween('+1 year', '+5 years'),
+            'date_of_birth' => fake()->dateTimeBetween('-60 years', '-18 years'),
+        ]);
+    }
+
     public function guest(): static
     {
         return $this->state(fn (array $attributes) => [
