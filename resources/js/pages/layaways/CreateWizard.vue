@@ -27,7 +27,6 @@ import {
 } from '@headlessui/vue';
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
-import axios from 'axios';
 import CreateCustomerForm, { type CustomerFormData, getEmptyCustomerForm } from '@/components/customers/CreateCustomerForm.vue';
 
 interface StoreUser {

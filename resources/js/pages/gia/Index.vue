@@ -10,7 +10,6 @@ import {
     ExclamationCircleIcon,
     InformationCircleIcon,
 } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 
 interface Category {
     id: number;

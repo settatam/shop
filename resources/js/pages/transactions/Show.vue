@@ -52,7 +52,6 @@ import {
 } from '@heroicons/vue/24/outline';
 import { CustomerCard, CustomerSearch } from '@/components/customers';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
-import axios from 'axios';
 
 interface ItemImage {
     id: number;

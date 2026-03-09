@@ -17,7 +17,6 @@ import {
     XMarkIcon,
 } from '@heroicons/vue/20/solid';
 import { UserIcon } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 import LeadSourceSelect from './LeadSourceSelect.vue';
 
 interface Customer {

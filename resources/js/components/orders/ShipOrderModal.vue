@@ -18,7 +18,6 @@ import {
     CheckCircleIcon,
     ExclamationTriangleIcon,
 } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 
 interface Order {
     id: number;

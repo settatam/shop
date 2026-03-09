@@ -1,5 +1,4 @@
 import { ref, watch, type Ref } from 'vue';
-import axios from 'axios';
 
 export interface WidgetFilter {
     [key: string]: unknown;

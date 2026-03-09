@@ -14,7 +14,6 @@ import {
     ArrowPathIcon,
     CheckCircleIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 import { EbayPoliciesSection } from '@/components/platforms';
 
 interface Policy {

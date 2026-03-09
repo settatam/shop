@@ -28,7 +28,6 @@ import {
     ChevronDownIcon,
     ChevronUpIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Listing {
     id: number;

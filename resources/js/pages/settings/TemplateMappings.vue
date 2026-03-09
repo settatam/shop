@@ -26,7 +26,6 @@ import {
     ExclamationCircleIcon,
     PlusIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface TemplateField {
     name: string;

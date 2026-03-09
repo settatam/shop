@@ -10,7 +10,6 @@ import {
     CheckCircleIcon,
     ExclamationTriangleIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface ItemSpecific {
     id: number;

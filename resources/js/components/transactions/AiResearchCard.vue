@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { SparklesIcon, ArrowPathIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 const props = defineProps<{
     transactionId: number;

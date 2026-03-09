@@ -12,7 +12,6 @@ import {
     ChevronRightIcon,
 } from '@heroicons/vue/20/solid';
 import { Package, ShoppingCart, ArrowDownToLine } from 'lucide-vue-next';
-import axios from 'axios';
 
 interface Brand {
     id: number;

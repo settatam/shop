@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { MicrophoneIcon, StopIcon, SpeakerWaveIcon, XMarkIcon, SignalIcon, SignalSlashIcon } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 import { useVoiceGateway } from '@/composables/useVoiceGateway';
 
 const props = defineProps<{

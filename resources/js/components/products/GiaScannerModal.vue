@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
-import axios from 'axios';
 import {
     Dialog,
     DialogContent,

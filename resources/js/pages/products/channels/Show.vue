@@ -14,7 +14,6 @@ import {
     BuildingStorefrontIcon,
 } from '@heroicons/vue/20/solid';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
-import axios from 'axios';
 
 interface Image {
     id: number;

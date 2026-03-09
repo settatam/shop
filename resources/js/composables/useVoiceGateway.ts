@@ -1,5 +1,4 @@
 import { ref, onUnmounted } from 'vue';
-import axios from 'axios';
 
 export interface VoiceGatewayState {
     isConnected: boolean;

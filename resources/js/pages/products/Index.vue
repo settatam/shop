@@ -9,7 +9,6 @@ import GiaScannerModal from '@/components/products/GiaScannerModal.vue';
 import AdvancedSearchModal from '@/components/products/AdvancedSearchModal.vue';
 import { onMounted, ref, watch, computed } from 'vue';
 import { PlusIcon, CameraIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Category {
     id: number;

@@ -15,7 +15,6 @@ import {
     ExclamationTriangleIcon,
     ComputerDesktopIcon,
 } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 
 interface PaymentSummary {
     subtotal: number;

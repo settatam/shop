@@ -2,7 +2,6 @@
 import { ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface SimilarItem {
     id: number;

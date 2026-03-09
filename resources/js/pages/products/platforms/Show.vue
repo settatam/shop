@@ -28,7 +28,6 @@ import EbayLocationFormModal from '@/components/platforms/EbayLocationFormModal.
 import EbayItemSpecificsEditor from '@/components/platforms/EbayItemSpecificsEditor.vue';
 import ShopifyMetafieldEditor from '@/components/platforms/ShopifyMetafieldEditor.vue';
 import WooCommerceAttributeEditor from '@/components/platforms/WooCommerceAttributeEditor.vue';
-import axios from 'axios';
 
 interface Product {
     id: number;

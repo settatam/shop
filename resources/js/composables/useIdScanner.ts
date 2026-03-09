@@ -1,5 +1,4 @@
 import { ref } from 'vue';
-import axios from 'axios';
 import { isAamvaBarcode } from '@/lib/aamva';
 import { parse } from '@/actions/App/Http/Controllers/Api/V1/CustomerIdScanController';
 

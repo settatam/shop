@@ -11,7 +11,6 @@ import ItemChatPanel from '@/components/transactions/ItemChatPanel.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
-import axios from 'axios';
 import { ArrowLeftIcon, PencilIcon, ArchiveBoxArrowDownIcon, RectangleStackIcon, XMarkIcon, ShareIcon, SparklesIcon } from '@heroicons/vue/20/solid';
 
 interface ItemImage {

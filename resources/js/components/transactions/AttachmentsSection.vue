@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import axios from 'axios';
 import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon, TrashIcon, DocumentTextIcon, ArrowDownTrayIcon } from '@heroicons/vue/24/outline';
 
 interface Attachment {

@@ -11,7 +11,6 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 import PlatformCategoryBrowser from './PlatformCategoryBrowser.vue';
-import axios from 'axios';
 
 interface PlatformCategory {
     id: number;

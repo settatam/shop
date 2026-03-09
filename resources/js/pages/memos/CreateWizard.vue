@@ -27,7 +27,6 @@ import {
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid';
 import { useDebounceFn } from '@vueuse/core';
 import { formatPhoneNumber } from '@/lib/utils';
-import axios from 'axios';
 import { toast } from 'vue-sonner';
 import ProductSearch from '@/components/products/ProductSearch.vue';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
@@ -946,6 +945,13 @@ function getPaymentTermLabel(days: number): string {
             mode="memo"
             @close="showAddItemModal = false"
             @save="handleSaveItem"
+        />
+
+        <!-- ID Scanner Modal -->
+        <IdScannerModal
+            :show="showMemoIdScanner"
+            @close="showMemoIdScanner = false"
+            @scanned="handleMemoIdCameraScan"
         />
     </AppLayout>
 </template>

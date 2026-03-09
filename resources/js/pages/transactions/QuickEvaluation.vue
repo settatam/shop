@@ -15,7 +15,6 @@ import {
     ArrowLeftIcon,
 } from '@heroicons/vue/24/outline';
 import { SparklesIcon, GlobeAltIcon, MagnifyingGlassIcon, ArrowTopRightOnSquareIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 // Components for the conversion modal
 import CustomerStep from '@/components/customers/CustomerStep.vue';

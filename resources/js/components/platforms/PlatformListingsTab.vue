@@ -28,7 +28,6 @@ import {
 } from '@heroicons/vue/20/solid';
 import PlatformOverrideModal from './PlatformOverrideModal.vue';
 import PublishToPlatformModal from './PublishToPlatformModal.vue';
-import axios from 'axios';
 
 interface PlatformListing {
     id: number;

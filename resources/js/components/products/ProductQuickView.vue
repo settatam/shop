@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface InventoryLevel {

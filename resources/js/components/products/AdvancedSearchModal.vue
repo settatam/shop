@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { MagnifyingGlassIcon } from '@heroicons/vue/20/solid';
 import { Package, ShoppingCart, ArrowDownToLine } from 'lucide-vue-next';
-import axios from 'axios';
 
 interface SearchResultItem {
     id: number;

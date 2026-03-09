@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
-import axios from 'axios';
 
 interface PlatformListing {
     id: number;

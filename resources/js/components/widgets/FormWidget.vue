@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import axios from 'axios';
 import type { WidgetData } from '@/composables/useWidget';
 
 interface FormField {

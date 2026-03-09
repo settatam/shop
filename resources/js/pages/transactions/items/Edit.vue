@@ -5,7 +5,6 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { Form } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import { ArrowLeftIcon, SparklesIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Category {
     id: number;

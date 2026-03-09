@@ -582,7 +582,7 @@ async function createNewProduct() {
     if (!newProduct.value.title || newProduct.value.price < 0) return;
 
     try {
-        const response = await window.axios.post('/orders/create-product', {
+        const response = await axios.post('/orders/create-product', {
             ...newProduct.value,
             warehouse_id: form.warehouse_id,
         });

@@ -25,7 +25,6 @@ import {
     ArchiveBoxIcon,
     LinkIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Image {
     id: number;

@@ -15,7 +15,6 @@ import {
 import CategoryPlatformMappingModal from '@/components/platforms/CategoryPlatformMappingModal.vue';
 import CategoryFieldMappingPanel from '@/components/platforms/CategoryFieldMappingPanel.vue';
 import ShopifyCategoryMetafieldPanel from '@/components/platforms/ShopifyCategoryMetafieldPanel.vue';
-import axios from 'axios';
 
 interface Category {
     id: number;

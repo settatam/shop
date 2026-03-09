@@ -3,7 +3,6 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, usePage } from '@inertiajs/vue3';
 import { ref, nextTick, onMounted, onUnmounted } from 'vue';
-import axios from 'axios';
 
 interface Agent {
     id: number;

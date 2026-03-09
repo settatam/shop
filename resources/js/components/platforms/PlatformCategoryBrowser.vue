@@ -11,7 +11,6 @@ import {
     ArrowPathIcon,
     SparklesIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface PlatformCategory {
     id: number;

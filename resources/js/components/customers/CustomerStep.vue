@@ -18,7 +18,6 @@ import {
     XMarkIcon,
 } from '@heroicons/vue/20/solid';
 import { UserIcon, CameraIcon, IdentificationIcon } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 import IdScannerModal from '@/components/scanner/IdScannerModal.vue';
 import { useIdScanner, type IdScanResult } from '@/composables/useIdScanner';

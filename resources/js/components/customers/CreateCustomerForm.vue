@@ -6,6 +6,10 @@ export interface CustomerFormData {
     phone: string;
     company_name?: string;
     lead_source_id?: number | null;
+    id_number?: string;
+    id_issuing_state?: string;
+    id_expiration_date?: string;
+    date_of_birth?: string;
     address: {
         address_line1: string;
         address_line2: string;

@@ -11,7 +11,6 @@ import {
     TrashIcon,
     PlusIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Props {
     marketplaceId: number;

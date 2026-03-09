@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { MagnifyingGlassIcon, ArrowPathIcon, ArrowTopRightOnSquareIcon, GlobeAltIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface PriceListing {
     source: string;

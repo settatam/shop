@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { usePage } from '@inertiajs/vue3';
-import axios from 'axios';
 import { Cog6ToothIcon, ArrowDownTrayIcon, EnvelopeIcon } from '@heroicons/vue/20/solid';
 import {
     DropdownMenu,

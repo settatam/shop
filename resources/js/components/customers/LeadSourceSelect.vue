@@ -8,7 +8,6 @@ import {
     ComboboxOption,
 } from '@headlessui/vue';
 import { CheckIcon, ChevronUpDownIcon, PlusIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface LeadSource {
     id: number;

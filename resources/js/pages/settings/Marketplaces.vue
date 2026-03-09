@@ -34,7 +34,6 @@ import {
     ArrowTopRightOnSquareIcon,
     Cog6ToothIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Connection {
     id: number;

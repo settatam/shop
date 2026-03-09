@@ -20,7 +20,6 @@ import {
     XCircleIcon,
     PencilIcon,
 } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface AvailableMarketplace {
     id: number;

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { XMarkIcon, PlusIcon } from '@heroicons/vue/20/solid';
-import axios from 'axios';
 
 interface Tag {
     id: number;

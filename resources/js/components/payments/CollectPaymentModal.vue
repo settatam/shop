@@ -17,7 +17,6 @@ import {
     PlusIcon,
     TrashIcon,
 } from '@heroicons/vue/24/outline';
-import axios from 'axios';
 
 // Types
 export type PayableModelType = 'memo' | 'repair' | 'order' | 'layaway';
