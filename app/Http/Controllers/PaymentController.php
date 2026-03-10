@@ -200,6 +200,28 @@ class PaymentController extends Controller
         ]);
 
         if (! $result->success) {
+            // Record the failed attempt
+            TerminalCheckout::create([
+                'store_id' => $store->id,
+                'payable_type' => get_class($payable),
+                'payable_id' => $payable->id,
+                'terminal_id' => $terminal->id,
+                'user_id' => auth()->id(),
+                'checkout_id' => 'failed_'.uniqid(),
+                'amount' => $amount,
+                'currency' => 'USD',
+                'status' => TerminalCheckout::STATUS_FAILED,
+                'error_message' => $result->errorMessage,
+                'timeout_seconds' => $timeout,
+                'expires_at' => now(),
+                'gateway_response' => $result->gatewayResponse,
+                'metadata' => [
+                    'service_fee_value' => $validated['service_fee_value'] ?? null,
+                    'service_fee_unit' => $validated['service_fee_unit'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                ],
+            ]);
+
             return response()->json([
                 'message' => $result->errorMessage ?? 'Failed to create terminal checkout',
             ], 422);
@@ -233,8 +255,7 @@ class PaymentController extends Controller
         // For blocking gateways (Dejavoo): payment was already approved, create payment record now
         if ($isCompleted) {
             $cardBrand = data_get($result->gatewayResponse, 'card_type');
-            $acctNo = data_get($result->gatewayResponse, 'acct_no', '');
-            $cardLastFour = $acctNo ? substr($acctNo, -4) : null;
+            $cardLastFour = data_get($result->gatewayResponse, 'card_last4');
 
             $payment = Payment::create([
                 'store_id' => $store->id,

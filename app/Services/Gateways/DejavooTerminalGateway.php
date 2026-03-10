@@ -121,7 +121,7 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
             'TipAmount' => number_format($options['tip_amount'] ?? 0, 2, '.', ''),
             'ExternalAmount' => '',
             'PaymentType' => $options['payment_type'] ?? 'Credit',
-            'ReferenceId' => $options['reference'] ?? '',
+            'ReferenceId' => ($options['reference'] ?? '').'_'.time(),
             'CaptureSignature' => true,
             'InvoiceNumber' => $options['invoice_number'] ?? '',
             'CallbackInfo' => ['Url' => ''],
@@ -150,7 +150,7 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
             Log::info('Dejavoo: Response received', [
                 'terminal_id' => $terminalId,
                 'status_code' => $response->status(),
-                'cmd_status' => data_get($body, 'SPInResponse.RStream.CmdStatus'),
+                'body' => $body,
             ]);
 
             return $this->parseCheckoutResponse($body, $terminalId, $timeout);
@@ -172,18 +172,18 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
     }
 
     /**
-     * Parse the SPIn API response into a CheckoutResult.
+     * Parse the Dejavoo API response into a CheckoutResult.
      */
     protected function parseCheckoutResponse(array $body, string $terminalId, int $timeout): CheckoutResult
     {
-        $rStream = data_get($body, 'SPInResponse.RStream', []);
-        $cmdStatus = data_get($rStream, 'CmdStatus');
-        $textResponse = data_get($rStream, 'TextResponse', '');
+        $resultCode = data_get($body, 'GeneralResponse.ResultCode');
+        $message = data_get($body, 'GeneralResponse.Message', '');
+        $detailedMessage = data_get($body, 'GeneralResponse.DetailedMessage', '');
 
-        if ($cmdStatus === 'Approved') {
-            $authCode = data_get($rStream, 'AuthCode', '');
-            $refNo = data_get($rStream, 'RefNo', '');
-            $checkoutId = $authCode ?: $refNo ?: 'dj_'.uniqid();
+        if ($resultCode === '0') {
+            $authCode = data_get($body, 'AuthCode', '');
+            $pnRefId = data_get($body, 'PNReferenceId', '');
+            $checkoutId = $authCode ?: $pnRefId ?: 'dj_'.uniqid();
 
             return CheckoutResult::success(
                 checkoutId: $checkoutId,
@@ -191,31 +191,31 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
                 expiresAt: Carbon::now()->addSeconds($timeout),
                 gatewayResponse: [
                     'auth_code' => $authCode,
-                    'ref_no' => $refNo,
-                    'card_type' => data_get($rStream, 'CardType'),
-                    'acct_no' => data_get($rStream, 'AcctNo'),
-                    'amount' => data_get($rStream, 'Amount'),
-                    'tip_amount' => data_get($rStream, 'TipAmount'),
-                    'text_response' => $textResponse,
-                    'result_code' => data_get($rStream, 'ResultCode'),
+                    'pn_reference_id' => $pnRefId,
+                    'reference_id' => data_get($body, 'ReferenceId'),
+                    'card_type' => data_get($body, 'CardData.CardType'),
+                    'card_last4' => data_get($body, 'CardData.Last4'),
+                    'card_first4' => data_get($body, 'CardData.First4'),
+                    'entry_type' => data_get($body, 'CardData.EntryType'),
+                    'amount' => data_get($body, 'Amounts.Amount'),
+                    'total_amount' => data_get($body, 'Amounts.TotalAmount'),
+                    'tip_amount' => data_get($body, 'Amounts.TipAmount'),
+                    'message' => $message,
+                    'detailed_message' => $detailedMessage,
                     'terminal_id' => $terminalId,
-                    'acq_ref_data' => data_get($rStream, 'AcqRefData'),
-                    'invoice_number' => data_get($rStream, 'InvoiceNumber'),
+                    'serial_number' => data_get($body, 'SerialNumber'),
+                    'batch_number' => data_get($body, 'BatchNumber'),
+                    'transaction_number' => data_get($body, 'TransactionNumber'),
                 ],
             );
         }
 
-        if ($cmdStatus === 'Declined') {
-            return CheckoutResult::failure(
-                errorMessage: 'Payment declined: '.($textResponse ?: 'Card was declined'),
-                gatewayResponse: $rStream,
-            );
-        }
+        $errorMessage = $detailedMessage ?: $message ?: 'Terminal payment failed';
 
         return CheckoutResult::failure(
-            errorMessage: $textResponse ?: 'Terminal payment failed',
-            errorCode: $cmdStatus,
-            gatewayResponse: $rStream,
+            errorMessage: $errorMessage,
+            errorCode: data_get($body, 'GeneralResponse.StatusCode'),
+            gatewayResponse: $body,
         );
     }
 
