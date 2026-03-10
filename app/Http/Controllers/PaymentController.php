@@ -189,13 +189,41 @@ class PaymentController extends Controller
 
         $amount = (float) $validated['amount'];
 
+        // Calculate service fee amount
+        $serviceFeeValue = (float) ($validated['service_fee_value'] ?? 0);
+        $serviceFeeUnit = $validated['service_fee_unit'] ?? null;
+        $serviceFeeAmount = 0;
+
+        if ($serviceFeeValue > 0 && $serviceFeeUnit) {
+            $adjustments = $payable->getPaymentAdjustments();
+            $subtotal = $payable->getSubtotal();
+            $discountValue = $adjustments['discount_value'] ?? 0;
+            $discountUnit = $adjustments['discount_unit'] ?? 'fixed';
+            $discountAmount = $discountUnit === 'percent'
+                ? ($subtotal * $discountValue / 100)
+                : $discountValue;
+            $subtotalAfterDiscount = $subtotal - $discountAmount;
+            $serviceFeeBase = min($amount, $subtotalAfterDiscount);
+
+            if ($serviceFeeUnit === 'percent') {
+                $serviceFeeAmount = round($serviceFeeBase * $serviceFeeValue / 100, 2);
+            } else {
+                $serviceFeeAmount = $amount >= $subtotalAfterDiscount
+                    ? round($serviceFeeValue, 2)
+                    : round($serviceFeeValue * ($amount / $subtotalAfterDiscount), 2);
+            }
+        }
+
+        // Total to charge on the terminal includes the service fee
+        $terminalAmount = $amount + $serviceFeeAmount;
+
         $gateway = $this->gatewayFactory->makeTerminal($terminal->gateway);
         $timeout = config('payment-gateways.terminal.default_timeout', 300);
 
         // Allow the request to run long enough for the terminal to complete
         set_time_limit($timeout + 60);
 
-        $result = $gateway->createCheckout($terminal, $amount, [
+        $result = $gateway->createCheckout($terminal, $terminalAmount, [
             'timeout' => $timeout,
             'reference' => $payable->getDisplayIdentifier(),
             'customer_id' => $payable->customer_id ?? null,
@@ -210,7 +238,7 @@ class PaymentController extends Controller
                 'terminal_id' => $terminal->id,
                 'user_id' => auth()->id(),
                 'checkout_id' => 'failed_'.uniqid(),
-                'amount' => $amount,
+                'amount' => $terminalAmount,
                 'currency' => 'USD',
                 'status' => TerminalCheckout::STATUS_FAILED,
                 'error_message' => $result->errorMessage,
@@ -218,8 +246,10 @@ class PaymentController extends Controller
                 'expires_at' => now(),
                 'gateway_response' => $result->gatewayResponse,
                 'metadata' => [
-                    'service_fee_value' => $validated['service_fee_value'] ?? null,
-                    'service_fee_unit' => $validated['service_fee_unit'] ?? null,
+                    'base_amount' => $amount,
+                    'service_fee_value' => $serviceFeeValue > 0 ? $serviceFeeValue : null,
+                    'service_fee_unit' => $serviceFeeValue > 0 ? $serviceFeeUnit : null,
+                    'service_fee_amount' => $serviceFeeAmount > 0 ? $serviceFeeAmount : null,
                     'notes' => $validated['notes'] ?? null,
                 ],
             ]);
@@ -228,8 +258,8 @@ class PaymentController extends Controller
                 Activity::ORDERS_TERMINAL_PAYMENT_FAILED,
                 $payable,
                 null,
-                ['error' => $result->errorMessage, 'amount' => $amount, 'terminal' => $terminal->name],
-                "Terminal payment of \${$amount} failed: {$result->errorMessage}",
+                ['error' => $result->errorMessage, 'amount' => $terminalAmount, 'terminal' => $terminal->name],
+                "Terminal payment of \${$terminalAmount} failed: {$result->errorMessage}",
             );
 
             return response()->json([
@@ -247,7 +277,7 @@ class PaymentController extends Controller
             'terminal_id' => $terminal->id,
             'user_id' => auth()->id(),
             'checkout_id' => $result->checkoutId,
-            'amount' => $amount,
+            'amount' => $terminalAmount,
             'currency' => 'USD',
             'status' => $isCompleted ? TerminalCheckout::STATUS_COMPLETED : TerminalCheckout::STATUS_PENDING,
             'external_payment_id' => $isCompleted ? $result->checkoutId : null,
@@ -256,8 +286,10 @@ class PaymentController extends Controller
             'completed_at' => $isCompleted ? now() : null,
             'gateway_response' => $result->gatewayResponse,
             'metadata' => [
-                'service_fee_value' => $validated['service_fee_value'] ?? null,
-                'service_fee_unit' => $validated['service_fee_unit'] ?? null,
+                'base_amount' => $amount,
+                'service_fee_value' => $serviceFeeValue > 0 ? $serviceFeeValue : null,
+                'service_fee_unit' => $serviceFeeValue > 0 ? $serviceFeeUnit : null,
+                'service_fee_amount' => $serviceFeeAmount > 0 ? $serviceFeeAmount : null,
                 'notes' => $validated['notes'] ?? null,
             ],
         ]);
@@ -277,6 +309,9 @@ class PaymentController extends Controller
                 'payment_method' => Payment::METHOD_CARD,
                 'status' => Payment::STATUS_COMPLETED,
                 'amount' => $amount,
+                'service_fee_value' => $serviceFeeValue > 0 ? $serviceFeeValue : null,
+                'service_fee_unit' => $serviceFeeValue > 0 ? $serviceFeeUnit : null,
+                'service_fee_amount' => $serviceFeeAmount > 0 ? $serviceFeeAmount : null,
                 'currency' => 'USD',
                 'gateway' => $terminal->gateway,
                 'gateway_payment_id' => $result->checkoutId,
@@ -284,8 +319,6 @@ class PaymentController extends Controller
                 'metadata' => [
                     'card_brand' => $cardBrand,
                     'card_last_four' => $cardLastFour,
-                    'service_fee_value' => $validated['service_fee_value'] ?? null,
-                    'service_fee_unit' => $validated['service_fee_unit'] ?? null,
                     'notes' => $validated['notes'] ?? null,
                 ],
                 'paid_at' => now(),
@@ -293,9 +326,28 @@ class PaymentController extends Controller
 
             $checkout->update(['payment_id' => $payment->id]);
 
+            // Update payable service fee adjustments if applicable
+            if ($serviceFeeAmount > 0) {
+                $payable->updatePaymentAdjustments([
+                    'service_fee_value' => $serviceFeeAmount,
+                    'service_fee_unit' => 'fixed',
+                ]);
+
+                $summary = $this->paymentService->calculateSummary($payable);
+                $payable->updateCalculatedTotals($summary);
+            }
+
+            // Record the total paid (base + service fee)
+            $payable->recordPayment($terminalAmount);
+
             // Recalculate payable totals
             if (method_exists($payable, 'recalculateTotals')) {
                 $payable->recalculateTotals();
+            }
+
+            // Check if fully paid and trigger completion
+            if ($payable->isFullyPaid()) {
+                $payable->onPaymentComplete();
             }
 
             $cardDesc = $cardBrand ? "{$cardBrand} ending {$cardLastFour}" : 'card';
@@ -303,8 +355,8 @@ class PaymentController extends Controller
                 Activity::ORDERS_TERMINAL_PAYMENT,
                 $payable,
                 null,
-                ['amount' => $amount, 'card_brand' => $cardBrand, 'card_last_four' => $cardLastFour, 'terminal' => $terminal->name],
-                "Terminal payment of \${$amount} received via {$cardDesc}",
+                ['amount' => $terminalAmount, 'service_fee_amount' => $serviceFeeAmount, 'card_brand' => $cardBrand, 'card_last_four' => $cardLastFour, 'terminal' => $terminal->name],
+                "Terminal payment of \${$terminalAmount} received via {$cardDesc}",
             );
 
             return response()->json([

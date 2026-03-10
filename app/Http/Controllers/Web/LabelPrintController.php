@@ -4,8 +4,9 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\LabelTemplate;
+use App\Models\ProductVariant;
 use App\Models\Transaction;
-use App\Models\Variant;
+use App\Services\LabelDataService;
 use App\Services\Shipping\ShippingLabelService;
 use App\Services\StoreContext;
 use App\Services\ZplGeneratorService;
@@ -50,11 +51,11 @@ class LabelPrintController extends Controller
         $variants = collect();
 
         if (! empty($variantIds)) {
-            $variants = Variant::with(['product.category', 'product.brand'])
+            $variants = ProductVariant::with(['product.category', 'product.brand'])
                 ->whereHas('product', fn ($q) => $q->where('store_id', $store->id))
                 ->whereIn('id', $variantIds)
                 ->get()
-                ->map(fn ($variant) => $this->formatVariantForLabel($variant));
+                ->map(fn ($variant) => LabelDataService::formatProductVariantForLabel($variant));
         }
 
         return Inertia::render('labels/PrintProducts', [
@@ -75,7 +76,7 @@ class LabelPrintController extends Controller
         $validated = $request->validate([
             'template_id' => 'required|exists:label_templates,id',
             'variant_ids' => 'required|array|min:1',
-            'variant_ids.*' => 'integer|exists:variants,id',
+            'variant_ids.*' => 'integer|exists:product_variants,id',
             'quantity' => 'integer|min:1|max:100',
         ]);
 
@@ -84,7 +85,7 @@ class LabelPrintController extends Controller
             ->where('type', LabelTemplate::TYPE_PRODUCT)
             ->findOrFail($validated['template_id']);
 
-        $variants = Variant::with(['product.category', 'product.brand'])
+        $variants = ProductVariant::with(['product.category', 'product.brand'])
             ->whereHas('product', fn ($q) => $q->where('store_id', $store->id))
             ->whereIn('id', $validated['variant_ids'])
             ->get();
@@ -93,7 +94,7 @@ class LabelPrintController extends Controller
         $items = [];
 
         foreach ($variants as $variant) {
-            $data = $this->formatVariantForLabel($variant);
+            $data = LabelDataService::formatProductVariantForLabel($variant);
             for ($i = 0; $i < $quantity; $i++) {
                 $items[] = $data;
             }
@@ -189,56 +190,6 @@ class LabelPrintController extends Controller
             'zpl' => $zpl,
             'count' => count($items),
         ]);
-    }
-
-    /**
-     * Format variant data for label printing.
-     *
-     * @return array<string, array<string, string|null>>
-     */
-    protected function formatVariantForLabel(Variant $variant): array
-    {
-        $product = $variant->product;
-
-        // Build options title
-        $options = collect([
-            $variant->option1 ? ($product->option1_name.': '.$variant->option1) : null,
-            $variant->option2 ? ($product->option2_name.': '.$variant->option2) : null,
-            $variant->option3 ? ($product->option3_name.': '.$variant->option3) : null,
-        ])->filter()->implode(' / ');
-
-        return [
-            'product' => [
-                'title' => $product->title,
-                'weight' => $product->weight ? $product->weight.'g' : null,
-                'upc' => $product->upc,
-                'ean' => $product->ean,
-                'jan' => $product->jan,
-                'isbn' => $product->isbn,
-                'mpn' => $product->mpn,
-                'category' => $product->category?->name,
-                'brand' => $product->brand?->name,
-                'metal_type' => $product->metal_type,
-                'metal_purity' => $product->metal_purity,
-                'metal_weight_grams' => $product->metal_weight_grams,
-                'jewelry_type' => $product->jewelry_type,
-                'ring_size' => $product->ring_size,
-                'chain_length_inches' => $product->chain_length_inches,
-                'main_stone_type' => $product->main_stone_type,
-                'total_carat_weight' => $product->total_carat_weight,
-            ],
-            'variant' => [
-                'sku' => $variant->sku,
-                'barcode' => $variant->barcode,
-                'price' => $variant->price ? '$'.number_format($variant->price / 100, 2) : null,
-                'cost' => $variant->cost ? '$'.number_format($variant->cost / 100, 2) : null,
-                'quantity' => (string) ($variant->quantity ?? 0),
-                'option1' => $variant->option1 ? ($product->option1_name.': '.$variant->option1) : null,
-                'option2' => $variant->option2 ? ($product->option2_name.': '.$variant->option2) : null,
-                'option3' => $variant->option3 ? ($product->option3_name.': '.$variant->option3) : null,
-                'options_title' => $options ?: null,
-            ],
-        ];
     }
 
     public function shippingLabels(Request $request): Response|RedirectResponse

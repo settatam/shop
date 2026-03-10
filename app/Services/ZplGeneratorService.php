@@ -44,7 +44,7 @@ class ZplGeneratorService
      */
     protected function startLabel(LabelTemplate $template): string
     {
-        return "^XA\n^PW{$template->canvas_width}\n^LL{$template->canvas_height}\n";
+        return "^XA\n^LH0,0\n^LS0\n^PW{$template->canvas_width}\n^LL{$template->canvas_height}\n";
     }
 
     /**
@@ -93,12 +93,16 @@ class ZplGeneratorService
         // Escape special ZPL characters
         $value = $this->escapeZplText($value);
 
+        $rotation = $this->mapRotation($styles['rotation'] ?? 0);
+
         // ^FO = Field Origin (x,y)
         // ^FB = Field Block (width, max lines, line spacing, alignment, hanging indent)
-        // ^A0N = Scalable font, Normal orientation
+        // ^A0 = Scalable font with orientation
         // ^FD = Field Data
         // ^FS = Field Separator
-        return "^FO{$element->x},{$element->y}^FB{$element->width},1,0,{$alignment},0^A0N,{$fontSize},{$fontSize}^FD{$value}^FS\n";
+        $fbWidth = in_array($rotation, ['R', 'I']) ? $element->height : $element->width;
+
+        return "^FO{$element->x},{$element->y}^FB{$fbWidth},1,0,{$alignment},0^A0{$rotation},{$fontSize},{$fontSize}^FD{$value}^FS\n";
     }
 
     /**
@@ -116,13 +120,43 @@ class ZplGeneratorService
         $barcodeHeight = $styles['barcodeHeight'] ?? 50;
         $showText = ($styles['showText'] ?? true) ? 'Y' : 'N';
         $moduleWidth = $styles['moduleWidth'] ?? 2;
+        $alignment = $styles['alignment'] ?? 'left';
+        $rotation = $this->mapRotation($styles['rotation'] ?? 0);
+
+        // Estimate Code 128 barcode width in dots:
+        // Each data char = 11 modules, start = 11, check = 11, stop = 13
+        $charCount = strlen($value);
+        $estimatedWidth = (($charCount + 2) * 11 + 13) * $moduleWidth;
+
+        // Calculate offset based on alignment within the element's bounding box
+        // For rotated barcodes the "length" axis changes
+        $x = $element->x;
+        $y = $element->y;
+        $isVertical = in_array($rotation, ['R', 'I']);
+
+        if ($isVertical) {
+            // Rotated: barcode length runs along Y axis, bar height along X
+            $availableSpace = $element->height;
+            if ($alignment === 'center' && $estimatedWidth < $availableSpace) {
+                $y = $element->y + (int) (($availableSpace - $estimatedWidth) / 2);
+            } elseif ($alignment === 'right' && $estimatedWidth < $availableSpace) {
+                $y = $element->y + $availableSpace - $estimatedWidth;
+            }
+        } else {
+            // Normal: barcode length runs along X axis
+            if ($alignment === 'center' && $estimatedWidth < $element->width) {
+                $x = $element->x + (int) (($element->width - $estimatedWidth) / 2);
+            } elseif ($alignment === 'right' && $estimatedWidth < $element->width) {
+                $x = $element->x + $element->width - $estimatedWidth;
+            }
+        }
 
         // ^FO = Field Origin (x,y)
         // ^BY = Bar Code Field Default (module width, wide/narrow ratio, bar height)
-        // ^BCN = Code 128 Barcode (orientation, height, print interpretation line, print above, UCC check digit)
+        // ^BC = Code 128 Barcode (orientation, height, print interpretation line, print above, UCC check digit)
         // ^FD = Field Data
         // ^FS = Field Separator
-        return "^FO{$element->x},{$element->y}^BY{$moduleWidth},2,{$barcodeHeight}^BCN,,{$showText},N,N^FD{$value}^FS\n";
+        return "^FO{$x},{$y}^BY{$moduleWidth},2,{$barcodeHeight}^BC{$rotation},,{$showText},N,N^FD{$value}^FS\n";
     }
 
     /**
@@ -142,7 +176,10 @@ class ZplGeneratorService
 
         $value = $this->escapeZplText($value);
 
-        return "^FO{$element->x},{$element->y}^FB{$element->width},1,0,{$alignment},0^A0N,{$fontSize},{$fontSize}^FD{$value}^FS\n";
+        $rotation = $this->mapRotation($styles['rotation'] ?? 0);
+        $fbWidth = in_array($rotation, ['R', 'I']) ? $element->height : $element->width;
+
+        return "^FO{$element->x},{$element->y}^FB{$fbWidth},1,0,{$alignment},0^A0{$rotation},{$fontSize},{$fontSize}^FD{$value}^FS\n";
     }
 
     /**
@@ -189,6 +226,19 @@ class ZplGeneratorService
             'center' => 'C',
             'right' => 'R',
             default => 'L',
+        };
+    }
+
+    /**
+     * Map rotation degrees to ZPL orientation letter.
+     */
+    protected function mapRotation(int $rotation): string
+    {
+        return match ($rotation) {
+            90 => 'R',
+            180 => 'B',
+            270 => 'I',
+            default => 'N',
         };
     }
 

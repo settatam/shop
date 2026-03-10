@@ -170,10 +170,12 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
         Route::get('products/{product}/preview', [ProductController::class, 'preview'])->name('products.preview');
         Route::get('products/{product}/print-barcode', [ProductController::class, 'printBarcode'])->name('products.print-barcode');
+        Route::post('products/{product}/print-barcode/zpl', [ProductController::class, 'generateZplFromTemplate'])->name('products.print-barcode.zpl');
     });
     Route::middleware('permission:products.update')->group(function () {
         Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
         Route::match(['put', 'patch'], 'products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::put('products/{product}/barcode-label', [ProductController::class, 'updateBarcodeLabel'])->name('products.update-barcode-label');
         Route::post('products/bulk-update', [ProductController::class, 'bulkUpdate'])->name('products.bulk-update');
         Route::post('products/bulk-inline-update', [ProductController::class, 'bulkInlineUpdate'])->name('products.bulk-inline-update');
         Route::post('products/get-for-inline-edit', [ProductController::class, 'getForInlineEdit'])->name('products.get-for-inline-edit');

@@ -394,10 +394,38 @@ function submitTransaction() {
                     </ol>
                 </nav>
 
+                <!-- Mobile compact summary -->
+                <div class="mb-4 flex items-center gap-3 overflow-x-auto rounded-lg bg-white px-4 py-3 shadow dark:bg-gray-800 lg:hidden">
+                    <div class="flex shrink-0 items-center gap-1.5 text-sm">
+                        <span class="text-gray-500 dark:text-gray-400">Employee:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ selectedStoreUser?.name || '—' }}</span>
+                    </div>
+                    <div class="h-4 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
+                    <div class="flex shrink-0 items-center gap-1.5 text-sm">
+                        <span class="text-gray-500 dark:text-gray-400">Customer:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ customerDisplayName || 'Not selected' }}</span>
+                    </div>
+                    <div class="h-4 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
+                    <div class="flex shrink-0 items-center gap-1.5 text-sm">
+                        <span class="text-gray-500 dark:text-gray-400">{{ formData.items_skipped ? 'Offer' : 'Items' }}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ formData.items_skipped ? '$' + totalBuyPrice.toFixed(2) : formData.items.length }}</span>
+                    </div>
+                    <div class="h-4 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
+                    <div class="flex shrink-0 items-center gap-1.5 text-sm">
+                        <span class="text-gray-500 dark:text-gray-400">Total:</span>
+                        <span class="font-semibold text-gray-900 dark:text-white">${{ totalBuyPrice.toFixed(2) }}</span>
+                    </div>
+                    <div v-if="formData.payments.length > 0" class="h-4 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
+                    <div v-if="formData.payments.length > 0" class="flex shrink-0 items-center gap-1.5 text-sm">
+                        <span class="text-gray-500 dark:text-gray-400">Paid:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">${{ totalPaymentsAmount.toFixed(2) }}</span>
+                    </div>
+                </div>
+
                 <!-- Main content area with summary sidebar -->
                 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <!-- Summary Sidebar -->
-                    <div class="lg:col-span-1">
+                    <div class="hidden lg:col-span-1 lg:block">
                         <div class="sticky top-4 space-y-4">
                             <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
                                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Transaction Summary</h3>

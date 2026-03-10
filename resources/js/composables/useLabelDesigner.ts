@@ -8,6 +8,7 @@ export interface LabelElementStyles {
     showText?: boolean;
     moduleWidth?: number;
     thickness?: number;
+    rotation?: 0 | 90 | 180 | 270;
 }
 
 export interface LabelElement {
@@ -48,7 +49,7 @@ export interface SampleData {
 
 const DEFAULT_ELEMENT_STYLES: Record<string, LabelElementStyles> = {
     text_field: { fontSize: 20, alignment: 'left' },
-    barcode: { barcodeHeight: 50, showText: true, moduleWidth: 2 },
+    barcode: { barcodeHeight: 50, showText: true, moduleWidth: 2, alignment: 'center', rotation: 0 },
     static_text: { fontSize: 20, alignment: 'left' },
     line: { thickness: 2 },
 };

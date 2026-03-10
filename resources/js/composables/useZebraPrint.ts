@@ -44,13 +44,17 @@ export function useZebraPrint() {
         status.value.error = null;
 
         try {
-            // Get available printers
+            // Get available printers (3s timeout so page doesn't hang)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
             const response = await fetch(`${ZEBRA_BROWSER_PRINT_URL}/available`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'text/plain',
                 },
+                signal: controller.signal,
             });
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error('Failed to connect to Zebra Browser Print');
@@ -60,11 +64,15 @@ export function useZebraPrint() {
             status.value.printers = data.printer || [];
             status.value.connected = true;
 
-            // Try to get default printer
+            // Try to get default printer (3s timeout)
             try {
+                const defaultController = new AbortController();
+                const defaultTimeoutId = setTimeout(() => defaultController.abort(), 3000);
                 const defaultResponse = await fetch(`${ZEBRA_BROWSER_PRINT_URL}/default?type=printer`, {
                     method: 'GET',
+                    signal: defaultController.signal,
                 });
+                clearTimeout(defaultTimeoutId);
                 if (defaultResponse.ok) {
                     const defaultPrinter = await defaultResponse.json();
                     if (defaultPrinter) {

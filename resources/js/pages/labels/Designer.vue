@@ -74,6 +74,7 @@ const activeSampleData = computed(() => {
 
 // Preset sizes
 const presetSizes = [
+    { name: '1¾" x 7/16"', width: 525, height: 131 },
     { name: '2" x 1"', width: 406, height: 203 },
     { name: '2.25" x 1.25"', width: 457, height: 254 },
     { name: '3" x 1"', width: 609, height: 203 },
@@ -305,7 +306,8 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                     </div>
                     <div class="flex items-center gap-2 text-xs text-gray-500">
                         <span>{{ designer.template.value.canvas_width }} x {{ designer.template.value.canvas_height }} dots</span>
-                        <span>({{ Math.round(designer.template.value.canvas_width / 203 * 100) / 100 }}" x {{ Math.round(designer.template.value.canvas_height / 203 * 100) / 100 }}")</span>
+                        <span class="text-gray-400">|</span>
+                        <span>{{ Math.round(designer.template.value.canvas_width / 300 * 100) / 100 }}" x {{ Math.round(designer.template.value.canvas_height / 300 * 100) / 100 }}" @300dpi</span>
                     </div>
                 </div>
 
@@ -329,30 +331,78 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                         <div
                             v-for="element in designer.template.value.elements"
                             :key="element.id"
-                            :class="[
-                                'absolute cursor-move select-none overflow-hidden border',
-                                designer.selectedElementId.value === element.id
-                                    ? 'border-indigo-500 ring-2 ring-indigo-500/30'
-                                    : 'border-gray-300 hover:border-indigo-300',
-                                element.element_type === 'line' ? 'bg-gray-800' : 'bg-white',
-                            ]"
-                            :style="getElementStyle(element)"
+                            :style="{
+                                ...getElementStyle(element),
+                                position: 'absolute',
+                                cursor: 'move',
+                                userSelect: 'none',
+                                overflow: 'hidden',
+                                boxSizing: 'border-box',
+                                border: designer.selectedElementId.value === element.id
+                                    ? '2px solid #6366f1'
+                                    : '1px solid #d1d5db',
+                                boxShadow: designer.selectedElementId.value === element.id
+                                    ? '0 0 0 3px rgba(99, 102, 241, 0.3)'
+                                    : 'none',
+                                background: element.element_type === 'line' ? '#1f2937' : '#ffffff',
+                            }"
                             @mousedown="handleElementMouseDown(element, $event)"
                         >
                             <!-- Text field / Static text -->
                             <template v-if="element.element_type === 'text_field' || element.element_type === 'static_text'">
-                                <div class="flex h-full items-center px-1 truncate" :style="{ textAlign: element.styles?.alignment || 'left' }">
+                                <div :style="{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    width: '100%',
+                                    height: '100%',
+                                    padding: '0',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'nowrap',
+                                    textOverflow: 'ellipsis',
+                                    textAlign: element.styles?.alignment || 'left',
+                                    justifyContent: element.styles?.alignment === 'center' ? 'center' : element.styles?.alignment === 'right' ? 'flex-end' : 'flex-start',
+                                }">
                                     {{ designer.renderElementContent(element, activeSampleData) }}
                                 </div>
                             </template>
 
                             <!-- Barcode -->
                             <template v-else-if="element.element_type === 'barcode'">
-                                <div class="flex h-full flex-col items-center justify-center">
-                                    <div class="flex h-3/4 w-full items-end justify-center gap-px">
-                                        <div v-for="i in 40" :key="i" class="h-full bg-black" :style="{ width: `${Math.random() > 0.5 ? 2 : 1}px` }"></div>
+                                <div :style="{
+                                    display: 'flex',
+                                    flexDirection: (element.styles?.rotation === 90 || element.styles?.rotation === 270) ? 'row' : 'column',
+                                    alignItems: element.styles?.alignment === 'left' ? 'flex-start' : element.styles?.alignment === 'right' ? 'flex-end' : 'center',
+                                    justifyContent: 'center',
+                                    width: '100%',
+                                    height: '100%',
+                                    overflow: 'hidden',
+                                    padding: '0',
+                                }">
+                                    <div :style="{
+                                        display: 'flex',
+                                        alignItems: 'flex-end',
+                                        justifyContent: 'center',
+                                        gap: '1px',
+                                        ...(element.styles?.rotation === 90 || element.styles?.rotation === 270
+                                            ? { flexDirection: 'column', height: '90%', width: 'auto', flex: '1', minWidth: '0' }
+                                            : { width: '80%', flex: '1', minHeight: '0' }),
+                                        overflow: 'hidden',
+                                    }">
+                                        <div v-for="i in 25" :key="i" :style="element.styles?.rotation === 90 || element.styles?.rotation === 270
+                                            ? { width: '100%', background: 'black', height: `${i % 3 === 0 ? 2 : 1}px` }
+                                            : { height: '100%', background: 'black', width: `${i % 3 === 0 ? 2 : 1}px` }
+                                        "></div>
                                     </div>
-                                    <div v-if="element.styles?.showText !== false" class="text-center text-xs truncate w-full">
+                                    <div v-if="element.styles?.showText !== false" :style="{
+                                        textAlign: 'center',
+                                        fontSize: '8px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        ...(element.styles?.rotation === 90 || element.styles?.rotation === 270
+                                            ? { writingMode: 'vertical-rl', height: '100%', width: 'auto', padding: '2px 0' }
+                                            : { width: '100%', padding: '0 2px' }),
+                                    }">
                                         {{ designer.renderElementContent(element, activeSampleData) }}
                                     </div>
                                 </div>
@@ -439,7 +489,7 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                             />
                         </div>
                     </div>
-                    <p class="text-xs text-gray-500">203 dots = 1 inch at 203 DPI</p>
+                    <p class="text-xs text-gray-500">Dots per inch depends on your printer (e.g., 203 or 300 DPI)</p>
 
                     <div class="flex items-center gap-2">
                         <Checkbox
@@ -532,8 +582,8 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                             />
                         </div>
 
-                        <!-- Alignment (for text elements) -->
-                        <div v-if="designer.selectedElement.value.element_type === 'text_field' || designer.selectedElement.value.element_type === 'static_text'">
+                        <!-- Alignment (for text and barcode elements) -->
+                        <div v-if="designer.selectedElement.value.element_type !== 'line'">
                             <Label>Alignment</Label>
                             <div class="mt-2 flex gap-1">
                                 <button
@@ -565,6 +615,39 @@ watch(() => designer.template.value.type, (newType, oldType) => {
                                     max="200"
                                     class="mt-1"
                                 />
+                            </div>
+
+                            <div>
+                                <Label for="module-width">Bar Width (dots)</Label>
+                                <Input
+                                    id="module-width"
+                                    :model-value="designer.selectedElement.value.styles?.moduleWidth || 2"
+                                    @update:model-value="designer.updateElementStyles(designer.selectedElementId.value!, { moduleWidth: Number($event) })"
+                                    type="number"
+                                    min="1"
+                                    max="10"
+                                    class="mt-1"
+                                />
+                                <p class="mt-1 text-xs text-gray-500">Controls printed barcode width. 1 = narrowest, 2 = double.</p>
+                            </div>
+
+                            <div>
+                                <Label>Rotation</Label>
+                                <div class="mt-2 flex gap-1">
+                                    <button
+                                        v-for="rot in [0, 90, 180, 270] as const"
+                                        :key="rot"
+                                        @click="designer.updateElementStyles(designer.selectedElementId.value!, { rotation: rot })"
+                                        :class="[
+                                            'flex-1 rounded border px-2 py-1 text-xs',
+                                            (designer.selectedElement.value.styles?.rotation || 0) === rot
+                                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400'
+                                                : 'border-gray-200 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5',
+                                        ]"
+                                    >
+                                        {{ rot }}°
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="flex items-center gap-2">

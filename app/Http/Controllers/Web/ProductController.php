@@ -10,6 +10,7 @@ use App\Models\Category;
 use App\Models\Image;
 use App\Models\Inventory;
 use App\Models\InventoryAdjustment;
+use App\Models\LabelTemplate;
 use App\Models\PlatformListing;
 use App\Models\PrinterSetting;
 use App\Models\Product;
@@ -23,9 +24,11 @@ use App\Models\Warehouse;
 use App\Services\ActivityLogFormatter;
 use App\Services\FeatureManager;
 use App\Services\Image\ImageService;
+use App\Services\LabelDataService;
 use App\Services\Sku\SkuGeneratorService;
 use App\Services\StoreContext;
 use App\Services\Video\VideoService;
+use App\Services\ZplGeneratorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -697,6 +700,19 @@ class ProductController extends Controller
             }
         }
 
+        // Resolve barcode label text server-side
+        $resolvedBarcodeText = collect($barcodeAttributes)
+            ->map(fn (string $attr) => match ($attr) {
+                'price_code' => $product->price_code,
+                'category' => $product->category?->name,
+                'price' => '$'.number_format($product->variants->first()?->price ?? 0, 2),
+                'sku' => $product->variants->first()?->sku,
+                'barcode' => $product->variants->first()?->barcode ?? $product->variants->first()?->sku,
+                default => $templateFieldValues[$attr] ?? null,
+            })
+            ->filter()
+            ->implode(', ');
+
         return Inertia::render('products/Show', [
             'product' => [
                 'id' => $product->id,
@@ -712,6 +728,7 @@ class ProductController extends Controller
                 'charge_taxes' => $product->charge_taxes,
                 'total_quantity' => $product->total_quantity,
                 'price_code' => $product->price_code,
+                'barcode_label_text' => $product->barcode_label_text,
                 'created_at' => $product->created_at,
                 'updated_at' => $product->updated_at,
                 'category' => $product->category ? [
@@ -844,6 +861,7 @@ class ProductController extends Controller
                 ->values(),
             'barcodeAttributes' => $barcodeAttributes,
             'templateFieldValues' => $templateFieldValues,
+            'resolvedBarcodeText' => $resolvedBarcodeText,
         ]);
     }
 
@@ -1426,12 +1444,36 @@ class ProductController extends Controller
                 'network_print_enabled' => $setting->isNetworkPrintingEnabled(),
             ]);
 
+        $labelTemplates = LabelTemplate::where('store_id', $store->id)
+            ->where('type', LabelTemplate::TYPE_PRODUCT)
+            ->with('elements')
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (LabelTemplate $t) => [
+                'id' => $t->id,
+                'name' => $t->name,
+                'is_default' => $t->is_default,
+                'canvas_width' => $t->canvas_width,
+                'canvas_height' => $t->canvas_height,
+                'elements' => $t->elements->map(fn ($e) => [
+                    'element_type' => $e->element_type,
+                    'x' => $e->x,
+                    'y' => $e->y,
+                    'width' => $e->width,
+                    'height' => $e->height,
+                    'content' => $e->content,
+                    'styles' => $e->styles ?? [],
+                ]),
+            ]);
+
         return Inertia::render('products/PrintBarcode', [
             'product' => [
                 'id' => $product->id,
                 'title' => $product->title,
                 'sku' => $product->sku,
                 'price_code' => $product->price_code,
+                'barcode_label_text' => $product->barcode_label_text,
                 'category' => $product->category?->name,
                 'variants' => $product->variants->map(fn (ProductVariant $variant) => [
                     'id' => $variant->id,
@@ -1444,6 +1486,72 @@ class ProductController extends Controller
             'barcodeAttributes' => $barcodeAttributes,
             'templateFieldValues' => $templateFieldValues,
             'printerSettings' => $printerSettings,
+            'labelTemplates' => $labelTemplates,
+        ]);
+    }
+
+    public function updateBarcodeLabel(Request $request, Product $product): RedirectResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $product->store_id !== $store->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'barcode_label_text' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $product->update([
+            'barcode_label_text' => $validated['barcode_label_text'] ?: null,
+        ]);
+
+        return redirect()->back();
+    }
+
+    /**
+     * Generate ZPL from a label template for product variants.
+     */
+    public function generateZplFromTemplate(Request $request, Product $product, ZplGeneratorService $zplGenerator): JsonResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        if (! $store || $product->store_id !== $store->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'template_id' => 'required|integer|exists:label_templates,id',
+            'variant_ids' => 'required|array|min:1',
+            'variant_ids.*' => 'integer|exists:product_variants,id',
+            'quantity' => 'integer|min:1|max:100',
+        ]);
+
+        $template = LabelTemplate::with('elements')
+            ->where('store_id', $store->id)
+            ->where('type', LabelTemplate::TYPE_PRODUCT)
+            ->findOrFail($validated['template_id']);
+
+        $variants = ProductVariant::with(['product.category', 'product.brand', 'product.attributeValues.field.options'])
+            ->where('product_id', $product->id)
+            ->whereIn('id', $validated['variant_ids'])
+            ->get();
+
+        $quantity = $validated['quantity'] ?? 1;
+        $items = [];
+
+        foreach ($variants as $variant) {
+            $data = LabelDataService::formatProductVariantForLabel($variant);
+            for ($i = 0; $i < $quantity; $i++) {
+                $items[] = $data;
+            }
+        }
+
+        $zpl = $zplGenerator->generateBatch($template, $items);
+
+        return response()->json([
+            'zpl' => $zpl,
+            'count' => count($items),
         ]);
     }
 

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { onMounted, ref, computed, watch } from 'vue';
+import { onMounted, ref, computed, watch, nextTick } from 'vue';
 import { ArrowLeftIcon, PrinterIcon, ComputerDesktopIcon, ExclamationTriangleIcon, WifiIcon, AdjustmentsHorizontalIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/20/solid';
 import JsBarcode from 'jsbarcode';
 import { useZebraPrint, ZPL, type PrinterSettings } from '@/composables/useZebraPrint';
+import axios from 'axios';
 
 interface Variant {
     id: number;
@@ -30,21 +31,201 @@ interface PrinterSettingOption {
     network_print_enabled: boolean;
 }
 
+interface TemplateElement {
+    element_type: 'text_field' | 'barcode' | 'static_text' | 'line';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    content: string | null;
+    styles: Record<string, any>;
+}
+
+interface LabelTemplateOption {
+    id: number;
+    name: string;
+    is_default: boolean;
+    canvas_width: number;
+    canvas_height: number;
+    elements: TemplateElement[];
+}
+
 interface Props {
     product: {
         id: number;
         title: string;
         sku: string | null;
         price_code: string | null;
+        barcode_label_text: string | null;
         category: string | null;
         variants: Variant[];
     };
     barcodeAttributes: string[];
     templateFieldValues: Record<string, string | null>;
     printerSettings: PrinterSettingOption[];
+    labelTemplates: LabelTemplateOption[];
 }
 
 const props = defineProps<Props>();
+
+// Label template selection — null means "Default" (hardcoded layout)
+const selectedTemplateId = ref<number | null>(null);
+const selectedTemplate = computed<LabelTemplateOption | null>(() => {
+    if (!selectedTemplateId.value) return null;
+    return props.labelTemplates.find(t => t.id === selectedTemplateId.value) ?? null;
+});
+const isTemplateMode = computed(() => selectedTemplate.value !== null);
+
+// Template ZPL generation state
+const generatingZpl = ref(false);
+
+/**
+ * Resolve a template field value for a variant from product data.
+ * Handles dot-notation like 'variant.sku', 'product.category', etc.
+ */
+const resolveTemplateField = (fieldKey: string | null, variant: Variant): string => {
+    if (!fieldKey) return '';
+    const [group, field] = fieldKey.split('.');
+    if (!group || !field) return '';
+
+    if (group === 'variant') {
+        if (field === 'sku') return variant.sku || '';
+        if (field === 'barcode') return variant.barcode || variant.sku || '';
+        if (field === 'price') return formatCurrency(variant.price);
+        if (field === 'options_title') return variant.title || '';
+        return '';
+    }
+
+    if (group === 'product') {
+        if (field === 'title') return props.product.title || '';
+        if (field === 'category') return props.product.category || '';
+        if (field === 'price_code') return props.product.price_code || '';
+        if (field === 'barcode_label_text') return props.product.barcode_label_text || '';
+        if (field === 'sku') return props.product.sku || '';
+        // attribute_line: use barcode_label_text override, or compute from barcode attributes
+        if (field === 'attribute_line') return getLabelLine(variant);
+        // Individual attributes (attribute_1 through attribute_5)
+        const attrMatch = field.match(/^attribute_(\d+)$/);
+        if (attrMatch) {
+            const index = parseInt(attrMatch[1]) - 1; // 1-indexed to 0-indexed
+            const values = getLabelValues(variant);
+            return values[index] || '';
+        }
+        // Check templateFieldValues for other fields
+        return props.templateFieldValues[field] || props.templateFieldValues[fieldKey] || '';
+    }
+
+    return '';
+};
+
+/**
+ * Compute scaled styles for template canvas preview.
+ */
+const templateCanvasStyles = computed(() => {
+    const tmpl = selectedTemplate.value;
+    if (!tmpl) return {};
+    // Scale canvas to a reasonable screen size (target ~336px for a 2" label)
+    const scale = 336 / Math.max(tmpl.canvas_width, 1);
+    return {
+        width: `${Math.round(tmpl.canvas_width * scale)}px`,
+        height: `${Math.round(tmpl.canvas_height * scale)}px`,
+        position: 'relative' as const,
+        margin: '0',
+        padding: '0',
+        overflow: 'hidden',
+    };
+});
+
+/**
+ * Get CSS style for a template element positioned within canvas.
+ * Uses same scale as the canvas itself.
+ */
+const templateScale = computed(() => {
+    const tmpl = selectedTemplate.value;
+    if (!tmpl) return 1;
+    return 336 / Math.max(tmpl.canvas_width, 1);
+});
+const getElementStyle = (element: TemplateElement, canvasWidth: number, canvasHeight: number) => {
+    return {
+        position: 'absolute' as const,
+        left: `${Math.round(element.x * templateScale.value)}px`,
+        top: `${Math.round(element.y * templateScale.value)}px`,
+        width: `${Math.round(element.width * templateScale.value)}px`,
+        height: `${Math.round(element.height * templateScale.value)}px`,
+        fontSize: `${Math.max(10, Math.round((element.styles?.fontSize || 20) * templateScale.value))}px`,
+        textAlign: (element.styles?.alignment || 'left') as any,
+        overflow: 'hidden',
+        lineHeight: '1.2',
+        margin: '0',
+        padding: '0',
+        boxSizing: 'border-box' as const,
+    };
+};
+
+/**
+ * Generate ZPL from server via template and send to printer.
+ */
+const generateTemplateZpl = async (): Promise<string | null> => {
+    const tmpl = selectedTemplate.value;
+    if (!tmpl) return null;
+
+    generatingZpl.value = true;
+    try {
+        const response = await axios.post(`/products/${props.product.id}/print-barcode/zpl`, {
+            template_id: tmpl.id,
+            variant_ids: selectedVariants.value,
+            quantity: copies.value,
+        });
+        return response.data.zpl;
+    } catch (error) {
+        console.error('Failed to generate ZPL from template:', error);
+        return null;
+    } finally {
+        generatingZpl.value = false;
+    }
+};
+
+// Template barcode refs for JsBarcode rendering in template mode
+const templateBarcodeRefs = ref<Map<string, SVGElement>>(new Map());
+
+const setTemplateBarcodeRef = (el: SVGElement | null, key: string) => {
+    if (el) {
+        templateBarcodeRefs.value.set(key, el);
+    }
+};
+
+const generateTemplateBarcodes = () => {
+    const tmpl = selectedTemplate.value;
+    if (!tmpl) return;
+
+    props.product.variants.forEach((variant) => {
+        tmpl.elements.forEach((element, idx) => {
+            if (element.element_type !== 'barcode') return;
+            const key = `${variant.id}-${idx}`;
+            const el = templateBarcodeRefs.value.get(key);
+            const fieldValue = resolveTemplateField(element.content, variant);
+            if (el && fieldValue) {
+                const barcodeH = (element.styles?.barcodeHeight || 50) * templateScale.value;
+                JsBarcode(el, fieldValue, {
+                    format: 'CODE128',
+                    width: 1.5,
+                    height: barcodeH,
+                    displayValue: element.styles?.showText !== false,
+                    margin: 0,
+                    fontSize: 12,
+                });
+            }
+        });
+    });
+};
+
+watch(selectedTemplateId, () => {
+    nextTick(() => {
+        if (isTemplateMode.value) {
+            generateTemplateBarcodes();
+        }
+    });
+});
 
 /**
  * Format price with currency symbol
@@ -97,9 +278,13 @@ const getLabelValues = (variant: Variant): string[] => {
 };
 
 /**
- * Get formatted horizontal line for label (values separated by commas)
+ * Get formatted horizontal line for label (values separated by commas).
+ * Uses per-product override if set, otherwise computes from attributes.
  */
 const getLabelLine = (variant: Variant): string => {
+    if (props.product.barcode_label_text) {
+        return props.product.barcode_label_text;
+    }
     return getLabelValues(variant).join(', ');
 };
 
@@ -391,7 +576,34 @@ const networkPrintHandler = async () => {
     }
 };
 
-const handlePrint = () => {
+const handlePrint = async () => {
+    if (isTemplateMode.value && printMode.value !== 'browser') {
+        // Template mode: generate ZPL server-side
+        const zpl = await generateTemplateZpl();
+        if (!zpl) {
+            zebraStatus.value.error = 'Failed to generate labels from template.';
+            return;
+        }
+
+        let success = false;
+        if (printMode.value === 'zebra') {
+            success = await print(zpl);
+        } else if (printMode.value === 'network') {
+            if (!selectedPrinterSettingId.value) {
+                zebraStatus.value.error = 'Please select a printer with network printing configured.';
+                return;
+            }
+            success = await networkPrint(selectedPrinterSettingId.value, zpl);
+        }
+
+        if (success) {
+            printSuccess.value = true;
+            setTimeout(() => { printSuccess.value = false; }, 3000);
+        }
+        return;
+    }
+
+    // Default mode or browser print
     if (printMode.value === 'zebra') {
         zebraPrint();
     } else if (printMode.value === 'network') {
@@ -428,11 +640,11 @@ const totalLabels = computed(() => {
                     <button
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-                        :disabled="printing || selectedVariants.length === 0 || (printMode === 'zebra' && !zebraStatus.selectedPrinter) || (printMode === 'network' && !selectedPrinterSettingId)"
+                        :disabled="printing || generatingZpl || selectedVariants.length === 0 || (printMode === 'zebra' && !zebraStatus.selectedPrinter) || (printMode === 'network' && !selectedPrinterSettingId)"
                         @click="handlePrint"
                     >
                         <PrinterIcon class="-ml-0.5 size-5" />
-                        {{ printing ? 'Printing...' : `Print ${totalLabels} Label${totalLabels !== 1 ? 's' : ''}` }}
+                        {{ generatingZpl ? 'Generating...' : printing ? 'Printing...' : `Print ${totalLabels} Label${totalLabels !== 1 ? 's' : ''}` }}
                     </button>
                 </div>
             </div>
@@ -922,6 +1134,23 @@ const totalLabels = computed(() => {
                 </div>
             </div>
 
+            <!-- Label Template Selection (hidden when printing) -->
+            <div v-if="labelTemplates.length > 0" class="print:hidden mb-6 bg-white rounded-lg shadow dark:bg-gray-800 p-4">
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Label Layout</h3>
+                <select
+                    v-model="selectedTemplateId"
+                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                >
+                    <option :value="null">Default</option>
+                    <option v-for="tmpl in labelTemplates" :key="tmpl.id" :value="tmpl.id">
+                        {{ tmpl.name }}{{ tmpl.is_default ? ' (Default)' : '' }}
+                    </option>
+                </select>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Select a custom label template or use the default layout.
+                </p>
+            </div>
+
             <!-- Variant Selection (for Zebra and Network modes) -->
             <div v-if="(printMode === 'zebra' || printMode === 'network') && product.variants.length > 1" class="print:hidden mb-6 bg-white rounded-lg shadow dark:bg-gray-800 p-4">
                 <div class="flex items-center justify-between mb-3">
@@ -974,7 +1203,63 @@ const totalLabels = computed(() => {
                 <div class="p-6 print:p-0">
                     <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-4 print:hidden">Label Preview</h3>
 
-                    <div class="flex flex-wrap gap-4 print:block" :style="printCssVars">
+                    <!-- Template-based preview -->
+                    <div v-if="isTemplateMode" class="flex flex-wrap gap-4 print:block">
+                        <div
+                            v-for="variant in product.variants"
+                            :key="variant.id"
+                            :class="[
+                                'border border-gray-200 print:border-0 bg-white',
+                                (printMode === 'zebra' || printMode === 'network') && !selectedVariants.includes(variant.id) ? 'opacity-40 print:hidden' : '',
+                            ]"
+                            :style="templateCanvasStyles"
+                        >
+                            <template v-for="(element, idx) in selectedTemplate!.elements" :key="idx">
+                                <!-- Text field element -->
+                                <div
+                                    v-if="element.element_type === 'text_field'"
+                                    :style="{
+                                        ...getElementStyle(element, selectedTemplate!.canvas_width, selectedTemplate!.canvas_height),
+                                        fontWeight: 'bold',
+                                        color: '#000',
+                                        whiteSpace: 'nowrap',
+                                        textOverflow: 'ellipsis',
+                                    }"
+                                >
+                                    {{ resolveTemplateField(element.content, variant) }}
+                                </div>
+                                <!-- Barcode element -->
+                                <div
+                                    v-else-if="element.element_type === 'barcode'"
+                                    :style="getElementStyle(element, selectedTemplate!.canvas_width, selectedTemplate!.canvas_height)"
+                                >
+                                    <svg :ref="(el) => setTemplateBarcodeRef(el as SVGElement, `${variant.id}-${idx}`)" style="display: block; margin: 0; padding: 0;"></svg>
+                                </div>
+                                <!-- Static text element -->
+                                <div
+                                    v-else-if="element.element_type === 'static_text'"
+                                    :style="{
+                                        ...getElementStyle(element, selectedTemplate!.canvas_width, selectedTemplate!.canvas_height),
+                                        fontWeight: 'bold',
+                                        color: '#000',
+                                    }"
+                                >
+                                    {{ element.content }}
+                                </div>
+                                <!-- Line element -->
+                                <div
+                                    v-else-if="element.element_type === 'line'"
+                                    :style="{
+                                        ...getElementStyle(element, selectedTemplate!.canvas_width, selectedTemplate!.canvas_height),
+                                        borderBottom: `${element.styles?.thickness || 2}px solid black`,
+                                    }"
+                                ></div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Default preview -->
+                    <div v-else class="flex flex-wrap gap-4 print:block" :style="printCssVars">
                         <div
                             v-for="variant in product.variants"
                             :key="variant.id"

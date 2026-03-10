@@ -88,6 +88,7 @@ class Product extends Model
         'weight_unit',
         'compare_at_price',
         'price_code',
+        'barcode_label_text',
         'currency_code',
         'store_id',
         'handle',

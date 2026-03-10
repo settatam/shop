@@ -115,6 +115,7 @@ interface Product {
     charge_taxes: boolean;
     total_quantity: number;
     price_code: string | null;
+    barcode_label_text: string | null;
     created_at: string;
     updated_at: string;
     category: { id: number; name: string; full_path: string } | null;
@@ -136,6 +137,7 @@ interface Props {
     inventoryDistribution?: DistributionRow[];
     barcodeAttributes?: string[];
     templateFieldValues?: Record<string, string | null>;
+    resolvedBarcodeText?: string;
 }
 
 const props = defineProps<Props>();
@@ -214,6 +216,54 @@ const formatAttributeName = (attr: string): string => {
 
 const refreshListings = () => {
     router.reload({ only: ['platformListings', 'availableMarketplaces'] });
+};
+
+// Barcode label editing
+const editingBarcodeLabel = ref(false);
+const barcodeLabelText = ref('');
+const savingBarcodeLabel = ref(false);
+
+const displayBarcodeText = computed(() => {
+    return props.product.barcode_label_text ?? props.resolvedBarcodeText ?? '';
+});
+
+const startEditingBarcodeLabel = () => {
+    barcodeLabelText.value = displayBarcodeText.value;
+    editingBarcodeLabel.value = true;
+};
+
+const cancelEditingBarcodeLabel = () => {
+    editingBarcodeLabel.value = false;
+};
+
+const saveBarcodeLabel = () => {
+    savingBarcodeLabel.value = true;
+    router.put(`/products/${props.product.id}/barcode-label`, {
+        barcode_label_text: barcodeLabelText.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingBarcodeLabel.value = false;
+        },
+        onFinish: () => {
+            savingBarcodeLabel.value = false;
+        },
+    });
+};
+
+const resetBarcodeLabel = () => {
+    savingBarcodeLabel.value = true;
+    router.put(`/products/${props.product.id}/barcode-label`, {
+        barcode_label_text: null,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            editingBarcodeLabel.value = false;
+        },
+        onFinish: () => {
+            savingBarcodeLabel.value = false;
+        },
+    });
 };
 
 // Transfer modal state
@@ -790,15 +840,39 @@ function submitTransfer(asDraft: boolean) {
                     <!-- Barcode Label -->
                     <div v-if="barcodeAttributes && barcodeAttributes.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Barcode Label</h3>
-                            <dl class="space-y-3">
-                                <div v-for="attr in barcodeAttributes" :key="attr" class="flex items-center justify-between">
-                                    <dt class="text-sm text-gray-500 dark:text-gray-400">{{ formatAttributeName(attr) }}</dt>
-                                    <dd class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ getAttributeValue(attr, product.variants[0]) || '-' }}
-                                    </dd>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-base font-semibold text-gray-900 dark:text-white">Barcode Label</h3>
+                                <button v-if="!editingBarcodeLabel" type="button" @click="startEditingBarcodeLabel" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                    <PencilIcon class="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <!-- View mode -->
+                            <div v-if="!editingBarcodeLabel">
+                                <p class="text-sm text-gray-900 dark:text-white">{{ displayBarcodeText || '-' }}</p>
+                                <div v-if="product.barcode_label_text" class="mt-2 flex items-center gap-2">
+                                    <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset dark:bg-blue-400/10 dark:text-blue-400 dark:ring-blue-400/30">Customized</span>
+                                    <button type="button" @click="resetBarcodeLabel" :disabled="savingBarcodeLabel" class="text-xs text-gray-500 hover:text-gray-700 underline dark:text-gray-400 dark:hover:text-gray-200">Reset</button>
                                 </div>
-                            </dl>
+                            </div>
+
+                            <!-- Edit mode -->
+                            <div v-else>
+                                <textarea
+                                    v-model="barcodeLabelText"
+                                    rows="3"
+                                    class="block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:focus:outline-indigo-500"
+                                    placeholder="Enter custom label text..."
+                                />
+                                <div class="mt-3 flex items-center gap-2">
+                                    <button type="button" @click="saveBarcodeLabel" :disabled="savingBarcodeLabel" class="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
+                                        {{ savingBarcodeLabel ? 'Saving...' : 'Save' }}
+                                    </button>
+                                    <button type="button" @click="cancelEditingBarcodeLabel" :disabled="savingBarcodeLabel" class="rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
