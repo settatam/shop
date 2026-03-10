@@ -14,7 +14,7 @@ interface TerminalGatewayInterface extends PaymentGatewayInterface
 
     public function getCheckoutStatus(string $checkoutId): CheckoutStatus;
 
-    public function cancelCheckout(string $checkoutId): CancelResult;
+    public function cancelCheckout(string $checkoutId, ?PaymentTerminal $terminal = null): CancelResult;
 
     public function listDevices(string $locationId): array;
 

@@ -360,6 +360,12 @@ async function cancelTerminalCheckout() {
     if (terminalAbortController) {
         terminalAbortController.abort();
         terminalAbortController = null;
+
+        // Send cancel signal to the terminal to clear its screen
+        if (selectedTerminalId.value) {
+            axios.post(`/api/v1/terminals/${selectedTerminalId.value}/cancel`).catch(() => {});
+        }
+
         terminalCheckoutStatus.value = null;
         isProcessing.value = false;
         successMessage.value = null;

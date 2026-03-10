@@ -122,6 +122,7 @@ const terminalCheckoutStatus = ref<string | null>(null);
 const processingTerminalLineId = ref<number | null>(null);
 const currentCheckoutId = ref<number | null>(null);
 const isCancelling = ref(false);
+const currentTerminalId = ref<number | null>(null);
 let terminalAbortController: AbortController | null = null;
 
 // Payment summary from API
@@ -450,6 +451,7 @@ async function processTerminalPayment(line: PaymentLine) {
     if (!line.terminal_id) return;
 
     processingTerminalLineId.value = line.id;
+    currentTerminalId.value = line.terminal_id;
     terminalCheckoutStatus.value = 'waiting';
     terminalAbortController = new AbortController();
 
@@ -543,8 +545,15 @@ async function cancelTerminalCheckout() {
     if (terminalAbortController) {
         terminalAbortController.abort();
         terminalAbortController = null;
+
+        // Send cancel signal to the terminal to clear its screen
+        if (currentTerminalId.value) {
+            axios.post(`/api/v1/terminals/${currentTerminalId.value}/cancel`).catch(() => {});
+        }
+
         terminalCheckoutStatus.value = null;
         processingTerminalLineId.value = null;
+        currentTerminalId.value = null;
         isProcessing.value = false;
         successMessage.value = null;
         isCancelling.value = false;

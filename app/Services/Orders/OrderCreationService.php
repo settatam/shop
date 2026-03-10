@@ -98,9 +98,6 @@ class OrderCreationService
             // Determine tax rate
             $taxRate = $data['tax_rate'] ?? $this->taxService->getTaxRate($warehouse, $store);
 
-            // Generate invoice number
-            $invoiceNumber = $this->generateInvoiceNumber($store);
-
             // Calculate trade-in credit if trade-in items are provided
             $tradeInCredit = 0;
             $tradeInTransaction = null;
@@ -122,7 +119,6 @@ class OrderCreationService
                 'warehouse_id' => $warehouse?->id,
                 'sales_channel_id' => $defaultLocalChannel->id,
                 'status' => Order::STATUS_PENDING,
-                'invoice_number' => $invoiceNumber,
                 'date_of_purchase' => $data['date_of_purchase'] ?? now(),
                 'tax_rate' => $taxRate,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
@@ -135,6 +131,9 @@ class OrderCreationService
             ]);
 
             $this->store = $store;
+
+            // Set invoice number using store prefix/suffix pattern
+            $this->order->update(['invoice_number' => $this->generateInvoiceNumber()]);
 
             // Add items
             foreach ($data['items'] as $itemData) {
@@ -223,20 +222,6 @@ class OrderCreationService
     }
 
     /**
-     * Generate a unique invoice number.
-     */
-    protected function generateInvoiceNumber(Store $store): string
-    {
-        $prefix = 'INV-';
-        $date = now()->format('Ymd');
-        $count = Order::where('store_id', $store->id)
-            ->whereDate('created_at', now()->toDateString())
-            ->count() + 1;
-
-        return $prefix.$date.'-'.str_pad((string) $count, 4, '0', STR_PAD_LEFT);
-    }
-
-    /**
      * Calculate totals including tax and trade-in credit.
      * Tax is calculated on the net amount after subtracting trade-in credit.
      */
@@ -302,6 +287,17 @@ class OrderCreationService
             'source_platform' => $this->data['source_platform'] ?? null,
             'external_marketplace_id' => $this->data['external_marketplace_id'] ?? null,
         ]);
+
+        // Set invoice number using store prefix/suffix pattern
+        $this->order->update(['invoice_number' => $this->generateInvoiceNumber()]);
+    }
+
+    protected function generateInvoiceNumber(): string
+    {
+        $prefix = $this->store->order_id_prefix ?? '';
+        $suffix = $this->store->order_id_suffix ?? '';
+
+        return "{$prefix}{$this->order->id}{$suffix}";
     }
 
     protected function assignCustomer(): void

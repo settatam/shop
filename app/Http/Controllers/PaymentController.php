@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Contracts\Payable;
 use App\Http\Requests\ProcessPaymentRequest;
 use App\Http\Requests\UpdatePaymentAdjustmentsRequest;
+use App\Models\Activity;
+use App\Models\ActivityLog;
 use App\Models\Layaway;
 use App\Models\Memo;
 use App\Models\Order;
@@ -222,6 +224,14 @@ class PaymentController extends Controller
                 ],
             ]);
 
+            ActivityLog::log(
+                Activity::ORDERS_TERMINAL_PAYMENT_FAILED,
+                $payable,
+                null,
+                ['error' => $result->errorMessage, 'amount' => $amount, 'terminal' => $terminal->name],
+                "Terminal payment of \${$amount} failed: {$result->errorMessage}",
+            );
+
             return response()->json([
                 'message' => $result->errorMessage ?? 'Failed to create terminal checkout',
             ], 422);
@@ -287,6 +297,15 @@ class PaymentController extends Controller
             if (method_exists($payable, 'recalculateTotals')) {
                 $payable->recalculateTotals();
             }
+
+            $cardDesc = $cardBrand ? "{$cardBrand} ending {$cardLastFour}" : 'card';
+            ActivityLog::log(
+                Activity::ORDERS_TERMINAL_PAYMENT,
+                $payable,
+                null,
+                ['amount' => $amount, 'card_brand' => $cardBrand, 'card_last_four' => $cardLastFour, 'terminal' => $terminal->name],
+                "Terminal payment of \${$amount} received via {$cardDesc}",
+            );
 
             return response()->json([
                 'message' => 'Payment approved.',

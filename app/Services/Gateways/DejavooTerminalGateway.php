@@ -229,8 +229,44 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
         );
     }
 
-    public function cancelCheckout(string $checkoutId): CancelResult
+    /**
+     * Cancel a pending transaction on the Dejavoo terminal.
+     * Sends a Cancel request via SPIn API to interrupt the terminal.
+     */
+    public function cancelCheckout(string $checkoutId, ?PaymentTerminal $terminal = null): CancelResult
     {
+        if (! $terminal) {
+            return CancelResult::success($checkoutId);
+        }
+
+        $authKey = $this->getAuthKey($terminal);
+        $terminalId = $this->getTerminalId($terminal);
+
+        if (! $authKey || ! $terminalId) {
+            return CancelResult::success($checkoutId);
+        }
+
+        try {
+            $response = Http::acceptJson()
+                ->asJson()
+                ->timeout(15)
+                ->post($this->getApiUrl('Payment/Cancel'), [
+                    'Tpn' => $terminalId,
+                    'AuthKey' => $authKey,
+                ]);
+
+            Log::info('Dejavoo: Cancel response', [
+                'terminal_id' => $terminalId,
+                'status_code' => $response->status(),
+                'body' => $response->json(),
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Dejavoo: Cancel request failed', [
+                'terminal_id' => $terminalId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return CancelResult::success($checkoutId);
     }
 

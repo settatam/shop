@@ -106,6 +106,12 @@ class Activity extends Model
 
     public const ORDERS_DELETE_CLOSED = 'orders.delete_closed';
 
+    public const ORDERS_TERMINAL_PAYMENT = 'orders.terminal_payment';
+
+    public const ORDERS_TERMINAL_PAYMENT_FAILED = 'orders.terminal_payment_failed';
+
+    public const ORDERS_TERMINAL_PAYMENT_CANCELLED = 'orders.terminal_payment_cancelled';
+
     // Transaction Activities
     public const TRANSACTIONS_VIEW = 'transactions.view';
 
@@ -389,6 +395,9 @@ class Activity extends Model
             self::ORDERS_MANAGE_SHIPPING => ['name' => 'Manage Shipping', 'category' => self::CATEGORY_ORDERS, 'description' => 'Create shipping labels and tracking'],
             self::ORDERS_VIEW_FINANCIALS => ['name' => 'View Order Financials', 'category' => self::CATEGORY_ORDERS, 'description' => 'View order costs and profits'],
             self::ORDERS_DELETE_CLOSED => ['name' => 'Closed Sale Deleted', 'category' => self::CATEGORY_ORDERS, 'description' => 'A completed/shipped sale was deleted'],
+            self::ORDERS_TERMINAL_PAYMENT => ['name' => 'Terminal Payment', 'category' => self::CATEGORY_ORDERS, 'description' => 'Payment received via card terminal'],
+            self::ORDERS_TERMINAL_PAYMENT_FAILED => ['name' => 'Terminal Payment Failed', 'category' => self::CATEGORY_ORDERS, 'description' => 'Card terminal payment was declined or failed'],
+            self::ORDERS_TERMINAL_PAYMENT_CANCELLED => ['name' => 'Terminal Payment Cancelled', 'category' => self::CATEGORY_ORDERS, 'description' => 'Card terminal payment was cancelled'],
 
             // Transactions
             self::TRANSACTIONS_VIEW => ['name' => 'View Transactions', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'View buy transactions'],

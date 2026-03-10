@@ -277,6 +277,7 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
     // Terminal Checkouts
     Route::get('terminal-checkouts/{checkout}', [TerminalCheckoutController::class, 'show']);
     Route::post('terminal-checkouts/{checkout}/cancel', [TerminalCheckoutController::class, 'cancel']);
+    Route::post('terminals/{terminal}/cancel', [TerminalCheckoutController::class, 'cancelTerminal']);
 
     // AI Chat
     Route::post('chat/message', [ChatController::class, 'message']);

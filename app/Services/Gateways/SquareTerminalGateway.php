@@ -102,7 +102,7 @@ class SquareTerminalGateway implements TerminalGatewayInterface
         );
     }
 
-    public function cancelCheckout(string $checkoutId): CancelResult
+    public function cancelCheckout(string $checkoutId, ?PaymentTerminal $terminal = null): CancelResult
     {
         // TODO: Implement Square Terminal checkout cancellation via API
         return CancelResult::success($checkoutId);

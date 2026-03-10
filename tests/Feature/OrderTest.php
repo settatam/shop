@@ -973,4 +973,56 @@ class OrderTest extends TestCase
         $order->refresh();
         $this->assertNull($order->customer_id);
     }
+
+    public function test_order_invoice_number_uses_store_prefix_and_suffix(): void
+    {
+        Passport::actingAs($this->user);
+
+        $this->store->update([
+            'order_id_prefix' => 'REB',
+            'order_id_suffix' => 'REB',
+        ]);
+
+        $response = $this->postJson('/api/v1/orders', [
+            'items' => [
+                [
+                    'title' => 'Test Product',
+                    'sku' => 'TEST-INV-001',
+                    'quantity' => 1,
+                    'price' => 10.00,
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $order = Order::where('store_id', $this->store->id)->latest('id')->first();
+        $this->assertEquals("REB{$order->id}REB", $order->invoice_number);
+    }
+
+    public function test_order_invoice_number_uses_just_order_id_when_no_prefix_suffix(): void
+    {
+        Passport::actingAs($this->user);
+
+        $this->store->update([
+            'order_id_prefix' => null,
+            'order_id_suffix' => null,
+        ]);
+
+        $response = $this->postJson('/api/v1/orders', [
+            'items' => [
+                [
+                    'title' => 'Test Product',
+                    'sku' => 'TEST-INV-002',
+                    'quantity' => 1,
+                    'price' => 10.00,
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $order = Order::where('store_id', $this->store->id)->latest('id')->first();
+        $this->assertEquals((string) $order->id, $order->invoice_number);
+    }
 }
