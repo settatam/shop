@@ -126,12 +126,12 @@ class Repair extends Model implements Payable
             if (in_array($repair->repair_number, ['REP-TEMP', 'APR-TEMP'])) {
                 $store = $repair->store;
                 $prefix = $repair->is_appraisal
-                    ? ($store?->appraisal_id_prefix ?? 'APR')
-                    : ($store?->repair_id_prefix ?? 'REP');
+                    ? ($store?->appraisal_id_prefix ?? '')
+                    : ($store?->repair_id_prefix ?? '');
                 $suffix = $repair->is_appraisal
                     ? ($store?->appraisal_id_suffix ?? '')
                     : ($store?->repair_id_suffix ?? '');
-                $repair->repair_number = "{$prefix}-{$repair->id}{$suffix}";
+                $repair->repair_number = "{$prefix}{$repair->id}{$suffix}";
                 $repair->saveQuietly();
                 $repair->searchable(); // Manually sync to Scout after saveQuietly
             }

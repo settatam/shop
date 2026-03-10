@@ -332,7 +332,6 @@ class RepairTest extends TestCase
         $repair2 = Repair::factory()->create(['store_id' => $this->store->id]);
 
         $this->assertNotEquals($repair1->repair_number, $repair2->repair_number);
-        $this->assertStringStartsWith('REP-', $repair1->repair_number);
     }
 
     public function test_can_delete_pending_repair(): void
@@ -414,11 +413,12 @@ class RepairTest extends TestCase
         $this->assertNotNull($repair->invoice);
         $this->assertEquals('paid', $repair->invoice->status);
 
-        // Verify order has REP- prefix in invoice number
+        // Verify order has invoice number using store's repair prefix/suffix
         $order = Order::find($repair->order_id);
         $this->assertNotNull($order);
-        $this->assertStringStartsWith('REP-', $order->invoice_number);
-        $this->assertEquals("REP-{$order->id}", $order->invoice_number);
+        $prefix = $this->store->repair_id_prefix ?? '';
+        $suffix = $this->store->repair_id_suffix ?? '';
+        $this->assertEquals("{$prefix}{$order->id}{$suffix}", $order->invoice_number);
     }
 
     public function test_product_status_changes_to_in_repair_when_added(): void

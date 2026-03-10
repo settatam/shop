@@ -99,31 +99,53 @@ class Invoice extends Model
         });
 
         static::created(function (Invoice $invoice) {
-            // Generate invoice_number from store prefix based on invoiceable type
-            if ($invoice->invoice_number === 'INV-TEMP') {
-                $store = $invoice->store;
-                $prefix = static::getPrefixForInvoiceableType($invoice->invoiceable_type, $store);
-                $invoice->invoice_number = "{$prefix}-{$invoice->id}";
-                $invoice->saveQuietly();
+            if ($invoice->invoice_number !== 'INV-TEMP') {
+                return;
             }
+
+            // For order invoices, use the order's order_id so they share the same number
+            if ($invoice->invoiceable_type === Order::class && $invoice->invoiceable_id) {
+                $order = Order::find($invoice->invoiceable_id);
+                if ($order && $order->order_id) {
+                    // Only use the order_id if no other invoice already has it
+                    $exists = Invoice::where('invoice_number', $order->order_id)
+                        ->where('id', '!=', $invoice->id)
+                        ->exists();
+
+                    if (! $exists) {
+                        $invoice->invoice_number = $order->order_id;
+                        $invoice->saveQuietly();
+
+                        return;
+                    }
+                }
+            }
+
+            // For other types, generate from store prefix/suffix
+            $store = $invoice->store;
+            [$prefix, $suffix] = static::getPrefixAndSuffixForInvoiceableType($invoice->invoiceable_type, $store);
+            $invoice->invoice_number = "{$prefix}{$invoice->id}{$suffix}";
+            $invoice->saveQuietly();
         });
     }
 
     /**
-     * Get the appropriate prefix based on the invoiceable type and store settings.
+     * Get the appropriate prefix and suffix based on the invoiceable type and store settings.
+     *
+     * @return array{0: string, 1: string}
      */
-    protected static function getPrefixForInvoiceableType(?string $invoiceableType, ?Store $store): string
+    protected static function getPrefixAndSuffixForInvoiceableType(?string $invoiceableType, ?Store $store): array
     {
         if (! $store) {
-            return 'INV';
+            return ['', ''];
         }
 
         return match ($invoiceableType) {
-            Order::class => $store->order_id_prefix ?: 'INV',
-            Repair::class => $store->repair_id_prefix ?: 'REP',
-            Memo::class => $store->memo_id_prefix ?: 'MEM',
-            Transaction::class => $store->buy_id_prefix ?: 'TXN',
-            default => 'INV',
+            Order::class => [$store->order_id_prefix ?? '', $store->order_id_suffix ?? ''],
+            Repair::class => [$store->repair_id_prefix ?? '', $store->repair_id_suffix ?? ''],
+            Memo::class => [$store->memo_id_prefix ?? '', $store->memo_id_suffix ?? ''],
+            Transaction::class => [$store->buy_id_prefix ?? '', $store->buy_id_suffix ?? ''],
+            default => ['', ''],
         };
     }
 

@@ -319,8 +319,10 @@ class RepairService
                 'notes' => "Created from Repair #{$repair->repair_number}",
             ], $store);
 
-            // Update invoice number to use REP-<order.id> format for repair orders
-            $order->update(['invoice_number' => "REP-{$order->id}"]);
+            // Update invoice number to use repair prefix/suffix format
+            $prefix = $store->repair_id_prefix ?? '';
+            $suffix = $store->repair_id_suffix ?? '';
+            $order->update(['invoice_number' => "{$prefix}{$order->id}{$suffix}"]);
 
             $repair->update(['order_id' => $order->id]);
             $repair->markPaymentReceived();

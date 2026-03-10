@@ -179,9 +179,9 @@ class Transaction extends Model
             // Generate transaction_number from store prefix/suffix
             if ($transaction->transaction_number === 'TXN-TEMP') {
                 $store = $transaction->store;
-                $prefix = $store?->buy_id_prefix ?? 'TXN';
+                $prefix = $store?->buy_id_prefix ?? '';
                 $suffix = $store?->buy_id_suffix ?? '';
-                $transaction->transaction_number = "{$prefix}-{$transaction->id}{$suffix}";
+                $transaction->transaction_number = "{$prefix}{$transaction->id}{$suffix}";
                 $transaction->saveQuietly();
                 $transaction->searchable(); // Manually sync to Scout after saveQuietly
             }

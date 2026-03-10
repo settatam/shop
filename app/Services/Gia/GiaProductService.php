@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductAttributeValue;
 use App\Models\Store;
 use App\Services\Rapnet\RapnetPriceService;
+use App\Services\Sku\SkuGeneratorService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -31,6 +32,7 @@ class GiaProductService
     public function __construct(
         protected GiaApiService $giaApiService,
         protected RapnetPriceService $rapnetPriceService,
+        protected SkuGeneratorService $skuGeneratorService,
     ) {
         $this->disk = config('filesystems.disks.do_spaces.bucket')
             ? 'do_spaces'
@@ -199,7 +201,7 @@ class GiaProductService
 
         // Create variant
         $product->variants()->create([
-            'sku' => $this->generateSku($category, $reportNumber),
+            'sku' => $this->generateSku($category, $product, $reportNumber),
             'price' => 0,
             'cost' => 0,
             'quantity' => 1,
@@ -455,6 +457,22 @@ class GiaProductService
                     $this->setAttributeByName($product, $fields, 'main_stone_weight', $weightRange);
                 }
             }
+
+            // Diamond color range for Earrings - use raw value for range calculation
+            if ($colorRaw) {
+                $colorRange = $this->getDiamondColorRange($colorRaw);
+                if ($colorRange) {
+                    $this->setAttributeByName($product, $fields, 'diamond_color_range', $colorRange);
+                }
+            }
+
+            // Diamond clarity range for Earrings - use raw value for range calculation
+            if ($clarityRaw) {
+                $clarityRange = $this->getDiamondClarityRange($clarityRaw);
+                if ($clarityRange) {
+                    $this->setAttributeByName($product, $fields, 'diamond_clarity_range', $clarityRange);
+                }
+            }
         } else {
             // ===== LOOSE STONES TEMPLATE HARDCODED FIELDS =====
             // Use lowercase/kebab-case values to match select field options
@@ -608,14 +626,12 @@ class GiaProductService
         if ($totalWeight > 0) {
             $fields = $template->fields;
 
-            // Set actual total weight (text fields)
+            // Set actual total weight (text field)
             $totalWeightFormatted = number_format($totalWeight, 2);
             $this->setAttributeByName($product, $fields, 'total_carat_weight', $totalWeightFormatted);
-            $this->setAttributeByName($product, $fields, 'total_stone_wt', $totalWeightFormatted.' carat');
-            $this->setAttributeByName($product, $fields, 'diamond_weight_total', $totalWeightFormatted);
 
-            // Get weight range for total (select field)
-            $weightRange = GiaApiService::getWeightRangeLabel($totalWeight);
+            // Get weight range for total (select field) — uses earrings-specific ranges
+            $weightRange = GiaApiService::getTotalStoneWeightRangeLabel($totalWeight);
             if ($weightRange) {
                 $this->setAttributeByName($product, $fields, 'total_stone_weight', $weightRange);
             }
@@ -674,8 +690,12 @@ class GiaProductService
     /**
      * Generate SKU for the product.
      */
-    protected function generateSku(Category $category, string $reportNumber): string
+    protected function generateSku(Category $category, Product $product, string $reportNumber): string
     {
+        if ($category->getEffectiveSkuFormat()) {
+            return $this->skuGeneratorService->generate($category, $product);
+        }
+
         $prefix = $category->getEffectiveSkuPrefix() ?? 'GIA';
 
         return $prefix.'-'.$reportNumber;
@@ -824,14 +844,14 @@ class GiaProductService
      */
     protected function getDiamondColorRange(string $color): ?string
     {
-        // Values must match select option values (lowercase with dashes)
+        // Values must match select option values (lowercase with underscores)
         $groups = [
-            'd-e-f' => ['D', 'E', 'F'],
-            'g-h-i-j' => ['G', 'H', 'I', 'J'],
-            'k-l-m' => ['K', 'L', 'M'],
-            'n-to-z' => ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'ST'],
+            'd_e_f' => ['D', 'E', 'F'],
+            'g_h_i_j' => ['G', 'H', 'I', 'J'],
+            'k_l_m' => ['K', 'L', 'M'],
+            'n_to_z' => ['N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'ST'],
             'fancy' => ['Fancy'],
-            'lab-grown' => ['Lab Grown'],
+            'lab_grown' => ['Lab Grown'],
         ];
 
         if (Str::contains($color, 'Fancy')) {
@@ -865,13 +885,13 @@ class GiaProductService
      */
     protected function getDiamondClarityRange(string $clarity): ?string
     {
-        // Values must match select option values (lowercase with dashes)
+        // Values must match select option values (lowercase with underscores)
         $ranges = [
-            'fl-if' => ['FL', 'IF'],
-            'vvs1-vvs2' => ['VVS1', 'VVS2'],
-            'vs1-vs2' => ['VS1', 'VS2'],
-            'si1-si2' => ['SI1', 'SI2'],
-            'i1-i3' => ['I1', 'I2', 'I3'],
+            'fl_if' => ['FL', 'IF'],
+            'vvs1_vvs2' => ['VVS1', 'VVS2'],
+            'vs1_vs2' => ['VS1', 'VS2'],
+            'si1_si2' => ['SI1', 'SI2'],
+            'i1_i3' => ['I1', 'I2', 'I3'],
         ];
 
         foreach ($ranges as $rangeName => $clarities) {

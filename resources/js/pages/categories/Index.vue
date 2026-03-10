@@ -3,10 +3,12 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import CategoryTreeItem from '@/components/CategoryTreeItem.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import {
     PlusIcon,
     FolderIcon,
+    MagnifyingGlassIcon,
+    XMarkIcon,
 } from '@heroicons/vue/20/solid';
 import {
     Dialog,
@@ -45,6 +47,9 @@ const props = defineProps<Props>();
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Categories', href: '/categories' },
 ];
+
+// Search
+const search = ref('');
 
 // Track expanded categories
 const expandedIds = ref<Set<number>>(new Set());
@@ -153,6 +158,60 @@ function deleteCategory(category: Category) {
     }
 }
 
+// Filter the tree by search term, keeping parent hierarchy for matches
+function filterTree(cats: Category[], term: string): Category[] {
+    const lower = term.toLowerCase();
+    const result: Category[] = [];
+
+    for (const cat of cats) {
+        const filteredChildren = filterTree(cat.children, term);
+        const nameMatches = cat.name.toLowerCase().includes(lower);
+
+        if (nameMatches || filteredChildren.length > 0) {
+            result.push({ ...cat, children: nameMatches ? cat.children : filteredChildren });
+        }
+    }
+
+    return result;
+}
+
+const filteredCategories = computed(() => {
+    if (!search.value.trim()) return props.categories;
+    return filterTree(props.categories, search.value.trim());
+});
+
+// Auto-expand all nodes when searching
+function collectAllIds(cats: Category[]): number[] {
+    const ids: number[] = [];
+    for (const cat of cats) {
+        if (cat.children.length > 0) {
+            ids.push(cat.id);
+            ids.push(...collectAllIds(cat.children));
+        }
+    }
+    return ids;
+}
+
+watch(search, (val) => {
+    if (val.trim()) {
+        // Expand all matched nodes so results are visible
+        expandedIds.value = new Set(collectAllIds(filteredCategories.value));
+    } else {
+        // Reset to default: expand all with children
+        const ids = new Set<number>();
+        function expand(cats: Category[]) {
+            for (const cat of cats) {
+                if (cat.children.length > 0) {
+                    ids.add(cat.id);
+                    expand(cat.children);
+                }
+            }
+        }
+        expand(props.categories);
+        expandedIds.value = ids;
+    }
+});
+
 // Expand all categories with children by default
 function expandAllWithChildren(cats: Category[]) {
     for (const cat of cats) {
@@ -212,7 +271,24 @@ const availableParents = computed(() => {
                         Organize your products into a hierarchical category structure.
                     </p>
                 </div>
-                <div class="mt-4 sm:mt-0">
+                <div class="mt-4 flex items-center gap-3 sm:mt-0">
+                    <div class="relative">
+                        <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" />
+                        <input
+                            v-model="search"
+                            type="text"
+                            placeholder="Search categories..."
+                            class="block w-64 rounded-md border-0 py-2 pl-9 pr-9 text-sm text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:placeholder:text-gray-500"
+                        />
+                        <button
+                            v-if="search"
+                            type="button"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            @click="search = ''"
+                        >
+                            <XMarkIcon class="size-4" />
+                        </button>
+                    </div>
                     <button
                         type="button"
                         class="inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
@@ -226,10 +302,15 @@ const availableParents = computed(() => {
 
             <!-- Category Tree -->
             <div v-if="categories.length > 0" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                <div class="px-4 py-5 sm:p-6">
+                <!-- No results message -->
+                <div v-if="search && filteredCategories.length === 0" class="px-4 py-12 text-center sm:px-6">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No categories matching "{{ search }}"</p>
+                </div>
+
+                <div v-else class="px-4 py-5 sm:p-6">
                     <div class="space-y-1">
                         <CategoryTreeItem
-                            v-for="category in categories"
+                            v-for="category in filteredCategories"
                             :key="category.id"
                             :category="category"
                             :expanded-ids="expandedIds"

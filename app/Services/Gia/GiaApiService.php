@@ -325,7 +325,7 @@ class GiaApiService
      */
     public static function getWeightRangeLabel(float $weight): ?string
     {
-        // Values must match select option values (e.g., '51-75', '76-99', '100-125')
+        // Values must match select option values (e.g., '51_75', '76_99', '100_125')
         $ranges = self::getDiamondWeightRanges();
 
         foreach ($ranges as $range) {
@@ -346,17 +346,56 @@ class GiaApiService
     public static function getDiamondWeightRanges(): array
     {
         return [
-            ['low' => 0.00, 'high' => 0.25, 'value' => '0-25'],
-            ['low' => 0.26, 'high' => 0.50, 'value' => '26-50'],
-            ['low' => 0.51, 'high' => 0.75, 'value' => '51-75'],
-            ['low' => 0.76, 'high' => 0.99, 'value' => '76-99'],
-            ['low' => 1.00, 'high' => 1.25, 'value' => '100-125'],
-            ['low' => 1.26, 'high' => 1.50, 'value' => '126-150'],
-            ['low' => 1.51, 'high' => 1.99, 'value' => '151-199'],
-            ['low' => 2.00, 'high' => 2.50, 'value' => '200-250'],
-            ['low' => 2.51, 'high' => 3.00, 'value' => '251-300'],
-            ['low' => 3.01, 'high' => 5.00, 'value' => '301-500'],
-            ['low' => 5.01, 'high' => 99999.00, 'value' => '500-plus'],
+            ['low' => 0.00, 'high' => 0.25, 'value' => '0_25'],
+            ['low' => 0.26, 'high' => 0.50, 'value' => '26_50'],
+            ['low' => 0.51, 'high' => 0.75, 'value' => '51_75'],
+            ['low' => 0.76, 'high' => 0.99, 'value' => '76_99'],
+            ['low' => 1.00, 'high' => 1.25, 'value' => '100_125'],
+            ['low' => 1.26, 'high' => 1.50, 'value' => '126_150'],
+            ['low' => 1.51, 'high' => 1.99, 'value' => '151_199'],
+            ['low' => 2.00, 'high' => 2.50, 'value' => '200_250'],
+            ['low' => 2.51, 'high' => 3.00, 'value' => '251_300'],
+            ['low' => 3.01, 'high' => 5.00, 'value' => '301_500'],
+            ['low' => 5.01, 'high' => 99999.00, 'value' => '501'],
         ];
+    }
+
+    /**
+     * Get total stone weight ranges for earrings (combined weight of two stones).
+     * Values match the Earrings template total_stone_weight select field options.
+     *
+     * @return array<array{low: float, high: float, value: string}>
+     */
+    public static function getTotalStoneWeightRanges(): array
+    {
+        return [
+            ['low' => 0.01, 'high' => 0.25, 'value' => '01_25'],
+            ['low' => 0.26, 'high' => 0.50, 'value' => '26_50'],
+            ['low' => 0.51, 'high' => 0.75, 'value' => '51_75'],
+            ['low' => 0.76, 'high' => 1.00, 'value' => '76_100'],
+            ['low' => 1.01, 'high' => 1.25, 'value' => '101_125'],
+            ['low' => 1.26, 'high' => 1.50, 'value' => '126_150'],
+            ['low' => 1.51, 'high' => 1.75, 'value' => '151_175'],
+            ['low' => 1.76, 'high' => 2.00, 'value' => '176_200'],
+            ['low' => 2.01, 'high' => 2.50, 'value' => '201_250'],
+            ['low' => 2.51, 'high' => 3.00, 'value' => '251_300'],
+            ['low' => 3.01, 'high' => 99999.00, 'value' => '301'],
+        ];
+    }
+
+    /**
+     * Get total stone weight range label for earrings.
+     */
+    public static function getTotalStoneWeightRangeLabel(float $weight): ?string
+    {
+        $ranges = self::getTotalStoneWeightRanges();
+
+        foreach ($ranges as $range) {
+            if ($weight >= $range['low'] && $weight <= $range['high']) {
+                return $range['value'];
+            }
+        }
+
+        return null;
     }
 }

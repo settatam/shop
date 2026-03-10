@@ -142,9 +142,9 @@ class Memo extends Model implements Payable
             // Generate memo_number from store prefix/suffix
             if ($memo->memo_number === 'MEM-TEMP') {
                 $store = $memo->store;
-                $prefix = $store?->memo_id_prefix ?? 'MEM';
+                $prefix = $store?->memo_id_prefix ?? '';
                 $suffix = $store?->memo_id_suffix ?? '';
-                $memo->memo_number = "{$prefix}-{$memo->id}{$suffix}";
+                $memo->memo_number = "{$prefix}{$memo->id}{$suffix}";
                 $memo->saveQuietly();
                 $memo->searchable(); // Manually sync to Scout after saveQuietly
             }
