@@ -623,9 +623,10 @@ function formatPaymentMethod(method: string): string {
 
 function startEditingDate() {
     // Format the date for the input (YYYY-MM-DD)
+    const toLocalDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const date = props.order.date_of_purchase
-        ? new Date(props.order.date_of_purchase).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+        ? toLocalDate(new Date(props.order.date_of_purchase + 'T00:00:00'))
+        : toLocalDate(new Date());
     editingDate.value = date;
     isEditingDate.value = true;
 }

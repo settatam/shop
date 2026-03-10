@@ -174,7 +174,7 @@ const form = useForm({
     tax_rate: props.defaultTaxRate,
     shipping_cost: 0,
     discount_cost: 0,
-    date_of_purchase: new Date().toISOString().split('T')[0],
+    date_of_purchase: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })(),
     notes: '',
     billing_address: null as Record<string, string> | null,
     shipping_address: null as Record<string, string> | null,
