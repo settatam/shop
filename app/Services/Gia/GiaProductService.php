@@ -414,7 +414,7 @@ class GiaProductService
             // Use lowercase/kebab-case values to match select field options
             $this->setAttributeByName($product, $fields, 'main_stone_gia_report_number', $reportNumber);
             $this->setAttributeByName($product, $fields, 'main_stone_cert_type', 'gia');
-            $this->setAttributeByName($product, $fields, 'main_stone_type', 'natural-diamond');
+            $this->setAttributeByName($product, $fields, 'main_stone_type', 'natural_diamond');
 
             // Main stone fields for Earrings
             if ($shape) {
@@ -478,7 +478,7 @@ class GiaProductService
             // Use lowercase/kebab-case values to match select field options
             $this->setAttributeByName($product, $fields, 'gia_report_number', $reportNumber);
             $this->setAttributeByName($product, $fields, 'cert_type', 'gia');
-            $this->setAttributeByName($product, $fields, 'main_stone_type', 'natural-diamond');
+            $this->setAttributeByName($product, $fields, 'main_stone_type', 'natural_diamond');
             $this->setAttributeByName($product, $fields, 'includes', 'certificate');
 
             // Main stone fields for Loose Stones
@@ -575,7 +575,7 @@ class GiaProductService
         // Second GIA report number and hardcoded fields
         $this->setAttributeByName($product, $fields, 'second_gia_report_number', $reportNumber);
         $this->setAttributeByName($product, $fields, 'second_stone_cert_type', 'gia');
-        $this->setAttributeByName($product, $fields, 'second_stone_type', 'natural-diamond');
+        $this->setAttributeByName($product, $fields, 'second_stone_type', 'natural_diamond');
 
         // Second stone fields with proper value transformation
         if ($shape) {
