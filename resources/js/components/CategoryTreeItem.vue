@@ -98,9 +98,23 @@ const isExpanded = props.expandedIds.has(props.category.id);
             <span
                 v-if="category.sku_format"
                 class="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded dark:bg-emerald-900/50 dark:text-emerald-400"
-                title="Has SKU format configured"
+                :title="`SKU format: ${category.sku_format}`"
             >
-                SKU: {{ category.sku_prefix || 'Auto' }}
+                SKU: {{ category.sku_format }}
+            </span>
+            <span
+                v-else-if="category.sku_prefix"
+                class="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded dark:bg-amber-900/50 dark:text-amber-400"
+                title="Has SKU prefix but no format"
+            >
+                SKU: {{ category.sku_prefix }}-
+            </span>
+            <span
+                v-else-if="category.is_leaf"
+                class="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded dark:bg-red-900/50 dark:text-red-400"
+                title="No SKU format configured"
+            >
+                No SKU
             </span>
 
             <!-- Products count -->

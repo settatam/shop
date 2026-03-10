@@ -587,7 +587,7 @@ class GiaProductTest extends TestCase
         $this->assertNotNull($result['product']);
         $variant = $result['product']->variants->first();
         $this->assertNotNull($variant);
-        $this->assertEquals('LS-7777777777', $variant->sku);
+        $this->assertEquals('LS-'.$result['product']->id, $variant->sku);
     }
 
     public function test_diamond_color_range_mapping(): void

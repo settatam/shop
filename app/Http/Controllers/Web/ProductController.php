@@ -184,7 +184,7 @@ class ProductController extends Controller
                 'label' => ucfirst(str_replace('_', ' ', $type)),
             ]);
 
-        return $shapes->merge($mainStoneTypes)->unique('value')->values();
+        return $shapes->merge($mainStoneTypes)->unique('value')->sortBy('label')->values();
     }
 
     /**

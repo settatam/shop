@@ -26,9 +26,12 @@ interface Category {
     parent_id: number | null;
     template_id: number | null;
     template_name: string | null;
+    sku_format: string | null;
+    sku_prefix: string | null;
     sort_order: number;
     level: number;
     products_count: number;
+    is_leaf: boolean;
     children: Category[];
 }
 

@@ -182,7 +182,7 @@ class GiaProductService
             $counter++;
         }
 
-        // Create product (status=active triggers auto-listing on In Store channel)
+        // Create product as draft — no price or vendor yet
         $product = Product::create([
             'store_id' => $store->id,
             'title' => $title,
@@ -190,9 +190,9 @@ class GiaProductService
             'category_id' => $category->id,
             'template_id' => $template?->id,
             'vendor_id' => $vendorId,
-            'status' => Product::STATUS_ACTIVE,
+            'status' => Product::STATUS_DRAFT,
             'is_published' => false,
-            'is_draft' => false,
+            'is_draft' => true,
             'has_variants' => false,
             'track_quantity' => true,
             'quantity' => 1,
@@ -696,9 +696,13 @@ class GiaProductService
             return $this->skuGeneratorService->generate($category, $product);
         }
 
-        $prefix = $category->getEffectiveSkuPrefix() ?? 'GIA';
+        $prefix = $category->getEffectiveSkuPrefix();
 
-        return $prefix.'-'.$reportNumber;
+        if ($prefix) {
+            return $prefix.'-'.$product->id;
+        }
+
+        return 'GIA-'.$reportNumber;
     }
 
     /**
