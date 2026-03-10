@@ -11,6 +11,7 @@ use App\Models\ProductAttributeValue;
 use App\Models\Store;
 use App\Services\Rapnet\RapnetPriceService;
 use App\Services\Sku\SkuGeneratorService;
+use App\Services\TitleFormatService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -33,6 +34,7 @@ class GiaProductService
         protected GiaApiService $giaApiService,
         protected RapnetPriceService $rapnetPriceService,
         protected SkuGeneratorService $skuGeneratorService,
+        protected TitleFormatService $titleFormatService,
     ) {
         $this->disk = config('filesystems.disks.do_spaces.bucket')
             ? 'do_spaces'
@@ -248,6 +250,12 @@ class GiaProductService
             }
         }
 
+        // Resolve title from category title_format if available
+        $formattedTitle = $this->titleFormatService->resolve($product->load(['attributeValues.field.options', 'category']));
+        if ($formattedTitle) {
+            $product->update(['title' => $formattedTitle]);
+        }
+
         // Create images from GIA PDF certificates
         $reports = [$report];
         if ($secondReport) {
@@ -304,8 +312,9 @@ class GiaProductService
             }
         }
 
-        // Regenerate title
-        $title = $this->generateTitle($results, $secondReport ? ($secondReport['results'] ?? []) : null, $isEarrings);
+        // Regenerate title — prefer title_format, fall back to hardcoded generation
+        $formattedTitle = $this->titleFormatService->resolve($product->load(['attributeValues.field.options', 'category']));
+        $title = $formattedTitle ?: $this->generateTitle($results, $secondReport ? ($secondReport['results'] ?? []) : null, $isEarrings);
         if ($title) {
             $product->title = $title;
             $product->save();
