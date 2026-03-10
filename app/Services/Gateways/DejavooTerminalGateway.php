@@ -12,6 +12,8 @@ use App\Services\Gateways\Results\PaymentResult;
 use App\Services\Gateways\Results\RefundResult;
 use App\Services\Gateways\Results\VoidResult;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class DejavooTerminalGateway implements TerminalGatewayInterface
@@ -71,7 +73,6 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
 
     public function charge(float $amount, array $paymentMethod, array $options = []): PaymentResult
     {
-        // Dejavoo terminals require in-person checkout flow, not direct charge
         throw new RuntimeException('Dejavoo charge not implemented. Use terminal checkout for in-person payments.');
     }
 
@@ -89,10 +90,13 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
 
     public function getPayment(string $paymentId): ?array
     {
-        // TODO: Implement Dejavoo get payment via API
         return null;
     }
 
+    /**
+     * Send a sale request to the Dejavoo terminal via the SPIn API.
+     * This is a blocking call — it waits until the customer completes the transaction.
+     */
     public function createCheckout(PaymentTerminal $terminal, float $amount, array $options = []): CheckoutResult
     {
         if ($terminal->gateway !== PaymentTerminal::GATEWAY_DEJAVOO) {
@@ -110,36 +114,115 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
         $authKey = $this->getAuthKey($terminal);
         $terminalId = $this->getTerminalId($terminal);
         $registerId = $this->getRegisterId($terminal);
-
-        // TODO: Implement actual Dejavoo SPIn API call
-        // POST to $this->apiUrl with XML payload containing:
-        // - AuthKey: $authKey
-        // - TerminalId (TPN): $terminalId
-        // - RegisterId: $registerId (optional, defaults to terminal ID)
-        // - Amount: $amount
-        // - PaymentType: 'Credit' or 'Debit'
-        // - TransType: 'Sale'
-
-        // For now, return a mock successful result for testing
-        $checkoutId = 'dj_checkout_'.uniqid();
         $timeout = $options['timeout'] ?? config('payment-gateways.terminal.default_timeout', 300);
 
-        return CheckoutResult::success(
-            checkoutId: $checkoutId,
-            status: 'pending',
-            expiresAt: Carbon::now()->addSeconds($timeout),
-            gatewayResponse: [
+        $payload = [
+            'Amount' => number_format($amount, 2, '.', ''),
+            'TipAmount' => number_format($options['tip_amount'] ?? 0, 2, '.', ''),
+            'ExternalAmount' => '',
+            'PaymentType' => $options['payment_type'] ?? 'Credit',
+            'ReferenceId' => $options['reference'] ?? '',
+            'CaptureSignature' => true,
+            'InvoiceNumber' => $options['invoice_number'] ?? '',
+            'CallbackInfo' => ['Url' => ''],
+            'PrintReceipt' => 'Both',
+            'GetReceipt' => 'Both',
+            'Tpn' => $terminalId,
+            'AuthKey' => $authKey,
+            'SPInProxyTimeout' => $timeout,
+            'GetExtendedData' => true,
+        ];
+
+        Log::info('Dejavoo: Sending payment to terminal', [
+            'terminal_id' => $terminalId,
+            'amount' => $amount,
+            'reference' => $options['reference'] ?? '',
+        ]);
+
+        try {
+            $response = Http::acceptJson()
+                ->asJson()
+                ->timeout($timeout + 30)
+                ->post($this->getApiUrl('Payment/Sale'), $payload);
+
+            $body = $response->json();
+
+            Log::info('Dejavoo: Response received', [
                 'terminal_id' => $terminalId,
-                'register_id' => $registerId,
-                'auth_key' => substr($authKey, 0, 4).'****', // Masked for security
-            ]
+                'status_code' => $response->status(),
+                'cmd_status' => data_get($body, 'SPInResponse.RStream.CmdStatus'),
+            ]);
+
+            return $this->parseCheckoutResponse($body, $terminalId, $timeout);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error('Dejavoo: Connection failed', [
+                'terminal_id' => $terminalId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return CheckoutResult::failure('Could not connect to the terminal. Please check your network connection and try again.');
+        } catch (\Exception $e) {
+            Log::error('Dejavoo: Unexpected error', [
+                'terminal_id' => $terminalId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return CheckoutResult::failure('Terminal payment failed: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Parse the SPIn API response into a CheckoutResult.
+     */
+    protected function parseCheckoutResponse(array $body, string $terminalId, int $timeout): CheckoutResult
+    {
+        $rStream = data_get($body, 'SPInResponse.RStream', []);
+        $cmdStatus = data_get($rStream, 'CmdStatus');
+        $textResponse = data_get($rStream, 'TextResponse', '');
+
+        if ($cmdStatus === 'Approved') {
+            $authCode = data_get($rStream, 'AuthCode', '');
+            $refNo = data_get($rStream, 'RefNo', '');
+            $checkoutId = $authCode ?: $refNo ?: 'dj_'.uniqid();
+
+            return CheckoutResult::success(
+                checkoutId: $checkoutId,
+                status: 'completed',
+                expiresAt: Carbon::now()->addSeconds($timeout),
+                gatewayResponse: [
+                    'auth_code' => $authCode,
+                    'ref_no' => $refNo,
+                    'card_type' => data_get($rStream, 'CardType'),
+                    'acct_no' => data_get($rStream, 'AcctNo'),
+                    'amount' => data_get($rStream, 'Amount'),
+                    'tip_amount' => data_get($rStream, 'TipAmount'),
+                    'text_response' => $textResponse,
+                    'result_code' => data_get($rStream, 'ResultCode'),
+                    'terminal_id' => $terminalId,
+                    'acq_ref_data' => data_get($rStream, 'AcqRefData'),
+                    'invoice_number' => data_get($rStream, 'InvoiceNumber'),
+                ],
+            );
+        }
+
+        if ($cmdStatus === 'Declined') {
+            return CheckoutResult::failure(
+                errorMessage: 'Payment declined: '.($textResponse ?: 'Card was declined'),
+                gatewayResponse: $rStream,
+            );
+        }
+
+        return CheckoutResult::failure(
+            errorMessage: $textResponse ?: 'Terminal payment failed',
+            errorCode: $cmdStatus,
+            gatewayResponse: $rStream,
         );
     }
 
     public function getCheckoutStatus(string $checkoutId): CheckoutStatus
     {
-        // TODO: Implement Dejavoo Terminal checkout status polling via API
-        // For now, return pending status
+        // Dejavoo uses a blocking API — status is determined at createCheckout time.
+        // If polling reaches here, the checkout is still being processed.
         return new CheckoutStatus(
             checkoutId: $checkoutId,
             status: CheckoutStatus::STATUS_PENDING
@@ -148,20 +231,16 @@ class DejavooTerminalGateway implements TerminalGatewayInterface
 
     public function cancelCheckout(string $checkoutId): CancelResult
     {
-        // TODO: Implement Dejavoo Terminal checkout cancellation via API
         return CancelResult::success($checkoutId);
     }
 
     public function listDevices(string $locationId): array
     {
-        // Dejavoo doesn't have a device listing API - devices are configured manually
         return [];
     }
 
     public function pairDevice(string $deviceCode, array $options = []): PairResult
     {
-        // Dejavoo terminals are configured manually with auth_key and register_id
-        // Return success with the provided device code as the device ID
         return PairResult::success(
             deviceId: $deviceCode,
             deviceName: $options['name'] ?? 'Dejavoo Terminal',

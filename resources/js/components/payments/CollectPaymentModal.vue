@@ -122,6 +122,7 @@ const terminalCheckoutStatus = ref<string | null>(null);
 const processingTerminalLineId = ref<number | null>(null);
 const currentCheckoutId = ref<number | null>(null);
 const isCancelling = ref(false);
+let terminalAbortController: AbortController | null = null;
 
 // Payment summary from API
 const summary = ref<PaymentSummary>({
@@ -449,7 +450,8 @@ async function processTerminalPayment(line: PaymentLine) {
     if (!line.terminal_id) return;
 
     processingTerminalLineId.value = line.id;
-    terminalCheckoutStatus.value = 'initiating';
+    terminalCheckoutStatus.value = 'waiting';
+    terminalAbortController = new AbortController();
 
     try {
         const response = await axios.post(`${apiBasePath.value}/terminal-checkout`, {
@@ -458,17 +460,28 @@ async function processTerminalPayment(line: PaymentLine) {
             service_fee_value: line.service_fee_value || null,
             service_fee_unit: line.service_fee_value > 0 ? line.service_fee_unit : null,
             notes: line.notes || null,
-        });
+        }, { timeout: 360000, signal: terminalAbortController.signal });
 
+        terminalAbortController = null;
+
+        if (response.data.status === 'completed') {
+            terminalCheckoutStatus.value = 'completed';
+            processingTerminalLineId.value = null;
+            emit('success');
+            return;
+        }
+
+        // Async gateway (Square) — poll for completion
         const checkoutId = response.data.checkout_id;
         currentCheckoutId.value = checkoutId;
-        terminalCheckoutStatus.value = 'waiting';
         successMessage.value = 'Payment initiated. Please complete the transaction on the terminal.';
-
-        // Poll for checkout completion
         await pollCheckoutStatus(checkoutId);
 
     } catch (err: any) {
+        terminalAbortController = null;
+        if (axios.isCancel(err)) {
+            return;
+        }
         error.value = err.response?.data?.message || 'Failed to initiate terminal payment.';
         terminalCheckoutStatus.value = null;
         processingTerminalLineId.value = null;
@@ -521,10 +534,28 @@ async function pollCheckoutStatus(checkoutId: number, maxAttempts = 60) {
 }
 
 async function cancelTerminalCheckout() {
-    if (!currentCheckoutId.value || isCancelling.value) return;
+    if (isCancelling.value) return;
 
     isCancelling.value = true;
     error.value = null;
+
+    // Abort the in-flight blocking request (Dejavoo)
+    if (terminalAbortController) {
+        terminalAbortController.abort();
+        terminalAbortController = null;
+        terminalCheckoutStatus.value = null;
+        processingTerminalLineId.value = null;
+        isProcessing.value = false;
+        successMessage.value = null;
+        isCancelling.value = false;
+        return;
+    }
+
+    // Cancel via API (Square polling flow)
+    if (!currentCheckoutId.value) {
+        isCancelling.value = false;
+        return;
+    }
 
     try {
         await axios.post(`/api/v1/terminal-checkouts/${currentCheckoutId.value}/cancel`);
@@ -674,7 +705,7 @@ watch(
                                     </div>
                                 </div>
 
-                                <!-- Terminal checkout status -->
+                                <!-- Terminal checkout status: waiting for customer -->
                                 <div v-if="terminalCheckoutStatus === 'waiting'" class="mb-4 rounded-md bg-blue-50 p-4 dark:bg-blue-900/50">
                                     <div class="flex items-center justify-between">
                                         <div class="flex items-center gap-3">

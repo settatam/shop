@@ -101,16 +101,17 @@ export function useCameraScanner(options: CameraScannerOptions) {
     }
 
     async function stopScanning() {
-        if (!html5QrCode || !isScanning.value) return;
+        const scanner = html5QrCode;
+        if (!scanner || !isScanning.value) return;
+
+        html5QrCode = null;
+        isScanning.value = false;
 
         try {
-            await html5QrCode.stop();
-            html5QrCode.clear();
-        } catch (error) {
-            console.error('Error stopping scanner:', error);
-        } finally {
-            isScanning.value = false;
-            html5QrCode = null;
+            await scanner.stop();
+            scanner.clear();
+        } catch {
+            // Scanner may already be stopped or cleared
         }
     }
 

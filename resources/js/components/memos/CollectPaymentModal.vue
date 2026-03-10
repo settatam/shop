@@ -86,6 +86,7 @@ const isLoadingTerminals = ref(false);
 const terminalCheckoutStatus = ref<string | null>(null);
 const currentCheckoutId = ref<number | null>(null);
 const isCancelling = ref(false);
+let terminalAbortController: AbortController | null = null;
 
 // Payment summary from API
 const summary = ref<PaymentSummary>({
@@ -272,25 +273,35 @@ async function submitPayment() {
 async function processTerminalPayment() {
     if (!selectedTerminalId.value) return;
 
-    terminalCheckoutStatus.value = 'initiating';
+    terminalCheckoutStatus.value = 'waiting';
+    terminalAbortController = new AbortController();
 
     try {
-        // Create terminal checkout - this will be implemented as an API endpoint
         const response = await axios.post(`/memos/${props.memo.id}/payment/terminal-checkout`, {
             terminal_id: selectedTerminalId.value,
             amount: paymentForm.value.amount,
             notes: paymentForm.value.notes || null,
-        });
+        }, { timeout: 360000, signal: terminalAbortController.signal });
 
+        terminalAbortController = null;
+
+        if (response.data.status === 'completed') {
+            terminalCheckoutStatus.value = 'completed';
+            emit('success');
+            return;
+        }
+
+        // Async gateway — poll for completion
         const checkoutId = response.data.checkout_id;
         currentCheckoutId.value = checkoutId;
-        terminalCheckoutStatus.value = 'waiting';
         successMessage.value = 'Payment initiated. Please complete the transaction on the terminal.';
-
-        // Poll for checkout completion
         await pollCheckoutStatus(checkoutId);
 
     } catch (err: any) {
+        terminalAbortController = null;
+        if (axios.isCancel(err)) {
+            return;
+        }
         error.value = err.response?.data?.message || 'Failed to initiate terminal payment.';
         terminalCheckoutStatus.value = null;
         isProcessing.value = false;
@@ -341,10 +352,25 @@ async function pollCheckoutStatus(checkoutId: number, maxAttempts = 60) {
 }
 
 async function cancelTerminalCheckout() {
-    if (!currentCheckoutId.value || isCancelling.value) return;
+    if (isCancelling.value) return;
 
     isCancelling.value = true;
     error.value = null;
+
+    if (terminalAbortController) {
+        terminalAbortController.abort();
+        terminalAbortController = null;
+        terminalCheckoutStatus.value = null;
+        isProcessing.value = false;
+        successMessage.value = null;
+        isCancelling.value = false;
+        return;
+    }
+
+    if (!currentCheckoutId.value) {
+        isCancelling.value = false;
+        return;
+    }
 
     try {
         await axios.post(`/api/v1/terminal-checkouts/${currentCheckoutId.value}/cancel`);

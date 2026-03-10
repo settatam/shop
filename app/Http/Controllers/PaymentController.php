@@ -150,6 +150,7 @@ class PaymentController extends Controller
 
     /**
      * Initiate a terminal checkout for a payable.
+     * For Dejavoo terminals, this blocks until the customer completes the transaction.
      */
     public function terminalCheckout(Request $request, int $id, string $type): JsonResponse
     {
@@ -186,9 +187,11 @@ class PaymentController extends Controller
 
         $amount = (float) $validated['amount'];
 
-        // Create checkout with the gateway
         $gateway = $this->gatewayFactory->makeTerminal($terminal->gateway);
         $timeout = config('payment-gateways.terminal.default_timeout', 300);
+
+        // Allow the request to run long enough for the terminal to complete
+        set_time_limit($timeout + 60);
 
         $result = $gateway->createCheckout($terminal, $amount, [
             'timeout' => $timeout,
@@ -202,7 +205,9 @@ class PaymentController extends Controller
             ], 422);
         }
 
-        // Create checkout record
+        $isCompleted = $result->status === 'completed';
+
+        // Create checkout record with the appropriate status
         $checkout = TerminalCheckout::create([
             'store_id' => $store->id,
             'payable_type' => get_class($payable),
@@ -212,9 +217,11 @@ class PaymentController extends Controller
             'checkout_id' => $result->checkoutId,
             'amount' => $amount,
             'currency' => 'USD',
-            'status' => TerminalCheckout::STATUS_PENDING,
+            'status' => $isCompleted ? TerminalCheckout::STATUS_COMPLETED : TerminalCheckout::STATUS_PENDING,
+            'external_payment_id' => $isCompleted ? $result->checkoutId : null,
             'timeout_seconds' => $timeout,
             'expires_at' => $result->expiresAt ?? now()->addSeconds($timeout),
+            'completed_at' => $isCompleted ? now() : null,
             'gateway_response' => $result->gatewayResponse,
             'metadata' => [
                 'service_fee_value' => $validated['service_fee_value'] ?? null,
@@ -223,8 +230,57 @@ class PaymentController extends Controller
             ],
         ]);
 
+        // For blocking gateways (Dejavoo): payment was already approved, create payment record now
+        if ($isCompleted) {
+            $cardBrand = data_get($result->gatewayResponse, 'card_type');
+            $acctNo = data_get($result->gatewayResponse, 'acct_no', '');
+            $cardLastFour = $acctNo ? substr($acctNo, -4) : null;
+
+            $payment = Payment::create([
+                'store_id' => $store->id,
+                'payable_type' => get_class($payable),
+                'payable_id' => $payable->id,
+                'terminal_checkout_id' => $checkout->id,
+                'customer_id' => $payable->customer_id ?? null,
+                'user_id' => auth()->id(),
+                'payment_method' => Payment::METHOD_CARD,
+                'status' => Payment::STATUS_COMPLETED,
+                'amount' => $amount,
+                'currency' => 'USD',
+                'gateway' => $terminal->gateway,
+                'gateway_payment_id' => $result->checkoutId,
+                'gateway_response' => $result->gatewayResponse,
+                'metadata' => [
+                    'card_brand' => $cardBrand,
+                    'card_last_four' => $cardLastFour,
+                    'service_fee_value' => $validated['service_fee_value'] ?? null,
+                    'service_fee_unit' => $validated['service_fee_unit'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                ],
+                'paid_at' => now(),
+            ]);
+
+            $checkout->update(['payment_id' => $payment->id]);
+
+            // Recalculate payable totals
+            if (method_exists($payable, 'recalculateTotals')) {
+                $payable->recalculateTotals();
+            }
+
+            return response()->json([
+                'message' => 'Payment approved.',
+                'status' => 'completed',
+                'checkout_id' => $checkout->id,
+                'payment_id' => $payment->id,
+                'card_brand' => $cardBrand,
+                'card_last_four' => $cardLastFour,
+            ]);
+        }
+
+        // For async gateways (Square): return checkout_id for polling
         return response()->json([
             'message' => 'Terminal checkout initiated.',
+            'status' => 'pending',
             'checkout_id' => $checkout->id,
             'gateway_checkout_id' => $result->checkoutId,
             'expires_at' => $checkout->expires_at,

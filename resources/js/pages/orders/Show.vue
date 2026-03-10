@@ -399,7 +399,12 @@ const statusLabels: Record<string, string> = {
 };
 
 function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    // Date-only strings (YYYY-MM-DD) are parsed as UTC by JS, causing off-by-one in US timezones.
+    // Append T00:00:00 to force local timezone interpretation.
+    const date = dateString.length === 10
+        ? new Date(dateString + 'T00:00:00')
+        : new Date(dateString);
+    return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',

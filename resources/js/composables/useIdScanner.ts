@@ -45,7 +45,12 @@ export function useIdScanner() {
     const lastScanResult = ref<IdScanResult | null>(null);
 
     async function processBarcode(barcode: string): Promise<IdScanResult | null> {
+        console.log('[useIdScanner] processBarcode called, barcode length:', barcode.length);
+        console.log('[useIdScanner] barcode preview:', barcode.substring(0, 100));
+        console.log('[useIdScanner] isAamvaBarcode:', isAamvaBarcode(barcode));
+
         if (!isAamvaBarcode(barcode)) {
+            console.log('[useIdScanner] Not an AAMVA barcode, returning null');
             return null;
         }
 
@@ -53,6 +58,7 @@ export function useIdScanner() {
         error.value = null;
 
         try {
+            console.log('[useIdScanner] Posting to:', parse.url());
             const response = await axios.post(parse.url(), { barcode });
 
             const result: IdScanResult = {
@@ -63,6 +69,7 @@ export function useIdScanner() {
             lastScanResult.value = result;
             return result;
         } catch (err: any) {
+            console.error('[useIdScanner] Error:', err);
             error.value = err.response?.data?.message || 'Failed to process ID scan';
             return null;
         } finally {

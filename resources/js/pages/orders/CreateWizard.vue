@@ -1079,6 +1079,17 @@ const steps = [
                         <!-- Create Mode -->
                         <template v-else>
                             <CreateCustomerForm v-model="newCustomer" :show-lead-source="true" />
+                            <div class="flex justify-end gap-3 pt-4">
+                                <button type="button" @click="cancelCreatingCustomer" class="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700">Cancel</button>
+                                <button
+                                    type="button"
+                                    @click="confirmNewCustomer"
+                                    :disabled="!newCustomer.first_name || !newCustomer.last_name"
+                                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Create Customer
+                                </button>
+                            </div>
                         </template>
                     </div>
 
