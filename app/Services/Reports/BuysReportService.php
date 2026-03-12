@@ -6,6 +6,7 @@ use App\Models\Status;
 use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * Service class for buys report data aggregation.
@@ -15,6 +16,34 @@ use Illuminate\Support\Collection;
  */
 class BuysReportService
 {
+    /**
+     * Payment method labels for display.
+     */
+    protected const PAYMENT_METHOD_LABELS = [
+        'cash' => 'Cash',
+        'card' => 'Credit Card',
+        'store_credit' => 'Store Credit',
+        'check' => 'Check',
+        'bank_transfer' => 'Bank Transfer',
+        'paypal' => 'PayPal',
+        'venmo' => 'Venmo',
+        'zelle' => 'Zelle',
+        'wire' => 'Wire Transfer',
+        'crypto' => 'Crypto',
+    ];
+
+    /**
+     * Format a payment method string for display.
+     */
+    public function formatPaymentMethod(?string $method): string
+    {
+        if (! $method) {
+            return '-';
+        }
+
+        return self::PAYMENT_METHOD_LABELS[$method] ?? ucwords(str_replace('_', ' ', $method));
+    }
+
     /**
      * Get the "Payment Processed" status ID for a store.
      */
@@ -39,7 +68,7 @@ class BuysReportService
             ->where('status_id', $paymentProcessedStatusId)
             ->whereNotNull('payment_processed_at')
             ->whereBetween('payment_processed_at', [$startDate, $endDate])
-            ->with(['items.category', 'customer', 'user']);
+            ->with(['items.category', 'customer.leadSource', 'user', 'statusModel']);
 
         if ($categoryIds) {
             $transactionsQuery->whereHas('items', fn ($q) => $q->whereIn('category_id', $categoryIds));
@@ -63,6 +92,8 @@ class BuysReportService
                     'date' => Carbon::parse($transaction->payment_processed_at)->format('Y-m-d H:i'),
                     'transaction_number' => $transaction->transaction_number ?? "#{$transaction->id}",
                     'customer' => $transaction->customer?->full_name ?? 'Walk-in',
+                    'lead' => $transaction->customer?->leadSource?->name ?? '-',
+                    'status' => $transaction->statusModel?->name ?? Str::title(str_replace('_', ' ', $transaction->status ?? '')),
                     'type' => ucfirst($transaction->type ?? 'in_store'),
                     'source' => ucfirst($transaction->source ?? 'direct'),
                     'categories' => $categories ?: '-',
@@ -71,6 +102,7 @@ class BuysReportService
                     'estimated_value' => $estimatedValue,
                     'profit' => $profit,
                     'profit_percent' => $purchaseAmt > 0 ? ($profit / $purchaseAmt) * 100 : 0,
+                    'payment_method' => $this->formatPaymentMethod($transaction->payment_method),
                     'user' => $transaction->user?->name ?? '-',
                 ];
             });

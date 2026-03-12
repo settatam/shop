@@ -82,3 +82,14 @@ Schedule::command('ebay:sync-listing-status')
 Schedule::command('storefront:cleanup-sessions')
     ->dailyAt('03:00')
     ->withoutOverlapping();
+
+// Daily reports via notifications system
+Schedule::command('reports:send-daily --type=sales')
+    ->dailyAt('00:01')
+    ->timezone('America/New_York')
+    ->withoutOverlapping();
+
+Schedule::command('reports:send-daily --type=buy')
+    ->dailyAt('00:05')
+    ->timezone('America/New_York')
+    ->withoutOverlapping();

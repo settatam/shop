@@ -278,6 +278,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('orders', [OrderController::class, 'storeFromWizard'])->name('web.orders.store');
         Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
     });
+
     Route::middleware('permission:orders.view')->group(function () {
         Route::get('orders', [OrderController::class, 'index'])->name('web.orders.index');
         Route::get('orders/search-products', [OrderController::class, 'searchProducts'])->name('web.orders.search-products');
@@ -287,6 +288,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('orders/{order}', [OrderController::class, 'show'])->name('web.orders.show');
         Route::get('orders/{order}/print-invoice', [OrderController::class, 'printInvoice'])->name('web.orders.print-invoice');
     });
+
     Route::middleware('permission:orders.update')->group(function () {
         Route::patch('orders/{order}', [OrderController::class, 'update'])->name('web.orders.update');
         Route::patch('orders/{order}/customer', [OrderController::class, 'updateCustomer'])->name('web.orders.update-customer');

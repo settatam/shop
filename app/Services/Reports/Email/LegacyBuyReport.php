@@ -56,15 +56,13 @@ class LegacyBuyReport extends AbstractReport
                     $this->dateColumn('date', 'Date'),
                     $this->linkColumn('txn_id', 'Txn ID', '/transactions/{id}'),
                     $this->textColumn('customer', 'Customer'),
-                    $this->textColumn('type', 'Type'),
-                    $this->textColumn('source', 'Source'),
-                    $this->textColumn('categories', 'Categories'),
-                    $this->numberColumn('num_items', '# Items'),
-                    $this->currencyColumn('purchase_amt', 'Purchase Amt'),
+                    $this->textColumn('lead', 'Lead'),
+                    $this->textColumn('status', 'Status'),
+                    $this->currencyColumn('purchase_amt', 'Purchase Price'),
+                    $this->textColumn('payment_type', 'Payment Type'),
                     $this->currencyColumn('estimated_value', 'Estimated Value'),
                     $this->currencyColumn('profit', 'Profit'),
                     $this->percentageColumn('profit_pct', 'Profit %'),
-                    $this->textColumn('user', 'User'),
                 ],
                 dataKey: 'daily_buys'
             )
@@ -135,11 +133,10 @@ class LegacyBuyReport extends AbstractReport
                     "{$this->baseUrl}/transactions/{$txn['id']}"
                 ),
                 'customer' => $txn['customer'],
-                'type' => $txn['type'],
-                'source' => $txn['source'],
-                'categories' => $txn['categories'],
-                'num_items' => $txn['num_items'],
+                'lead' => $txn['lead'],
+                'status' => $txn['status'],
                 'purchase_amt' => $this->formatCurrency($txn['purchase_amt']),
+                'payment_type' => $txn['payment_method'],
                 'estimated_value' => $txn['estimated_value'] > 0
                     ? $this->formatCurrency($txn['estimated_value'])
                     : ['data' => 0, 'formatted' => '--'],
@@ -149,7 +146,6 @@ class LegacyBuyReport extends AbstractReport
                 'profit_pct' => $txn['profit_percent'] > 0
                     ? $this->formatPercentage($txn['profit_percent'])
                     : ['data' => 0, 'formatted' => 'N/A'],
-                'user' => $txn['user'],
             ];
         })->toArray();
 
@@ -167,11 +163,10 @@ class LegacyBuyReport extends AbstractReport
                 'date' => 'Totals',
                 'txn_id' => ['data' => '', 'href' => ''],
                 'customer' => '',
-                'type' => '',
-                'source' => '',
-                'categories' => '',
-                'num_items' => $totals['num_items'],
+                'lead' => '',
+                'status' => '',
                 'purchase_amt' => $this->formatCurrency($totals['purchase_amt']),
+                'payment_type' => '',
                 'estimated_value' => $totals['estimated_value'] > 0
                     ? $this->formatCurrency($totals['estimated_value'])
                     : ['data' => 0, 'formatted' => '-'],
@@ -181,7 +176,6 @@ class LegacyBuyReport extends AbstractReport
                 'profit_pct' => $totalProfitPct > 0
                     ? $this->formatPercentage($totalProfitPct)
                     : ['data' => 0, 'formatted' => '-'],
-                'user' => '',
                 '_is_total' => true,
             ];
         }

@@ -290,6 +290,16 @@ class NotificationSubscription extends Model
                 'name' => 'Alert on Closed Transaction Deletion',
                 'recipients' => [['type' => self::RECIPIENT_OWNER]],
             ],
+            'daily-buy-report' => [
+                'activity' => Activity::REPORTS_DAILY_BUY,
+                'name' => 'Daily Buy Report',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
+            'daily-sales-report' => [
+                'activity' => Activity::REPORTS_DAILY_SALES,
+                'name' => 'Daily Sales Report',
+                'recipients' => [['type' => self::RECIPIENT_OWNER]],
+            ],
         ];
     }
 

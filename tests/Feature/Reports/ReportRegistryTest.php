@@ -170,10 +170,12 @@ class ReportRegistryTest extends TestCase
         $leadColumn = $columns->firstWhere('key', 'lead');
         $this->assertNotNull($leadColumn, 'Should have lead column for legacy reports');
 
-        // Should have service_fee column in monthly summary (matching SalesReportController)
+        // Should have shopify/reb split columns in monthly summary
         $monthlyColumns = collect($structure['tables'][1]['columns']);
-        $serviceFeeColumn = $monthlyColumns->firstWhere('key', 'total_service_fee');
-        $this->assertNotNull($serviceFeeColumn, 'Should have service fee column');
+        $shopifyColumn = $monthlyColumns->firstWhere('key', 'total_shopify');
+        $this->assertNotNull($shopifyColumn, 'Should have total_shopify column');
+        $rebColumn = $monthlyColumns->firstWhere('key', 'total_reb');
+        $this->assertNotNull($rebColumn, 'Should have total_reb column');
     }
 
     public function test_legacy_buy_report_structure(): void

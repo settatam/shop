@@ -87,8 +87,14 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->respond(function (Symfony\Component\HttpFoundation\Response $response) {
+        $exceptions->respond(function (Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, \Illuminate\Http\Request $request) {
             if ($response->getStatusCode() === 419) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => 'The page expired, please try again.',
+                    ], 419);
+                }
+
                 return back()->with([
                     'error' => 'The page expired, please try again.',
                 ]);

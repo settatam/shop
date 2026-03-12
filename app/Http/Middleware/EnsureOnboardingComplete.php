@@ -21,6 +21,12 @@ class EnsureOnboardingComplete
         $store = $this->storeContext->getCurrentStore();
 
         if ($store && $store->needsOnboarding()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Onboarding is not complete.',
+                ], 409);
+            }
+
             return redirect()->route('onboarding.index');
         }
 

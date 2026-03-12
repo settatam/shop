@@ -70,6 +70,7 @@ class SalesReportService
             ->with([
                 'customer.leadSource',
                 'items.product.category',
+                'items.product.vendor',
                 'items.category',
                 'items.variant',
                 'salesChannel',
@@ -116,6 +117,13 @@ class SalesReportService
                 $profit = ($order->sub_total ?? 0) + $serviceFee - $cost;
                 $channelName = $order->salesChannel?->name ?? $order->source_platform ?? 'In Store';
 
+                $vendors = $order->items
+                    ->pluck('product.vendor.name')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->implode(', ');
+
                 return [
                     'id' => $order->id,
                     'date' => $order->created_at->format('Y-m-d H:i'),
@@ -135,6 +143,7 @@ class SalesReportService
                     'shipping_cost' => $order->shipping_cost ?? 0,
                     'total' => $order->total ?? 0,
                     'payment_type' => $paymentMethods,
+                    'vendor' => $vendors ?: '-',
                 ];
             });
     }
@@ -206,6 +215,8 @@ class SalesReportService
                 'total_wholesale_value' => $aggregated['total_wholesale_value'],
                 'total_sales_price' => $aggregated['total_sales_price'],
                 'total_service_fee' => $aggregated['total_service_fee'],
+                'total_shopify' => $aggregated['total_shopify'],
+                'total_reb' => $aggregated['total_reb'],
                 'total_tax' => $aggregated['total_tax'],
                 'total_shipping' => $aggregated['total_shipping'],
                 'total_paid' => $aggregated['total_paid'],
@@ -269,6 +280,8 @@ class SalesReportService
                 'total_wholesale_value' => $aggregated['total_wholesale_value'],
                 'total_sales_price' => $aggregated['total_sales_price'],
                 'total_service_fee' => $aggregated['total_service_fee'],
+                'total_shopify' => $aggregated['total_shopify'],
+                'total_reb' => $aggregated['total_reb'],
                 'total_tax' => $aggregated['total_tax'],
                 'total_shipping' => $aggregated['total_shipping'],
                 'total_paid' => $aggregated['total_paid'],
@@ -297,6 +310,8 @@ class SalesReportService
             'total_wholesale_value' => $data->sum('total_wholesale_value'),
             'total_sales_price' => $totalSalesPrice,
             'total_service_fee' => $data->sum('total_service_fee'),
+            'total_shopify' => $data->sum('total_shopify'),
+            'total_reb' => $data->sum('total_reb'),
             'total_tax' => $data->sum('total_tax'),
             'total_shipping' => $data->sum('total_shipping'),
             'total_paid' => $data->sum('total_paid'),
@@ -316,6 +331,8 @@ class SalesReportService
         $totalServiceFee = 0;
         $totalTax = 0;
         $totalShipping = 0;
+        $totalShopify = 0;
+        $totalReb = 0;
 
         foreach ($orders as $order) {
             foreach ($order->items as $item) {
@@ -331,6 +348,13 @@ class SalesReportService
             $totalServiceFee += (float) ($order->service_fee_value ?? 0);
             $totalTax += (float) ($order->sales_tax ?? 0);
             $totalShipping += (float) ($order->shipping_cost ?? 0);
+
+            $orderSubtotal = (float) ($order->sub_total ?? 0);
+            if ($order->source_platform === 'shopify') {
+                $totalShopify += $orderSubtotal;
+            } else {
+                $totalReb += $orderSubtotal;
+            }
         }
 
         $totalSalesPrice = $orders->sum('sub_total');
@@ -344,6 +368,8 @@ class SalesReportService
             'total_wholesale_value' => $totalWholesaleValue,
             'total_sales_price' => $totalSalesPrice,
             'total_service_fee' => $totalServiceFee,
+            'total_shopify' => $totalShopify,
+            'total_reb' => $totalReb,
             'total_tax' => $totalTax,
             'total_shipping' => $totalShipping,
             'total_paid' => $totalPaid,

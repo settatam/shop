@@ -221,6 +221,10 @@ class Activity extends Model
 
     public const REPORTS_EXPORT = 'reports.export';
 
+    public const REPORTS_DAILY_BUY = 'reports.daily_buy';
+
+    public const REPORTS_DAILY_SALES = 'reports.daily_sales';
+
     // AI Activities
     public const AI_GENERATE_DESCRIPTIONS = 'ai.generate_descriptions';
 
@@ -466,6 +470,8 @@ class Activity extends Model
             // Reports
             self::REPORTS_VIEW => ['name' => 'View Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'View all reports and analytics'],
             self::REPORTS_EXPORT => ['name' => 'Export Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'Export report data'],
+            self::REPORTS_DAILY_BUY => ['name' => 'Daily Buy Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily summary of buy transactions'],
+            self::REPORTS_DAILY_SALES => ['name' => 'Daily Sales Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily summary of sales orders'],
 
             // AI
             self::AI_GENERATE_DESCRIPTIONS => ['name' => 'Generate AI Descriptions', 'category' => self::CATEGORY_PRODUCTS, 'group' => 'ai', 'description' => 'Use AI to generate product descriptions'],

@@ -439,6 +439,30 @@ class NotificationTemplate extends Model
                 'is_system' => true,
             ],
 
+            // Report Templates
+            [
+                'slug' => 'daily-buy-report',
+                'name' => 'Daily Buy Report',
+                'channel' => NotificationChannel::TYPE_EMAIL,
+                'category' => 'reports',
+                'subject' => '{{ date }}',
+                'content' => '<h2 style="margin-bottom: 20px;">{{ date }}</h2>
+{{ report_html|raw }}',
+                'available_variables' => ['date', 'report_html', 'store'],
+                'is_system' => true,
+            ],
+            [
+                'slug' => 'daily-sales-report',
+                'name' => 'Daily Sales Report',
+                'channel' => NotificationChannel::TYPE_EMAIL,
+                'category' => 'reports',
+                'subject' => '{{ date }}',
+                'content' => '<h2 style="margin-bottom: 20px;">{{ date }}</h2>
+{{ report_html|raw }}',
+                'available_variables' => ['date', 'report_html', 'store'],
+                'is_system' => true,
+            ],
+
             // SMS Templates
             [
                 'slug' => 'order-created-sms',

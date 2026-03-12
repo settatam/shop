@@ -603,6 +603,10 @@ async function createNewProduct() {
         });
         cancelCreatingProduct();
     } catch (error) {
+        if (error.response?.status === 419) {
+            window.location.reload();
+            return;
+        }
         console.error('Error creating product:', error);
     }
 }
