@@ -293,12 +293,22 @@ class TransactionController extends Controller
             ->with('success', 'Transaction updated successfully.');
     }
 
-    public function destroy(Transaction $transaction): RedirectResponse
+    public function destroy(Request $request, Transaction $transaction): RedirectResponse
     {
         $store = $this->storeContext->getCurrentStore();
 
         if (! $store || $transaction->store_id !== $store->id) {
             abort(404);
+        }
+
+        $request->validate([
+            'deletion_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $deletionReason = $request->input('deletion_reason');
+
+        if ($deletionReason) {
+            $transaction->update(['deletion_reason' => $deletionReason]);
         }
 
         $transaction->delete();

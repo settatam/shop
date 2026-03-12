@@ -593,7 +593,7 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
 
 <template>
     <TransitionRoot as="template" :show="open">
-        <Dialog as="div" class="relative z-50" @close="handleClose">
+        <Dialog as="div" class="relative z-50" @close="() => {}">
             <TransitionChild
                 as="template"
                 enter="ease-out duration-300"
@@ -606,7 +606,7 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                 <div class="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75" />
             </TransitionChild>
 
-            <div class="fixed inset-0 z-10 overflow-y-auto">
+            <div class="fixed inset-0 z-10 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
                 <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                     <TransitionChild
                         as="template"
@@ -617,7 +617,7 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                         leave-from="opacity-100 translate-y-0 sm:scale-100"
                         leave-to="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                     >
-                        <DialogPanel class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6 dark:bg-gray-800">
+                        <DialogPanel class="relative transform rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6 dark:bg-gray-800 max-h-[85vh] overflow-y-auto sm:max-h-[90vh]">
                             <div class="absolute right-0 top-0 pr-4 pt-4">
                                 <button
                                     type="button"
@@ -1164,7 +1164,7 @@ const inputClass = 'mt-1 block w-full rounded-md border-0 px-2 py-2 text-gray-90
                                 </div>
                             </div>
 
-                            <div class="mt-6 flex justify-end gap-3">
+                            <div class="sticky bottom-0 -mx-4 -mb-4 mt-6 flex justify-end gap-3 border-t border-gray-200 bg-white px-4 py-3 sm:-mx-6 sm:-mb-6 sm:px-6 dark:border-gray-700 dark:bg-gray-800">
                                 <button
                                     type="button"
                                     class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600"

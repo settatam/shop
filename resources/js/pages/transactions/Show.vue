@@ -3,6 +3,7 @@ import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { NotesSection } from '@/components/notes';
 import AddItemModal from '@/components/transactions/AddItemModal.vue';
 import AttachmentsSection from '@/components/transactions/AttachmentsSection.vue';
+import DeleteTransactionDialog from '@/components/transactions/DeleteTransactionDialog.vue';
 import ShippingLabelsSection from '@/components/transactions/ShippingLabelsSection.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
@@ -989,11 +990,6 @@ const processPayment = () => {
     });
 };
 
-const deleteTransaction = () => {
-    if (confirm(`Are you sure you want to delete transaction ${props.transaction.transaction_number}?`)) {
-        router.delete(`/transactions/${props.transaction.id}`);
-    }
-};
 
 const changeStatus = (status: string) => {
     if (status === props.transaction.status) return;
@@ -1461,15 +1457,15 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
 <!--                    </Menu>-->
 
                     <!-- Delete -->
-                    <button
-                        v-if="transaction.can_be_cancelled"
-                        type="button"
-                        class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 dark:bg-gray-800 dark:ring-gray-600 dark:hover:bg-red-900/20"
-                        @click="deleteTransaction"
-                    >
-                        <TrashIcon class="-ml-0.5 size-5" />
-                        Delete
-                    </button>
+                    <DeleteTransactionDialog v-if="transaction.can_be_cancelled" :transaction="transaction">
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-red-50 dark:bg-gray-800 dark:ring-gray-600 dark:hover:bg-red-900/20"
+                        >
+                            <TrashIcon class="-ml-0.5 size-5" />
+                            Delete
+                        </button>
+                    </DeleteTransactionDialog>
                 </div>
             </div>
 

@@ -135,6 +135,7 @@ class Transaction extends Model
         'outbound_carrier',
         'return_tracking_number',
         'return_carrier',
+        'deletion_reason',
         'offer_given_at',
         'offer_accepted_at',
         'payment_processed_at',
