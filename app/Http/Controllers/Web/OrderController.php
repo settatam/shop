@@ -116,6 +116,7 @@ class OrderController extends Controller
         }
 
         $order->load([
+            'customer.addresses.state',
             'customer.leadSource',
             'user',
             'storeUser',
@@ -1798,7 +1799,7 @@ class OrderController extends Controller
                 )),
 
             // Relationships
-            'customer' => $order->customer ? [
+            'customer' => $order->customer ? array_merge([
                 'id' => $order->customer->id,
                 'first_name' => $order->customer->first_name,
                 'last_name' => $order->customer->last_name,
@@ -1815,7 +1816,7 @@ class OrderController extends Controller
                     'id' => $order->customer->leadSource->id,
                     'name' => $order->customer->leadSource->name,
                 ] : null,
-            ] : null,
+            ], $this->formatPrimaryAddress($order->customer)) : null,
             'user' => $order->user ? [
                 'id' => $order->user->id,
                 'name' => $order->user->name,
@@ -2023,6 +2024,29 @@ class OrderController extends Controller
             ['value' => TransactionItem::CONDITION_LIKE_NEW, 'label' => 'Like New'],
             ['value' => TransactionItem::CONDITION_USED, 'label' => 'Used'],
             ['value' => TransactionItem::CONDITION_DAMAGED, 'label' => 'Damaged'],
+        ];
+    }
+
+    /**
+     * @return array{primary_address?: array{address: string|null, address2: string|null, city: string|null, state_abbreviation: string|null, zip: string|null, one_line_address: string}}
+     */
+    protected function formatPrimaryAddress(Customer $customer): array
+    {
+        $address = $customer->defaultAddress ?? $customer->addresses->first();
+
+        if (! $address) {
+            return [];
+        }
+
+        return [
+            'primary_address' => [
+                'address' => $address->address,
+                'address2' => $address->address2,
+                'city' => $address->city,
+                'state_abbreviation' => $address->state_abbreviation,
+                'zip' => $address->zip,
+                'one_line_address' => $address->one_line_address,
+            ],
         ];
     }
 }

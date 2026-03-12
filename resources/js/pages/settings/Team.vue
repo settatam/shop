@@ -563,7 +563,7 @@ function getStatusBadgeClass(status: string): string {
                                                 Change role
                                             </button>
                                         </MenuItem>
-                                        <MenuItem v-if="member.status === 'active' && member.user_id" v-slot="{ active }">
+                                        <MenuItem v-slot="{ active }">
                                             <button
                                                 @click="openChangePasswordModal(member)"
                                                 :class="[

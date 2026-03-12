@@ -47,6 +47,13 @@ class CreateOrderFromWizardRequest extends FormRequest
                 },
             ],
             'customer.phone' => ['nullable', 'string', 'max:50'],
+            'customer.address' => ['nullable', 'array'],
+            'customer.address.address_line1' => ['required_with:customer.address', 'string', 'max:255'],
+            'customer.address.address_line2' => ['nullable', 'string', 'max:255'],
+            'customer.address.city' => ['nullable', 'string', 'max:100'],
+            'customer.address.state' => ['nullable', 'string', 'max:50'],
+            'customer.address.postal_code' => ['nullable', 'string', 'max:20'],
+            'customer.address.country' => ['nullable', 'string', 'max:2'],
 
             // Step 3: Items (products) - allow empty if bucket_items provided
             'items' => ['required_without:bucket_items', 'array'],

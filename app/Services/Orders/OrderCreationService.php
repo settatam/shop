@@ -13,6 +13,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\SalesChannel;
+use App\Models\State;
 use App\Models\Store;
 use App\Models\StoreCredit;
 use App\Models\StoreUser;
@@ -87,6 +88,23 @@ class OrderCreationService
                     ]);
                 }
                 $customerId = $customer->id;
+
+                // Save the customer address if provided
+                if (! empty($data['customer']['address'])) {
+                    $addressData = $data['customer']['address'];
+                    $stateId = ! empty($addressData['state'])
+                        ? State::findByAbbreviation($addressData['state'])?->id
+                        : null;
+
+                    $customer->addAddress([
+                        'address' => $addressData['address_line1'] ?? null,
+                        'address2' => $addressData['address_line2'] ?? null,
+                        'city' => $addressData['city'] ?? null,
+                        'state_id' => $stateId,
+                        'zip' => $addressData['postal_code'] ?? null,
+                        'is_default' => true,
+                    ]);
+                }
             }
 
             // Get warehouse if provided
