@@ -475,16 +475,18 @@ class MigrateLegacyTransactions extends Command
             $transactionData['return_carrier'] = 'fedex';
         }
 
+        // Preserve original legacy ID as primary key
+        $transactionData['id'] = $legacyTransaction->id;
+
         if ($this->reimport && $existing) {
             // Update existing transaction and restore if soft-deleted
             DB::table('transactions')
-                ->where('id', $existing->id)
+                ->where('id', $legacyTransaction->id)
                 ->update(array_merge($transactionData, ['deleted_at' => null]));
-            $transaction = Transaction::find($existing->id);
+            $transaction = Transaction::find($legacyTransaction->id);
         } else {
-            // Use auto-increment ID, legacy ID is stored in transaction_number
-            $newId = DB::table('transactions')->insertGetId($transactionData);
-            $transaction = Transaction::find($newId);
+            DB::table('transactions')->insert($transactionData);
+            $transaction = Transaction::find($legacyTransaction->id);
         }
 
         // Migrate items
