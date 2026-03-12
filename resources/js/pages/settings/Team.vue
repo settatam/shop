@@ -10,6 +10,7 @@ import {
     TrashIcon,
     ArrowsRightLeftIcon,
     CheckCircleIcon,
+    KeyIcon,
 } from '@heroicons/vue/24/outline';
 
 import HeadingSmall from '@/components/HeadingSmall.vue';
@@ -63,6 +64,7 @@ const showEditRoleModal = ref(false);
 const showRemoveModal = ref(false);
 const showTransferModal = ref(false);
 const showAcceptModal = ref(false);
+const showChangePasswordModal = ref(false);
 
 // Form state
 const inviteForm = ref({
@@ -87,6 +89,14 @@ const acceptForm = ref({
 });
 const acceptErrors = ref<Record<string, string>>({});
 const isAccepting = ref(false);
+
+// Change password form state
+const changePasswordForm = ref({
+    password: '',
+    password_confirmation: '',
+});
+const changePasswordErrors = ref<Record<string, string>>({});
+const isChangingPassword = ref(false);
 
 // Filter out owner role from selectable roles (can't assign owner role)
 const assignableRoles = computed(() =>
@@ -114,12 +124,18 @@ function openAcceptModal(member: TeamMember) {
     showAcceptModal.value = true;
 }
 
+function openChangePasswordModal(member: TeamMember) {
+    selectedMember.value = member;
+    showChangePasswordModal.value = true;
+}
+
 function closeModals() {
     showInviteModal.value = false;
     showEditRoleModal.value = false;
     showRemoveModal.value = false;
     showTransferModal.value = false;
     showAcceptModal.value = false;
+    showChangePasswordModal.value = false;
     selectedMember.value = null;
     selectedRoleId.value = null;
     inviteForm.value = {
@@ -134,6 +150,11 @@ function closeModals() {
         password_confirmation: '',
     };
     acceptErrors.value = {};
+    changePasswordForm.value = {
+        password: '',
+        password_confirmation: '',
+    };
+    changePasswordErrors.value = {};
 }
 
 function inviteMember() {
@@ -356,6 +377,47 @@ function acceptInvitation() {
         });
 }
 
+function changePassword() {
+    if (!selectedMember.value || isChangingPassword.value) return;
+
+    isChangingPassword.value = true;
+    changePasswordErrors.value = {};
+
+    fetch(`/api/v1/team/${selectedMember.value.id}/change-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-XSRF-TOKEN': decodeURIComponent(
+                document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('XSRF-TOKEN='))
+                    ?.split('=')[1] || ''
+            ),
+        },
+        credentials: 'include',
+        body: JSON.stringify(changePasswordForm.value),
+    })
+        .then(async (response) => {
+            const data = await response.json();
+            if (!response.ok) {
+                if (response.status === 422) {
+                    changePasswordErrors.value = data.errors || { password: data.message };
+                } else {
+                    changePasswordErrors.value = { password: data.message || 'Failed to change password' };
+                }
+                return;
+            }
+            closeModals();
+        })
+        .catch(() => {
+            changePasswordErrors.value = { password: 'An error occurred. Please try again.' };
+        })
+        .finally(() => {
+            isChangingPassword.value = false;
+        });
+}
+
 function getInitials(name: string): string {
     return name
         .split(' ')
@@ -499,6 +561,18 @@ function getStatusBadgeClass(status: string): string {
                                             >
                                                 <ShieldCheckIcon class="mr-3 h-5 w-5 text-gray-400" />
                                                 Change role
+                                            </button>
+                                        </MenuItem>
+                                        <MenuItem v-if="member.status === 'active' && member.user_id" v-slot="{ active }">
+                                            <button
+                                                @click="openChangePasswordModal(member)"
+                                                :class="[
+                                                    active ? 'bg-gray-50 dark:bg-white/5' : '',
+                                                    'flex w-full items-center px-3 py-2 text-sm text-gray-900 dark:text-white',
+                                                ]"
+                                            >
+                                                <KeyIcon class="mr-3 h-5 w-5 text-gray-400" />
+                                                Change password
                                             </button>
                                         </MenuItem>
                                         <MenuItem v-if="isOwner" v-slot="{ active }">
@@ -815,6 +889,74 @@ function getStatusBadgeClass(status: string): string {
                                     class="sm:col-start-2"
                                 >
                                     {{ isAccepting ? 'Accepting...' : 'Accept & create account' }}
+                                </Button>
+                                <Button variant="outline" @click="closeModals" class="mt-3 sm:col-start-1 sm:mt-0">
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+        <!-- Change Password Modal -->
+        <Teleport to="body">
+            <div v-if="showChangePasswordModal && selectedMember" class="relative z-50">
+                <div class="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 transition-opacity" @click="closeModals"></div>
+
+                <div class="fixed inset-0 z-10 overflow-y-auto">
+                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                        <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                            <div>
+                                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-500/10">
+                                    <KeyIcon class="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <div class="mt-3 text-center sm:mt-5">
+                                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                                        Change password
+                                    </h3>
+                                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                        Set a new password for <span class="font-medium">{{ selectedMember.name }}</span>.
+                                    </p>
+                                </div>
+
+                                <div class="mt-6 space-y-4">
+                                    <div>
+                                        <Label for="change_password">New password</Label>
+                                        <Input
+                                            id="change_password"
+                                            v-model="changePasswordForm.password"
+                                            type="password"
+                                            placeholder="Enter new password"
+                                            class="mt-1"
+                                        />
+                                        <p v-if="changePasswordErrors.password" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                            {{ changePasswordErrors.password }}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <Label for="change_password_confirmation">Confirm password</Label>
+                                        <Input
+                                            id="change_password_confirmation"
+                                            v-model="changePasswordForm.password_confirmation"
+                                            type="password"
+                                            placeholder="Confirm new password"
+                                            class="mt-1"
+                                        />
+                                        <p v-if="changePasswordErrors.password_confirmation" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                            {{ changePasswordErrors.password_confirmation }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
+                                <Button
+                                    @click="changePassword"
+                                    :disabled="!changePasswordForm.password || !changePasswordForm.password_confirmation || isChangingPassword"
+                                    class="sm:col-start-2"
+                                >
+                                    {{ isChangingPassword ? 'Changing...' : 'Change password' }}
                                 </Button>
                                 <Button variant="outline" @click="closeModals" class="mt-3 sm:col-start-1 sm:mt-0">
                                     Cancel

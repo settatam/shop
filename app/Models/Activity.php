@@ -207,6 +207,8 @@ class Activity extends Model
 
     public const TEAM_TRANSFER_OWNERSHIP = 'team.transfer_ownership';
 
+    public const TEAM_CHANGE_PASSWORD = 'team.change_password';
+
     public const TEAM_MANAGE_ROLES = 'team.manage_roles';
 
     // Role Activities
@@ -460,6 +462,7 @@ class Activity extends Model
             self::TEAM_REMOVE => ['name' => 'Remove Team Members', 'category' => self::CATEGORY_TEAM, 'description' => 'Remove team members'],
             self::TEAM_ACCEPT_INVITATION => ['name' => 'Accept Invitation', 'category' => self::CATEGORY_TEAM, 'description' => 'Manually accept a team invitation'],
             self::TEAM_TRANSFER_OWNERSHIP => ['name' => 'Transfer Ownership', 'category' => self::CATEGORY_TEAM, 'description' => 'Transfer store ownership to another team member'],
+            self::TEAM_CHANGE_PASSWORD => ['name' => 'Change Password', 'category' => self::CATEGORY_TEAM, 'description' => 'Changed a team member\'s password'],
             self::TEAM_MANAGE_ROLES => ['name' => 'Manage Roles', 'category' => self::CATEGORY_TEAM, 'description' => 'Create and edit roles'],
 
             // Roles

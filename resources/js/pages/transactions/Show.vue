@@ -647,9 +647,6 @@ async function handleSaveItem(item: EditableItem, deletedImageIds: number[] = []
                 condition: item.condition,
                 price: item.price,
             };
-            if (props.transaction.status !== 'payment_processed') {
-                updatePayload.buy_price = item.buy_price;
-            }
             await axios.put(`/api/v1/transactions/${props.transaction.id}/items/${itemId}`, updatePayload);
 
             // Delete images that were marked for removal
@@ -1499,7 +1496,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th v-if="transaction.status !== 'payment_processed'" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1603,25 +1600,10 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-2 text-sm text-right">
-                                                <div class="relative inline-flex items-center">
-                                                    <span class="absolute left-2 text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        v-model.number="inlineEditingPrices[item.id].buy_price"
-                                                        :disabled="transaction.status === 'payment_processed'"
-                                                        @blur="saveInlinePrice(item.id, 'buy_price')"
-                                                        class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                        :class="{ 'opacity-50': inlineUpdating[item.id], 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
-                                                    />
-                                                    <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
-                                                        <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
-                                                    </span>
-                                                </div>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.buy_price) }}
                                             </td>
-                                            <td v-if="transaction.status !== 'payment_processed'" class="whitespace-nowrap px-3 py-4 text-sm text-right">
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
                                                 <button
                                                     type="button"
                                                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 mr-2"
@@ -1631,6 +1613,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     <PencilIcon class="size-4" />
                                                 </button>
                                                 <button
+                                                    v-if="transaction.status !== 'payment_processed'"
                                                     type="button"
                                                     class="text-red-400 hover:text-red-500"
                                                     title="Delete item"
@@ -1721,7 +1704,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">DWT</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Est. Price</th>
                                             <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Buy Price</th>
-                                            <th v-if="transaction.status !== 'payment_processed'" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
+                                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1825,25 +1808,10 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td class="whitespace-nowrap px-3 py-2 text-sm text-right">
-                                                <div class="relative inline-flex items-center">
-                                                    <span class="absolute left-2 text-gray-400 dark:text-gray-500 pointer-events-none">$</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        v-model.number="inlineEditingPrices[item.id].buy_price"
-                                                        :disabled="transaction.status === 'payment_processed'"
-                                                        @blur="saveInlinePrice(item.id, 'buy_price')"
-                                                        class="w-32 pl-5 pr-2 py-1 text-right text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                                        :class="{ 'opacity-50': inlineUpdating[item.id], 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
-                                                    />
-                                                    <span v-if="inlineUpdating[item.id]" class="absolute right-1 top-1/2 -translate-y-1/2">
-                                                        <ArrowPathIcon class="size-3 animate-spin text-indigo-500" />
-                                                    </span>
-                                                </div>
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-gray-900 dark:text-white">
+                                                {{ formatCurrency(item.buy_price) }}
                                             </td>
-                                            <td v-if="transaction.status !== 'payment_processed'" class="whitespace-nowrap px-3 py-4 text-sm text-right">
+                                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right">
                                                 <button
                                                     type="button"
                                                     class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 mr-2"
@@ -1853,6 +1821,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                                     <PencilIcon class="size-4" />
                                                 </button>
                                                 <button
+                                                    v-if="transaction.status !== 'payment_processed'"
                                                     type="button"
                                                     class="text-red-400 hover:text-red-500"
                                                     title="Delete item"
@@ -3048,7 +3017,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
             :categories="categories ?? []"
             :editing-item="editingItem"
             :existing-images="editingItemImages"
-            :disable-buy-price="transaction.status === 'payment_processed'"
+            :disable-buy-price="editingItem !== null || transaction.status === 'payment_processed'"
             @close="showAddItemModal = false"
             @save="handleSaveItem"
         />

@@ -557,6 +557,87 @@ class StoreUserTest extends TestCase
         $this->assertStringContains('Transferred store ownership', $log->description);
     }
 
+    public function test_can_change_team_member_password(): void
+    {
+        Passport::actingAs($this->owner);
+
+        $memberUser = User::factory()->create();
+        $storeUser = StoreUser::factory()->create([
+            'user_id' => $memberUser->id,
+            'store_id' => $this->store->id,
+            'role_id' => $this->staffRole->id,
+            'is_owner' => false,
+            'status' => 'active',
+        ]);
+
+        $response = $this->postJson("/api/v1/team/{$storeUser->id}/change-password", [
+            'password' => 'NewSecurePassword123!',
+            'password_confirmation' => 'NewSecurePassword123!',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['message' => 'Password changed successfully']);
+
+        // Verify the password was actually changed
+        $memberUser->refresh();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('NewSecurePassword123!', $memberUser->password));
+    }
+
+    public function test_cannot_change_own_password_via_team(): void
+    {
+        Passport::actingAs($this->owner);
+
+        $response = $this->postJson("/api/v1/team/{$this->ownerStoreUser->id}/change-password", [
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'NewPassword123!',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Use the password settings page to change your own password']);
+    }
+
+    public function test_cannot_change_password_for_pending_invite(): void
+    {
+        Passport::actingAs($this->owner);
+
+        $pendingInvite = StoreUser::factory()->create([
+            'store_id' => $this->store->id,
+            'role_id' => $this->staffRole->id,
+            'user_id' => null,
+            'status' => 'invite sent',
+        ]);
+
+        $response = $this->postJson("/api/v1/team/{$pendingInvite->id}/change-password", [
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'NewPassword123!',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Cannot change password for a pending invitation']);
+    }
+
+    public function test_change_password_requires_confirmation(): void
+    {
+        Passport::actingAs($this->owner);
+
+        $memberUser = User::factory()->create();
+        $storeUser = StoreUser::factory()->create([
+            'user_id' => $memberUser->id,
+            'store_id' => $this->store->id,
+            'role_id' => $this->staffRole->id,
+            'is_owner' => false,
+            'status' => 'active',
+        ]);
+
+        $response = $this->postJson("/api/v1/team/{$storeUser->id}/change-password", [
+            'password' => 'NewPassword123!',
+            'password_confirmation' => 'DifferentPassword!',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('password');
+    }
+
     /**
      * Helper method to check if string contains substring.
      */

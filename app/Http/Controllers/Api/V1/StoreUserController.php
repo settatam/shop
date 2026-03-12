@@ -337,6 +337,58 @@ class StoreUserController extends Controller
     }
 
     /**
+     * Change a team member's password.
+     */
+    public function changePassword(Request $request, StoreUser $storeUser): JsonResponse
+    {
+        $store = $request->user()->currentStore();
+
+        if (! $store || $storeUser->store_id !== $store->id) {
+            return response()->json(['message' => 'Store user not found'], 404);
+        }
+
+        // Cannot change own password via team settings
+        if ($storeUser->user_id === $request->user()->id) {
+            return response()->json([
+                'message' => 'Use the password settings page to change your own password',
+            ], 422);
+        }
+
+        // Must have a linked user account
+        if (! $storeUser->user_id) {
+            return response()->json([
+                'message' => 'Cannot change password for a pending invitation',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'password' => ['required', 'string', Password::defaults(), 'confirmed'],
+        ]);
+
+        $user = User::findOrFail($storeUser->user_id);
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        // Log the activity
+        ActivityLog::log(
+            Activity::TEAM_CHANGE_PASSWORD,
+            $storeUser,
+            null,
+            [
+                'member_email' => $storeUser->email,
+                'member_name' => $storeUser->name,
+                'changed_by' => $request->user()->name,
+            ],
+            "Changed password for {$storeUser->name} ({$storeUser->email})"
+        );
+
+        return response()->json([
+            'message' => 'Password changed successfully',
+        ]);
+    }
+
+    /**
      * Transfer store ownership to another user.
      */
     public function transferOwnership(Request $request, StoreUser $storeUser): JsonResponse

@@ -583,24 +583,12 @@ const autoPopulateFields = async () => {
                                     </div>
 
                                     <div>
-                                        <label for="buy_price" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Buy Price</label>
-                                        <div class="relative mt-1">
-                                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                <span class="text-gray-500 sm:text-sm">$</span>
-                                            </div>
-                                            <input
-                                                id="buy_price"
-                                                type="number"
-                                                name="buy_price"
-                                                step="0.01"
-                                                :value="item.buy_price"
-                                                :disabled="transaction.status === 'payment_processed'"
-                                                class="block w-full rounded-md border-0 py-2 pl-7 pr-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                :class="{ 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60': transaction.status === 'payment_processed' }"
-                                            />
-                                        </div>
-                                        <p v-if="transaction.status === 'payment_processed'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                            Buy price is locked after payment has been processed.
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Buy Price</label>
+                                        <p class="mt-1 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700 ring-1 ring-inset ring-gray-300 dark:bg-gray-700/50 dark:text-gray-300 dark:ring-gray-600">
+                                            {{ item.buy_price != null ? `$${Number(item.buy_price).toFixed(2)}` : '—' }}
+                                        </p>
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            Buy price can only be set from the transaction page.
                                         </p>
                                     </div>
                                 </div>

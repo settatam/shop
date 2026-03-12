@@ -172,6 +172,7 @@ Route::prefix('v1')->middleware(['auth:api', 'store'])->name('api.')->group(func
 
     // Team Members (Store Users)
     Route::get('team/permissions', [StoreUserController::class, 'permissions']);
+    Route::post('team/{storeUser}/change-password', [StoreUserController::class, 'changePassword']);
     Route::post('team/{storeUser}/transfer-ownership', [StoreUserController::class, 'transferOwnership']);
     Route::post('team/{storeUser}/accept-invitation', [StoreUserController::class, 'acceptInvitation']);
     Route::apiResource('team', StoreUserController::class)->parameters(['team' => 'storeUser']);

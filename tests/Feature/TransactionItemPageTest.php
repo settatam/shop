@@ -85,7 +85,6 @@ class TransactionItemPageTest extends TestCase
         $response = $this->actingAs($this->user)
             ->put("/transactions/{$this->transaction->id}/items/{$this->item->id}", [
                 'title' => 'Updated Gold Ring',
-                'buy_price' => 150.00,
                 'precious_metal' => TransactionItem::METAL_GOLD_14K,
                 'condition' => TransactionItem::CONDITION_USED,
             ]);
@@ -94,19 +93,18 @@ class TransactionItemPageTest extends TestCase
 
         $this->item->refresh();
         $this->assertEquals('Updated Gold Ring', $this->item->title);
-        $this->assertEquals(150.00, $this->item->buy_price);
         $this->assertEquals(TransactionItem::METAL_GOLD_14K, $this->item->precious_metal);
     }
 
     public function test_update_logs_price_changes(): void
     {
-        // Set initial buy_price
-        $this->item->update(['buy_price' => 100.00]);
+        // Set initial price
+        $this->item->update(['price' => 100.00]);
 
         $response = $this->actingAs($this->user)
             ->put("/transactions/{$this->transaction->id}/items/{$this->item->id}", [
                 'title' => 'Gold Ring 14K',
-                'buy_price' => 150.00,
+                'price' => 150.00,
             ]);
 
         $response->assertRedirect();
@@ -126,16 +124,16 @@ class TransactionItemPageTest extends TestCase
             ->first();
 
         $this->assertNotNull($log);
-        $this->assertStringContainsString('Buy Price', $log->description);
+        $this->assertStringContainsString('Estimated Value', $log->description);
         $this->assertStringContainsString('$100.00', $log->description);
         $this->assertStringContainsString('$150.00', $log->description);
 
         // Verify changes are stored in properties
         $properties = $log->properties;
         $this->assertArrayHasKey('changes', $properties);
-        $this->assertArrayHasKey('buy_price', $properties['changes']);
-        $this->assertEquals(100.00, $properties['changes']['buy_price']['old']);
-        $this->assertEquals(150.00, $properties['changes']['buy_price']['new']);
+        $this->assertArrayHasKey('price', $properties['changes']);
+        $this->assertEquals(100.00, $properties['changes']['price']['old']);
+        $this->assertEquals(150.00, $properties['changes']['price']['new']);
     }
 
     public function test_update_validates_input(): void

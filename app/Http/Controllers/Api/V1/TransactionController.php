@@ -122,9 +122,7 @@ class TransactionController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
             'price' => ['nullable', 'numeric', 'min:0'],
-            'buy_price' => $transaction->isPaymentProcessed()
-                ? ['prohibited']
-                : ['nullable', 'numeric', 'min:0'],
+            'buy_price' => ['prohibited'],
             'dwt' => ['nullable', 'numeric', 'min:0'],
             'precious_metal' => ['nullable', 'string', 'max:50'],
             'condition' => ['nullable', 'string', 'max:50'],

@@ -71,48 +71,18 @@ class TransactionItemQuickUpdateTest extends TestCase
         $this->assertEquals(80.00, $this->item->buy_price); // Should remain unchanged
     }
 
-    public function test_can_quick_update_buy_price(): void
+    public function test_cannot_quick_update_buy_price(): void
     {
         $response = $this->actingAs($this->user)
             ->patchJson("/transactions/{$this->transaction->id}/items/{$this->item->id}/quick-update", [
                 'buy_price' => 90.00,
             ]);
 
-        $response->assertOk();
-        $response->assertJson([
-            'success' => true,
-            'item' => [
-                'id' => $this->item->id,
-                'buy_price' => 90.00,
-            ],
-        ]);
+        $response->assertUnprocessable();
+        $response->assertJsonValidationErrors(['buy_price']);
 
         $this->item->refresh();
-        $this->assertEquals(100.00, $this->item->price); // Should remain unchanged
-        $this->assertEquals(90.00, $this->item->buy_price);
-    }
-
-    public function test_can_quick_update_both_prices(): void
-    {
-        $response = $this->actingAs($this->user)
-            ->patchJson("/transactions/{$this->transaction->id}/items/{$this->item->id}/quick-update", [
-                'price' => 200.00,
-                'buy_price' => 160.00,
-            ]);
-
-        $response->assertOk();
-        $response->assertJson([
-            'success' => true,
-            'item' => [
-                'id' => $this->item->id,
-                'price' => 200.00,
-                'buy_price' => 160.00,
-            ],
-        ]);
-
-        $this->item->refresh();
-        $this->assertEquals(200.00, $this->item->price);
-        $this->assertEquals(160.00, $this->item->buy_price);
+        $this->assertEquals(80.00, $this->item->buy_price); // Should remain unchanged
     }
 
     public function test_quick_update_validates_numeric_values(): void
@@ -130,11 +100,11 @@ class TransactionItemQuickUpdateTest extends TestCase
     {
         $response = $this->actingAs($this->user)
             ->patchJson("/transactions/{$this->transaction->id}/items/{$this->item->id}/quick-update", [
-                'buy_price' => -50.00,
+                'price' => -50.00,
             ]);
 
         $response->assertUnprocessable();
-        $response->assertJsonValidationErrors(['buy_price']);
+        $response->assertJsonValidationErrors(['price']);
     }
 
     public function test_quick_update_updates_transaction_totals(): void
@@ -142,17 +112,17 @@ class TransactionItemQuickUpdateTest extends TestCase
         // Create another item to verify totals are recalculated
         TransactionItem::factory()->create([
             'transaction_id' => $this->transaction->id,
-            'buy_price' => 50.00,
+            'price' => 50.00,
         ]);
 
         $response = $this->actingAs($this->user)
             ->patchJson("/transactions/{$this->transaction->id}/items/{$this->item->id}/quick-update", [
-                'buy_price' => 120.00,
+                'price' => 120.00,
             ]);
 
         $response->assertOk();
         $response->assertJsonPath('success', true);
-        $this->assertEquals(170, $response->json('transaction.total_buy_price')); // 120 + 50
+        $this->assertEquals(170, $response->json('transaction.total_value')); // 120 + 50
     }
 
     public function test_cannot_quick_update_buy_price_when_payment_processed(): void
