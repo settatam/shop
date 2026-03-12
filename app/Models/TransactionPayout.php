@@ -14,6 +14,10 @@ class TransactionPayout extends Model
 
     public const PROVIDER_PAYPAL = 'paypal';
 
+    public const PROVIDER_CASH = 'cash';
+
+    public const PROVIDER_CHECK = 'check';
+
     public const RECIPIENT_TYPE_EMAIL = 'EMAIL';
 
     public const RECIPIENT_TYPE_PHONE = 'PHONE';
@@ -58,6 +62,7 @@ class TransactionPayout extends Model
         'status',
         'error_code',
         'error_message',
+        'notes',
         'api_response',
         'processed_at',
     ];
@@ -144,6 +149,17 @@ class TransactionPayout extends Model
             'error_code' => $errorCode,
             'error_message' => $errorMessage,
             'api_response' => $response,
+            'processed_at' => now(),
+        ]);
+    }
+
+    public function markAsCompleted(string $provider, ?string $notes = null, ?int $userId = null): void
+    {
+        $this->update([
+            'status' => self::STATUS_SUCCESS,
+            'provider' => $provider,
+            'notes' => $notes,
+            'user_id' => $userId,
             'processed_at' => now(),
         ]);
     }

@@ -112,6 +112,8 @@ class Activity extends Model
 
     public const ORDERS_TERMINAL_PAYMENT_CANCELLED = 'orders.terminal_payment_cancelled';
 
+    public const ORDERS_PAYOUT_ISSUED = 'orders.payout_issued';
+
     // Transaction Activities
     public const TRANSACTIONS_VIEW = 'transactions.view';
 
@@ -404,6 +406,7 @@ class Activity extends Model
             self::ORDERS_TERMINAL_PAYMENT => ['name' => 'Terminal Payment', 'category' => self::CATEGORY_ORDERS, 'description' => 'Payment received via card terminal'],
             self::ORDERS_TERMINAL_PAYMENT_FAILED => ['name' => 'Terminal Payment Failed', 'category' => self::CATEGORY_ORDERS, 'description' => 'Card terminal payment was declined or failed'],
             self::ORDERS_TERMINAL_PAYMENT_CANCELLED => ['name' => 'Terminal Payment Cancelled', 'category' => self::CATEGORY_ORDERS, 'description' => 'Card terminal payment was cancelled'],
+            self::ORDERS_PAYOUT_ISSUED => ['name' => 'Payout Issued', 'category' => self::CATEGORY_ORDERS, 'description' => 'Excess trade-in credit payout issued to customer'],
 
             // Transactions
             self::TRANSACTIONS_VIEW => ['name' => 'View Transactions', 'category' => self::CATEGORY_TRANSACTIONS, 'description' => 'View buy transactions'],
