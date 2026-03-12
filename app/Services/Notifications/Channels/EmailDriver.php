@@ -37,13 +37,25 @@ class EmailDriver extends AbstractNotificationDriver
                 ? config('mail.developer_email', $recipient)
                 : $recipient;
 
-            Mail::html($content, function ($message) use ($to, $subject, $options) {
+            $fromEmail = $this->getSetting('from_email', config('mail.from.address'));
+            $fromName = $this->getSetting('from_name', $this->store->name);
+
+            if (empty($to)) {
+                $log->markAsFailed('Resolved recipient email is empty');
+
+                return $log;
+            }
+
+            if (empty($fromEmail)) {
+                $log->markAsFailed('From email address is not configured');
+
+                return $log;
+            }
+
+            Mail::html($content, function ($message) use ($to, $subject, $fromEmail, $fromName, $options) {
                 $message->to($to)
                     ->subject($subject);
 
-                // Set from address
-                $fromEmail = $this->getSetting('from_email', config('mail.from.address'));
-                $fromName = $this->getSetting('from_name', $this->store->name);
                 $message->from($fromEmail, $fromName);
 
                 // Add reply-to if specified

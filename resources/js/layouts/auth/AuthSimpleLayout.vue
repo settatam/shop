@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import AppLogo from '@/components/AppLogo.vue';
 import { home } from '@/routes';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 defineProps<{
     title?: string;
     description?: string;
 }>();
+
+const page = usePage();
+const flashError = computed(() => (page.props.flash as any)?.error);
 </script>
 
 <template>
@@ -28,6 +32,13 @@ defineProps<{
                     <p v-if="description" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
                         {{ description }}
                     </p>
+                </div>
+
+                <div
+                    v-if="flashError"
+                    class="mt-6 rounded-md bg-red-50 p-4 text-sm font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                >
+                    {{ flashError }}
                 </div>
 
                 <div class="mt-10">

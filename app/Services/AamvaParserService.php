@@ -91,9 +91,15 @@ class AamvaParserService
     }
 
     private const FIELD_CODES = [
-        'DAA', 'DAC', 'DAD', 'DAG', 'DAH', 'DAI', 'DAJ', 'DAK', 'DAQ', 'DAY',
+        'DAA', 'DAB', 'DAC', 'DAD', 'DAG', 'DAH', 'DAI', 'DAJ', 'DAK', 'DAL',
+        'DAM', 'DAN', 'DAO', 'DAQ', 'DAR', 'DAS', 'DAT', 'DAU', 'DAW', 'DAX',
+        'DAY', 'DAZ',
         'DBA', 'DBB', 'DBC', 'DBD',
-        'DCS', 'DCT', 'DCU',
+        'DCA', 'DCB', 'DCD', 'DCE', 'DCF', 'DCG', 'DCH', 'DCI', 'DCJ', 'DCK',
+        'DCL', 'DCM', 'DCN', 'DCO', 'DCP', 'DCQ', 'DCR', 'DCS', 'DCT', 'DCU',
+        'DDA', 'DDB', 'DDC', 'DDD', 'DDE', 'DDF', 'DDG', 'DDH', 'DDI', 'DDJ',
+        'DDK', 'DDL', 'DDM', 'DDN',
+        'ZMZ',
     ];
 
     /**
@@ -108,7 +114,7 @@ class AamvaParserService
         $fields = [];
         $codesPattern = implode('|', self::FIELD_CODES);
 
-        preg_match_all('/(' . $codesPattern . ')([^\n]*?)(?=' . $codesPattern . '|\n|$)/s', $rawData, $matches, PREG_SET_ORDER);
+        preg_match_all('/('.$codesPattern.')([^\n]*?)(?='.$codesPattern.'|\n|$)/s', $rawData, $matches, PREG_SET_ORDER);
 
         foreach ($matches as $match) {
             $code = $match[1];

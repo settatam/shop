@@ -640,10 +640,10 @@ async function handleBarcodeScan(barcode: string) {
         return;
     }
 
-    // Only process on the products step (step 4)
+    // Only do product lookup on the products step
     if (currentStep.value !== 4) {
-        // Navigate to products step first
-        currentStep.value = 4;
+        showScannerFeedback('info', 'Navigate to the Products step to scan product barcodes');
+        return;
     }
 
     try {

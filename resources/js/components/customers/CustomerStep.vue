@@ -20,6 +20,7 @@ import {
 import { UserIcon, CameraIcon, IdentificationIcon } from '@heroicons/vue/24/outline';
 import LeadSourceSelect from '@/components/customers/LeadSourceSelect.vue';
 import IdScannerModal from '@/components/scanner/IdScannerModal.vue';
+import WebcamCaptureModal from '@/components/scanner/WebcamCaptureModal.vue';
 import { useIdScanner, type IdScanResult } from '@/composables/useIdScanner';
 import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
 
@@ -159,6 +160,14 @@ function handleIdPhotos(event: Event) {
 function removeIdPhoto(index: number) {
     URL.revokeObjectURL(idPhotos.value[index].preview);
     idPhotos.value.splice(index, 1);
+    emit('update:idPhotos', idPhotos.value.map(p => p.file));
+}
+
+// Webcam photo capture
+const showWebcamCapture = ref(false);
+
+function handleWebcamCapture(file: File) {
+    idPhotos.value.push({ file, preview: URL.createObjectURL(file) });
     emit('update:idPhotos', idPhotos.value.map(p => p.file));
 }
 
@@ -575,7 +584,7 @@ const filteredOptions = computed(() => {
 
                 <!-- ID Photo Upload -->
                 <div v-if="showIdPhotos" class="sm:col-span-2">
-                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Customer ID (optional)</p>
+                    <p class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">Customer Photo / ID (optional)</p>
                     <div class="flex flex-wrap gap-3">
                         <div v-for="(photo, index) in idPhotos" :key="index" class="relative">
                             <img :src="photo.preview" alt="Customer ID" class="h-28 w-36 rounded-lg border border-gray-200 object-cover dark:border-gray-600" />
@@ -587,10 +596,18 @@ const filteredOptions = computed(() => {
                                 <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
-                        <label class="flex h-28 w-36 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-indigo-500 dark:hover:bg-gray-600">
-                            <CameraIcon class="size-7 text-gray-400" />
-                            <span class="mt-1 text-xs text-gray-500 dark:text-gray-400">Take photo or upload</span>
-                            <input type="file" accept="image/*" capture="environment" multiple class="hidden" @change="handleIdPhotos" />
+                        <button
+                            type="button"
+                            class="flex h-28 w-36 flex-col items-center justify-center rounded-lg border-2 border-dashed border-indigo-300 bg-indigo-50 hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-600 dark:bg-indigo-900/30 dark:hover:border-indigo-500 dark:hover:bg-indigo-900/50"
+                            @click="showWebcamCapture = true"
+                        >
+                            <CameraIcon class="size-7 text-indigo-500 dark:text-indigo-400" />
+                            <span class="mt-1 text-xs font-medium text-indigo-600 dark:text-indigo-400">Take Photo</span>
+                        </button>
+                        <label class="flex h-28 w-36 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500 dark:hover:bg-gray-600">
+                            <svg class="size-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                            <span class="mt-1 text-xs text-gray-500 dark:text-gray-400">Upload File</span>
+                            <input type="file" accept="image/*" multiple class="hidden" @change="handleIdPhotos" />
                         </label>
                     </div>
                 </div>
@@ -602,6 +619,14 @@ const filteredOptions = computed(() => {
             :show="showIdScanner"
             @close="showIdScanner = false"
             @scanned="handleCameraIdScan"
+        />
+
+        <!-- Webcam Photo Capture Modal -->
+        <WebcamCaptureModal
+            :show="showWebcamCapture"
+            title="Customer Photo"
+            @close="showWebcamCapture = false"
+            @captured="handleWebcamCapture"
         />
     </div>
 </template>

@@ -1767,7 +1767,7 @@ class OrderController extends Controller
             'shipped_at' => $order->shipped_at?->toISOString(),
             'tracking_url' => $order->getTrackingUrl(),
             'order_id' => $order->order_id,
-            'date_of_purchase' => $order->date_of_purchase?->toISOString(),
+            'date_of_purchase' => $order->date_of_purchase?->toDateString(),
             'source_platform' => $order->source_platform,
             'external_marketplace_id' => $order->external_marketplace_id,
             'created_at' => $order->created_at->toISOString(),

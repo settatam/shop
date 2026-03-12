@@ -515,7 +515,7 @@ class InvoiceController extends Controller
                 'total_paid' => $invoice->total_paid ?? $invoiceable?->total_paid ?? 0,
                 'balance_due' => $invoice->balance_due ?? $invoiceable?->balance_due ?? 0,
                 'notes' => $invoiceable?->notes ?? null,
-                'date_of_purchase' => $invoiceable?->date_of_purchase?->toISOString() ?? $invoiceable?->created_at?->toISOString(),
+                'date_of_purchase' => $invoiceable?->date_of_purchase?->toDateString() ?? $invoiceable?->created_at?->toISOString(),
                 'created_at' => $invoice->created_at->toISOString(),
                 'customer' => $customerData,
                 'user' => $invoiceable?->storeUser ? [

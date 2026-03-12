@@ -89,15 +89,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->respond(function (Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, \Illuminate\Http\Request $request) {
             if ($response->getStatusCode() === 419) {
-                if ($request->expectsJson()) {
+                if ($request->expectsJson() && ! $request->header('X-Inertia')) {
                     return response()->json([
                         'message' => 'The page expired, please try again.',
                     ], 419);
                 }
 
-                return back()->with([
-                    'error' => 'The page expired, please try again.',
-                ]);
+                // Force a full page reload so the browser gets a fresh CSRF token.
+                // Using back() with Inertia would make an XHR visit that reuses the stale token.
+                return \Inertia\Inertia::location(back()->getTargetUrl());
             }
 
             return $response;
