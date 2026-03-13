@@ -563,6 +563,9 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
     // Customers
     Route::middleware('permission:customers.view')->group(function () {
         Route::get('customers/export/quickbooks', [\App\Http\Controllers\Web\CustomerController::class, 'exportQuickbooks'])->name('web.customers.export-quickbooks');
+        Route::post('customers/bulk-action', [\App\Http\Controllers\Web\CustomerController::class, 'bulkAction'])->name('web.customers.bulk-action');
+        Route::post('customers/export/csv', [\App\Http\Controllers\Web\CustomerController::class, 'exportCsv'])->name('web.customers.export-csv');
+        Route::post('customers/export/quickbooks-selected', [\App\Http\Controllers\Web\CustomerController::class, 'exportQuickbooksSelected'])->name('web.customers.export-quickbooks-selected');
         Route::get('customers', [\App\Http\Controllers\Web\CustomerController::class, 'index'])->name('web.customers.index');
         Route::get('customers/{customer}', [\App\Http\Controllers\Web\CustomerController::class, 'show'])->name('web.customers.show');
     });

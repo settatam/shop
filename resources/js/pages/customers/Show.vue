@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import { NotesSection } from '@/components/notes';
+import { DatePicker } from '@/components/ui/date-picker';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -120,6 +121,10 @@ interface Customer {
     city: string | null;
     state: string | null;
     postal_code: string | null;
+    id_number: string | null;
+    id_issuing_state: string | null;
+    id_expiration_date: string | null;
+    date_of_birth: string | null;
     lead_source_id: number | null;
     notes: string | null;
     created_at: string;
@@ -197,6 +202,10 @@ const editForm = useForm({
     city: props.customer.city || '',
     state: props.customer.state || '',
     postal_code: props.customer.postal_code || '',
+    id_number: props.customer.id_number || '',
+    id_issuing_state: props.customer.id_issuing_state || '',
+    id_expiration_date: props.customer.id_expiration_date || '',
+    date_of_birth: props.customer.date_of_birth || '',
     lead_source_id: props.customer.lead_source_id || '',
     notes: props.customer.notes || '',
 });
@@ -895,14 +904,28 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                         </div>
                     </div>
 
-                    <!-- Member Since -->
+                    <!-- Member Since & Dates -->
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
-                        <div class="px-4 py-5 sm:p-6">
+                        <div class="px-4 py-5 sm:p-6 space-y-4">
                             <div class="flex items-center gap-3">
                                 <CalendarIcon class="size-5 text-gray-400" />
                                 <div>
                                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Member Since</p>
                                     <p class="text-sm text-gray-900 dark:text-white">{{ formatDate(customer.created_at) }}</p>
+                                </div>
+                            </div>
+                            <div v-if="customer.date_of_birth" class="flex items-center gap-3">
+                                <CalendarIcon class="size-5 text-gray-400" />
+                                <div>
+                                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Date of Birth</p>
+                                    <p class="text-sm text-gray-900 dark:text-white">{{ formatDate(customer.date_of_birth) }}</p>
+                                </div>
+                            </div>
+                            <div v-if="customer.id_expiration_date" class="flex items-center gap-3">
+                                <CalendarIcon class="size-5 text-gray-400" />
+                                <div>
+                                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">ID Expiration</p>
+                                    <p class="text-sm text-gray-900 dark:text-white">{{ formatDate(customer.id_expiration_date) }}</p>
                                 </div>
                             </div>
                         </div>
@@ -1030,6 +1053,46 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                                                 <option value="">Select state</option>
                                                 <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
                                             </select>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label for="edit_id_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300">ID Number</label>
+                                                <input
+                                                    id="edit_id_number"
+                                                    v-model="editForm.id_number"
+                                                    type="text"
+                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label for="edit_id_issuing_state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">ID Issuing State</label>
+                                                <select
+                                                    id="edit_id_issuing_state"
+                                                    v-model="editForm.id_issuing_state"
+                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                >
+                                                    <option value="">Select state</option>
+                                                    <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ID Expiration Date</label>
+                                                <DatePicker
+                                                    v-model="editForm.id_expiration_date"
+                                                    placeholder="Select date"
+                                                    class="w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
+                                                <DatePicker
+                                                    v-model="editForm.date_of_birth"
+                                                    placeholder="Select date"
+                                                    class="w-full"
+                                                />
+                                            </div>
                                         </div>
                                         <div>
                                             <label for="edit_lead_source" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>

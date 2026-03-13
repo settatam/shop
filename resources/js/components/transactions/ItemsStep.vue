@@ -325,93 +325,152 @@ function getConditionName(conditionValue?: string): string {
                 </div>
             </div>
 
-            <!-- Items table -->
-            <div v-if="items.length > 0" class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                            <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                                Item
-                            </th>
-                            <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                                Category
-                            </th>
-                            <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                                Metal
-                            </th>
-                            <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
-                                DWT
-                            </th>
-                            <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                                Est. Value
-                            </th>
-                            <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                                Buy Price
-                            </th>
-                            <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                                <span class="sr-only">Actions</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                        <tr v-for="item in items" :key="item.id">
-                            <td class="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
-                                <div>
-                                    <div class="font-medium text-gray-900 dark:text-white">{{ item.title }}</div>
-                                    <div v-if="item.condition" class="text-sm text-gray-500 dark:text-gray-400">
-                                        {{ getConditionName(item.condition) }}
+            <!-- Items list (card layout for mobile/tablet, table for desktop) -->
+            <div v-if="items.length > 0" class="space-y-3">
+                <!-- Card layout for mobile/tablet -->
+                <div class="space-y-3 lg:hidden">
+                    <div
+                        v-for="item in items"
+                        :key="item.id"
+                        class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex-1">
+                                <p class="font-medium text-gray-900 dark:text-white">{{ item.title }}</p>
+                                <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
+                                    <span v-if="item.condition">{{ getConditionName(item.condition) }}</span>
+                                    <span v-if="item.category_id">{{ getCategoryName(item.category_id) }}</span>
+                                    <span v-if="item.precious_metal">{{ getMetalName(item.precious_metal) }}</span>
+                                    <span v-if="item.dwt">{{ item.dwt.toFixed(2) }} DWT</span>
+                                </div>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-1">
+                                <button
+                                    type="button"
+                                    @click="openEditModal(item)"
+                                    class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-700"
+                                    title="Edit"
+                                >
+                                    <PencilIcon class="size-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="removeItem(item.id)"
+                                    class="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700"
+                                    title="Remove"
+                                >
+                                    <TrashIcon class="size-5" />
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 dark:border-gray-700">
+                            <div v-if="item.price" class="text-sm text-gray-500 dark:text-gray-400">
+                                Est. Value: ${{ item.price.toFixed(2) }}
+                            </div>
+                            <div v-else></div>
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                Buy: ${{ item.buy_price.toFixed(2) }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total row -->
+                    <div class="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3 dark:bg-gray-800">
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">Total Buy Price</span>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                            ${{ items.reduce((sum, i) => sum + i.buy_price, 0).toFixed(2) }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Table layout for desktop -->
+                <div class="hidden overflow-x-auto rounded-lg border border-gray-200 lg:block dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
+                                    Item
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                                    Category
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                                    Metal
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                                    DWT
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                    Est. Value
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                    Buy Price
+                                </th>
+                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                                    <span class="sr-only">Actions</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                            <tr v-for="item in items" :key="item.id">
+                                <td class="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6">
+                                    <div>
+                                        <div class="font-medium text-gray-900 dark:text-white">{{ item.title }}</div>
+                                        <div v-if="item.condition" class="text-sm text-gray-500 dark:text-gray-400">
+                                            {{ getConditionName(item.condition) }}
+                                        </div>
                                     </div>
-                                </div>
-                            </td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                                {{ getCategoryName(item.category_id) }}
-                            </td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                                {{ getMetalName(item.precious_metal) }}
-                            </td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
-                                {{ item.dwt ? item.dwt.toFixed(2) : '-' }}
-                            </td>
-                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500 dark:text-gray-400">
-                                {{ item.price ? `$${item.price.toFixed(2)}` : '-' }}
-                            </td>
-                            <td class="whitespace-nowrap px-3 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
-                                ${{ item.buy_price.toFixed(2) }}
-                            </td>
-                            <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                <div class="flex items-center justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        @click="openEditModal(item)"
-                                        class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-700"
-                                        title="Edit"
-                                    >
-                                        <PencilIcon class="size-4" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        @click="removeItem(item.id)"
-                                        class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700"
-                                        title="Remove"
-                                    >
-                                        <TrashIcon class="size-4" />
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                    <tfoot class="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                            <td colspan="5" class="py-3 pl-4 pr-3 text-right text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
-                                Total Buy Price
-                            </td>
-                            <td class="py-3 pr-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
-                                ${{ items.reduce((sum, i) => sum + i.buy_price, 0).toFixed(2) }}
-                            </td>
-                            <td></td>
-                        </tr>
-                    </tfoot>
-                </table>
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ getCategoryName(item.category_id) }}
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ getMetalName(item.precious_metal) }}
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ item.dwt ? item.dwt.toFixed(2) : '-' }}
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-500 dark:text-gray-400">
+                                    {{ item.price ? `$${item.price.toFixed(2)}` : '-' }}
+                                </td>
+                                <td class="whitespace-nowrap px-3 py-4 text-right text-sm font-medium text-gray-900 dark:text-white">
+                                    ${{ item.buy_price.toFixed(2) }}
+                                </td>
+                                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            @click="openEditModal(item)"
+                                            class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-700"
+                                            title="Edit"
+                                        >
+                                            <PencilIcon class="size-4" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            @click="removeItem(item.id)"
+                                            class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700"
+                                            title="Remove"
+                                        >
+                                            <TrashIcon class="size-4" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <td colspan="5" class="py-3 pl-4 pr-3 text-right text-sm font-semibold text-gray-900 dark:text-white sm:pl-6">
+                                    Total Buy Price
+                                </td>
+                                <td class="py-3 pr-3 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                    ${{ items.reduce((sum, i) => sum + i.buy_price, 0).toFixed(2) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </template>
 

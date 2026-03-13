@@ -360,6 +360,195 @@ class CustomerController extends Controller
         return back()->with('success', 'Address deleted successfully.');
     }
 
+    public function bulkAction(Request $request): RedirectResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'in:delete'],
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:customers,id'],
+        ]);
+
+        $customers = Customer::where('store_id', $store->id)
+            ->whereIn('id', $validated['ids'])
+            ->get();
+
+        $count = $customers->count();
+
+        if ($validated['action'] === 'delete') {
+            $customers->each->delete();
+
+            return redirect()->route('web.customers.index')
+                ->with('success', "{$count} customer(s) deleted.");
+        }
+
+        return redirect()->route('web.customers.index')
+            ->with('success', "{$count} customer(s) processed.");
+    }
+
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $query = Customer::query()
+            ->where('store_id', $store->id)
+            ->with('leadSource');
+
+        if ($ids = $request->input('ids')) {
+            $query->whereIn('id', (array) $ids);
+        } else {
+            if ($search = $request->get('search')) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone_number', 'like', "%{$search}%");
+                });
+            }
+
+            if ($leadSourceId = $request->get('lead_source_id')) {
+                $query->where('lead_source_id', $leadSourceId);
+            }
+
+            if ($fromDate = $request->get('from_date')) {
+                $query->whereDate('created_at', '>=', $fromDate);
+            }
+
+            if ($toDate = $request->get('to_date')) {
+                $query->whereDate('created_at', '<=', $toDate);
+            }
+        }
+
+        $customers = $query->orderBy('created_at', 'desc')->get();
+        $filename = 'customers-export-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($customers) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'ID',
+                'First Name',
+                'Last Name',
+                'Company',
+                'Email',
+                'Phone',
+                'Address',
+                'Address 2',
+                'City',
+                'State',
+                'Zip',
+                'ID Number',
+                'ID Issuing State',
+                'ID Expiration Date',
+                'Date of Birth',
+                'Lead Source',
+                'Accepts Marketing',
+                'Store Credit Balance',
+                'Number of Sales',
+                'Number of Buys',
+                'Last Sales Date',
+                'Created At',
+            ]);
+
+            foreach ($customers as $customer) {
+                fputcsv($handle, [
+                    $customer->id,
+                    $customer->first_name ?? '',
+                    $customer->last_name ?? '',
+                    $customer->company_name ?? '',
+                    $customer->email ?? '',
+                    $customer->phone_number ?? '',
+                    $customer->address ?? '',
+                    $customer->address2 ?? '',
+                    $customer->city ?? '',
+                    $customer->state ?? '',
+                    $customer->zip ?? '',
+                    $customer->id_number ?? '',
+                    $customer->id_issuing_state ?? '',
+                    $customer->id_expiration_date?->format('Y-m-d') ?? '',
+                    $customer->date_of_birth?->format('Y-m-d') ?? '',
+                    $customer->leadSource?->name ?? '',
+                    $customer->accepts_marketing ? 'Yes' : 'No',
+                    $customer->store_credit_balance ?? '0.00',
+                    $customer->number_of_sales ?? 0,
+                    $customer->number_of_buys ?? 0,
+                    $customer->last_sales_date?->format('Y-m-d') ?? '',
+                    $customer->created_at?->format('Y-m-d H:i:s') ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    public function exportQuickbooksSelected(Request $request): StreamedResponse
+    {
+        $store = $this->storeContext->getCurrentStore();
+
+        $query = Customer::query()
+            ->where('store_id', $store->id);
+
+        if ($ids = $request->input('ids')) {
+            $query->whereIn('id', (array) $ids);
+        }
+
+        $customers = $query->orderBy('created_at', 'desc')->get();
+        $filename = 'customers-quickbooks-'.now()->format('Y-m-d').'.csv';
+
+        return response()->streamDownload(function () use ($customers) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Display Name As',
+                'Title',
+                'First Name',
+                'Middle Name',
+                'Last Name',
+                'Company',
+                'Email',
+                'Phone',
+                'Mobile',
+                'Billing Address Line 1',
+                'Billing Address Line 2',
+                'Billing Address City',
+                'Billing Address State',
+                'Billing Address Postal Code',
+                'Billing Address Country',
+                'Notes',
+            ]);
+
+            foreach ($customers as $customer) {
+                $displayName = $customer->full_name ?: ($customer->email ?? "Customer #{$customer->id}");
+
+                fputcsv($handle, [
+                    $displayName,
+                    '',
+                    $customer->first_name ?? '',
+                    '',
+                    $customer->last_name ?? '',
+                    $customer->company_name ?? '',
+                    $customer->email ?? '',
+                    $customer->phone_number ?? '',
+                    '',
+                    $customer->address ?? '',
+                    $customer->address2 ?? '',
+                    $customer->city ?? '',
+                    $customer->state ?? '',
+                    $customer->zip ?? '',
+                    'US',
+                    $customer->id_number ? "ID: {$customer->id_number}" : '',
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
     /**
      * Export customers as QuickBooks-compatible CSV.
      */
