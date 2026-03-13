@@ -13,6 +13,8 @@
     $paymentModes = $paymentModes ?? [];
     $salesperson = $salesperson ?? null;
     $serviceFee = $serviceFee ?? ['amount' => 0, 'reason' => null, 'value' => 0, 'unit' => 'fixed'];
+    $tradeInCredit = $tradeInCredit ?? 0;
+    $customerPayout = $customerPayout ?? null;
 @endphp
     <style>
         * {
@@ -464,6 +466,14 @@
                         </tr>
                     @endif
 
+                    {{-- Trade-In Credit --}}
+                    @if($tradeInCredit > 0)
+                        <tr>
+                            <th colspan="4" style="color: #16a34a;">Trade-In Credit</th>
+                            <td style="color: #16a34a;">-${{ number_format($tradeInCredit, 2) }}</td>
+                        </tr>
+                    @endif
+
                     {{-- Payment Modes (if multiple payments) --}}
                     @if(count($paymentModes) > 1)
                         <tr>
@@ -492,6 +502,17 @@
                         <th colspan="4">Total</th>
                         <td>${{ number_format($invoice->total, 2) }}</td>
                     </tr>
+
+                    {{-- Customer Payout (excess trade-in credit) --}}
+                    @if($customerPayout && $customerPayout['amount'] > 0)
+                        <tr>
+                            <th colspan="4" style="color: #d97706;">
+                                Change Due to Customer
+                                ({{ $customerPayout['status'] === 'SUCCESS' ? 'Paid' : 'Pending' }})
+                            </th>
+                            <td style="color: #d97706;">${{ number_format($customerPayout['amount'], 2) }}</td>
+                        </tr>
+                    @endif
                 </tfoot>
             </table>
         </div>

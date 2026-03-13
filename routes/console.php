@@ -93,3 +93,18 @@ Schedule::command('reports:send-daily --type=buy')
     ->dailyAt('00:05')
     ->timezone('America/New_York')
     ->withoutOverlapping();
+
+Schedule::command('reports:send-daily --type=memo')
+    ->dailyAt('00:07')
+    ->timezone('America/New_York')
+    ->withoutOverlapping();
+
+Schedule::command('reports:send-daily --type=repair')
+    ->dailyAt('00:08')
+    ->timezone('America/New_York')
+    ->withoutOverlapping();
+
+Schedule::command('reports:send-daily --type=items_not_reviewed')
+    ->dailyAt('00:10')
+    ->timezone('America/New_York')
+    ->withoutOverlapping();

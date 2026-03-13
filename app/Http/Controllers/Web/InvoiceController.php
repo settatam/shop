@@ -402,7 +402,7 @@ class InvoiceController extends Controller
 
         // Load tradeInTransaction only for models that have it (e.g., Memo, Order)
         if ($invoiceable && method_exists($invoiceable, 'tradeInTransaction')) {
-            $invoiceable->load('tradeInTransaction.items');
+            $invoiceable->load('tradeInTransaction.items', 'tradeInTransaction.payouts');
         }
         $customer = $invoice->customer ?? $invoiceable?->customer;
 
@@ -529,6 +529,7 @@ class InvoiceController extends Controller
                 'service_fee_unit' => $serviceFeeUnit,
                 'trade_in_credit' => $tradeInCredit,
                 'trade_in_transaction' => $tradeInTransaction,
+                'customer_payout' => $this->getCustomerPayout($invoiceable),
                 'items' => $items,
                 'payments' => $payments->map(fn ($payment) => [
                     'id' => $payment->id,
@@ -551,6 +552,31 @@ class InvoiceController extends Controller
                 'email' => $store?->customer_email ?? $store?->account_email,
             ],
             'barcode' => $barcode,
+        ];
+    }
+
+    /**
+     * Get the customer payout data if the order has excess trade-in credit.
+     *
+     * @return array{amount: float, status: string, provider: string|null, processed_at: string|null}|null
+     */
+    protected function getCustomerPayout($invoiceable): ?array
+    {
+        if (! $invoiceable instanceof \App\Models\Order || ! $invoiceable->hasTradeIn()) {
+            return null;
+        }
+
+        $payout = $invoiceable->tradeInTransaction?->payouts?->first();
+
+        if (! $payout) {
+            return null;
+        }
+
+        return [
+            'amount' => (float) $payout->amount,
+            'status' => $payout->status,
+            'provider' => $payout->provider,
+            'processed_at' => $payout->processed_at?->toISOString(),
         ];
     }
 }

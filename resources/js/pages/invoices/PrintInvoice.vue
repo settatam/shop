@@ -64,6 +64,12 @@ interface Props {
                 dwt: number | null;
             }[];
         } | null;
+        customer_payout: {
+            amount: number;
+            status: string;
+            provider: string | null;
+            processed_at: string | null;
+        } | null;
         customer: {
             id: number;
             full_name: string;
@@ -487,6 +493,20 @@ const print = () => {
                                             </th>
                                             <td class="pt-4 pl-3 pr-4 text-sm font-normal text-right text-slate-700 sm:pr-6 md:pr-0">
                                                 ${{ formatCurrency(invoice.total) }}
+                                            </td>
+                                        </tr>
+
+                                        <!-- Customer Payout (excess trade-in credit) -->
+                                        <tr v-if="invoice.customer_payout">
+                                            <th scope="row" colspan="4" class="hidden pt-4 pl-6 pr-3 text-xs font-normal text-right text-amber-600 sm:table-cell md:pl-0">
+                                                Change Due to Customer
+                                                <span class="font-light">({{ invoice.customer_payout.status === 'SUCCESS' ? 'Paid' : 'Pending' }})</span>
+                                            </th>
+                                            <th scope="row" class="pt-4 pl-4 pr-3 text-xs font-normal text-left text-amber-600 sm:hidden">
+                                                Change Due to Customer
+                                            </th>
+                                            <td class="pt-4 pl-3 pr-4 text-xs font-normal text-right text-amber-600 sm:pr-6 md:pr-0">
+                                                ${{ formatCurrency(invoice.customer_payout.amount) }}
                                             </td>
                                         </tr>
                                     </tfoot>

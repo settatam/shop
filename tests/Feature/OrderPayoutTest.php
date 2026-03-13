@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Role;
 use App\Models\Store;
@@ -201,5 +202,41 @@ class OrderPayoutTest extends TestCase
             'subject_id' => $order->id,
             'user_id' => $this->user->id,
         ]);
+    }
+
+    public function test_print_invoice_includes_customer_payout_data(): void
+    {
+        $transaction = Transaction::factory()->paymentProcessed()->create([
+            'store_id' => $this->store->id,
+        ]);
+
+        $order = Order::factory()->confirmed()->create([
+            'store_id' => $this->store->id,
+            'trade_in_transaction_id' => $transaction->id,
+            'trade_in_credit' => 10000,
+        ]);
+
+        $invoice = Invoice::factory()->create([
+            'store_id' => $this->store->id,
+            'invoiceable_type' => Order::class,
+            'invoiceable_id' => $order->id,
+        ]);
+
+        TransactionPayout::factory()->pending()->create([
+            'store_id' => $this->store->id,
+            'transaction_id' => $transaction->id,
+            'amount' => 3300,
+            'provider' => 'cash',
+        ]);
+
+        $response = $this->actingAs($this->user)->get("/invoices/{$invoice->id}/print");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('invoices/PrintInvoice')
+            ->has('invoice.customer_payout')
+            ->where('invoice.customer_payout.amount', 3300)
+            ->where('invoice.customer_payout.status', TransactionPayout::STATUS_PENDING)
+        );
     }
 }

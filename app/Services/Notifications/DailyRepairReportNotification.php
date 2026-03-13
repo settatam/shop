@@ -5,26 +5,26 @@ namespace App\Services\Notifications;
 use App\Models\Activity;
 use App\Models\Store;
 use App\Services\Notifications\Concerns\RendersReportHtml;
-use App\Services\Reports\Email\LegacySalesReport;
+use App\Services\Reports\Email\DailyRepairReport;
 use Carbon\Carbon;
 
-class DailySalesReportNotification
+class DailyRepairReportNotification
 {
     use RendersReportHtml;
 
     /**
-     * Send the daily sales report for a store.
+     * Send the daily repair report for a store.
      */
     public function send(Store $store, Carbon $reportDate): void
     {
-        $report = new LegacySalesReport($store, $reportDate);
+        $report = new DailyRepairReport($store, $reportDate);
         $data = $report->getData();
         $structure = $report->getStructure()->toArray();
 
         $reportHtml = $this->renderReportHtml($structure, $data);
 
         $manager = new NotificationManager($store);
-        $manager->trigger(Activity::REPORTS_DAILY_SALES, [
+        $manager->trigger(Activity::REPORTS_DAILY_REPAIR, [
             'date' => $data['date'],
             'report_html' => $reportHtml,
         ]);

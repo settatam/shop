@@ -34,11 +34,15 @@ class EmailDriver extends AbstractNotificationDriver
         try {
             // Redirect to developer email in non-production
             $to = config('app.env') !== 'production'
-                ? config('mail.developer_email', $recipient)
+                ? (config('mail.developer_email') ?? $recipient)
                 : $recipient;
 
-            $fromEmail = $this->getSetting('from_email', config('mail.from.address'));
-            $fromName = $this->getSetting('from_name', $this->store->name);
+            $fromEmail = $this->getSetting('from_email')
+                ?? $this->store->email_from_address
+                ?? config('mail.from.address');
+            $fromName = $this->getSetting('from_name')
+                ?? $this->store->email_from_name
+                ?? $this->store->name;
 
             if (empty($to)) {
                 $log->markAsFailed('Resolved recipient email is empty');
@@ -59,7 +63,8 @@ class EmailDriver extends AbstractNotificationDriver
                 $message->from($fromEmail, $fromName);
 
                 // Add reply-to if specified
-                if ($replyTo = $this->getSetting('reply_to')) {
+                $replyTo = $this->getSetting('reply_to') ?? $this->store->email_reply_to_address;
+                if ($replyTo) {
                     $message->replyTo($replyTo);
                 }
 

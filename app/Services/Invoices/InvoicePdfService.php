@@ -50,8 +50,9 @@ class InvoicePdfService
         // Generate barcode for invoice number
         $barcodeBase64 = $this->generateBarcode($invoice->invoice_number);
 
-        // Get trade-ins if this is an order with a trade-in transaction
+        // Get trade-ins and payout if this is an order with a trade-in transaction
         $tradeIns = $this->getTradeIns($invoiceable);
+        $customerPayout = $this->getCustomerPayout($invoiceable);
 
         // Get date of purchase from invoiceable
         $dateOfPurchase = $this->getDateOfPurchase($invoiceable);
@@ -98,6 +99,8 @@ class InvoicePdfService
             'serviceFee' => $this->extractServiceFee($invoiceable),
             'barcodeBase64' => $barcodeBase64,
             'tradeIns' => $tradeIns,
+            'tradeInCredit' => $invoiceable instanceof Order ? (float) ($invoiceable->trade_in_credit ?? 0) : 0,
+            'customerPayout' => $customerPayout,
             'dateOfPurchase' => $dateOfPurchase,
             'primaryPaymentMethod' => $primaryPaymentMethod,
             'paymentModes' => $paymentModes,
@@ -259,6 +262,30 @@ class InvoicePdfService
         return [
             'amount' => round($amount, 2),
             'reason' => $reason,
+        ];
+    }
+
+    /**
+     * Get customer payout info for excess trade-in credit.
+     *
+     * @return array{amount: float, status: string}|null
+     */
+    protected function getCustomerPayout($invoiceable): ?array
+    {
+        if (! $invoiceable instanceof Order || ! $invoiceable->hasTradeIn()) {
+            return null;
+        }
+
+        $invoiceable->load('tradeInTransaction.payouts');
+        $payout = $invoiceable->tradeInTransaction?->payouts?->first();
+
+        if (! $payout) {
+            return null;
+        }
+
+        return [
+            'amount' => (float) $payout->amount,
+            'status' => $payout->status,
         ];
     }
 

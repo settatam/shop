@@ -229,6 +229,12 @@ class Activity extends Model
 
     public const REPORTS_DAILY_SALES = 'reports.daily_sales';
 
+    public const REPORTS_ITEMS_NOT_REVIEWED = 'reports.items_not_reviewed';
+
+    public const REPORTS_DAILY_MEMO = 'reports.daily_memo';
+
+    public const REPORTS_DAILY_REPAIR = 'reports.daily_repair';
+
     // AI Activities
     public const AI_GENERATE_DESCRIPTIONS = 'ai.generate_descriptions';
 
@@ -478,6 +484,9 @@ class Activity extends Model
             self::REPORTS_EXPORT => ['name' => 'Export Reports', 'category' => self::CATEGORY_REPORTS, 'description' => 'Export report data'],
             self::REPORTS_DAILY_BUY => ['name' => 'Daily Buy Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily summary of buy transactions'],
             self::REPORTS_DAILY_SALES => ['name' => 'Daily Sales Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily summary of sales orders'],
+            self::REPORTS_ITEMS_NOT_REVIEWED => ['name' => 'Items Not Reviewed Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily report of unreviewed buy transaction items'],
+            self::REPORTS_DAILY_MEMO => ['name' => 'Daily Memo Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily summary of consignment memo activity'],
+            self::REPORTS_DAILY_REPAIR => ['name' => 'Daily Repair Report', 'category' => self::CATEGORY_REPORTS, 'description' => 'Daily summary of repair activity'],
 
             // AI
             self::AI_GENERATE_DESCRIPTIONS => ['name' => 'Generate AI Descriptions', 'category' => self::CATEGORY_PRODUCTS, 'group' => 'ai', 'description' => 'Use AI to generate product descriptions'],
