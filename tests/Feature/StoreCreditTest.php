@@ -511,6 +511,69 @@ class StoreCreditTest extends TestCase
         $this->assertEquals(123.45, $balance);
     }
 
+    public function test_print_receipt_loads_for_cash_out(): void
+    {
+        $this->storeCreditService->issue($this->customer, 500.00, StoreCredit::SOURCE_BUY_TRANSACTION);
+
+        $cashOut = $this->storeCreditService->cashOut(
+            customer: $this->customer,
+            amount: 200.00,
+            payoutMethod: StoreCredit::PAYOUT_CASH,
+            description: 'Customer requested cash out',
+        );
+
+        $response = $this->get("/customers/{$this->customer->id}/store-credits/{$cashOut->id}/print");
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('customers/PrintCashOutReceipt')
+            ->has('storeCredit')
+            ->has('customer')
+            ->has('store')
+            ->where('storeCredit.id', $cashOut->id)
+            ->where('storeCredit.amount', '200.00')
+            ->where('storeCredit.payout_method', 'cash')
+            ->where('customer.id', $this->customer->id)
+        );
+    }
+
+    public function test_print_receipt_returns_404_for_other_stores_customer(): void
+    {
+        $otherStore = Store::factory()->create();
+        $otherCustomer = Customer::factory()->create(['store_id' => $otherStore->id, 'store_credit_balance' => 100]);
+
+        $storeCredit = StoreCredit::factory()->create([
+            'store_id' => $otherStore->id,
+            'customer_id' => $otherCustomer->id,
+            'type' => StoreCredit::TYPE_DEBIT,
+            'source' => StoreCredit::SOURCE_CASH_OUT,
+            'amount' => 50.00,
+            'balance_after' => 50.00,
+        ]);
+
+        $response = $this->get("/customers/{$otherCustomer->id}/store-credits/{$storeCredit->id}/print");
+
+        $response->assertStatus(404);
+    }
+
+    public function test_print_receipt_returns_404_for_mismatched_customer(): void
+    {
+        $otherCustomer = Customer::factory()->create(['store_id' => $this->store->id, 'store_credit_balance' => 100]);
+
+        $storeCredit = StoreCredit::factory()->create([
+            'store_id' => $this->store->id,
+            'customer_id' => $otherCustomer->id,
+            'type' => StoreCredit::TYPE_DEBIT,
+            'source' => StoreCredit::SOURCE_CASH_OUT,
+            'amount' => 50.00,
+            'balance_after' => 50.00,
+        ]);
+
+        $response = $this->get("/customers/{$this->customer->id}/store-credits/{$storeCredit->id}/print");
+
+        $response->assertStatus(404);
+    }
+
     public function test_cash_out_with_all_payout_methods(): void
     {
         $methods = [

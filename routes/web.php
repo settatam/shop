@@ -569,6 +569,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::delete('customers/{customer}/addresses/{address}', [\App\Http\Controllers\Web\CustomerController::class, 'deleteAddress'])->name('web.customers.delete-address');
         Route::get('customers/{customer}/store-credits', [\App\Http\Controllers\Web\StoreCreditController::class, 'index'])->name('web.customers.store-credits.index');
         Route::post('customers/{customer}/store-credits/cash-out', [\App\Http\Controllers\Web\StoreCreditController::class, 'cashOut'])->name('web.customers.store-credits.cash-out');
+        Route::get('customers/{customer}/store-credits/{storeCredit}/print', [\App\Http\Controllers\Web\StoreCreditController::class, 'printReceipt'])->name('web.customers.store-credits.print');
     });
 
     // Lead Sources

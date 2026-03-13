@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
-import { ArrowLeftIcon, CheckCircleIcon } from '@heroicons/vue/20/solid';
+import { ArrowLeftIcon, CheckCircleIcon, PrinterIcon } from '@heroicons/vue/20/solid';
 import {
     BanknotesIcon,
     DocumentCheckIcon,
@@ -224,6 +224,7 @@ const payoutMethodLabels: Record<string, string> = {
                                     <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Payout Method</th>
                                     <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Description</th>
                                     <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">By</th>
+                                    <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white"></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -262,6 +263,16 @@ const payoutMethodLabels: Record<string, string> = {
                                     </td>
                                     <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
                                         {{ entry.user?.name || '-' }}
+                                    </td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-sm">
+                                        <Link
+                                            v-if="entry.source === 'cash_out'"
+                                            :href="`/customers/${customer.id}/store-credits/${entry.id}/print`"
+                                            class="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                            title="Print Receipt"
+                                        >
+                                            <PrinterIcon class="size-4" />
+                                        </Link>
                                     </td>
                                 </tr>
                             </tbody>
