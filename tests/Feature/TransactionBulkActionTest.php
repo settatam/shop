@@ -158,6 +158,115 @@ class TransactionBulkActionTest extends TestCase
         }
     }
 
+    public function test_can_bulk_cancel_transactions(): void
+    {
+        $transactions = Transaction::factory()->count(3)->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transactions/bulk-action', [
+            'action' => 'cancel',
+            'ids' => $transactions->pluck('id')->toArray(),
+        ]);
+
+        $response->assertRedirect(route('web.transactions.index'));
+        $response->assertSessionHas('success');
+
+        foreach ($transactions as $transaction) {
+            $this->assertDatabaseHas('transactions', [
+                'id' => $transaction->id,
+                'status' => Transaction::STATUS_CANCELLED,
+            ]);
+        }
+    }
+
+    public function test_bulk_cancel_skips_already_cancelled(): void
+    {
+        $cancelledTransaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_CANCELLED,
+        ]);
+
+        $pendingTransaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PENDING,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transactions/bulk-action', [
+            'action' => 'cancel',
+            'ids' => [$cancelledTransaction->id, $pendingTransaction->id],
+        ]);
+
+        $response->assertRedirect(route('web.transactions.index'));
+
+        $this->assertDatabaseHas('transactions', [
+            'id' => $pendingTransaction->id,
+            'status' => Transaction::STATUS_CANCELLED,
+        ]);
+    }
+
+    public function test_can_cancel_transaction_from_detail_page(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_PAYMENT_PROCESSED,
+        ]);
+
+        $response = $this->actingAs($this->user)->post("/transactions/{$transaction->id}/cancel");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('transactions', [
+            'id' => $transaction->id,
+            'status' => Transaction::STATUS_CANCELLED,
+        ]);
+    }
+
+    public function test_cannot_cancel_already_cancelled_transaction(): void
+    {
+        $transaction = Transaction::factory()->create([
+            'store_id' => $this->store->id,
+            'status' => Transaction::STATUS_CANCELLED,
+        ]);
+
+        $response = $this->actingAs($this->user)->post("/transactions/{$transaction->id}/cancel");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+    }
+
+    public function test_can_cancel_transaction_from_any_status(): void
+    {
+        $statuses = [
+            Transaction::STATUS_PENDING,
+            Transaction::STATUS_ITEMS_RECEIVED,
+            Transaction::STATUS_OFFER_GIVEN,
+            Transaction::STATUS_OFFER_ACCEPTED,
+            Transaction::STATUS_OFFER_DECLINED,
+            Transaction::STATUS_PAYMENT_PENDING,
+            Transaction::STATUS_PAYMENT_PROCESSED,
+        ];
+
+        foreach ($statuses as $status) {
+            $transaction = Transaction::factory()->create([
+                'store_id' => $this->store->id,
+                'status' => $status,
+            ]);
+
+            $response = $this->actingAs($this->user)->post("/transactions/{$transaction->id}/cancel");
+
+            $response->assertRedirect();
+            $response->assertSessionHas('success');
+
+            $this->assertDatabaseHas('transactions', [
+                'id' => $transaction->id,
+                'status' => Transaction::STATUS_CANCELLED,
+            ]);
+        }
+    }
+
     public function test_bulk_action_requires_valid_ids(): void
     {
         $response = $this->actingAs($this->user)->post('/transactions/bulk-action', [

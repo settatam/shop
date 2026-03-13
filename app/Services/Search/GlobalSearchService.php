@@ -82,7 +82,7 @@ class GlobalSearchService
                 'id' => $model->id,
                 'title' => $model->title,
                 'subtitle' => $model->brand?->name ?? $model->category?->name,
-                'url' => route('products.edit', $model),
+                'url' => route('products.show', $model),
             ],
             'orders' => [
                 'id' => $model->id,

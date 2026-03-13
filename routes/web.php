@@ -386,6 +386,7 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::post('transactions/{transaction}/process-payment', [\App\Http\Controllers\Web\TransactionController::class, 'processPayment'])->name('web.transactions.process-payment');
     });
     Route::delete('transactions/{transaction}', [\App\Http\Controllers\Web\TransactionController::class, 'destroy'])->name('web.transactions.destroy')->middleware('permission:transactions.delete');
+    Route::post('transactions/{transaction}/cancel', [\App\Http\Controllers\Web\TransactionController::class, 'cancel'])->name('web.transactions.cancel')->middleware('permission:transactions.delete');
 
     // Transaction Item Detail routes
     Route::prefix('transactions/{transaction}/items/{item}')->name('web.transactions.items.')->middleware('permission:transactions.view')->group(function () {

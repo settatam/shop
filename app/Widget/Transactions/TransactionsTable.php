@@ -349,11 +349,11 @@ class TransactionsTable extends Table
         // Default actions when no specific status is selected
         return [
             [
-                'key' => 'delete',
-                'label' => 'Delete Selected',
-                'icon' => 'TrashIcon',
-                'variant' => 'danger',
-                'confirm' => 'Are you sure you want to delete the selected transactions?',
+                'key' => 'cancel',
+                'label' => 'Cancel Selected',
+                'icon' => 'XCircleIcon',
+                'variant' => 'warning',
+                'confirm' => 'Are you sure you want to cancel the selected transactions?',
             ],
             [
                 'key' => 'export',

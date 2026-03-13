@@ -319,6 +319,19 @@ class TransactionController extends Controller
             ->with('success', 'Transaction deleted successfully.');
     }
 
+    public function cancel(Transaction $transaction): RedirectResponse
+    {
+        $this->authorizeTransaction($transaction);
+
+        if ($transaction->isCancelled()) {
+            return back()->with('error', 'Transaction is already cancelled.');
+        }
+
+        $transaction->cancel();
+
+        return back()->with('success', 'Transaction cancelled successfully.');
+    }
+
     public function submitOffer(Request $request, Transaction $transaction): RedirectResponse
     {
         $this->authorizeTransaction($transaction);
@@ -504,6 +517,7 @@ class TransactionController extends Controller
 
         $actionLabel = match ($validated['action']) {
             'delete' => $this->handleBulkDelete($transactions),
+            'cancel' => $this->handleBulkCancel($transactions),
             'change_status' => $this->handleBulkChangeStatus($transactions, $config),
             'add_tag' => $this->handleBulkAddTag($transactions, $config),
             'remove_tag' => $this->handleBulkRemoveTag($transactions, $config),
@@ -586,6 +600,20 @@ class TransactionController extends Controller
         $transactions->each->delete();
 
         return 'deleted';
+    }
+
+    /**
+     * @param  Collection<int, Transaction>  $transactions
+     */
+    protected function handleBulkCancel(Collection $transactions): string
+    {
+        $transactions->each(function (Transaction $transaction) {
+            if (! $transaction->isCancelled()) {
+                $transaction->cancel();
+            }
+        });
+
+        return 'cancelled';
     }
 
     /**

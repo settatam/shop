@@ -431,12 +431,7 @@ class Transaction extends Model
 
     public function canBeCancelled(): bool
     {
-        return in_array($this->status, [
-            self::STATUS_PENDING,
-            self::STATUS_KIT_RECEIVED,
-            self::STATUS_OFFER_GIVEN,
-            self::STATUS_OFFER_DECLINED,
-        ]);
+        return ! $this->isCancelled();
     }
 
     // State transitions
