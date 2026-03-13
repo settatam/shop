@@ -114,6 +114,7 @@ const emit = defineEmits<{
     filterChange: [filter: Record<string, unknown>];
     bulkAction: [action: string, ids: (number | string)[], config: Record<string, unknown>];
     bulkActionModal: [action: string, ids: (number | string)[]];
+    bulkActionSuccess: [];
     reviewItem: [transactionId: number, itemId: number];
     marketplacePriceUpdate: [productId: number, listingId: number | null, channelId: number, price: number];
 }>();
@@ -364,6 +365,7 @@ function handleBulkAction(action: BulkAction) {
             preserveScroll: true,
             onSuccess: () => {
                 selectedItems.value.clear();
+                emit('bulkActionSuccess');
             },
         });
     } else {

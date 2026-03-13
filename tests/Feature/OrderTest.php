@@ -1025,4 +1025,64 @@ class OrderTest extends TestCase
         $order = Order::where('store_id', $this->store->id)->latest('id')->first();
         $this->assertEquals((string) $order->id, $order->invoice_number);
     }
+
+    public function test_bulk_cancel_orders(): void
+    {
+        $this->actingAs($this->user);
+
+        $orders = Order::factory()->pending()->count(2)->create(['store_id' => $this->store->id]);
+
+        $response = $this->post('/orders/bulk-action', [
+            'action' => 'cancel',
+            'ids' => $orders->pluck('id')->toArray(),
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        foreach ($orders as $order) {
+            $this->assertDatabaseHas('orders', [
+                'id' => $order->id,
+                'status' => Order::STATUS_CANCELLED,
+            ]);
+        }
+    }
+
+    public function test_bulk_cancel_skips_completed_orders(): void
+    {
+        $this->actingAs($this->user);
+
+        $completedOrder = Order::factory()->completed()->create(['store_id' => $this->store->id]);
+        $pendingOrder = Order::factory()->pending()->create(['store_id' => $this->store->id]);
+
+        $response = $this->post('/orders/bulk-action', [
+            'action' => 'cancel',
+            'ids' => [$completedOrder->id, $pendingOrder->id],
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $completedOrder->id,
+            'status' => Order::STATUS_COMPLETED,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $pendingOrder->id,
+            'status' => Order::STATUS_CANCELLED,
+        ]);
+    }
+
+    public function test_bulk_delete_action_is_rejected(): void
+    {
+        $this->actingAs($this->user);
+
+        $orders = Order::factory()->pending()->count(2)->create(['store_id' => $this->store->id]);
+
+        $response = $this->post('/orders/bulk-action', [
+            'action' => 'delete',
+            'ids' => $orders->pluck('id')->toArray(),
+        ]);
+
+        $response->assertSessionHasErrors('action');
+    }
 }

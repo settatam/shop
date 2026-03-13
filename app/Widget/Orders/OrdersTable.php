@@ -421,13 +421,6 @@ class OrdersTable extends Table
     {
         return [
             [
-                'key' => 'delete',
-                'label' => 'Delete Selected',
-                'icon' => 'TrashIcon',
-                'variant' => 'danger',
-                'confirm' => 'Are you sure you want to delete the selected orders? Only pending or draft orders can be deleted.',
-            ],
-            [
                 'key' => 'cancel',
                 'label' => 'Cancel Selected',
                 'icon' => 'XCircleIcon',

@@ -1377,7 +1377,7 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate([
-            'action' => 'required|string|in:delete,cancel',
+            'action' => 'required|string|in:cancel',
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:orders,id',
         ]);
@@ -1388,31 +1388,14 @@ class OrderController extends Controller
 
         $count = $orders->count();
 
-        match ($validated['action']) {
-            'delete' => $orders->each(function ($order) {
-                if ($order->isPending() || $order->status === Order::STATUS_DRAFT) {
-                    foreach ($order->items as $item) {
-                        if ($item->product_variant_id) {
-                            $this->restoreStock($item->product_variant_id, $item->quantity);
-                        }
-                    }
-                    $order->delete();
-                }
-            }),
-            'cancel' => $orders->each(function ($order) {
-                if (! $order->isCancelled() && $order->status !== Order::STATUS_COMPLETED) {
-                    $this->orderCreationService->cancelOrder($order);
-                }
-            }),
-        };
-
-        $actionLabel = match ($validated['action']) {
-            'delete' => 'deleted',
-            'cancel' => 'cancelled',
-        };
+        $orders->each(function ($order) {
+            if (! $order->isCancelled() && $order->status !== Order::STATUS_COMPLETED) {
+                $this->orderCreationService->cancelOrder($order);
+            }
+        });
 
         return redirect()->route('web.orders.index')
-            ->with('success', "{$count} order(s) {$actionLabel} successfully.");
+            ->with('success', "{$count} order(s) cancelled successfully.");
     }
 
     // Search Products API for Wizard
