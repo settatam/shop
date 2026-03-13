@@ -23,7 +23,6 @@ class DailyMemoReport extends AbstractReport
     protected array $openStatuses = [
         Memo::STATUS_PENDING,
         Memo::STATUS_SENT_TO_VENDOR,
-        Memo::STATUS_VENDOR_RECEIVED,
     ];
 
     public function __construct($store, ?Carbon $reportDate = null, ?string $baseUrl = null)
@@ -60,7 +59,6 @@ class DailyMemoReport extends AbstractReport
                     $this->badgeColumn('status', 'Status', [
                         'pending' => 'warning',
                         'sent_to_vendor' => 'info',
-                        'vendor_received' => 'info',
                     ]),
                     $this->numberColumn('item_count', '# Items'),
                     $this->currencyColumn('total', 'Total'),

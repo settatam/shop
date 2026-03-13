@@ -23,7 +23,6 @@ class DailyRepairReport extends AbstractReport
     protected array $openStatuses = [
         Repair::STATUS_PENDING,
         Repair::STATUS_SENT_TO_VENDOR,
-        Repair::STATUS_RECEIVED_BY_VENDOR,
     ];
 
     public function __construct($store, ?Carbon $reportDate = null, ?string $baseUrl = null)
@@ -61,7 +60,6 @@ class DailyRepairReport extends AbstractReport
                     $this->badgeColumn('status', 'Status', [
                         'pending' => 'warning',
                         'sent_to_vendor' => 'info',
-                        'received_by_vendor' => 'info',
                     ]),
                     $this->currencyColumn('total', 'Total'),
                     $this->numberColumn('repair_days', 'Repair Days'),

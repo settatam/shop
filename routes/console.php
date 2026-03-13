@@ -108,3 +108,8 @@ Schedule::command('reports:send-daily --type=items_not_reviewed')
     ->dailyAt('00:10')
     ->timezone('America/New_York')
     ->withoutOverlapping();
+
+Schedule::command('reports:send-daily --store=2 --type=all')
+    ->dailyAt('00:01')
+    ->timezone('America/New_York')
+    ->withoutOverlapping();
