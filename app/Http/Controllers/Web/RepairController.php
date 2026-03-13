@@ -61,6 +61,7 @@ class RepairController extends Controller
 
         $repair->load([
             'customer.leadSource',
+            'customer.addresses.state',
             'vendor',
             'user',
             'storeUser',
@@ -629,7 +630,7 @@ class RepairController extends Controller
             'can_be_cancelled' => $repair->canBeCancelled(),
 
             // Relationships
-            'customer' => $repair->customer ? [
+            'customer' => $repair->customer ? array_merge([
                 'id' => $repair->customer->id,
                 'first_name' => $repair->customer->first_name,
                 'last_name' => $repair->customer->last_name,
@@ -638,7 +639,46 @@ class RepairController extends Controller
                 'phone_number' => $repair->customer->phone_number,
                 'company_name' => $repair->customer->company_name,
                 'store_credit_balance' => (float) $repair->customer->store_credit_balance,
-            ] : null,
+                'id_number' => $repair->customer->id_number,
+                'id_issuing_state' => $repair->customer->id_issuing_state,
+                'id_expiration_date' => $repair->customer->id_expiration_date,
+                'date_of_birth' => $repair->customer->date_of_birth,
+                'lead_source_id' => $repair->customer->lead_source_id,
+                'lead_source' => $repair->customer->leadSource ? [
+                    'id' => $repair->customer->leadSource->id,
+                    'name' => $repair->customer->leadSource->name,
+                ] : null,
+                'addresses' => $repair->customer->addresses->map(fn ($addr) => [
+                    'id' => $addr->id,
+                    'full_name' => $addr->full_name,
+                    'nickname' => $addr->nickname,
+                    'type' => $addr->type,
+                    'address' => $addr->address,
+                    'address2' => $addr->address2,
+                    'city' => $addr->city,
+                    'state_id' => $addr->state_id,
+                    'state_abbreviation' => $addr->state_abbreviation,
+                    'zip' => $addr->zip,
+                    'phone' => $addr->phone,
+                    'is_default' => $addr->is_default,
+                    'is_shipping' => $addr->is_shipping,
+                    'formatted_address' => $addr->formatted_address,
+                    'one_line_address' => $addr->one_line_address,
+                ])->values(),
+            ], (function () use ($repair) {
+                $address = $repair->customer->defaultAddress ?? $repair->customer->addresses->first();
+
+                return $address ? [
+                    'primary_address' => [
+                        'address' => $address->address,
+                        'address2' => $address->address2,
+                        'city' => $address->city,
+                        'state_abbreviation' => $address->state_abbreviation,
+                        'zip' => $address->zip,
+                        'one_line_address' => $address->one_line_address,
+                    ],
+                ] : [];
+            })()) : null,
             'vendor' => $repair->vendor ? [
                 'id' => $repair->vendor->id,
                 'name' => $repair->vendor->name,
