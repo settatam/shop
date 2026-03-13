@@ -29,6 +29,7 @@ use App\Http\Controllers\Web\OnboardingController;
 use App\Http\Controllers\Web\OrderController;
 use App\Http\Controllers\Web\PackingSlipController;
 use App\Http\Controllers\Web\PaymentListController;
+use App\Http\Controllers\Web\PosController;
 use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\ProductTypeController;
 use App\Http\Controllers\Web\PurchaseOrderController;
@@ -277,6 +278,10 @@ Route::middleware(['auth', 'verified', 'store', 'onboarding'])->group(function (
         Route::get('orders/create', [OrderController::class, 'createWizard'])->name('web.orders.create-wizard');
         Route::post('orders', [OrderController::class, 'storeFromWizard'])->name('web.orders.store');
         Route::post('orders/create-product', [OrderController::class, 'storeQuickProduct'])->name('web.orders.create-product');
+
+        // POS (Point of Sale)
+        Route::get('pos', [PosController::class, 'show'])->name('web.pos.show');
+        Route::post('pos', [PosController::class, 'store'])->name('web.pos.store');
     });
 
     Route::middleware('permission:orders.view')->group(function () {

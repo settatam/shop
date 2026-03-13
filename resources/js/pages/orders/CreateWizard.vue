@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { router, Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
+import PosLayout from '@/layouts/PosLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { useBarcodeScanner } from '@/composables/useBarcodeScanner';
 import {
@@ -144,6 +145,12 @@ interface OrderItem {
     image?: string;
 }
 
+interface CompletedOrder {
+    id: number;
+    total: number;
+    customer_name: string;
+}
+
 interface Props {
     storeUsers: StoreUser[];
     currentStoreUserId?: number;
@@ -155,14 +162,32 @@ interface Props {
     preciousMetals: PreciousMetal[];
     itemConditions: ItemCondition[];
     preSelectedProduct?: Product | null;
+    posMode?: boolean;
+    completedOrder?: CompletedOrder | null;
 }
 
 const props = defineProps<Props>();
+
+const layoutComponent = computed(() => props.posMode ? PosLayout : AppLayout);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Orders', href: '/orders' },
     { title: 'New Order', href: '/orders/create' },
 ];
+
+// POS mode: sale complete overlay
+const saleComplete = ref(!!props.completedOrder);
+
+watch(() => props.completedOrder, (val) => {
+    saleComplete.value = !!val;
+});
+
+function formatCurrencyValue(amount: number): string {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+    }).format(amount);
+}
 
 // Form state
 const form = useForm({
@@ -201,6 +226,19 @@ const isSearchingCustomers = ref(false);
 const selectedCustomer = ref<Customer | null>(null);
 const isCreatingNewCustomer = ref(false);
 const newCustomer = ref<CustomerFormData>(getEmptyCustomerForm());
+
+// POS mode: reset wizard for next sale
+function resetWizard(): void {
+    saleComplete.value = false;
+    form.reset();
+    form.clearErrors();
+    selectedCustomer.value = null;
+    customerSearchQuery.value = '';
+    customerSearchResults.value = [];
+    isCreatingNewCustomer.value = false;
+    newCustomer.value = getEmptyCustomerForm();
+    currentStep.value = 1;
+}
 
 let customerSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -795,12 +833,12 @@ function formatCurrency(amount: number): string {
 const hasFormErrors = computed(() => Object.keys(form.errors).length > 0);
 
 function submitOrder() {
-    form.post('/orders', {
+    const url = props.posMode ? '/pos' : '/orders';
+    form.post(url, {
         preserveScroll: true,
         preserveState: true,
         onError: (errors) => {
             console.error('Order creation errors:', errors);
-            // Scroll to top to show error
             window.scrollTo({ top: 0, behavior: 'smooth' });
         },
     });
@@ -816,9 +854,37 @@ const steps = [
 </script>
 
 <template>
-    <Head title="New Order" />
+    <Head :title="posMode ? 'POS' : 'New Order'" />
 
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <component :is="layoutComponent" v-bind="posMode ? {} : { breadcrumbs }">
+        <!-- POS Sale Complete Overlay -->
+        <div v-if="posMode && saleComplete && completedOrder" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div class="mx-4 w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl dark:bg-gray-800">
+                <div class="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                    <CheckCircleIcon class="size-10 text-green-600 dark:text-green-400" />
+                </div>
+                <h2 class="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Sale Complete</h2>
+                <p class="mb-1 text-gray-500 dark:text-gray-400">{{ completedOrder.customer_name }}</p>
+                <p class="mb-6 text-3xl font-bold text-gray-900 dark:text-white">{{ formatCurrencyValue(completedOrder.total) }}</p>
+                <div class="flex flex-col gap-3">
+                    <a
+                        :href="`/orders/${completedOrder.id}/print-invoice`"
+                        target="_blank"
+                        class="inline-flex w-full items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                    >
+                        Print Receipt
+                    </a>
+                    <button
+                        type="button"
+                        class="inline-flex w-full items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+                        @click="resetWizard"
+                    >
+                        New Sale
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div class="flex h-full flex-1 flex-col p-4">
             <div class="mx-auto w-full max-w-6xl">
                 <!-- Error Alert -->
@@ -1798,5 +1864,5 @@ const steps = [
             @close="showOrderIdScanner = false"
             @scanned="handleOrderIdScan"
         />
-    </AppLayout>
+    </component>
 </template>

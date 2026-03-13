@@ -90,6 +90,7 @@ const pagesWithOwnScanner = [
     '/transactions/buy',
     '/memos/create',
     '/repairs/create',
+    '/pos',
 ];
 
 const shouldEnableGlobalScanner = computed(() => {

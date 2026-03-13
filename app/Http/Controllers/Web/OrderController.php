@@ -188,6 +188,16 @@ class OrderController extends Controller
                 ->with('error', 'Please select a store first.');
         }
 
+        return Inertia::render('orders/CreateWizard', $this->buildWizardProps($request, $store));
+    }
+
+    /**
+     * Build the shared props array for the order creation wizard.
+     *
+     * @return array<string, mixed>
+     */
+    public function buildWizardProps(Request $request, \App\Models\Store $store): array
+    {
         // Get store users for the employee dropdown (only assignable users with order permission)
         $storeUsers = $store->storeUsers()
             ->with(['user', 'role'])
@@ -267,7 +277,7 @@ class OrderController extends Controller
             }
         }
 
-        return Inertia::render('orders/CreateWizard', [
+        return [
             'storeUsers' => $storeUsers,
             'currentStoreUserId' => $currentStoreUserId,
             'categories' => $categories,
@@ -278,7 +288,7 @@ class OrderController extends Controller
             'preciousMetals' => $this->getPreciousMetals(),
             'itemConditions' => $this->getItemConditions(),
             'preSelectedProduct' => $preSelectedProduct,
-        ]);
+        ];
     }
 
     public function storeFromWizard(CreateOrderFromWizardRequest $request): RedirectResponse
