@@ -108,6 +108,7 @@ class DailyMemoReport extends AbstractReport
         $memos = Memo::query()
             ->where('store_id', $this->store->id)
             ->whereIn('status', $this->openStatuses)
+            ->has('items')
             ->with(['vendor', 'items'])
             ->orderBy('created_at', 'asc')
             ->get();
@@ -167,6 +168,7 @@ class DailyMemoReport extends AbstractReport
                 $query->whereBetween('created_at', [$startOfDay, $endOfDay])
                     ->orWhereBetween('updated_at', [$startOfDay, $endOfDay]);
             })
+            ->has('items')
             ->with(['vendor'])
             ->orderBy('updated_at', 'desc')
             ->get();

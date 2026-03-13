@@ -109,6 +109,7 @@ class DailyRepairReport extends AbstractReport
         $repairs = Repair::query()
             ->where('store_id', $this->store->id)
             ->whereIn('status', $this->openStatuses)
+            ->has('items')
             ->with(['customer', 'vendor'])
             ->orderBy('created_at', 'asc')
             ->get();
@@ -164,6 +165,7 @@ class DailyRepairReport extends AbstractReport
                 $query->whereBetween('created_at', [$startOfDay, $endOfDay])
                     ->orWhereBetween('updated_at', [$startOfDay, $endOfDay]);
             })
+            ->has('items')
             ->with(['customer', 'vendor'])
             ->orderBy('updated_at', 'desc')
             ->get();
