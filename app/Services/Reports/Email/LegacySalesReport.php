@@ -212,9 +212,6 @@ class LegacySalesReport extends AbstractReport
 
         $dailyData = $this->salesService->getDailyAggregatedData($this->store->id, $startOfMonth, $endDate);
 
-        // Convert to reversed order (oldest first for MTD)
-        $dailyData = $dailyData->reverse()->values();
-
         $data = $dailyData->map(function ($row) {
             return [
                 'date' => $row['date'],
