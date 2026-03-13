@@ -83,6 +83,16 @@ const form = useForm({
 const selectedAddress = ref<number | null>(null);
 const expandedAddressId = ref<number | null>(null);
 const savingAddressId = ref<number | null>(null);
+const addressSuccessMessage = ref<string | null>(null);
+let successTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const showSuccess = (message: string) => {
+    if (successTimeout) clearTimeout(successTimeout);
+    addressSuccessMessage.value = message;
+    successTimeout = setTimeout(() => {
+        addressSuccessMessage.value = null;
+    }, 3000);
+};
 
 interface AddressFormData {
     address: string;
@@ -114,6 +124,7 @@ watch(
             selectedAddress.value = props.selectedAddressId || null;
             expandedAddressId.value = null;
             savingAddressId.value = null;
+            addressSuccessMessage.value = null;
             showNewAddressForm.value = false;
             resetNewAddressForm();
             initAddressForms();
@@ -203,6 +214,7 @@ const saveAddress = (address: Address) => {
         onSuccess: () => {
             savingAddressId.value = null;
             expandedAddressId.value = null;
+            showSuccess('Address updated');
         },
         onError: () => {
             savingAddressId.value = null;
@@ -273,6 +285,7 @@ const saveNewAddress = () => {
             savingNewAddress.value = false;
             showNewAddressForm.value = false;
             resetNewAddressForm();
+            showSuccess('Address added');
         },
         onError: () => {
             savingNewAddress.value = false;
@@ -564,6 +577,17 @@ const save = () => {
                                                 <PlusIcon class="size-3.5" />
                                                 Add Address
                                             </button>
+                                        </div>
+
+                                        <!-- Success message -->
+                                        <div
+                                            v-if="addressSuccessMessage"
+                                            class="mb-3 flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                        >
+                                            <svg class="size-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                                            </svg>
+                                            {{ addressSuccessMessage }}
                                         </div>
 
                                         <!-- Address selector for entity context -->
