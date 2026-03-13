@@ -34,6 +34,7 @@ class BuysReportService
 
     /**
      * Format a payment method string for display.
+     * Handles comma-separated values like "ach,venmo".
      */
     public function formatPaymentMethod(?string $method): string
     {
@@ -41,7 +42,12 @@ class BuysReportService
             return '-';
         }
 
-        return self::PAYMENT_METHOD_LABELS[$method] ?? ucwords(str_replace('_', ' ', $method));
+        return collect(explode(',', $method))
+            ->map(fn ($m) => trim($m))
+            ->filter()
+            ->unique()
+            ->map(fn ($m) => self::PAYMENT_METHOD_LABELS[$m] ?? ucwords(str_replace('_', ' ', $m)))
+            ->implode(', ') ?: '-';
     }
 
     /**
