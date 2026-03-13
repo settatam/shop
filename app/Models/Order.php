@@ -454,8 +454,7 @@ class Order extends Model implements Payable
         $total = $subTotal
             + ($this->shipping_cost ?? 0)
             + ($this->sales_tax ?? 0)
-            - ($this->discount_cost ?? 0)
-            - ($this->trade_in_credit ?? 0);
+            - ($this->discount_cost ?? 0);
 
         $this->update([
             'sub_total' => $subTotal,

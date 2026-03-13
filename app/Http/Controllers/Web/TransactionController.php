@@ -136,8 +136,10 @@ class TransactionController extends Controller
             'outboundLabel',
             'returnLabel',
             'payouts',
+            'order',
             'notes.user',
             'images', // Transaction-level attachments
+            'statusModel',
         ]);
 
         // Get statuses based on transaction type
@@ -458,6 +460,7 @@ class TransactionController extends Controller
             } elseif ($method === 'check') {
                 $paymentEntry['details'] = [
                     'type' => 'check',
+                    'check_number' => $details['check_number'] ?? null,
                     'mailing_name' => $details['mailing_name'] ?? null,
                     'mailing_address' => $details['mailing_address'] ?? null,
                     'mailing_city' => $details['mailing_city'] ?? null,
@@ -1807,6 +1810,9 @@ class TransactionController extends Controller
             'id' => $transaction->id,
             'transaction_number' => $transaction->transaction_number,
             'status' => $transaction->status,
+            'status_label' => $transaction->statusModel?->name
+                ?? ucfirst(str_replace('_', ' ', $transaction->status ?? 'Unknown')),
+            'status_color' => $transaction->statusModel?->color ?? '#6b7280',
             'type' => $transaction->type,
             'source' => $transaction->source,
             'preliminary_offer' => $transaction->preliminary_offer,
@@ -1832,6 +1838,13 @@ class TransactionController extends Controller
             'can_be_cancelled' => $transaction->canBeCancelled(),
             'is_in_store' => $transaction->isInStore(),
             'is_online' => $transaction->isOnline(),
+            'is_trade_in' => $transaction->isTradeIn(),
+            'linked_order' => $transaction->isTradeIn() && $transaction->order ? [
+                'id' => $transaction->order->id,
+                'invoice_number' => $transaction->order->invoice_number,
+                'status' => $transaction->order->status,
+                'total' => (float) $transaction->order->total,
+            ] : null,
             'shipping_address_id' => $transaction->shipping_address_id,
             'shipping_address' => $transaction->shippingAddress ? [
                 'id' => $transaction->shippingAddress->id,
@@ -1864,6 +1877,7 @@ class TransactionController extends Controller
                     'city' => $customer->city,
                     'state' => $customer->state,
                     'zip' => $customer->zip,
+                    'store_credit_balance' => (float) $customer->store_credit_balance,
                     'lead_source_id' => $customer->lead_source_id,
                     'lead_source' => $customer->leadSource ? [
                         'id' => $customer->leadSource->id,

@@ -732,7 +732,7 @@ const tradeInCredit = computed(() => {
 });
 
 const taxableAmount = computed(() => {
-    return Math.max(0, subtotal.value - form.discount_cost - tradeInCredit.value);
+    return Math.max(0, subtotal.value - form.discount_cost);
 });
 
 const taxAmount = computed(() => {
@@ -740,12 +740,7 @@ const taxAmount = computed(() => {
 });
 
 const total = computed(() => {
-    return Math.max(0, subtotal.value + form.shipping_cost + taxAmount.value - form.discount_cost - tradeInCredit.value);
-});
-
-const excessTradeInCredit = computed(() => {
-    const orderTotalBeforeTradeIn = subtotal.value + form.shipping_cost + (subtotal.value - form.discount_cost) * form.tax_rate - form.discount_cost;
-    return Math.max(0, tradeInCredit.value - orderTotalBeforeTradeIn);
+    return Math.max(0, subtotal.value + form.shipping_cost + taxAmount.value - form.discount_cost);
 });
 
 // Navigation
@@ -972,10 +967,6 @@ const steps = [
                                             <div class="flex items-center justify-between text-sm">
                                                 <span class="text-gray-500 dark:text-gray-400">Subtotal</span>
                                                 <span class="text-gray-900 dark:text-white">{{ formatCurrency(subtotal) }}</span>
-                                            </div>
-                                            <div v-if="tradeInCredit > 0" class="flex items-center justify-between text-sm text-green-600 dark:text-green-400">
-                                                <span>Trade-In Credit</span>
-                                                <span>-{{ formatCurrency(tradeInCredit) }}</span>
                                             </div>
                                             <div v-if="taxAmount > 0" class="flex items-center justify-between text-sm">
                                                 <span class="text-gray-500 dark:text-gray-400">Tax</span>
@@ -1721,10 +1712,6 @@ const steps = [
                                             <dt>Discount</dt>
                                             <dd>-{{ formatCurrency(form.discount_cost) }}</dd>
                                         </div>
-                                        <div v-if="tradeInCredit > 0" class="flex justify-between text-green-600 dark:text-green-400">
-                                            <dt>Trade-In Credit</dt>
-                                            <dd>-{{ formatCurrency(tradeInCredit) }}</dd>
-                                        </div>
                                         <div v-if="form.shipping_cost > 0" class="flex justify-between">
                                             <dt class="text-gray-500 dark:text-gray-400">Shipping</dt>
                                             <dd class="text-gray-900 dark:text-white">{{ formatCurrency(form.shipping_cost) }}</dd>
@@ -1737,10 +1724,6 @@ const steps = [
                                     <div class="flex justify-between border-t border-gray-200 pt-2 text-base font-semibold dark:border-gray-600">
                                         <dt class="text-gray-900 dark:text-white">Customer Pays</dt>
                                         <dd class="text-indigo-600 dark:text-indigo-400">{{ formatCurrency(total) }}</dd>
-                                    </div>
-                                    <div v-if="excessTradeInCredit > 0" class="flex justify-between text-sm text-orange-600 dark:text-orange-400">
-                                        <dt>Customer Refund (Excess Trade-In)</dt>
-                                        <dd>{{ formatCurrency(excessTradeInCredit) }}</dd>
                                     </div>
                                 </dl>
                             </div>

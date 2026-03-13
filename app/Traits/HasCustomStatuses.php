@@ -16,14 +16,24 @@ trait HasCustomStatuses
     public static function bootHasCustomStatuses(): void
     {
         static::creating(function ($model) {
-            // Set default status_id if not provided and store_id is available
+            // Sync status_id if not provided and store_id is available
             if (empty($model->status_id) && ! empty($model->store_id)) {
                 $entityType = $model->getStatusableType();
-                $defaultStatus = Status::getDefault($model->store_id, $entityType);
 
+                // If a legacy status string is set, find the matching custom status
+                if (! empty($model->status)) {
+                    $matchingStatus = Status::findBySlug($model->store_id, $entityType, $model->status);
+                    if ($matchingStatus) {
+                        $model->status_id = $matchingStatus->id;
+
+                        return;
+                    }
+                }
+
+                // Fall back to default status
+                $defaultStatus = Status::getDefault($model->store_id, $entityType);
                 if ($defaultStatus) {
                     $model->status_id = $defaultStatus->id;
-                    // Also set the legacy status field for backward compatibility
                     if (empty($model->status)) {
                         $model->status = $defaultStatus->slug;
                     }

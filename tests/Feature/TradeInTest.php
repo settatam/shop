@@ -10,10 +10,10 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\Store;
+use App\Models\StoreCredit;
 use App\Models\StoreUser;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
-use App\Models\TransactionPayout;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\Orders\OrderCreationService;
@@ -178,18 +178,16 @@ class TradeInTest extends TestCase
         $this->assertEquals($order->id, $order->tradeInTransaction->order_id);
         $this->assertTrue($order->tradeInTransaction->isTradeIn());
 
-        // Tax should be calculated on net amount (4000 - 3000 = 1000, tax = 80)
-        $this->assertEquals(80.00, $order->sales_tax);
+        // Tax should be calculated on full subtotal (4000 * 0.08 = 320)
+        $this->assertEquals(320.00, $order->sales_tax);
 
-        // Total should be subtotal + tax - trade-in credit = 4000 + 80 - 3000 = 1080
-        $this->assertEquals(1080.00, $order->total);
+        // Total should be subtotal + tax = 4000 + 320 = 4320 (trade-in does not reduce total)
+        $this->assertEquals(4320.00, $order->total);
 
-        // Store credit payment should be created
-        $this->assertDatabaseHas('payments', [
+        // No auto store credit payment should be created
+        $this->assertDatabaseMissing('payments', [
             'order_id' => $order->id,
             'payment_method' => Payment::METHOD_STORE_CREDIT,
-            'amount' => 3000.00,
-            'status' => Payment::STATUS_COMPLETED,
         ]);
     }
 
@@ -236,17 +234,15 @@ class TradeInTest extends TestCase
 
         $order = $orderCreationService->createFromWizard($data, $this->store);
 
-        // When trade-in exceeds purchase, total should be 0
-        $this->assertEquals(0, $order->total);
+        // Total should be full product price + tax (2000 + 160 = 2160), trade-in does not reduce total
+        $this->assertEquals(2160.00, $order->total);
 
-        // Trade-in credit should be the full trade-in amount
+        // Trade-in credit should be the full trade-in amount (informational)
         $this->assertEquals(5000.00, $order->trade_in_credit);
 
-        // A payout should be created for the excess
-        $this->assertDatabaseHas('transaction_payouts', [
-            'transaction_id' => $order->trade_in_transaction_id,
-            'status' => TransactionPayout::STATUS_PENDING,
-        ]);
+        // Full trade-in amount should be in customer's store credit balance
+        $this->customer->refresh();
+        $this->assertEquals(5000.00, (float) $this->customer->store_credit_balance);
     }
 
     public function test_can_cancel_trade_in_with_order(): void
@@ -307,12 +303,6 @@ class TradeInTest extends TestCase
         $this->assertEquals(Transaction::STATUS_CANCELLED, $transaction->status);
         $this->assertNull($transaction->order_id);
 
-        // Store credit payment should be refunded
-        $this->assertDatabaseHas('payments', [
-            'order_id' => $order->id,
-            'payment_method' => Payment::METHOD_STORE_CREDIT,
-            'status' => Payment::STATUS_REFUNDED,
-        ]);
     }
 
     public function test_can_unlink_trade_in_without_cancelling(): void
@@ -423,11 +413,11 @@ class TradeInTest extends TestCase
         $this->assertTrue($order->hasTradeIn());
         $this->assertEquals(800.00, $order->trade_in_credit);
 
-        // Tax on net amount: (2000 - 800) * 0.07 = 84
-        $this->assertEquals(84.00, $order->sales_tax);
+        // Tax on full subtotal: 2000 * 0.07 = 140
+        $this->assertEquals(140.00, $order->sales_tax);
 
-        // Total: 2000 + 84 - 800 = 1284
-        $this->assertEquals(1284.00, $order->total);
+        // Total: 2000 + 140 = 2140 (trade-in does not reduce total)
+        $this->assertEquals(2140.00, $order->total);
     }
 
     public function test_trade_in_transaction_is_trade_in_helper(): void
@@ -463,6 +453,137 @@ class TradeInTest extends TestCase
         $this->assertTrue($order->hasTradeIn());
     }
 
+    public function test_trade_in_issues_store_credit_to_customer(): void
+    {
+        $tradeInService = app(TradeInService::class);
+
+        $this->assertEquals(0, (float) $this->customer->store_credit_balance);
+
+        $items = [
+            ['title' => 'Gold Ring', 'buy_price' => 500.00],
+            ['title' => 'Silver Chain', 'buy_price' => 200.00],
+        ];
+
+        $transaction = $tradeInService->createTradeIn(
+            $items,
+            $this->customer->id,
+            $this->store,
+            $this->warehouse->id
+        );
+
+        $this->customer->refresh();
+
+        // Customer balance should increase
+        $this->assertEquals(700.00, (float) $this->customer->store_credit_balance);
+
+        // Store credit ledger entry should exist
+        $this->assertDatabaseHas('store_credits', [
+            'customer_id' => $this->customer->id,
+            'type' => StoreCredit::TYPE_CREDIT,
+            'amount' => 700.00,
+            'source' => StoreCredit::SOURCE_BUY_TRANSACTION,
+            'reference_type' => Transaction::class,
+            'reference_id' => $transaction->id,
+        ]);
+
+        // Transaction payment_method should be store_credit
+        $this->assertEquals(Transaction::PAYMENT_STORE_CREDIT, $transaction->payment_method);
+    }
+
+    public function test_cancelling_trade_in_reverses_store_credit(): void
+    {
+        $tradeInService = app(TradeInService::class);
+        $orderCreationService = app(OrderCreationService::class);
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 1000.00,
+        ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
+
+        $data = [
+            'store_user_id' => $this->storeUser->id,
+            'customer_id' => $this->customer->id,
+            'warehouse_id' => $this->warehouse->id,
+            'tax_rate' => 0,
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'variant_id' => $variant->id,
+                    'title' => $product->title,
+                    'quantity' => 1,
+                    'price' => 1000.00,
+                ],
+            ],
+            'trade_in_items' => [
+                ['title' => 'Gold Ring', 'buy_price' => 300.00],
+            ],
+        ];
+
+        $order = $orderCreationService->createFromWizard($data, $this->store);
+
+        $this->customer->refresh();
+        $balanceAfterTradeIn = (float) $this->customer->store_credit_balance;
+        $this->assertEquals(300.00, $balanceAfterTradeIn);
+
+        // Cancel the trade-in
+        $tradeInService->cancelTradeInWithOrder($order, cancelTransaction: true);
+
+        $this->customer->refresh();
+
+        // Balance should be reversed back to 0
+        $this->assertEquals(0, (float) $this->customer->store_credit_balance);
+
+        // Debit entry should exist
+        $this->assertDatabaseHas('store_credits', [
+            'customer_id' => $this->customer->id,
+            'type' => StoreCredit::TYPE_DEBIT,
+            'amount' => 300.00,
+            'source' => StoreCredit::SOURCE_REFUND,
+        ]);
+    }
+
+    public function test_process_payment_saves_check_number(): void
+    {
+        $tradeInService = app(TradeInService::class);
+
+        $transaction = $tradeInService->createTradeIn(
+            [['title' => 'Test Item', 'buy_price' => 100.00]],
+            $this->customer->id,
+            $this->store,
+            $this->warehouse->id
+        );
+
+        // Set to a state that allows payment processing
+        $transaction->update(['status' => Transaction::STATUS_OFFER_ACCEPTED]);
+
+        $response = $this->post("/transactions/{$transaction->id}/process-payment", [
+            'payments' => [
+                [
+                    'method' => 'check',
+                    'amount' => 100.00,
+                    'details' => [
+                        'check_number' => '1234',
+                        'mailing_name' => 'John Doe',
+                        'mailing_address' => '123 Main St',
+                    ],
+                ],
+            ],
+        ]);
+
+        $transaction->refresh();
+
+        $this->assertEquals('check', $transaction->payment_method);
+        $this->assertEquals('1234', $transaction->payment_details['check_number']);
+    }
+
     public function test_trade_in_validation_requires_title_and_price(): void
     {
         $product = Product::factory()->create(['store_id' => $this->store->id]);
@@ -493,5 +614,69 @@ class TradeInTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors(['trade_in_items.0.title', 'trade_in_items.0.buy_price']);
+    }
+
+    public function test_cancelling_order_cancels_trade_in_transaction(): void
+    {
+        $orderCreationService = app(OrderCreationService::class);
+
+        $product = Product::factory()->create(['store_id' => $this->store->id]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'price' => 1000.00,
+        ]);
+        Inventory::factory()->create([
+            'store_id' => $this->store->id,
+            'product_variant_id' => $variant->id,
+            'warehouse_id' => $this->warehouse->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
+
+        $data = [
+            'store_user_id' => $this->storeUser->id,
+            'customer_id' => $this->customer->id,
+            'warehouse_id' => $this->warehouse->id,
+            'tax_rate' => 0,
+            'items' => [
+                [
+                    'product_id' => $product->id,
+                    'variant_id' => $variant->id,
+                    'title' => $product->title,
+                    'quantity' => 1,
+                    'price' => 1000.00,
+                ],
+            ],
+            'trade_in_items' => [
+                ['title' => 'Gold Ring', 'buy_price' => 500.00],
+            ],
+        ];
+
+        $order = $orderCreationService->createFromWizard($data, $this->store);
+        $transactionId = $order->trade_in_transaction_id;
+
+        $this->customer->refresh();
+        $this->assertEquals(500.00, (float) $this->customer->store_credit_balance);
+
+        // Cancel the order
+        $orderCreationService->cancelOrder($order);
+
+        $order->refresh();
+        $this->customer->refresh();
+
+        // Order should be cancelled
+        $this->assertTrue($order->isCancelled());
+
+        // Trade-in transaction should be cancelled
+        $transaction = Transaction::find($transactionId);
+        $this->assertEquals(Transaction::STATUS_CANCELLED, $transaction->status);
+        $this->assertNull($transaction->order_id);
+
+        // Trade-in should be unlinked from order
+        $this->assertNull($order->trade_in_transaction_id);
+        $this->assertEquals(0, $order->trade_in_credit);
+
+        // Store credit should be reversed
+        $this->assertEquals(0, (float) $this->customer->store_credit_balance);
     }
 }

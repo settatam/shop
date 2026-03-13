@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import { UserIcon, PencilIcon } from '@heroicons/vue/24/outline';
+import { UserIcon, PencilIcon, BanknotesIcon } from '@heroicons/vue/24/outline';
 
 interface LeadSource {
     id: number;
@@ -25,6 +25,7 @@ interface Customer {
     primary_address?: { address: string | null; address2?: string | null; city: string | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
     lead_source?: LeadSource | null;
     leadSource?: LeadSource | null;
+    store_credit_balance?: number | null;
 }
 
 interface Props {
@@ -74,6 +75,14 @@ const addressLines = computed(() => {
 const leadSource = computed(() => {
     return props.customer.leadSource || props.customer.lead_source || null;
 });
+
+const storeCreditBalance = computed(() => {
+    return props.customer.store_credit_balance ?? 0;
+});
+
+function formatCurrency(value: number): string {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+}
 </script>
 
 <template>
@@ -115,15 +124,15 @@ const leadSource = computed(() => {
             <p v-if="customer.company_name" class="text-sm text-gray-500 dark:text-gray-400 truncate">
                 {{ customer.company_name }}
             </p>
-            <p v-if="customer.email" class="text-sm text-gray-500 dark:text-gray-400 truncate">
-                {{ customer.email }}
-            </p>
-            <p v-if="customerPhone" class="text-sm text-gray-500 dark:text-gray-400">
-                {{ customerPhone }}
-            </p>
             <div v-if="addressLines.length" class="text-sm text-gray-500 dark:text-gray-400">
                 <p v-for="(line, i) in addressLines" :key="i">{{ line }}</p>
             </div>
+            <p v-if="customerPhone" class="text-sm text-gray-500 dark:text-gray-400">
+                {{ customerPhone }}
+            </p>
+            <p v-if="customer.email" class="text-sm text-gray-500 dark:text-gray-400 truncate">
+                {{ customer.email }}
+            </p>
 
             <!-- Lead Source -->
             <div v-if="!compact" class="mt-2 flex items-center gap-2">
@@ -137,6 +146,17 @@ const leadSource = computed(() => {
                 <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">
                     Unknown
                 </span>
+            </div>
+
+            <!-- Store Credit -->
+            <div v-if="!compact && storeCreditBalance > 0" class="mt-2">
+                <Link
+                    :href="`/customers/${customer.id}/store-credits`"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20 hover:bg-green-100 dark:bg-green-400/10 dark:text-green-400 dark:ring-green-400/20 dark:hover:bg-green-400/20"
+                >
+                    <BanknotesIcon class="size-3.5" />
+                    Store Credit: {{ formatCurrency(storeCreditBalance) }}
+                </Link>
             </div>
         </div>
     </div>

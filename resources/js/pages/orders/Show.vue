@@ -125,15 +125,6 @@ interface TradeInTransaction {
     items: TradeInItem[];
 }
 
-interface ExcessCreditPayout {
-    id: number;
-    amount: number;
-    status: string;
-    provider?: string;
-    notes?: string;
-    processed_at?: string;
-    user?: User;
-}
 
 interface ReturnItemSummary {
     id: number;
@@ -246,7 +237,6 @@ interface Order {
     invoice?: Invoice;
     payments?: Payment[];
     trade_in_transaction?: TradeInTransaction;
-    excess_credit_payout?: ExcessCreditPayout;
     returns?: OrderReturn[];
     has_returns?: boolean;
     note_entries: Note[];
@@ -721,37 +711,6 @@ function openReturnModal(item: OrderItem) {
 function closeReturnModal() {
     showReturnModal.value = false;
     returningItem.value = null;
-}
-
-// Payout modal
-const showPayoutModal = ref(false);
-const payoutMethod = ref('cash');
-const payoutNotes = ref('');
-const isIssuingPayout = ref(false);
-
-function openPayoutModal() {
-    payoutMethod.value = 'cash';
-    payoutNotes.value = '';
-    showPayoutModal.value = true;
-}
-
-function closePayoutModal() {
-    showPayoutModal.value = false;
-}
-
-function issueCustomerPayout() {
-    if (isIssuingPayout.value) return;
-    isIssuingPayout.value = true;
-    router.post(`/orders/${props.order.id}/issue-payout`, {
-        payout_method: payoutMethod.value,
-        notes: payoutNotes.value || null,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            showPayoutModal.value = false;
-        },
-        onFinish: () => { isIssuingPayout.value = false; },
-    });
 }
 
 function processReturn() {
@@ -1270,65 +1229,6 @@ function processReturn() {
                             </div>
                         </div>
 
-                        <!-- Customer Payout (excess trade-in credit) -->
-                        <div v-if="order.excess_credit_payout" class="rounded-lg bg-white shadow dark:bg-gray-800">
-                            <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-                                <div class="flex items-center justify-between">
-                                    <h2 class="flex items-center gap-2 text-lg font-medium text-gray-900 dark:text-white">
-                                        <BanknotesIcon class="size-5 text-amber-500 dark:text-amber-400" />
-                                        Customer Payout
-                                    </h2>
-                                    <span :class="[
-                                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                                        order.excess_credit_payout.status === 'SUCCESS'
-                                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                                    ]">
-                                        {{ order.excess_credit_payout.status === 'SUCCESS' ? 'Completed' : 'Pending' }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="p-6">
-                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                    Trade-in value exceeded the order total. The customer is owed:
-                                </p>
-                                <p class="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-400">
-                                    {{ formatCurrency(Number(order.excess_credit_payout.amount)) }}
-                                </p>
-
-                                <!-- Completed payout details -->
-                                <div v-if="order.excess_credit_payout.status === 'SUCCESS'" class="mt-4 space-y-2 rounded-md bg-green-50 p-3 dark:bg-green-900/20">
-                                    <div class="flex justify-between text-sm">
-                                        <span class="text-gray-500 dark:text-gray-400">Method</span>
-                                        <span class="font-medium text-gray-900 dark:text-white capitalize">{{ order.excess_credit_payout.provider }}</span>
-                                    </div>
-                                    <div v-if="order.excess_credit_payout.notes" class="flex justify-between text-sm">
-                                        <span class="text-gray-500 dark:text-gray-400">Notes</span>
-                                        <span class="font-medium text-gray-900 dark:text-white">{{ order.excess_credit_payout.notes }}</span>
-                                    </div>
-                                    <div v-if="order.excess_credit_payout.processed_at" class="flex justify-between text-sm">
-                                        <span class="text-gray-500 dark:text-gray-400">Date</span>
-                                        <span class="text-gray-900 dark:text-white">{{ formatDate(order.excess_credit_payout.processed_at) }}</span>
-                                    </div>
-                                    <div v-if="order.excess_credit_payout.user" class="flex justify-between text-sm">
-                                        <span class="text-gray-500 dark:text-gray-400">Issued by</span>
-                                        <span class="text-gray-900 dark:text-white">{{ order.excess_credit_payout.user.name }}</span>
-                                    </div>
-                                </div>
-
-                                <!-- Issue payout button -->
-                                <button
-                                    v-if="order.excess_credit_payout.status !== 'SUCCESS'"
-                                    type="button"
-                                    @click="openPayoutModal"
-                                    class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-                                >
-                                    <BanknotesIcon class="size-4" />
-                                    Issue Payout
-                                </button>
-                            </div>
-                        </div>
-
                         <!-- Notes -->
                         <div v-if="order.notes" class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
                             <h2 class="mb-3 text-lg font-medium text-gray-900 dark:text-white">Notes</h2>
@@ -1401,10 +1301,6 @@ function processReturn() {
                                 <div v-if="(order.discount_cost ?? 0) > 0" class="flex justify-between text-sm text-green-600 dark:text-green-400">
                                     <dt>Discount</dt>
                                     <dd>-{{ formatCurrency(order.discount_cost ?? 0) }}</dd>
-                                </div>
-                                <div v-if="(order.trade_in_credit ?? 0) > 0" class="flex justify-between text-sm text-green-600 dark:text-green-400">
-                                    <dt>Trade-In Credit</dt>
-                                    <dd>-{{ formatCurrency(order.trade_in_credit ?? 0) }}</dd>
                                 </div>
                                 <div v-if="(order.shipping_cost ?? 0) > 0" class="flex justify-between text-sm">
                                     <dt class="text-gray-500 dark:text-gray-400">Shipping</dt>
@@ -1701,82 +1597,6 @@ function processReturn() {
             @close="closeShipModal"
             @success="onShipSuccess"
         />
-
-        <!-- Customer Payout Modal -->
-        <Teleport to="body">
-            <div v-if="showPayoutModal" class="fixed inset-0 z-50 overflow-y-auto">
-                <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 transition-opacity" @click="closePayoutModal" />
-                    <div class="relative transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                        <div class="absolute right-0 top-0 pr-4 pt-4">
-                            <button type="button" @click="closePayoutModal" class="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
-                                <XMarkIcon class="size-6" />
-                            </button>
-                        </div>
-                        <div class="sm:flex sm:items-start">
-                            <div class="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900 sm:mx-0">
-                                <BanknotesIcon class="size-6 text-amber-600 dark:text-amber-400" />
-                            </div>
-                            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left flex-1">
-                                <h3 class="text-lg font-semibold leading-6 text-gray-900 dark:text-white">Issue Customer Payout</h3>
-                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Record the payout for excess trade-in credit</p>
-                            </div>
-                        </div>
-
-                        <div class="mt-6 space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount</label>
-                                <div class="rounded-md bg-gray-50 dark:bg-gray-700 px-3 py-2 text-lg font-bold text-amber-600 dark:text-amber-400">
-                                    {{ formatCurrency(Number(order.excess_credit_payout?.amount ?? 0)) }}
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Payout Method</label>
-                                <div class="flex gap-4">
-                                    <label class="flex items-center">
-                                        <input v-model="payoutMethod" type="radio" value="cash" class="text-amber-600 focus:ring-amber-600" />
-                                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Cash</span>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input v-model="payoutMethod" type="radio" value="check" class="text-amber-600 focus:ring-amber-600" />
-                                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Check</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-                                <textarea
-                                    v-model="payoutNotes"
-                                    rows="2"
-                                    placeholder="Check number, receipt details, etc."
-                                    class="block w-full rounded-md border-0 py-2 px-3 text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-amber-600 dark:bg-gray-700 sm:text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        <div class="mt-6 flex gap-3 justify-end">
-                            <button
-                                type="button"
-                                @click="closePayoutModal"
-                                class="rounded-md bg-white dark:bg-gray-700 px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                @click="issueCustomerPayout"
-                                :disabled="isIssuingPayout"
-                                class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-500 disabled:opacity-50"
-                            >
-                                {{ isIssuingPayout ? 'Issuing...' : 'Issue Payout' }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </Teleport>
 
         <!-- Return Item Modal -->
         <Teleport to="body">

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateOrderFromWizardRequest;
 use App\Models\Activity;
-use App\Models\ActivityLog;
 use App\Models\Address;
 use App\Models\Bucket;
 use App\Models\Category;
@@ -132,7 +131,6 @@ class OrderController extends Controller
             'payments.user',
             'returns.items.orderItem',
             'tradeInTransaction.items',
-            'tradeInTransaction.payouts.user',
             'notes.user',
         ]);
 
@@ -1729,82 +1727,6 @@ class OrderController extends Controller
         }
     }
 
-    public function issueCustomerPayout(Request $request, Order $order): RedirectResponse
-    {
-        $this->authorizeOrder($order);
-
-        if (! $order->tradeInTransaction) {
-            return back()->with('error', 'This order does not have a trade-in transaction.');
-        }
-
-        $order->load('tradeInTransaction.payouts');
-
-        $payout = $order->tradeInTransaction->payouts->first();
-
-        if (! $payout) {
-            return back()->with('error', 'No payout record found for this order.');
-        }
-
-        if (! $payout->isPending()) {
-            return back()->with('error', 'This payout has already been processed.');
-        }
-
-        $validated = $request->validate([
-            'payout_method' => 'required|string|in:cash,check',
-            'notes' => 'nullable|string|max:1000',
-        ]);
-
-        $payout->markAsCompleted(
-            $validated['payout_method'],
-            $validated['notes'] ?? null,
-            auth()->id()
-        );
-
-        ActivityLog::log(
-            Activity::ORDERS_PAYOUT_ISSUED,
-            $order,
-            null,
-            [
-                'amount' => $payout->amount,
-                'method' => $validated['payout_method'],
-            ],
-            "Payout of \${$payout->amount} issued via {$validated['payout_method']}"
-        );
-
-        return back()->with('success', "Payout of \${$payout->amount} issued successfully.");
-    }
-
-    /**
-     * Format the excess credit payout data for the frontend.
-     *
-     * @return array<string, mixed>|null
-     */
-    protected function formatExcessCreditPayout(Order $order): ?array
-    {
-        if (! $order->tradeInTransaction || ! $order->tradeInTransaction->relationLoaded('payouts')) {
-            return null;
-        }
-
-        $payout = $order->tradeInTransaction->payouts->first();
-
-        if (! $payout) {
-            return null;
-        }
-
-        return [
-            'id' => $payout->id,
-            'amount' => $payout->amount,
-            'status' => $payout->status,
-            'provider' => $payout->provider,
-            'notes' => $payout->notes,
-            'processed_at' => $payout->processed_at?->toISOString(),
-            'user' => $payout->user ? [
-                'id' => $payout->user->id,
-                'name' => $payout->user->name,
-            ] : null,
-        ];
-    }
-
     protected function authorizeOrder(Order $order): void
     {
         $store = $this->storeContext->getCurrentStore();
@@ -1997,7 +1919,6 @@ class OrderController extends Controller
                     'dwt' => $item->dwt,
                 ]),
             ] : null,
-            'excess_credit_payout' => $this->formatExcessCreditPayout($order),
             'note_entries' => ($order->getRelation('notes') ?? collect())->map(fn ($note) => [
                 'id' => $note->id,
                 'content' => $note->content,

@@ -50,6 +50,7 @@ import {
     ChevronLeftIcon,
     ChevronRightIcon,
     CheckBadgeIcon,
+    ShoppingBagIcon,
 } from '@heroicons/vue/24/outline';
 import { CustomerCard, CustomerSearch } from '@/components/customers';
 import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
@@ -227,6 +228,13 @@ interface Transaction {
     can_be_cancelled: boolean;
     is_in_store: boolean;
     is_online: boolean;
+    is_trade_in: boolean;
+    linked_order: {
+        id: number;
+        invoice_number: string;
+        status: string;
+        total: number;
+    } | null;
     customer: Customer | null;
     user: User | null;
     assigned_user: User | null;
@@ -820,6 +828,18 @@ const paymentMethodsDisplay = computed(() => {
     return props.transaction.payment_method?.replace(/_/g, ' ') || null;
 });
 
+const checkNumber = computed(() => {
+    const details = props.transaction.payment_details;
+    if (details?.check_number) {
+        return details.check_number;
+    }
+    if (details?.payments) {
+        const checkPayment = details.payments.find(p => p.method === 'check');
+        return checkPayment?.details?.check_number || null;
+    }
+    return null;
+});
+
 // Formatting helpers
 const formatCurrency = (value: number | null) => {
     if (value === null || value === undefined) return '-';
@@ -1356,7 +1376,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     statusColors[transaction.status] || statusColors.pending,
                                 ]"
                             >
-                                {{ statusLabels[transaction.status] || transaction.status }}
+                                {{ transaction.status_label || statusLabels[transaction.status] || transaction.status }}
                             </span>
                             <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                                 {{ typeLabels[transaction.type] || transaction.type }}
@@ -1948,6 +1968,31 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                         </div>
                     </div>
 
+                    <!-- Linked Order (Trade-In) -->
+                    <div v-if="transaction.is_trade_in && transaction.linked_order" class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-3">Linked Order</h3>
+                            <Link
+                                :href="`/orders/${transaction.linked_order.id}`"
+                                class="flex items-center gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+                            >
+                                <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+                                    <ShoppingBagIcon class="size-5 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ transaction.linked_order.invoice_number || `Order #${transaction.linked_order.id}` }}
+                                    </p>
+                                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="capitalize">{{ transaction.linked_order.status }}</span>
+                                        <span>&middot;</span>
+                                        <span>{{ formatCurrency(transaction.linked_order.total) }}</span>
+                                    </div>
+                                </div>
+                            </Link>
+                        </div>
+                    </div>
+
                     <!-- Offer & Payment -->
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
@@ -1969,6 +2014,7 @@ const getTrackingUrl = (trackingNumber: string, carrier: string) => {
                                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Payment Method</dt>
                                     <dd class="text-sm text-gray-900 dark:text-white">
                                         <span class="font-medium capitalize">{{ paymentMethodsDisplay }}</span>
+                                        <span v-if="checkNumber" class="text-gray-500 dark:text-gray-400"> #{{ checkNumber }}</span>
 
                                         <!-- Check payment details -->
                                         <div v-if="transaction.payment_method === 'check' && transaction.payment_details" class="mt-2 text-xs text-gray-600 dark:text-gray-400">

@@ -217,20 +217,8 @@ class OrderCreationService
                 $this->tradeInService->applyTradeInToOrder($this->order, $tradeInTransaction);
             }
 
-            // Calculate totals with tax (including trade-in credit)
-            $this->calculateTotalsWithTax($taxRate, $tradeInCredit);
-
-            // Handle excess trade-in credit (customer receives refund)
-            if ($tradeInCredit > 0 && $this->order->total <= 0) {
-                $excessAmount = $tradeInCredit - ($this->order->sub_total + $this->order->shipping_cost + $this->order->sales_tax - $this->order->discount_cost);
-                if ($excessAmount > 0 && $tradeInTransaction) {
-                    $this->tradeInService->handleExcessCredit(
-                        $this->order,
-                        $excessAmount,
-                        $data['excess_credit_payout_method'] ?? 'cash'
-                    );
-                }
-            }
+            // Calculate totals with tax
+            $this->calculateTotalsWithTax($taxRate);
 
             // Create invoice for the order
             $this->invoiceService->createFromOrder($this->order);
@@ -240,26 +228,22 @@ class OrderCreationService
     }
 
     /**
-     * Calculate totals including tax and trade-in credit.
-     * Tax is calculated on the net amount after subtracting trade-in credit.
+     * Calculate totals including tax.
      */
-    protected function calculateTotalsWithTax(float $taxRate, float $tradeInCredit = 0): void
+    protected function calculateTotalsWithTax(float $taxRate): void
     {
         $this->order->refresh();
         $this->order->load('items');
 
         $subTotal = $this->order->items->sum(fn ($item) => $item->line_total);
 
-        // Taxable amount = subtotal - discounts - trade_in_credit
-        // This ensures tax is only charged on the net purchase amount
-        $taxableAmount = max(0, $subTotal - ($this->order->discount_cost ?? 0) - $tradeInCredit);
+        $taxableAmount = max(0, $subTotal - ($this->order->discount_cost ?? 0));
         $salesTax = $taxableAmount * $taxRate;
 
         $total = $subTotal
             + ($this->order->shipping_cost ?? 0)
             + $salesTax
-            - ($this->order->discount_cost ?? 0)
-            - $tradeInCredit;
+            - ($this->order->discount_cost ?? 0);
 
         $this->order->update([
             'sub_total' => $subTotal,
@@ -706,6 +690,11 @@ class OrderCreationService
                 if ($item->product_variant_id) {
                     $this->restoreStock($item->product_variant_id, $item->quantity);
                 }
+            }
+
+            // Cancel linked trade-in transaction and reverse store credit
+            if ($order->hasTradeIn()) {
+                $this->tradeInService->cancelTradeInWithOrder($order, cancelTransaction: true);
             }
 
             $order->cancel();

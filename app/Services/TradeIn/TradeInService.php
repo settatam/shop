@@ -2,12 +2,14 @@
 
 namespace App\Services\TradeIn;
 
+use App\Models\Customer;
 use App\Models\Order;
-use App\Models\Payment;
 use App\Models\Store;
+use App\Models\StoreCredit;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
 use App\Models\TransactionPayout;
+use App\Services\Credits\StoreCreditService;
 use Illuminate\Support\Facades\DB;
 
 class TradeInService
@@ -33,6 +35,7 @@ class TradeInService
                 'type' => Transaction::TYPE_IN_STORE,
                 'source' => Transaction::SOURCE_TRADE_IN,
                 'status' => Transaction::STATUS_PAYMENT_PROCESSED,
+                'payment_method' => Transaction::PAYMENT_STORE_CREDIT,
                 'final_offer' => $this->calculateTradeInCredit($items),
                 'payment_processed_at' => now(),
             ]);
@@ -48,6 +51,21 @@ class TradeInService
                     'condition' => $itemData['condition'] ?? null,
                     'dwt' => $itemData['dwt'] ?? null,
                 ]);
+            }
+
+            // Issue store credit to the customer
+            $customer = Customer::find($customerId);
+            $creditAmount = $transaction->final_offer;
+
+            if ($customer && $creditAmount > 0) {
+                app(StoreCreditService::class)->issue(
+                    customer: $customer,
+                    amount: $creditAmount,
+                    source: StoreCredit::SOURCE_BUY_TRANSACTION,
+                    reference: $transaction,
+                    description: "Store credit from trade-in {$transaction->transaction_number}",
+                    userId: $userId ?? auth()->id(),
+                );
             }
 
             return $transaction->load('items');
@@ -85,7 +103,7 @@ class TradeInService
         $tradeInCredit = $transaction->final_offer ?? $transaction->total_buy_price;
 
         DB::transaction(function () use ($order, $transaction, $tradeInCredit) {
-            // Update order with trade-in credit
+            // Update order with trade-in credit (informational)
             $order->update([
                 'trade_in_transaction_id' => $transaction->id,
                 'trade_in_credit' => $tradeInCredit,
@@ -93,23 +111,6 @@ class TradeInService
 
             // Link transaction to order
             $transaction->update(['order_id' => $order->id]);
-
-            // Create a store credit payment record for the trade-in amount
-            Payment::create([
-                'store_id' => $order->store_id,
-                'payable_type' => Order::class,
-                'payable_id' => $order->id,
-                'order_id' => $order->id,
-                'customer_id' => $order->customer_id,
-                'user_id' => auth()->id(),
-                'payment_method' => Payment::METHOD_STORE_CREDIT,
-                'status' => Payment::STATUS_COMPLETED,
-                'amount' => min($tradeInCredit, $order->total + $tradeInCredit), // Credit can't exceed what was needed before trade-in
-                'currency' => 'USD',
-                'reference' => "Trade-In: {$transaction->transaction_number}",
-                'notes' => "Trade-in credit from transaction {$transaction->transaction_number}",
-                'paid_at' => now(),
-            ]);
         });
     }
 
@@ -150,11 +151,21 @@ class TradeInService
         DB::transaction(function () use ($order, $cancelTransaction) {
             $transaction = $order->tradeInTransaction;
 
-            // Void the store credit payment
-            Payment::where('order_id', $order->id)
-                ->where('payment_method', Payment::METHOD_STORE_CREDIT)
-                ->where('reference', 'like', "Trade-In: {$transaction->transaction_number}%")
-                ->update(['status' => Payment::STATUS_REFUNDED]);
+            // Reverse the issued store credit
+            if ($cancelTransaction && $transaction && $transaction->customer_id) {
+                $customer = Customer::find($transaction->customer_id);
+                $creditAmount = (float) $transaction->final_offer;
+
+                if ($customer && $creditAmount > 0 && $customer->store_credit_balance >= $creditAmount) {
+                    app(StoreCreditService::class)->redeem(
+                        customer: $customer,
+                        amount: $creditAmount,
+                        source: StoreCredit::SOURCE_REFUND,
+                        reference: $transaction,
+                        description: "Reversed store credit from cancelled trade-in {$transaction->transaction_number}",
+                    );
+                }
+            }
 
             if ($cancelTransaction && $transaction) {
                 // Unlink and cancel the transaction
