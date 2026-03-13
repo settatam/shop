@@ -32,6 +32,7 @@ import {
 import CollectPaymentModal from '@/components/payments/CollectPaymentModal.vue';
 import ShipOrderModal from '@/components/orders/ShipOrderModal.vue';
 import { CustomerCard, CustomerSearch } from '@/components/customers';
+import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 
 interface LeadSource {
     id: number;
@@ -316,6 +317,7 @@ const editingDate = ref('');
 
 // Customer editing
 const isAddingCustomer = ref(false);
+const showCustomerEditModal = ref(false);
 const selectedCustomer = ref<Customer | null>(null);
 
 const canEditOrder = computed(() => {
@@ -1337,7 +1339,12 @@ function processReturn() {
                             <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Customer</h2>
 
                             <!-- Existing customer -->
-                            <CustomerCard v-if="order.customer" :customer="order.customer" />
+                            <CustomerCard
+                                v-if="order.customer"
+                                :customer="order.customer"
+                                :show-edit-button="true"
+                                @edit="showCustomerEditModal = true"
+                            />
 
                             <!-- No customer - Add customer form -->
                             <div v-else>
@@ -1696,5 +1703,13 @@ function processReturn() {
                 </div>
             </div>
         </Teleport>
+        <!-- Customer Edit Modal -->
+        <CustomerEditModal
+            v-if="order.customer"
+            :show="showCustomerEditModal"
+            :customer="order.customer"
+            @close="showCustomerEditModal = false"
+            @saved="showCustomerEditModal = false"
+        />
     </AppLayout>
 </template>

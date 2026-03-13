@@ -39,7 +39,6 @@ class UpdateCustomerRequest extends FormRequest
             'id_expiration_date' => ['nullable', 'date'],
             'date_of_birth' => ['nullable', 'date'],
             'lead_source_id' => ['nullable', 'integer', 'exists:lead_sources,id'],
-            'notes' => ['nullable', 'string', 'max:2000'],
             'accepts_marketing' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
         ];

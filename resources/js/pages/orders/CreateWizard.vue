@@ -787,7 +787,7 @@ function canProceed(): boolean {
         case 1:
             return !!form.store_user_id;
         case 2:
-            return true; // Customer is optional for walk-in sales
+            return !!form.customer_id || !!form.customer;
         case 3:
             // Trade-in step: if trade-in is enabled, must have at least one item
             // Bucket sale step: if sell_from_bucket is enabled, must have at least one bucket item
@@ -944,7 +944,7 @@ const steps = [
                     <div class="h-4 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
                     <div class="flex shrink-0 items-center gap-1.5 text-sm">
                         <span class="text-gray-500 dark:text-gray-400">Customer:</span>
-                        <span class="font-medium text-gray-900 dark:text-white">{{ selectedCustomer?.full_name || 'Walk-in' }}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ selectedCustomer?.full_name || '—' }}</span>
                     </div>
                     <div class="h-4 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
                     <div class="flex shrink-0 items-center gap-1.5 text-sm">
@@ -1084,7 +1084,7 @@ const steps = [
                         <div class="flex items-center justify-between">
                             <div>
                                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Customer Information</h2>
-                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Search for an existing customer or create a new one. Leave empty for walk-in sales.</p>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Search for an existing customer or create a new one.</p>
                             </div>
                             <div class="flex gap-2">
                                 <button type="button" @click="switchToCustomerSearch" :class="['rounded-md px-3 py-1.5 text-sm font-medium', !isCreatingNewCustomer ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400']">Search</button>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
+import { CustomerCard } from '@/components/customers';
+import CustomerEditModal from '@/components/customers/CustomerEditModal.vue';
 import { NotesSection } from '@/components/notes';
-import { DatePicker } from '@/components/ui/date-picker';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -11,7 +12,6 @@ import { formatPhoneNumber } from '@/lib/utils';
 import {
     ArrowLeftIcon,
     PencilIcon,
-    CheckIcon,
     XMarkIcon,
     PlusIcon,
     DocumentArrowUpIcon,
@@ -22,8 +22,6 @@ import {
     UserIcon,
     EnvelopeIcon,
     PhoneIcon,
-    MapPinIcon,
-    BuildingOfficeIcon,
     CalendarIcon,
     DocumentIcon,
     HomeIcon,
@@ -120,7 +118,7 @@ interface Customer {
     address: string | null;
     city: string | null;
     state: string | null;
-    postal_code: string | null;
+    zip: string | null;
     id_number: string | null;
     id_issuing_state: string | null;
     id_expiration_date: string | null;
@@ -192,32 +190,6 @@ const activeTab = ref<'buys' | 'sales'>('buys');
 
 // Edit modal
 const isEditing = ref(false);
-const editForm = useForm({
-    first_name: props.customer.first_name || '',
-    last_name: props.customer.last_name || '',
-    email: props.customer.email || '',
-    phone_number: props.customer.phone_number || '',
-    company_name: props.customer.company_name || '',
-    address: props.customer.address || '',
-    city: props.customer.city || '',
-    state: props.customer.state || '',
-    postal_code: props.customer.postal_code || '',
-    id_number: props.customer.id_number || '',
-    id_issuing_state: props.customer.id_issuing_state || '',
-    id_expiration_date: props.customer.id_expiration_date || '',
-    date_of_birth: props.customer.date_of_birth || '',
-    lead_source_id: props.customer.lead_source_id || '',
-    notes: props.customer.notes || '',
-});
-
-const saveCustomer = () => {
-    editForm.put(`/customers/${props.customer.id}`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            isEditing.value = false;
-        },
-    });
-};
 
 // Lead source modal
 const showLeadSourceModal = ref(false);
@@ -474,40 +446,12 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
                     <div class="rounded-lg bg-white shadow ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10">
                         <div class="px-4 py-5 sm:p-6">
                             <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Customer Details</h3>
-                            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div>
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">First Name</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ customer.first_name || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Last Name</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ customer.last_name || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ customer.email || '-' }}</dd>
-                                </div>
-                                <div>
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ customer.phone_number || '-' }}</dd>
-                                </div>
-                                <div v-if="customer.company_name">
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Company</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ customer.company_name }}</dd>
-                                </div>
-                                <div v-if="customer.address || customer.city">
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Address</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                                        <span v-if="customer.address">{{ customer.address }}<br /></span>
-                                        <span v-if="customer.city">{{ customer.city }}</span>
-                                        <span v-if="customer.postal_code">, {{ customer.postal_code }}</span>
-                                    </dd>
-                                </div>
-                                <div v-if="customer.notes" class="sm:col-span-2">
-                                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Notes</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ customer.notes }}</dd>
-                                </div>
-                            </dl>
+                            <CustomerCard
+                                :customer="customer"
+                                :show-edit-button="true"
+                                :show-view-link="false"
+                                @edit="isEditing = true"
+                            />
                         </div>
                     </div>
 
@@ -936,210 +880,12 @@ const idBack = computed(() => getDocumentsByType('id_back')[0] || null);
         </div>
 
         <!-- Edit Customer Modal -->
-        <TransitionRoot as="template" :show="isEditing">
-            <Dialog class="relative z-50" @close="isEditing = false">
-                <TransitionChild
-                    as="template"
-                    enter="ease-out duration-300"
-                    enter-from="opacity-0"
-                    enter-to="opacity-100"
-                    leave="ease-in duration-200"
-                    leave-from="opacity-100"
-                    leave-to="opacity-0"
-                >
-                    <div class="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 transition-opacity" />
-                </TransitionChild>
-
-                <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
-                    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                        <TransitionChild
-                            as="template"
-                            enter="ease-out duration-300"
-                            enter-from="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                            enter-to="opacity-100 translate-y-0 sm:scale-100"
-                            leave="ease-in duration-200"
-                            leave-from="opacity-100 translate-y-0 sm:scale-100"
-                            leave-to="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                        >
-                            <DialogPanel class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 dark:bg-gray-800">
-                                <div>
-                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Edit Customer</h3>
-                                    <form @submit.prevent="saveCustomer" class="space-y-4">
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label for="edit_first_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
-                                                <input
-                                                    id="edit_first_name"
-                                                    v-model="editForm.first_name"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label for="edit_last_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
-                                                <input
-                                                    id="edit_last_name"
-                                                    v-model="editForm.last_name"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label for="edit_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                                            <input
-                                                id="edit_email"
-                                                v-model="editForm.email"
-                                                type="email"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label for="edit_phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                                            <input
-                                                id="edit_phone"
-                                                :value="editForm.phone_number"
-                                                type="tel"
-                                                placeholder="(555) 123-4567"
-                                                @input="editForm.phone_number = formatPhoneNumber(($event.target as HTMLInputElement).value)"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label for="edit_company" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Company</label>
-                                            <input
-                                                id="edit_company"
-                                                v-model="editForm.company_name"
-                                                type="text"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label for="edit_address" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Address</label>
-                                            <input
-                                                id="edit_address"
-                                                v-model="editForm.address"
-                                                type="text"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label for="edit_city" class="block text-sm font-medium text-gray-700 dark:text-gray-300">City</label>
-                                                <input
-                                                    id="edit_city"
-                                                    v-model="editForm.city"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label for="edit_postal_code" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Postal Code</label>
-                                                <input
-                                                    id="edit_postal_code"
-                                                    v-model="editForm.postal_code"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label for="edit_state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
-                                            <select
-                                                id="edit_state"
-                                                v-model="editForm.state"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option value="">Select state</option>
-                                                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
-                                            </select>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label for="edit_id_number" class="block text-sm font-medium text-gray-700 dark:text-gray-300">ID Number</label>
-                                                <input
-                                                    id="edit_id_number"
-                                                    v-model="editForm.id_number"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label for="edit_id_issuing_state" class="block text-sm font-medium text-gray-700 dark:text-gray-300">ID Issuing State</label>
-                                                <select
-                                                    id="edit_id_issuing_state"
-                                                    v-model="editForm.id_issuing_state"
-                                                    class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                >
-                                                    <option value="">Select state</option>
-                                                    <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ID Expiration Date</label>
-                                                <DatePicker
-                                                    v-model="editForm.id_expiration_date"
-                                                    placeholder="Select date"
-                                                    class="w-full"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
-                                                <DatePicker
-                                                    v-model="editForm.date_of_birth"
-                                                    placeholder="Select date"
-                                                    class="w-full"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label for="edit_lead_source" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lead Source</label>
-                                            <select
-                                                id="edit_lead_source"
-                                                v-model="editForm.lead_source_id"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            >
-                                                <option value="">No lead source</option>
-                                                <option v-for="source in leadSources" :key="source.id" :value="source.id">
-                                                    {{ source.name }}
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label for="edit_notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Notes</label>
-                                            <textarea
-                                                id="edit_notes"
-                                                v-model="editForm.notes"
-                                                rows="3"
-                                                class="mt-1 block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                            />
-                                        </div>
-                                        <div class="flex gap-3 justify-end pt-2">
-                                            <button
-                                                type="button"
-                                                class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                @click="isEditing = false"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                :disabled="editForm.processing"
-                                                class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-                                            >
-                                                {{ editForm.processing ? 'Saving...' : 'Save Changes' }}
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </DialogPanel>
-                        </TransitionChild>
-                    </div>
-                </div>
-            </Dialog>
-        </TransitionRoot>
+        <CustomerEditModal
+            :show="isEditing"
+            :customer="customer"
+            @close="isEditing = false"
+            @saved="isEditing = false"
+        />
 
         <!-- Add Lead Source Modal -->
         <Teleport to="body">

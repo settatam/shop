@@ -4,7 +4,8 @@ import { useForm, router } from '@inertiajs/vue3';
 import { US_STATES } from '@/lib/states';
 import { formatPhoneNumber } from '@/lib/utils';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue';
-import { XMarkIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/vue/24/outline';
+import { XMarkIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import { DatePicker } from '@/components/ui/date-picker';
 import LeadSourceSelect from './LeadSourceSelect.vue';
 
 interface Address {
@@ -37,11 +38,10 @@ interface Customer {
     email: string | null;
     phone_number: string | null;
     company_name?: string | null;
-    address?: string | null;
-    address2?: string | null;
-    city?: string | null;
-    state?: string | null;
-    zip?: string | null;
+    id_number?: string | null;
+    id_issuing_state?: string | null;
+    id_expiration_date?: string | null;
+    date_of_birth?: string | null;
     lead_source_id?: number | null;
     addresses?: Address[];
     primary_address?: { address: string | null; address2: string | null; city: string | null; state_id: number | null; state_abbreviation: string | null; zip: string | null; one_line_address: string } | null;
@@ -73,12 +73,11 @@ const form = useForm({
     email: '',
     phone_number: '',
     company_name: '',
+    id_number: '',
+    id_issuing_state: '',
+    id_expiration_date: '',
+    date_of_birth: '',
     lead_source_id: null as number | null,
-    address: '',
-    address2: '',
-    city: '',
-    state: '',
-    zip: '',
 });
 
 const selectedAddress = ref<number | null>(null);
@@ -107,16 +106,16 @@ watch(
             form.email = props.customer.email || '';
             form.phone_number = props.customer.phone_number || '';
             form.company_name = props.customer.company_name || '';
+            form.id_number = props.customer.id_number || '';
+            form.id_issuing_state = props.customer.id_issuing_state || '';
+            form.id_expiration_date = props.customer.id_expiration_date || '';
+            form.date_of_birth = props.customer.date_of_birth || '';
             form.lead_source_id = props.customer.lead_source_id || null;
-            const pa = props.customer.primary_address;
-            form.address = pa?.address || props.customer.address || '';
-            form.address2 = pa?.address2 || props.customer.address2 || '';
-            form.city = pa?.city || props.customer.city || '';
-            form.state = pa?.state_abbreviation || props.customer.state || '';
-            form.zip = pa?.zip || props.customer.zip || '';
             selectedAddress.value = props.selectedAddressId || null;
             expandedAddressId.value = null;
             savingAddressId.value = null;
+            showNewAddressForm.value = false;
+            resetNewAddressForm();
             initAddressForms();
         }
     },
@@ -211,6 +210,76 @@ const saveAddress = (address: Address) => {
     });
 };
 
+// New address form
+const showNewAddressForm = ref(false);
+const savingNewAddress = ref(false);
+const newAddressForm = ref<AddressFormData>({
+    address: '',
+    address2: '',
+    city: '',
+    state: '',
+    zip: '',
+    phone: '',
+    is_default: false,
+});
+
+const resetNewAddressForm = () => {
+    newAddressForm.value = {
+        address: '',
+        address2: '',
+        city: '',
+        state: '',
+        zip: '',
+        phone: '',
+        is_default: false,
+    };
+};
+
+const openNewAddressForm = () => {
+    expandedAddressId.value = null;
+    resetNewAddressForm();
+    if (!hasAddresses.value) {
+        newAddressForm.value.is_default = true;
+        // Pre-fill from primary_address if available
+        const pa = props.customer.primary_address;
+        if (pa) {
+            newAddressForm.value.address = pa.address || '';
+            newAddressForm.value.address2 = pa.address2 || '';
+            newAddressForm.value.city = pa.city || '';
+            newAddressForm.value.state = pa.state_abbreviation || '';
+            newAddressForm.value.zip = pa.zip || '';
+        }
+    }
+    showNewAddressForm.value = true;
+};
+
+const saveNewAddress = () => {
+    savingNewAddress.value = true;
+
+    router.post(`/customers/${props.customer.id}/addresses`, {
+        first_name: props.customer.first_name || '',
+        last_name: props.customer.last_name || '',
+        address: newAddressForm.value.address,
+        address2: newAddressForm.value.address2,
+        city: newAddressForm.value.city,
+        state: newAddressForm.value.state,
+        zip: newAddressForm.value.zip,
+        phone: newAddressForm.value.phone,
+        type: 'home',
+        is_default: newAddressForm.value.is_default,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            savingNewAddress.value = false;
+            showNewAddressForm.value = false;
+            resetNewAddressForm();
+        },
+        onError: () => {
+            savingNewAddress.value = false;
+        },
+    });
+};
+
 const formatAddress = (address: Address): string => {
     if (address.formatted_address) {
         return address.formatted_address;
@@ -230,9 +299,8 @@ const close = () => {
 };
 
 const save = () => {
-    // Build the URL based on whether we're also updating an entity's address
     let url = `/customers/${props.customer.id}`;
-    const data: Record<string, any> = { ...form.data() };
+    const { ...data }: Record<string, any> = form.data();
 
     // If we have entity context and address selector, include the address update
     if (showAddressSelector.value && selectedAddress.value !== props.selectedAddressId) {
@@ -395,6 +463,76 @@ const save = () => {
                                         </p>
                                     </div>
 
+                                    <!-- ID Number & Issuing State -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label
+                                                for="edit_customer_id_number"
+                                                class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                            >
+                                                ID Number
+                                            </label>
+                                            <input
+                                                id="edit_customer_id_number"
+                                                v-model="form.id_number"
+                                                type="text"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            />
+                                            <p v-if="form.errors.id_number" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ form.errors.id_number }}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label
+                                                for="edit_customer_id_issuing_state"
+                                                class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                            >
+                                                ID Issuing State
+                                            </label>
+                                            <select
+                                                id="edit_customer_id_issuing_state"
+                                                v-model="form.id_issuing_state"
+                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                            >
+                                                <option value="">Select state</option>
+                                                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                            </select>
+                                            <p v-if="form.errors.id_issuing_state" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ form.errors.id_issuing_state }}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- ID Expiration & Date of Birth -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                ID Expiration Date
+                                            </label>
+                                            <DatePicker
+                                                v-model="form.id_expiration_date"
+                                                placeholder="Select date"
+                                                class="w-full"
+                                            />
+                                            <p v-if="form.errors.id_expiration_date" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ form.errors.id_expiration_date }}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Date of Birth
+                                            </label>
+                                            <DatePicker
+                                                v-model="form.date_of_birth"
+                                                placeholder="Select date"
+                                                class="w-full"
+                                            />
+                                            <p v-if="form.errors.date_of_birth" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                                                {{ form.errors.date_of_birth }}
+                                            </p>
+                                        </div>
+                                    </div>
+
                                     <!-- Lead Source -->
                                     <div>
                                         <label
@@ -413,9 +551,20 @@ const save = () => {
                                         </p>
                                     </div>
 
-                                    <!-- Addresses (when customer has address records) -->
-                                    <div v-if="hasAddresses" class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Addresses</h4>
+                                    <!-- Addresses -->
+                                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Addresses</h4>
+                                            <button
+                                                v-if="!showNewAddressForm"
+                                                type="button"
+                                                class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                                @click="openNewAddressForm"
+                                            >
+                                                <PlusIcon class="size-3.5" />
+                                                Add Address
+                                            </button>
+                                        </div>
 
                                         <!-- Address selector for entity context -->
                                         <p v-if="showAddressSelector" class="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -423,6 +572,7 @@ const save = () => {
                                         </p>
 
                                         <div class="space-y-2">
+                                            <!-- Existing addresses -->
                                             <div
                                                 v-for="address in customer.addresses"
                                                 :key="address.id"
@@ -552,90 +702,103 @@ const save = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
 
-                                    <!-- Simple address fields (no address records on customer) -->
-                                    <div v-if="!hasAddresses" class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Primary Address</h4>
+                                            <!-- No addresses message -->
+                                            <p v-if="!hasAddresses && !showNewAddressForm" class="text-sm text-gray-500 dark:text-gray-400 italic">
+                                                No addresses yet.
+                                            </p>
 
-                                        <div class="space-y-4">
-                                            <div>
-                                                <label
-                                                    for="edit_customer_address"
-                                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                                >
-                                                    Address
-                                                </label>
-                                                <input
-                                                    id="edit_customer_address"
-                                                    v-model="form.address"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label
-                                                    for="edit_customer_address2"
-                                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                                >
-                                                    Address Line 2
-                                                </label>
-                                                <input
-                                                    id="edit_customer_address2"
-                                                    v-model="form.address2"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
-                                            </div>
-
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label
-                                                        for="edit_customer_city"
-                                                        class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                                    >
-                                                        City
-                                                    </label>
-                                                    <input
-                                                        id="edit_customer_city"
-                                                        v-model="form.city"
-                                                        type="text"
-                                                        class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    />
+                                            <!-- New address form -->
+                                            <div
+                                                v-if="showNewAddressForm"
+                                                class="rounded-md border border-dashed border-indigo-300 dark:border-indigo-700"
+                                            >
+                                                <div class="px-3 py-2">
+                                                    <span class="text-sm font-medium text-indigo-600 dark:text-indigo-400">New Address</span>
                                                 </div>
-                                                <div>
-                                                    <label
-                                                        for="edit_customer_state"
-                                                        class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                                    >
-                                                        State
-                                                    </label>
-                                                    <select
-                                                        id="edit_customer_state"
-                                                        v-model="form.state"
-                                                        class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                    >
-                                                        <option value="">Select state</option>
-                                                        <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
-                                                    </select>
+                                                <div class="border-t border-gray-200 dark:border-gray-700 px-3 pb-3 pt-3 space-y-3">
+                                                    <div>
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Address *</label>
+                                                        <input
+                                                            v-model="newAddressForm.address"
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Address Line 2</label>
+                                                        <input
+                                                            v-model="newAddressForm.address2"
+                                                            type="text"
+                                                            class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        />
+                                                    </div>
+                                                    <div class="grid grid-cols-6 gap-3">
+                                                        <div class="col-span-3">
+                                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">City *</label>
+                                                            <input
+                                                                v-model="newAddressForm.city"
+                                                                type="text"
+                                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            />
+                                                        </div>
+                                                        <div class="col-span-1">
+                                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">State</label>
+                                                            <select
+                                                                v-model="newAddressForm.state"
+                                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            >
+                                                                <option value="">Select state</option>
+                                                                <option v-for="s in US_STATES" :key="s.value" :value="s.value">{{ s.label }}</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-span-2">
+                                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">ZIP *</label>
+                                                            <input
+                                                                v-model="newAddressForm.zip"
+                                                                type="text"
+                                                                class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                                                        <input
+                                                            :value="newAddressForm.phone"
+                                                            type="tel"
+                                                            placeholder="(555) 123-4567"
+                                                            @input="newAddressForm.phone = formatPhoneNumber(($event.target as HTMLInputElement).value)"
+                                                            class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
+                                                        />
+                                                    </div>
+                                                    <div class="flex items-center justify-between pt-1">
+                                                        <label class="flex items-center gap-2">
+                                                            <input
+                                                                v-model="newAddressForm.is_default"
+                                                                type="checkbox"
+                                                                class="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+                                                            />
+                                                            <span class="text-sm text-gray-700 dark:text-gray-300">Default address</span>
+                                                        </label>
+                                                        <div class="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                class="rounded-md px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                                                @click="showNewAddressForm = false"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                :disabled="savingNewAddress || !newAddressForm.address || !newAddressForm.city || !newAddressForm.zip"
+                                                                class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                                                                @click="saveNewAddress"
+                                                            >
+                                                                {{ savingNewAddress ? 'Saving...' : 'Add Address' }}
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-
-                                            <div>
-                                                <label
-                                                    for="edit_customer_zip"
-                                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                                >
-                                                    Postal Code
-                                                </label>
-                                                <input
-                                                    id="edit_customer_zip"
-                                                    v-model="form.zip"
-                                                    type="text"
-                                                    class="mt-1 block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:ring-gray-600"
-                                                />
                                             </div>
                                         </div>
                                     </div>

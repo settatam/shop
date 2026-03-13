@@ -27,9 +27,9 @@ class CreateOrderFromWizardRequest extends FormRequest
             // Step 1: Store User (Employee)
             'store_user_id' => ['required', 'integer', 'exists:store_users,id'],
 
-            // Step 2: Customer
-            'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
-            'customer' => ['nullable', 'array'],
+            // Step 2: Customer (required — either existing or new)
+            'customer_id' => ['required_without:customer', 'nullable', 'integer', 'exists:customers,id'],
+            'customer' => ['required_without:customer_id', 'nullable', 'array'],
             'customer.first_name' => ['required_with:customer', 'string', 'max:100'],
             'customer.last_name' => ['required_with:customer', 'string', 'max:100'],
             'customer.email' => [
