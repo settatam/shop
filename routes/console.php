@@ -55,16 +55,16 @@ Schedule::command('clear:legacy-warehouse --force')
     });
 
 // Legacy daily reports - Send at configured time (default midnight ET)
-Schedule::command('reports:send-legacy-daily')
-    ->when(fn () => config('legacy-sync.enabled') && config('legacy-sync.reports.enabled'))
-    ->dailyAt(config('legacy-sync.schedule.send_reports_at', '00:00'))
-    ->timezone(config('legacy-sync.schedule.timezone', 'America/New_York'));
+//Schedule::command('reports:send-legacy-daily')
+//    ->when(fn () => config('legacy-sync.enabled') && config('legacy-sync.reports.enabled'))
+//    ->dailyAt(config('legacy-sync.schedule.send_reports_at', '00:00'))
+//    ->timezone(config('legacy-sync.schedule.timezone', 'America/New_York'));
 
 // Send scheduled reports - runs every minute to check for due reports
-Schedule::command('reports:send-scheduled')
-    ->everyMinute()
-    ->withoutOverlapping()
-    ->runInBackground();
+//Schedule::command('reports:send-scheduled')
+//    ->everyMinute()
+//    ->withoutOverlapping()
+//    ->runInBackground();
 
 // Sync eBay orders every 5 minutes
 Schedule::command('ebay:sync-orders')
@@ -84,30 +84,30 @@ Schedule::command('storefront:cleanup-sessions')
     ->withoutOverlapping();
 
 // Daily reports via notifications system
-Schedule::command('reports:send-daily --type=sales')
-    ->dailyAt('00:01')
-    ->timezone('America/New_York')
-    ->withoutOverlapping();
-
-Schedule::command('reports:send-daily --type=buy')
-    ->dailyAt('00:05')
-    ->timezone('America/New_York')
-    ->withoutOverlapping();
-
-Schedule::command('reports:send-daily --type=memo')
-    ->dailyAt('00:07')
-    ->timezone('America/New_York')
-    ->withoutOverlapping();
-
-Schedule::command('reports:send-daily --type=repair')
-    ->dailyAt('00:08')
-    ->timezone('America/New_York')
-    ->withoutOverlapping();
-
-Schedule::command('reports:send-daily --type=items_not_reviewed')
-    ->dailyAt('00:10')
-    ->timezone('America/New_York')
-    ->withoutOverlapping();
+//Schedule::command('reports:send-daily --type=sales')
+//    ->dailyAt('00:01')
+//    ->timezone('America/New_York')
+//    ->withoutOverlapping();
+//
+//Schedule::command('reports:send-daily --type=buy')
+//    ->dailyAt('00:05')
+//    ->timezone('America/New_York')
+//    ->withoutOverlapping();
+//
+//Schedule::command('reports:send-daily --type=memo')
+//    ->dailyAt('00:07')
+//    ->timezone('America/New_York')
+//    ->withoutOverlapping();
+//
+//Schedule::command('reports:send-daily --type=repair')
+//    ->dailyAt('00:08')
+//    ->timezone('America/New_York')
+//    ->withoutOverlapping();
+//
+//Schedule::command('reports:send-daily --type=items_not_reviewed')
+//    ->dailyAt('00:10')
+//    ->timezone('America/New_York')
+//    ->withoutOverlapping();
 
 Schedule::command('reports:send-daily --store=2 --type=all')
     ->dailyAt('00:01')
